@@ -18,6 +18,7 @@
     "e2e": "playwright test",
     "format:check": "prettier --check .",
     "lint": "eslint .",
+    "runtime:smoke": "./node_modules/.bin/tsx scripts/runtime-core-smoke.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",

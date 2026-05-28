@@ -23,6 +23,18 @@ This stage creates the workspace skeleton only:
 
 Current apps expose typed health-check functions and package placeholders so the workspace can lint, test, and build before deeper business implementation starts.
 
+## Runtime Core MVP
+
+The repository now includes an AI Native `runtime-core` app intended for OpenClaw-style installs.
+
+Example commands:
+
+```bash
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts skills:list
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=publish --platforms=douyin --content=hello
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=interaction.fetch --platforms=xiaohongshu
+```
+
 ## Commands
 
 ```bash
