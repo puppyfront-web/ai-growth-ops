@@ -407,6 +407,8 @@ Registry 至少应提供：
 6. 能查看运行日志或 artifact
 7. 能启停至少一个 skill
 
+`docs/delivery/2026-05-29-openclaw-runtime-core-checklist.md` 是本次 2026-05-29 客户安装交付的现场操作清单，交付时应以该文件为准执行验证。
+
 ## Migration Direction From Current Repository
 
 第一阶段不是一次性删除所有旧代码，而是明确迁移方向：
