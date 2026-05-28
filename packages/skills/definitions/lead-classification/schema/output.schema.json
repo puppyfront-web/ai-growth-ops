@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "intent": { "type": "string" },
+    "leadLevel": { "type": "string", "enum": ["A", "B", "C", "D"] },
+    "confidence": { "type": "number" },
+    "riskLevel": { "type": "string", "enum": ["low", "medium", "high"] },
+    "summary": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "nextAction": { "type": "string" }
+  },
+  "required": ["intent", "leadLevel", "confidence", "riskLevel", "summary"]
+}

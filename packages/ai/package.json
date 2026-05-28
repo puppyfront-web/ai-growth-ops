@@ -1,0 +1,17 @@
+{
+  "name": "@ai-growth-ops/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "openai": "^4.80.0",
+    "ajv": "^8.17.0"
+  }
+}

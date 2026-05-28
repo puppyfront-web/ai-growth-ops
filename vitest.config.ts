@@ -1,0 +1,27 @@
+import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@ai-growth-ops/database': fileURLToPath(
+        new URL('./packages/database/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/shared': fileURLToPath(
+        new URL('./packages/shared/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/providers': fileURLToPath(
+        new URL('./packages/providers/src/index.ts', import.meta.url)
+      )
+    }
+  },
+  test: {
+    environment: 'node',
+    exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],
+    fileParallelism: false,
+    globals: true,
+    include: ['tests/**/*.test.ts'],
+    maxWorkers: 1,
+    setupFiles: ['tests/setup/vitest.setup.ts']
+  }
+});

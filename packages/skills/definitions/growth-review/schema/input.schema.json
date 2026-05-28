@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "period": { "type": "string" },
+    "publishedContents": { "type": "number" },
+    "totalInteractions": { "type": "number" },
+    "leadsGenerated": { "type": "number" },
+    "leadsByLevel": { "type": "object" },
+    "leadsByPlatform": { "type": "object" },
+    "publishSuccessRate": { "type": "number" },
+    "topPerformingContent": { "type": "array", "items": { "type": "object" } },
+    "syncSuccessRate": { "type": "number" }
+  },
+  "required": ["period"]
+}

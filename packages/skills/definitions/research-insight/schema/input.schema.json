@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "posts": { "type": "array", "items": { "type": "object" } },
+    "comments": { "type": "array", "items": { "type": "object" } },
+    "keywords": { "type": "array", "items": { "type": "string" } },
+    "platform": { "type": "string" },
+    "brandProfile": { "type": "object" }
+  },
+  "required": ["comments"]
+}

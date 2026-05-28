@@ -1,0 +1,18 @@
+{
+  "name": "@ai-growth-ops/browser-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-growth-ops/shared": "workspace:*",
+    "playwright": "^1.52.0"
+  }
+}

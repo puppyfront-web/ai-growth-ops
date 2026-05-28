@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": { "type": "string" },
+    "highlights": { "type": "array", "items": { "type": "string" } },
+    "issues": { "type": "array", "items": { "type": "string" } },
+    "recommendations": { "type": "array", "items": { "type": "string" } },
+    "nextPeriodFocus": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["summary", "highlights", "recommendations"]
+}

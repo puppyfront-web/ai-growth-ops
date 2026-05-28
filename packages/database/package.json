@@ -1,0 +1,25 @@
+{
+  "name": "@ai-growth-ops/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:push": "prisma db push --schema prisma/schema.prisma",
+    "db:seed": "tsx prisma/seed.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}

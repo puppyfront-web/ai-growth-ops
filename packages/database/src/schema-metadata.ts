@@ -1,0 +1,31 @@
+export const m1ModelNames = [
+  'User',
+  'PlatformAccount',
+  'PlatformCapability',
+  'ContentProject',
+  'ContentItem',
+  'ContentVariant',
+  'MediaAsset',
+  'PublishJob',
+  'PublishAttempt',
+  'Interaction',
+  'Conversation',
+  'Lead',
+  'LeadActivity',
+  'LeadSinkConfig',
+  'LeadExternalMapping',
+  'LeadSinkSyncLog',
+  'ResearchTask',
+  'ResearchKeyword',
+  'ResearchTargetAccount',
+  'CollectedPost',
+  'CollectedComment',
+  'ResearchInsight',
+  'ContentOpportunity',
+  'SkillRun',
+  'AgentRun',
+  'ProviderRunLog',
+  'AuditLog'
+] as const;
+
+export type M1ModelName = (typeof m1ModelNames)[number];

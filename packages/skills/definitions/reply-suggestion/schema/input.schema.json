@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "interaction": { "type": "object" },
+    "classification": { "type": "object" },
+    "platform": { "type": "string" },
+    "brandTone": { "type": "string" },
+    "platformRules": { "type": "object" }
+  },
+  "required": ["interaction", "classification", "platform"]
+}

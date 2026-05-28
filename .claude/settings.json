@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node ../../node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/build/index.js db push --schema prisma/schema.prisma)",
+      "Bash(pnpm install *)",
+      "Bash(npx prisma *)",
+      "Bash(pnpm exec *)"
+    ]
+  }
+}

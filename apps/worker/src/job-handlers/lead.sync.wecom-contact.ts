@@ -1,0 +1,83 @@
+import { Job } from 'bullmq';
+import type { LeadSyncInput } from '../job-types.js';
+import { createDatabaseClient } from '@ai-growth-ops/database';
+import type { DatabaseClient } from '@ai-growth-ops/database';
+import { syncLeadToSink } from '@ai-growth-ops/lead-sinks';
+
+export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promise<void> {
+  const { leadId, sinkConfigId } = job.data;
+  const db: DatabaseClient = createDatabaseClient();
+
+  try {
+    const lead = await db.lead.findFirst({ where: { id: leadId, deletedAt: null } });
+    if (!lead) {
+      job.log(`Lead ${leadId} not found, skipping`);
+      return;
+    }
+
+    // Get sink config
+    const sinkConfig = sinkConfigId
+      ? await db.leadSinkConfig.findFirst({ where: { id: sinkConfigId } })
+      : await db.leadSinkConfig.findFirst({ where: { sinkType: 'wecom' } });
+
+    const configObj = (sinkConfig?.config as Record<string, unknown>) || {};
+
+    // Update lead status to SYNCING
+    await db.lead.update({
+      where: { id: leadId },
+      data: { status: 'SYNCING' },
+    });
+
+    // Call WeCom contact sink
+    const result = await syncLeadToSink({
+      id: lead.id,
+      sourcePlatform: lead.sourcePlatform,
+      externalUserName: lead.externalUserName || undefined,
+      level: lead.level,
+      intent: lead.intent || undefined,
+      summary: lead.summary || undefined,
+      confidence: lead.confidence || undefined,
+      tags: lead.tags,
+      assignedTo: lead.assignedTo || undefined,
+      nextAction: lead.nextAction || undefined,
+      riskLevel: lead.riskLevel || undefined,
+      createdAt: lead.createdAt,
+    }, 'wecom', {
+      corpId: configObj.corpId as string,
+      secret: configObj.secret as string,
+      agentId: configObj.agentId as string,
+    });
+
+    // Update external mapping
+    await db.leadExternalMapping.upsert({
+      where: { leadId_sinkType: { leadId, sinkType: 'wecom' } },
+      create: {
+        leadId,
+        sinkType: 'wecom',
+        externalId: result.externalId || `wecom-${leadId.slice(0, 8)}`,
+      },
+      update: { syncedAt: new Date(), externalId: result.externalId || undefined },
+    });
+
+    // Log sync result
+    await db.leadSinkSyncLog.create({
+      data: {
+        leadId,
+        sinkType: 'wecom',
+        operation: 'upsert_lead',
+        status: result.success ? 'success' : 'failed',
+        error: result.errorMessage,
+      },
+    });
+
+    // Update lead status
+    await db.lead.update({
+      where: { id: leadId },
+      data: { status: result.success ? 'SYNCED' : 'SYNCING' },
+    });
+
+    job.log(`WeCom sync for lead ${leadId}: ${result.success ? 'success' : 'failed'}`);
+  } finally {
+    await db.$disconnect();
+  }
+}

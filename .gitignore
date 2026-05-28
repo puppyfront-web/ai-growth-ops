@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+.turbo
+playwright-report
+test-results
+pnpm-lock.yaml
+.DS_Store
+*.tsbuildinfo
+.next
+out
+.claude/settings.local.json
+apps/api/uploads/

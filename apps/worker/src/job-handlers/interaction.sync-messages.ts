@@ -1,0 +1,119 @@
+import type { PlatformCode, InteractionMode } from '@ai-growth-ops/connectors';
+import { getOrCreateConnector } from '@ai-growth-ops/connectors';
+import { createDatabaseClient } from '@ai-growth-ops/database';
+import type { DatabaseClient } from '@ai-growth-ops/database';
+import { decryptToken } from '@ai-growth-ops/providers';
+import type { Job } from 'bullmq';
+import type { InteractionSyncMessagesInput } from '../job-types.js';
+
+export async function handleInteractionSyncMessages(
+  job: Job<InteractionSyncMessagesInput>
+): Promise<void> {
+  const {
+    userId,
+    platformAccountId,
+    platform,
+    mode,
+    cursor,
+    limit,
+    syncJobId,
+  } = job.data;
+  const db: DatabaseClient = createDatabaseClient();
+
+  // Update sync job status to running
+  if (syncJobId) {
+    await db.interactionSyncJob.update({
+      where: { id: syncJobId },
+      data: { status: 'running', startedAt: new Date() },
+    });
+  }
+
+  try {
+    // Resolve credentials from the platform account
+    const account = await db.platformAccount.findFirst({
+      where: { id: platformAccountId },
+    });
+
+    const cookie = account?.cookieRef ? decryptToken(account.cookieRef) : undefined;
+    const accessToken = account?.accessTokenEncrypted
+      ? decryptToken(account.accessTokenEncrypted)
+      : undefined;
+
+    const connector = getOrCreateConnector(
+      platform as PlatformCode,
+      mode as InteractionMode,
+      { mode: mode as InteractionMode, cookie, accessToken },
+    );
+
+    // Fetch messages from platform
+    const messages = await connector.fetchMessages({
+      platformAccountId,
+      cursor,
+      limit: limit || 50,
+    });
+
+    // Process and deduplicate
+    let newCount = 0;
+    let skippedCount = 0;
+
+    for (const message of messages) {
+      const existing = await db.interaction.findFirst({
+        where: {
+          platformAccountId,
+          externalInteractionId: message.externalMessageId,
+        },
+      });
+
+      if (existing) {
+        skippedCount++;
+        continue;
+      }
+
+      await db.interaction.create({
+        data: {
+          userId,
+          externalInteractionId: message.externalMessageId,
+          platformAccountId,
+          platform: platform as any,
+          type: 'message',
+          status: 'NEW',
+          content: message.content,
+          externalUserId: message.externalUserId,
+          externalUserName: message.userNickname,
+          rawPayload: (message.rawPayload as any) ?? undefined,
+        },
+      });
+      newCount++;
+    }
+
+    // Update sync job as completed
+    if (syncJobId) {
+      await db.interactionSyncJob.update({
+        where: { id: syncJobId },
+        data: {
+          status: 'completed',
+          finishedAt: new Date(),
+          fetchedCount: messages.length,
+        },
+      });
+    }
+
+    job.log(
+      `Synced ${messages.length} messages: ${newCount} new, ${skippedCount} duplicates`
+    );
+  } catch (err) {
+    if (syncJobId) {
+      await db.interactionSyncJob.update({
+        where: { id: syncJobId },
+        data: {
+          status: 'failed',
+          finishedAt: new Date(),
+          errorMessage: err instanceof Error ? err.message : String(err),
+        },
+      });
+    }
+    throw err;
+  } finally {
+    await db.$disconnect();
+  }
+}

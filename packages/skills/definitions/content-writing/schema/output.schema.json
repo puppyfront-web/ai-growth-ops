@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "body": { "type": "string" },
+    "script": { "type": "string" },
+    "hashtags": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string" },
+    "ctaText": { "type": "string" }
+  },
+  "required": ["title", "body"]
+}

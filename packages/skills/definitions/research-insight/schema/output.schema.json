@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "painPoints": { "type": "array", "items": { "type": "string" } },
+    "popularTopics": { "type": "array", "items": { "type": "string" } },
+    "contentAngles": { "type": "array", "items": { "type": "string" } },
+    "suggestedOpportunities": { "type": "array", "items": { "type": "object", "properties": { "title": { "type": "string" }, "format": { "type": "string" }, "priority": { "type": "string" }, "evidence": { "type": "array", "items": { "type": "string" } } } } }
+  },
+  "required": ["painPoints", "popularTopics", "contentAngles"]
+}

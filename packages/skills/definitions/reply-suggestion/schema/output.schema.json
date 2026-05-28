@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "suggestedText": { "type": "string" },
+    "replyType": { "type": "string" },
+    "riskLevel": { "type": "string", "enum": ["low", "medium", "high"] },
+    "needReview": { "type": "boolean" },
+    "reason": { "type": "string" }
+  },
+  "required": ["suggestedText", "replyType", "riskLevel", "needReview"]
+}

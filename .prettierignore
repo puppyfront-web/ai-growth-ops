@@ -1,0 +1,7 @@
+**/dist
+coverage
+node_modules
+packages/database/src/generated
+playwright-report
+test-results
+pnpm-lock.yaml

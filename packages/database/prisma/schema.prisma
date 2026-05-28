@@ -1,0 +1,962 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  douyin
+  xiaohongshu
+  wechat_official
+  wechat_channels
+  baijiahao
+  zhihu
+}
+
+enum ProviderMode {
+  official_api
+  browser_assist
+  manual_confirm
+  manual_import
+}
+
+enum AccountStatus {
+  active
+  expired
+  disabled
+  error
+}
+
+enum ContentType {
+  text_image
+  video
+  article
+  answer
+}
+
+enum ContentStatus {
+  draft
+  ready
+  archived
+}
+
+enum ComplianceStatus {
+  pending
+  approved
+  rejected
+}
+
+enum PublishJobStatus {
+  DRAFT
+  READY
+  SCHEDULED
+  RUNNING
+  WAITING_HUMAN_CONFIRM
+  PUBLISHED
+  FAILED
+  NEED_MANUAL_REPAIR
+  CANCELLED
+}
+
+enum InteractionType {
+  comment
+  message
+  official_message
+  form_submission
+}
+
+enum InteractionStatus {
+  NEW
+  NORMALIZED
+  CLASSIFYING
+  CLASSIFIED
+  REPLY_SUGGESTED
+  WAITING_HUMAN_REVIEW
+  REPLIED
+  CONVERTED_TO_LEAD
+  IGNORED
+}
+
+enum LeadLevel {
+  A
+  B
+  C
+  D
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  SYNCING
+  SYNCED
+  ASSIGNED
+  CONTACTED
+  ADDED_WECOM
+  WON
+  LOST
+  INVALID
+}
+
+enum ResearchStatus {
+  DRAFT
+  QUEUED
+  RUNNING
+  ANALYZING
+  INSIGHT_GENERATED
+  FAILED
+  PAUSED
+}
+
+enum MediaSourceType {
+  uploaded
+  external_url
+  generated_future
+}
+
+enum MediaReviewStatus {
+  pending_review
+  approved
+  rejected
+}
+
+enum ProviderRunStatus {
+  pending
+  running
+  success
+  failed
+  timeout
+}
+
+enum SkillRunStatus {
+  pending
+  running
+  success
+  failed
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  publish
+  sync
+  ai_generate
+  approve
+  reject
+}
+
+enum InteractionMode {
+  official_api
+  webhook
+  browser_assist
+  manual_import
+  recorded
+  sandbox
+  disabled
+}
+
+enum NotificationLevel {
+  info
+  warning
+  error
+  critical
+}
+
+enum SystemTaskStatus {
+  queued
+  running
+  success
+  failed
+  cancelled
+  suspended
+}
+
+enum ReplySuggestionStatus {
+  draft
+  waiting_review
+  approved
+  rejected
+  sent
+  failed
+  cancelled
+}
+
+enum ReplyType {
+  faq_answer
+  guide_to_private
+  guide_to_wecom
+  ask_more_info
+  thanks
+  complaint_response
+  manual_only
+}
+
+enum ContentItemStatus {
+  draft
+  editing
+  ready_for_review
+  approved
+  scheduled
+  published
+  archived
+}
+
+enum ComplianceRiskLevel {
+  low
+  medium
+  high
+}
+
+enum PublishMode {
+  official_api
+  browser_assist
+  manual_confirm
+  sandbox
+  recorded
+  disabled
+}
+
+enum ResearchMode {
+  real_crawler
+  recorded
+  manual_import
+  disabled
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  role         String    @default("operator")
+  passwordHash String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  metadata     Json?
+
+  platformAccounts     PlatformAccount[]
+  platformCapabilities PlatformCapability[]
+  contentProjects      ContentProject[]
+  contentItems         ContentItem[]
+  contentVariants      ContentVariant[]
+  publishJobs          PublishJob[]
+  conversations        Conversation[]
+  interactions         Interaction[]
+  leads                Lead[]
+  researchTasks        ResearchTask[]
+  auditLogs            AuditLog[]
+  mediaAssets          MediaAsset[]
+}
+
+model PlatformAccount {
+  id                    String        @id @default(uuid())
+  userId                String
+  platform              Platform
+  name                  String
+  mode                  ProviderMode  @default(official_api)
+  status                AccountStatus @default(active)
+  authType              String?
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  cookieRef             String?
+  capabilities          Json?
+  lastHealthCheckAt     DateTime?
+  expiresAt             DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  deletedAt             DateTime?
+  metadata              Json?
+
+  user                 User                 @relation(fields: [userId], references: [id])
+  publishJobs          PublishJob[]
+  platformCapabilities PlatformCapability[]
+  conversations        Conversation[]
+  interactions         Interaction[]
+
+  @@unique([userId, platform, name])
+  @@map("platform_accounts")
+}
+
+model PlatformCapability {
+  id                String       @id @default(uuid())
+  userId            String
+  platformAccountId String
+  platform          Platform
+  capabilityKey     String
+  mode              ProviderMode @default(official_api)
+  enabled           Boolean      @default(true)
+  limits            Json?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  deletedAt         DateTime?
+  metadata          Json?
+
+  user            User            @relation(fields: [userId], references: [id])
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([platformAccountId, capabilityKey])
+  @@map("platform_capabilities")
+}
+
+model ContentProject {
+  id          String        @id @default(uuid())
+  userId      String
+  title       String
+  description String?
+  status      ContentStatus @default(draft)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+  metadata    Json?
+
+  user         User          @relation(fields: [userId], references: [id])
+  contentItems ContentItem[]
+
+  @@map("content_projects")
+}
+
+model ContentItem {
+  id                   String        @id @default(uuid())
+  userId               String
+  projectId            String
+  type                 ContentType
+  title                String
+  body                 String?
+  status               ContentStatus @default(draft)
+  sourceType           String?
+  sourceResearchTaskId String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  deletedAt            DateTime?
+  metadata             Json?
+
+  user            User             @relation(fields: [userId], references: [id])
+  project         ContentProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contentVariants ContentVariant[]
+
+  @@map("content_items")
+}
+
+model ContentVariant {
+  id               String           @id @default(uuid())
+  userId           String
+  contentItemId    String
+  platform         Platform
+  contentType      ContentType
+  title            String?
+  body             String?
+  tags             Json?
+  cta              String?
+  mediaAssetIds    Json?
+  complianceStatus ComplianceStatus @default(pending)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+  metadata         Json?
+
+  user        User         @relation(fields: [userId], references: [id])
+  contentItem ContentItem  @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  publishJobs PublishJob[]
+  complianceChecks ContentComplianceCheck[]
+
+  @@unique([contentItemId, platform, contentType])
+  @@map("content_variants")
+}
+
+model MediaAsset {
+  id                   String            @id @default(uuid())
+  userId               String
+  fileName             String
+  fileType             String
+  fileSize             Int?
+  sourceType           MediaSourceType   @default(uploaded)
+  sourceUrl            String?
+  reviewStatus         MediaReviewStatus @default(approved)
+  generationProvider   String?
+  generationPromptHash String?
+  costEstimate         Float?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  deletedAt            DateTime?
+  metadata             Json?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("media_assets")
+}
+
+model PublishJob {
+  id                String           @id @default(uuid())
+  userId            String
+  contentVariantId  String
+  platformAccountId String
+  platform          Platform
+  contentType       ContentType
+  mode              ProviderMode     @default(official_api)
+  status            PublishJobStatus @default(DRAFT)
+  scheduledAt       DateTime?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  externalPostId    String?
+  externalUrl       String?
+  lastError         String?
+  retryCount        Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+  metadata          Json?
+
+  user            User             @relation(fields: [userId], references: [id])
+  contentVariant  ContentVariant   @relation(fields: [contentVariantId], references: [id])
+  platformAccount PlatformAccount  @relation(fields: [platformAccountId], references: [id])
+  publishAttempts PublishAttempt[]
+  interactions    Interaction[]
+  leads           Lead[]
+  manualChecklist ManualPublishChecklist?
+
+  @@unique([contentVariantId, platformAccountId, mode])
+  @@map("publish_jobs")
+}
+
+model PublishAttempt {
+  id           String    @id @default(uuid())
+  publishJobId String
+  attemptNo    Int
+  status       String
+  error        String?
+  screenshotId String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  metadata     Json?
+
+  publishJob PublishJob @relation(fields: [publishJobId], references: [id], onDelete: Cascade)
+
+  @@map("publish_attempts")
+}
+
+model Interaction {
+  id                    String            @id @default(uuid())
+  userId                String
+  platform              Platform
+  platformAccountId     String
+  conversationId        String?
+  publishJobId          String?
+  externalInteractionId String
+  externalUserId        String
+  externalUserName      String?
+  type                  InteractionType
+  content               String
+  rawPayload            Json?
+  status                InteractionStatus @default(NEW)
+  receivedAt            DateTime          @default(now())
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  deletedAt             DateTime?
+  metadata              Json?
+
+  user            User            @relation(fields: [userId], references: [id])
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id])
+  conversation    Conversation?   @relation(fields: [conversationId], references: [id])
+  publishJob      PublishJob?     @relation(fields: [publishJobId], references: [id])
+  leads           Lead[]
+  classification  InteractionClassification?
+  replySuggestions ReplySuggestion[]
+
+  @@unique([platformAccountId, externalInteractionId])
+  @@map("interactions")
+}
+
+model Conversation {
+  id                String            @id @default(uuid())
+  userId            String
+  platform          Platform
+  platformAccountId String
+  externalUserId    String
+  externalUserName  String?
+  status            InteractionStatus @default(NEW)
+  lastMessageAt     DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+  metadata          Json?
+
+  user            User            @relation(fields: [userId], references: [id])
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id])
+  interactions    Interaction[]
+
+  @@unique([platformAccountId, externalUserId])
+  @@map("conversations")
+}
+
+model Lead {
+  id                  String     @id @default(uuid())
+  userId              String
+  sourcePlatform      Platform
+  sourceAccountId     String
+  sourceInteractionId String?
+  sourcePublishJobId  String?
+  externalUserId      String
+  externalUserName    String?
+  level               LeadLevel  @default(C)
+  status              LeadStatus @default(NEW)
+  intent              String?
+  confidence          Float?
+  summary             String?
+  tags                Json?
+  assignedTo          String?
+  nextAction          String?
+  riskLevel           String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  deletedAt           DateTime?
+  metadata            Json?
+
+  user             User                  @relation(fields: [userId], references: [id])
+  interaction      Interaction?          @relation(fields: [sourceInteractionId], references: [id])
+  publishJob       PublishJob?           @relation(fields: [sourcePublishJobId], references: [id])
+  leadActivities   LeadActivity[]
+  externalMappings LeadExternalMapping[]
+  syncLogs         LeadSinkSyncLog[]
+
+  @@unique([sourcePlatform, sourceAccountId, externalUserId])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid())
+  leadId    String
+  action    String
+  note      String?
+  operator  String?
+  createdAt DateTime @default(now())
+  metadata  Json?
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_activities")
+}
+
+model LeadSinkConfig {
+  id        String   @id @default(uuid())
+  userId    String
+  sinkType  String
+  config    Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  metadata  Json?
+
+  @@map("lead_sink_configs")
+}
+
+model LeadExternalMapping {
+  id          String   @id @default(uuid())
+  leadId      String
+  sinkType    String
+  externalId  String
+  externalUrl String?
+  syncedAt    DateTime @default(now())
+  metadata    Json?
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, sinkType])
+  @@map("lead_external_mappings")
+}
+
+model LeadSinkSyncLog {
+  id          String   @id @default(uuid())
+  leadId      String
+  sinkType    String
+  operation   String
+  status      String
+  error       String?
+  attemptedAt DateTime @default(now())
+  metadata    Json?
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_sink_sync_logs")
+}
+
+model ResearchTask {
+  id                   String         @id @default(uuid())
+  userId               String
+  type                 String
+  platforms            Json?
+  keywords             Json?
+  targetAccountConfigs Json?
+  status               ResearchStatus @default(DRAFT)
+  provider             String?
+  rateLimitPolicy      Json?
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  lastError            String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  deletedAt            DateTime?
+  metadata             Json?
+
+  user              User                    @relation(fields: [userId], references: [id])
+  researchKeywords  ResearchKeyword[]
+  targetAccounts    ResearchTargetAccount[]
+  collectedPosts    CollectedPost[]
+  collectedComments CollectedComment[]
+  insights          ResearchInsight[]
+  opportunities     ContentOpportunity[]
+
+  @@map("research_tasks")
+}
+
+model ResearchKeyword {
+  id             String    @id @default(uuid())
+  researchTaskId String
+  keyword        String
+  platform       Platform?
+  createdAt      DateTime  @default(now())
+
+  researchTask ResearchTask @relation(fields: [researchTaskId], references: [id], onDelete: Cascade)
+
+  @@map("research_keywords")
+}
+
+model ResearchTargetAccount {
+  id             String   @id @default(uuid())
+  researchTaskId String
+  platform       Platform
+  accountId      String
+  accountName    String?
+  createdAt      DateTime @default(now())
+
+  researchTask ResearchTask @relation(fields: [researchTaskId], references: [id], onDelete: Cascade)
+
+  @@map("research_target_accounts")
+}
+
+model CollectedPost {
+  id             String    @id @default(uuid())
+  researchTaskId String
+  platform       Platform
+  externalPostId String
+  title          String?
+  content        String?
+  authorId       String?
+  authorName     String?
+  likeCount      Int?
+  commentCount   Int?
+  shareCount     Int?
+  publishedAt    DateTime?
+  collectedAt    DateTime  @default(now())
+  metadata       Json?
+
+  researchTask ResearchTask @relation(fields: [researchTaskId], references: [id], onDelete: Cascade)
+
+  @@map("collected_posts")
+}
+
+model CollectedComment {
+  id                String   @id @default(uuid())
+  researchTaskId    String
+  platform          Platform
+  externalCommentId String
+  externalPostId    String?
+  externalUserId    String?
+  externalUserName  String?
+  content           String
+  likeCount         Int?
+  collectedAt       DateTime @default(now())
+  metadata          Json?
+
+  researchTask ResearchTask @relation(fields: [researchTaskId], references: [id], onDelete: Cascade)
+
+  @@map("collected_comments")
+}
+
+model ResearchInsight {
+  id             String   @id @default(uuid())
+  researchTaskId String
+  type           String
+  title          String
+  summary        String?
+  data           Json?
+  createdAt      DateTime @default(now())
+
+  researchTask ResearchTask @relation(fields: [researchTaskId], references: [id], onDelete: Cascade)
+
+  @@map("research_insights")
+}
+
+model ContentOpportunity {
+  id             String   @id @default(uuid())
+  researchTaskId String
+  title          String
+  description    String?
+  platforms      Json?
+  priority       String?
+  status         String   @default("suggested")
+  createdAt      DateTime @default(now())
+
+  researchTask ResearchTask @relation(fields: [researchTaskId], references: [id], onDelete: Cascade)
+
+  @@map("content_opportunities")
+}
+
+model SkillRun {
+  id         String         @id @default(uuid())
+  userId     String
+  skillName  String
+  status     SkillRunStatus @default(pending)
+  input      Json?
+  output     Json?
+  error      String?
+  tokensUsed Int?
+  latencyMs  Int?
+  traceId    String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime       @default(now())
+  metadata   Json?
+
+  @@map("skill_runs")
+}
+
+model AgentRun {
+  id         String    @id @default(uuid())
+  userId     String
+  agentName  String
+  status     String    @default("pending")
+  input      Json?
+  output     Json?
+  error      String?
+  traceId    String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  metadata   Json?
+
+  @@map("agent_runs")
+}
+
+model ProviderRunLog {
+  id                String            @id @default(uuid())
+  providerName      String
+  providerVersion   String?
+  operation         String
+  inputSummary      String?
+  outputSummary     String?
+  status            ProviderRunStatus @default(pending)
+  errorCode         String?
+  errorMessage      String?
+  screenshotAssetId String?
+  durationMs        Int?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  traceId           String?
+  createdAt         DateTime          @default(now())
+  metadata          Json?
+
+  @@map("provider_run_logs")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  userId    String
+  action    AuditAction
+  entity    String
+  entityId  String
+  changes   Json?
+  traceId   String?
+  createdAt DateTime    @default(now())
+  metadata  Json?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String
+  title     String
+  content   String
+  level     NotificationLevel @default(info)
+  readAt    DateTime?
+  actionUrl String?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model SystemTask {
+  id               String   @id @default(uuid())
+  taskType         String
+  title            String
+  status           SystemTaskStatus @default(queued)
+  relatedEntityType String?
+  relatedEntityId  String?
+  progress         Int      @default(0)
+  errorMessage     String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@map("system_tasks")
+}
+
+model SecretRef {
+  id             String   @id @default(uuid())
+  scope          String
+  key            String
+  encryptedValue String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([scope, key])
+  @@map("secret_refs")
+}
+
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  eventType   String
+  platform    String?
+  entityType  String?
+  entityId    String?
+  value       Float?
+  metadata    Json?
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([eventType, occurredAt])
+  @@index([platform, occurredAt])
+  @@map("analytics_events")
+}
+
+model InteractionClassification {
+  id             String   @id @default(uuid())
+  interactionId  String   @unique
+  intent         String
+  leadLevel      String
+  confidence     Float
+  riskLevel      String
+  summary        String
+  tags           Json
+  nextAction     String?
+  modelProvider  String?
+  modelName      String?
+  createdAt      DateTime @default(now())
+  interaction    Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+
+  @@map("interaction_classifications")
+}
+
+model ReplySuggestion {
+  id             String   @id @default(uuid())
+  interactionId  String
+  suggestedText  String
+  replyType      ReplyType @default(faq_answer)
+  riskLevel      String   @default("low")
+  needReview     Boolean  @default(false)
+  decision       String?
+  decisionReason String?
+  status         ReplySuggestionStatus @default(draft)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  interaction    Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  replyAttempts  ReplyAttempt[]
+
+  @@index([interactionId, status])
+  @@map("reply_suggestions")
+}
+
+model ReplyAttempt {
+  id                String   @id @default(uuid())
+  replySuggestionId String
+  replySuggestion   ReplySuggestion @relation(fields: [replySuggestionId], references: [id], onDelete: Cascade)
+  platform          String
+  providerMode      String
+  status            String
+  externalReplyId   String?
+  errorCode         String?
+  errorMessage      String?
+  rawResponse       Json?
+  createdAt         DateTime @default(now())
+
+  @@index([platform, status])
+  @@map("reply_attempts")
+}
+
+model InteractionSyncJob {
+  id                String   @id @default(uuid())
+  platform          String
+  platformAccountId String
+  syncType          String
+  mode              String
+  status            String
+  cursor            String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  fetchedCount      Int      @default(0)
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([platform, status])
+  @@map("interaction_sync_jobs")
+}
+
+model ContentComplianceCheck {
+  id               String   @id @default(uuid())
+  contentVariantId String
+  contentVariant   ContentVariant @relation(fields: [contentVariantId], references: [id], onDelete: Cascade)
+  status           String
+  riskLevel        ComplianceRiskLevel @default(low)
+  issues           Json
+  suggestedFixes   Json?
+  checkedBy        String?
+  createdAt        DateTime @default(now())
+
+  @@index([contentVariantId])
+  @@map("content_compliance_checks")
+}
+
+model BrowserSession {
+  id             String   @id @default(uuid())
+  platform       String
+  platformAccountId String
+  status         String
+  loginRequired  Boolean  @default(false)
+  startedAt      DateTime?
+  endedAt        DateTime?
+  lastScreenshotKey String?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("browser_sessions")
+}
+
+model ManualPublishChecklist {
+  id            String   @id @default(uuid())
+  publishJobId  String   @unique
+  publishJob    PublishJob @relation(fields: [publishJobId], references: [id], onDelete: Cascade)
+  platform      String
+  steps         Json
+  status        String
+  completedBy   String?
+  completedAt   DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@map("manual_publish_checklists")
+}

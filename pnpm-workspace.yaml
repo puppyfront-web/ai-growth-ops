@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  '@prisma/client': false
+  '@prisma/engines': false
+  esbuild: false
+  prisma: false

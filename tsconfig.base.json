@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@ai-growth-ops/shared": ["packages/shared/src/index.ts"],
+      "@ai-growth-ops/api": ["apps/api/src/index.ts"],
+      "@ai-growth-ops/web": ["apps/web/src/index.ts"],
+      "@ai-growth-ops/ai": ["packages/ai/src/index.ts"],
+      "@ai-growth-ops/connectors": ["packages/connectors/src/index.ts"],
+      "@ai-growth-ops/database": ["packages/database/src/index.ts"],
+      "@ai-growth-ops/lead-sinks": ["packages/lead-sinks/src/index.ts"],
+      "@ai-growth-ops/observability": ["packages/observability/src/index.ts"],
+      "@ai-growth-ops/providers": ["packages/providers/src/index.ts"],
+      "@ai-growth-ops/skills": ["packages/skills/src/index.ts"]
+    }
+  }
+}

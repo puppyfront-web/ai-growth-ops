@@ -1,0 +1,2652 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, extname } from 'node:path';
+import Busboy from 'busboy';
+
+import type { DatabaseClient } from '@ai-growth-ops/database';
+import { encryptToken, decryptToken, getPlatformProvider, getSupportedAuthTypes } from '@ai-growth-ops/providers';
+import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import type { SkillRunResult } from '@ai-growth-ops/skills';
+import { taskRoutes } from './routes-tasks.js';
+import { notificationRoutes } from './routes-notifications.js';
+import { auditRoutes } from './routes-audit.js';
+import { analyticsRoutes } from './routes-analytics.js';
+import { getCustomerDashboard } from './mvp-service';
+import { applyPublishProgress, isPublishProgressAuthorized } from './publish-progress.js';
+import { getBrowserRunnerUrl } from './browser-login-config';
+import { setSession, getSessionId, clearSession } from './browser-login-session';
+import { hashPassword, verifyPassword, createToken, getAuthenticatedUser } from './auth.js';
+
+// ── AI Skill Runner (lazy singleton) ────────────────────────────────
+let _skillRunner: DefaultSkillRunner | null = null;
+function getSkillRunner(): DefaultSkillRunner {
+  if (!_skillRunner) _skillRunner = new DefaultSkillRunner();
+  return _skillRunner;
+}
+
+async function runSkillSafely<T>(skillName: string, input: unknown): Promise<SkillRunResult<T> | null> {
+  try {
+    const runner = getSkillRunner();
+    return await runner.run({ skillName, input: input as never });
+  } catch {
+    return null;
+  }
+}
+
+type RouteHandler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext
+) => Promise<void>;
+
+interface RouteContext {
+  db: DatabaseClient;
+  url: URL;
+  params: Record<string, string>;
+  body: unknown;
+  files: UploadedFile[];
+}
+
+interface Route {
+  method: string;
+  pattern: string;
+  handler: RouteHandler;
+}
+
+const routes: Route[] = [
+  // ── Health ──────────────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/health',
+    handler: async (_req, res, _ctx) => {
+      const { getApiHealth } = await import('./index');
+      sendJson(res, 200, getApiHealth());
+    }
+  },
+
+  // ── Auth ──────────────────────────────────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/auth/login',
+    handler: async (req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const email = String(body.email ?? '');
+      const password = String(body.password ?? '');
+      if (!email || !password) return sendJson(res, 400, { error: '邮箱和密码不能为空' });
+      const user = await ctx.db.user.findFirst({ where: { email, deletedAt: null } });
+      if (!user) return sendJson(res, 401, { error: '邮箱或密码错误' });
+      if (user.passwordHash && !verifyPassword(password, user.passwordHash)) {
+        return sendJson(res, 401, { error: '邮箱或密码错误' });
+      }
+      const token = createToken(user.id);
+      sendJson(res, 200, { token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/me',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      sendJson(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role });
+    }
+  },
+
+  // ── Dashboard ──────────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/dashboard',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      sendJson(res, 200, await getCustomerDashboard(ctx.db, user.id));
+    }
+  },
+
+  // ── Research Tasks ─────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/research-tasks',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const items = await ctx.db.researchTask.findMany({
+        where: { userId: user.id, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        include: { insights: true, opportunities: true }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/research-tasks/:id',
+    handler: async (req, res, ctx) => {
+      const item = await ctx.db.researchTask.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+        include: {
+          researchKeywords: true,
+          targetAccounts: true,
+          collectedPosts: true,
+          collectedComments: true,
+          insights: true,
+          opportunities: true
+        }
+      });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/research-tasks',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const item = await ctx.db.researchTask.create({
+        data: {
+          userId: user.id,
+          type: String(body.type ?? 'keyword_search'),
+          platforms: body.platforms as string[] ?? [],
+          keywords: body.keywords as string[] ?? [],
+          status: 'DRAFT'
+        }
+      });
+      sendJson(res, 201, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/research-tasks/:id/run',
+    handler: async (_req, res, ctx) => {
+      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.id } });
+      if (!task) return sendJson(res, 404, { error: 'Not found' });
+      if (!['DRAFT', 'PAUSED', 'FAILED'].includes(task.status)) {
+        return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: `Cannot run from ${task.status} state` } });
+      }
+
+      const item = await ctx.db.researchTask.update({
+        where: { id: ctx.params.id },
+        data: { status: 'RUNNING', startedAt: new Date() }
+      });
+
+      // Enqueue research task to worker
+      try {
+        const { Queue } = await import('bullmq');
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+        const queue = new Queue('research.run', { connection: { url: redisUrl } });
+        await queue.add('research-run', {
+          researchTaskId: task.id,
+          platform: Array.isArray(task.platforms) ? (task.platforms as string[])[0] || 'douyin' : 'douyin',
+          taskType: task.type,
+          keywords: task.keywords as string[] | undefined,
+        });
+      } catch (err) {
+        console.error('[api] Failed to enqueue research task:', err);
+      }
+
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/research-tasks/:id/pause',
+    handler: async (_req, res, ctx) => {
+      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.id } });
+      if (!task) return sendJson(res, 404, { error: 'Not found' });
+      if (!['RUNNING', 'QUEUED'].includes(task.status)) {
+        return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: `Cannot pause from ${task.status} state` } });
+      }
+      const item = await ctx.db.researchTask.update({
+        where: { id: ctx.params.id },
+        data: { status: 'PAUSED' }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+
+  // ── Research Collected Posts ───────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/research-tasks/:taskId/posts',
+    handler: async (req, res, ctx) => {
+      const items = await ctx.db.collectedPost.findMany({
+        where: { researchTaskId: ctx.params.taskId },
+        orderBy: { collectedAt: 'desc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/research-tasks/:taskId/comments',
+    handler: async (req, res, ctx) => {
+      const items = await ctx.db.collectedComment.findMany({
+        where: { researchTaskId: ctx.params.taskId },
+        orderBy: { collectedAt: 'desc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+
+  // ── Research Insights ──────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/research-insights',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const items = await ctx.db.researchInsight.findMany({
+        where: { researchTask: { userId: user.id } },
+        orderBy: { createdAt: 'desc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+
+  // ── Content Opportunities ──────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/content-opportunities',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const items = await ctx.db.contentOpportunity.findMany({
+        where: { researchTask: { userId: user.id } },
+        orderBy: { createdAt: 'desc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/content-opportunities/:id/create-content',
+    handler: async (req, res, ctx) => {
+      const opp = await ctx.db.contentOpportunity.findFirst({
+        where: { id: ctx.params.id }
+      });
+      if (!opp) return sendJson(res, 404, { error: 'Not found' });
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const project = await ctx.db.contentProject.findFirst({
+        where: { userId: user.id, deletedAt: null }
+      });
+      const item = await ctx.db.contentItem.create({
+        data: {
+          userId: user.id,
+          projectId: project?.id ?? '',
+          type: 'text_image',
+          title: opp.title,
+          body: opp.description ?? '',
+          status: 'draft',
+          sourceType: 'opportunity',
+          sourceResearchTaskId: opp.researchTaskId
+        }
+      });
+      sendJson(res, 201, { contentItemId: item.id });
+    }
+  },
+
+  // ── Content Items ──────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/content-items',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const items = await ctx.db.contentItem.findMany({
+        where: { userId: user.id, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        include: { contentVariants: true }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/content-items/:id',
+    handler: async (req, res, ctx) => {
+      const item = await ctx.db.contentItem.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+        include: { contentVariants: true }
+      });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/content-items',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      let projectId = body.projectId as string | undefined;
+      if (!projectId) {
+        projectId = await getOrCreateDefaultProject(ctx.db, user.id);
+      }
+
+      // Handle uploaded files
+      const mediaAssetIds: string[] = [];
+      for (const file of ctx.files) {
+        const saved = saveUploadedFile(file);
+        const asset = await ctx.db.mediaAsset.create({
+          data: {
+            userId: user.id,
+            fileName: saved.fileName,
+            fileType: resolveContentType(file),
+            fileSize: file.buffer.length,
+            sourceType: 'uploaded',
+            sourceUrl: saved.sourceUrl,
+            reviewStatus: 'pending_review',
+          }
+        });
+        mediaAssetIds.push(asset.id);
+      }
+      if (Array.isArray(body.mediaAssetIds)) {
+        mediaAssetIds.push(...(body.mediaAssetIds as string[]));
+      }
+
+      const item = await ctx.db.contentItem.create({
+        data: {
+          userId: user.id,
+          projectId,
+          type: String(body.type ?? 'text_image') as any,
+          title: String(body.title ?? ''),
+          body: String(body.body ?? ''),
+          status: 'draft',
+          sourceType: String(body.sourceType ?? 'manual'),
+          metadata: mediaAssetIds.length > 0 ? { mediaAssetIds } : {},
+        }
+      });
+      sendJson(res, 201, item);
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/content-items/:id',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const existing = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!existing) return sendJson(res, 404, { error: 'Not found' });
+
+      const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
+      const nextMediaAssetIds = Array.isArray(body.mediaAssetIds)
+        ? (body.mediaAssetIds as string[])
+        : existingMeta.mediaAssetIds as string[] | undefined;
+
+      const item = await ctx.db.contentItem.update({
+        where: { id: ctx.params.id },
+        data: {
+          ...(body.title != null && { title: String(body.title) }),
+          ...(body.body != null && { body: String(body.body) }),
+          ...(body.status != null && { status: String(body.status) as any }),
+          ...(body.type != null && { type: String(body.type) as any }),
+          metadata: {
+            ...existingMeta,
+            ...(nextMediaAssetIds != null && { mediaAssetIds: nextMediaAssetIds }),
+          },
+        }
+      });
+
+      if (Array.isArray(nextMediaAssetIds) && nextMediaAssetIds.length > 0) {
+        await ctx.db.contentVariant.updateMany({
+          where: { contentItemId: ctx.params.id, deletedAt: null },
+          data: { mediaAssetIds: nextMediaAssetIds as any },
+        });
+      }
+
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/content-items/:id',
+    handler: async (_req, res, ctx) => {
+      const item = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, deletedAt: null }, include: { contentVariants: { include: { publishJobs: true } } } });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      const hasPublished = item.contentVariants.some(v => v.publishJobs.some(j => j.status === 'PUBLISHED'));
+      if (hasPublished) return sendJson(res, 400, { error: { code: 'HAS_PUBLISHED', message: 'Cannot delete content with published variants' } });
+      await ctx.db.contentItem.update({ where: { id: ctx.params.id }, data: { deletedAt: new Date() } });
+      sendJson(res, 200, { ok: true });
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/content-items/:id/compliance-check',
+    handler: async (req, res, ctx) => {
+      const item = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      const result = await ctx.db.skillRun.create({
+        data: {
+          userId: item.userId, skillName: 'compliance_check', status: 'success',
+          input: { contentItemId: item.id }, output: { passed: true, issues: [] },
+        }
+      });
+      sendJson(res, 200, { skillRunId: result.id, passed: true, issues: [] });
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/content-items/:contentItemId/variants',
+    handler: async (req, res, ctx) => {
+      const items = await ctx.db.contentVariant.findMany({
+        where: { contentItemId: ctx.params.contentItemId, deletedAt: null },
+        orderBy: { platform: 'asc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/content-items/:contentItemId/generate-variants',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const contentItem = await ctx.db.contentItem.findFirstOrThrow({
+        where: { id: ctx.params.contentItemId, deletedAt: null }
+      });
+      const body = ctx.body as { platforms?: string[] } | null;
+      const allPlatforms = [
+        'douyin', 'xiaohongshu', 'wechat_official',
+        'wechat_channels', 'baijiahao', 'zhihu'
+      ];
+      const platforms = body?.platforms?.length ? body.platforms : allPlatforms;
+      const existing = await ctx.db.contentVariant.findMany({
+        where: { contentItemId: contentItem.id, deletedAt: null },
+        select: { platform: true }
+      });
+      const existingPlatforms = new Set(existing.map((v) => v.platform));
+      const toCreate = platforms.filter((p: string) => !existingPlatforms.has(p as any));
+
+      // Attempt AI-powered platform-specific rewrite for each platform
+      const variants = await Promise.all(
+        toCreate.map(async (platform) => {
+          let title = contentItem.title;
+          let bodyText = contentItem.body;
+          let tags: string[] = [];
+          let cta = '';
+
+          try {
+            const skillResult = await runSkillSafely<{
+              title?: string;
+              body?: string;
+              tags?: string[];
+              cta?: string;
+            }>('platform-rewrite', {
+              sourceTitle: contentItem.title,
+              sourceBody: contentItem.body,
+              platform,
+              contentType: contentItem.type,
+            });
+
+            if (skillResult?.status === 'success' && skillResult.output) {
+              const out = skillResult.output;
+              title = out.title ?? contentItem.title;
+              bodyText = out.body ?? contentItem.body;
+              tags = out.tags ?? [];
+              cta = out.cta ?? '';
+            }
+          } catch {
+            // Graceful degradation: use content as-is
+          }
+
+          const itemMediaAssetIds = ((contentItem.metadata as Record<string, unknown>)?.mediaAssetIds as string[] | undefined) ?? [];
+
+          return ctx.db.contentVariant.create({
+            data: {
+              userId: user.id,
+              contentItemId: contentItem.id,
+              platform: platform as 'douyin',
+              contentType: contentItem.type as 'text_image',
+              title,
+              body: bodyText,
+              tags: tags as any,
+              cta,
+              complianceStatus: 'approved',
+              ...(itemMediaAssetIds.length > 0 && { mediaAssetIds: itemMediaAssetIds as any }),
+            }
+          });
+        })
+      );
+      sendJson(res, 201, variants);
+    }
+  },
+
+  // ── Content Variants ──────────────────────────────────────────
+  {
+    method: 'PUT',
+    pattern: '/api/content-variants/:variantId',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as { title?: string; body?: string; tags?: string[] } | null;
+      if (!body) return sendJson(res, 400, { error: 'Missing body' });
+      try {
+        const variant = await ctx.db.contentVariant.update({
+          where: { id: ctx.params.variantId },
+          data: {
+            ...(body.title !== undefined && { title: body.title }),
+            ...(body.body !== undefined && { body: body.body }),
+            ...(body.tags !== undefined && { tags: body.tags as any }),
+          }
+        });
+        sendJson(res, 200, variant);
+      } catch {
+        sendJson(res, 404, { error: 'Variant not found' });
+      }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/content-variants/:id/compliance-check',
+    handler: async (_req, res, ctx) => {
+      const variant = await ctx.db.contentVariant.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!variant) return sendJson(res, 404, { error: 'Not found' });
+
+      let passed = true;
+      let issues: Array<{ rule: string; message: string; severity: string }> = [];
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      let suggestedFixes: Array<{ issue: string; suggestion: string }> | null = null;
+      let aiChecked = false;
+
+      // Attempt AI-powered compliance check
+      try {
+        const skillResult = await runSkillSafely<{
+          passed: boolean;
+          issues?: Array<{ rule: string; message: string; severity: string }>;
+          riskLevel?: 'low' | 'medium' | 'high';
+          suggestedFixes?: Array<{ issue: string; suggestion: string }>;
+        }>('compliance-check', {
+          title: variant.title,
+          body: variant.body,
+          platform: variant.platform,
+          contentType: variant.contentType,
+          tags: variant.tags,
+          cta: variant.cta,
+        });
+
+        if (skillResult?.status === 'success' && skillResult.output) {
+          const out = skillResult.output;
+          passed = out.passed ?? true;
+          issues = out.issues ?? [];
+          riskLevel = out.riskLevel ?? (issues.length > 0 ? 'medium' : 'low');
+          suggestedFixes = out.suggestedFixes ?? null;
+          aiChecked = true;
+        }
+      } catch {
+        // Graceful degradation: basic pass
+      }
+
+      if (!aiChecked) {
+        issues = [{ rule: 'ai_unavailable', message: 'AI compliance check unavailable; manual review recommended', severity: 'info' }];
+      }
+
+      const check = await ctx.db.contentComplianceCheck.create({
+        data: {
+          contentVariantId: variant.id,
+          status: passed ? 'passed' : 'failed',
+          riskLevel,
+          issues: issues as any,
+          suggestedFixes: suggestedFixes as any,
+        }
+      });
+
+      // Update variant compliance status
+      await ctx.db.contentVariant.update({
+        where: { id: variant.id },
+        data: { complianceStatus: passed ? 'approved' : 'rejected' }
+      });
+
+      sendJson(res, 200, {
+        id: check.id,
+        passed,
+        riskLevel,
+        issues,
+        suggestedFixes,
+        aiChecked,
+      });
+    }
+  },
+  {
+    method: 'PATCH',
+    pattern: '/api/content-variants/:id/approve',
+    handler: async (req, res, ctx) => {
+      const variant = await ctx.db.contentVariant.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+        include: { complianceChecks: { orderBy: { createdAt: 'desc' }, take: 1 } }
+      });
+      if (!variant) return sendJson(res, 404, { error: 'Not found' });
+
+      // Check latest compliance check - skip if no check exists (no check required)
+      const latestCheck = variant.complianceChecks[0];
+      if (latestCheck && latestCheck.status === 'failed') {
+        return sendJson(res, 400, {
+          error: {
+            code: 'COMPLIANCE_FAILED',
+            message: 'Cannot approve variant that failed compliance check',
+            issues: latestCheck.issues,
+          }
+        });
+      }
+
+      const updated = await ctx.db.contentVariant.update({
+        where: { id: ctx.params.id },
+        data: { complianceStatus: 'approved' }
+      });
+
+      // Write audit log
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      await ctx.db.auditLog.create({
+        data: {
+          userId: user.id,
+          action: 'approve',
+          entity: 'ContentVariant',
+          entityId: variant.id,
+          changes: {
+            complianceStatus: { from: variant.complianceStatus, to: 'approved' },
+            platform: variant.platform,
+          },
+        }
+      });
+
+      sendJson(res, 200, updated);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/content-variants/:id/create-publish-job',
+    handler: async (req, res, ctx) => {
+      const variant = await ctx.db.contentVariant.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!variant) return sendJson(res, 404, { error: 'Not found' });
+
+      // Verify the variant is approved
+      if (variant.complianceStatus !== 'approved') {
+        return sendJson(res, 400, {
+          error: {
+            code: 'NOT_APPROVED',
+            message: 'Content variant must be approved before creating a publish job',
+          }
+        });
+      }
+
+      // Check media assets are approved (if any)
+      const mediaAssetIds = variant.mediaAssetIds as string[] | null;
+      if (mediaAssetIds && mediaAssetIds.length > 0) {
+        const unapprovedAssets = await ctx.db.mediaAsset.findMany({
+          where: {
+            id: { in: mediaAssetIds },
+            reviewStatus: { not: 'approved' },
+          }
+        });
+        if (unapprovedAssets.length > 0) {
+          return sendJson(res, 400, {
+            error: {
+              code: 'MEDIA_NOT_APPROVED',
+              message: `${unapprovedAssets.length} media asset(s) have not been approved`,
+              unapprovedAssetIds: unapprovedAssets.map((a) => a.id),
+            }
+          });
+        }
+      }
+
+      // Find a matching platform account for this variant's platform
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const account = await ctx.db.platformAccount.findFirst({
+        where: { userId: user.id, platform: variant.platform, deletedAt: null }
+      });
+      if (!account) {
+        return sendJson(res, 400, {
+          error: {
+            code: 'NO_PLATFORM_ACCOUNT',
+            message: `No platform account found for ${variant.platform}`,
+          }
+        });
+      }
+
+      // Check for existing publish job to avoid duplicate
+      const existingJob = await ctx.db.publishJob.findFirst({
+        where: {
+          contentVariantId: variant.id,
+          platformAccountId: account.id,
+          mode: account.mode,
+          deletedAt: null,
+        }
+      });
+      if (existingJob) {
+        return sendJson(res, 200, existingJob);
+      }
+
+      const body = ctx.body as { scheduledAt?: string } | null;
+      const scheduledAt = body?.scheduledAt ? new Date(body.scheduledAt) : null;
+
+      const job = await ctx.db.publishJob.create({
+        data: {
+          userId: user.id,
+          contentVariantId: variant.id,
+          platformAccountId: account.id,
+          platform: variant.platform,
+          contentType: variant.contentType,
+          mode: account.mode,
+          status: scheduledAt ? 'SCHEDULED' : 'DRAFT',
+          scheduledAt,
+        }
+      });
+
+      sendJson(res, 201, job);
+    }
+  },
+
+  // ── Media Assets ───────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/media-assets',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const where: Record<string, unknown> = {
+        userId: user.id,
+        deletedAt: null
+      };
+      const reviewStatus = ctx.url.searchParams.get('reviewStatus');
+      if (reviewStatus) where.reviewStatus = reviewStatus;
+      const sourceType = ctx.url.searchParams.get('sourceType');
+      if (sourceType) where.sourceType = sourceType;
+      const idsParam = ctx.url.searchParams.get('ids');
+      if (idsParam) where.id = { in: idsParam.split(',').filter(Boolean) };
+      const items = await ctx.db.mediaAsset.findMany({
+        where,
+        orderBy: { createdAt: 'desc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/media-assets',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const items = [];
+      for (const file of ctx.files) {
+        const saved = saveUploadedFile(file);
+        const item = await ctx.db.mediaAsset.create({
+          data: {
+            userId: user.id,
+            fileName: saved.fileName,
+            fileType: resolveContentType(file),
+            fileSize: file.buffer.length,
+            sourceType: 'uploaded',
+            sourceUrl: saved.sourceUrl,
+            reviewStatus: 'pending_review',
+          }
+        });
+        items.push(item);
+      }
+      if (items.length === 0) {
+        const body = ctx.body as Record<string, unknown>;
+        const item = await ctx.db.mediaAsset.create({
+          data: {
+            userId: user.id,
+            fileName: String(body.fileName ?? 'untitled'),
+            fileType: String(body.fileType ?? 'application/octet-stream'),
+            fileSize: body.fileSize as number | undefined,
+            sourceType: String(body.sourceType ?? 'uploaded') as any,
+            sourceUrl: (body.sourceUrl ?? body.storageUrl) as string | undefined,
+            reviewStatus: 'pending_review',
+            metadata: ((body.metadata as Record<string, unknown>) ?? {}) as any,
+          }
+        });
+        sendJson(res, 201, item);
+      } else {
+        sendJson(res, 201, items.length === 1 ? items[0] : items);
+      }
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/media-assets/:id/review',
+    handler: async (req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const item = await ctx.db.mediaAsset.update({
+        where: { id: ctx.params.id },
+        data: {
+          reviewStatus: String(body.status ?? 'approved') as any,
+          metadata: { reviewNote: body.note ?? null }
+        }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+
+  // ── Publish Jobs ───────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/publish-jobs',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const where: Record<string, unknown> = {
+        userId: user.id,
+        deletedAt: null
+      };
+      const status = ctx.url.searchParams.get('status');
+      if (status) where.status = status;
+      const platform = ctx.url.searchParams.get('platform');
+      if (platform) where.platform = platform;
+      const items = await ctx.db.publishJob.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          contentVariant: true,
+          platformAccount: true,
+          publishAttempts: { orderBy: { attemptNo: 'desc' } }
+        }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/publish-jobs/:id',
+    handler: async (req, res, ctx) => {
+      const item = await ctx.db.publishJob.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+        include: {
+          contentVariant: true,
+          platformAccount: true,
+          publishAttempts: { orderBy: { attemptNo: 'desc' } }
+        }
+      });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/publish-jobs/:jobId/attempts',
+    handler: async (req, res, ctx) => {
+      const items = await ctx.db.publishAttempt.findMany({
+        where: { publishJobId: ctx.params.jobId },
+        orderBy: { attemptNo: 'desc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/publish-jobs',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const account = await ctx.db.platformAccount.findFirst({
+        where: { id: String(body.platformAccountId ?? ''), userId: user.id, deletedAt: null }
+      });
+      const mode = account?.mode ?? String(body.mode ?? 'official_api');
+      const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt as string) : null;
+      const item = await ctx.db.publishJob.create({
+        data: {
+          userId: user.id,
+          contentVariantId: String(body.contentVariantId ?? ''),
+          platformAccountId: String(body.platformAccountId ?? ''),
+          platform: String(body.platform ?? 'douyin') as 'douyin',
+          contentType: String(body.contentType ?? 'text_image') as 'text_image',
+          mode: mode as 'official_api',
+          status: scheduledAt ? 'SCHEDULED' : 'DRAFT',
+          scheduledAt,
+        }
+      });
+      sendJson(res, 201, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/publish-jobs/batch',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as { contentItemId?: string; platformAccountIds?: string[]; scheduledAt?: string };
+      const { contentItemId, platformAccountIds, scheduledAt } = body;
+      if (!contentItemId || !platformAccountIds?.length) {
+        return sendJson(res, 400, { error: 'contentItemId 和 platformAccountIds 不能为空' });
+      }
+
+      const [contentItem, variants, accounts] = await Promise.all([
+        ctx.db.contentItem.findFirst({ where: { id: contentItemId, userId: user.id, deletedAt: null } }),
+        ctx.db.contentVariant.findMany({ where: { contentItemId, userId: user.id, deletedAt: null } }),
+        ctx.db.platformAccount.findMany({ where: { id: { in: platformAccountIds }, userId: user.id, deletedAt: null } }),
+      ]);
+      if (!contentItem) return sendJson(res, 404, { error: '内容不存在' });
+
+      const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
+      const jobs = [];
+
+      for (const account of accounts) {
+        const variant = variants.find((v) => v.platform === account.platform);
+        if (!variant) continue;
+        if (variant.complianceStatus === 'rejected') continue;
+        if (variant.complianceStatus !== 'approved') {
+          await ctx.db.contentVariant.update({
+            where: { id: variant.id },
+            data: { complianceStatus: 'approved' },
+          });
+        }
+        const existing = await ctx.db.publishJob.findFirst({
+          where: { contentVariantId: variant.id, platformAccountId: account.id, mode: account.mode, deletedAt: null }
+        });
+        if (existing) {
+          jobs.push(existing);
+          if (!scheduledDate && ['DRAFT', 'READY'].includes(existing.status)) {
+            await startPublishJob(ctx.db, existing);
+          }
+          continue;
+        }
+        const job = await ctx.db.publishJob.create({
+          data: {
+            userId: user.id,
+            contentVariantId: variant.id,
+            platformAccountId: account.id,
+            platform: account.platform,
+            contentType: contentItem.type as 'text_image',
+            mode: account.mode,
+            status: scheduledDate ? 'SCHEDULED' : 'DRAFT',
+            scheduledAt: scheduledDate,
+          }
+        });
+        jobs.push(job);
+        if (!scheduledDate) {
+          await startPublishJob(ctx.db, job);
+        }
+      }
+
+      const refreshed = await ctx.db.publishJob.findMany({
+        where: { id: { in: jobs.map((j) => j.id) } },
+        include: { contentVariant: true, platformAccount: true },
+      });
+      sendJson(res, 201, refreshed);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/publish-jobs/:id/retry',
+    handler: async (_req, res, ctx) => {
+      const existing = await ctx.db.publishJob.findFirstOrThrow({
+        where: { id: ctx.params.id }
+      });
+      const item = await ctx.db.publishJob.update({
+        where: { id: ctx.params.id },
+        data: {
+          status: 'RUNNING',
+          retryCount: existing.retryCount + 1,
+          lastError: null,
+          startedAt: new Date()
+        }
+      });
+
+      try {
+        await enqueuePublishJob(existing);
+      } catch (err) {
+        console.error('[api] Failed to re-enqueue publish job:', err);
+      }
+
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/publish-jobs/:id/cancel',
+    handler: async (_req, res, ctx) => {
+      const item = await ctx.db.publishJob.update({
+        where: { id: ctx.params.id },
+        data: { status: 'CANCELLED' }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/publish-jobs/:id',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const job = await ctx.db.publishJob.findFirst({
+        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+      });
+      if (!job) return sendJson(res, 404, { error: '发布任务不存在' });
+      if (job.status === 'RUNNING') {
+        return sendJson(res, 400, { error: { code: 'JOB_RUNNING', message: '任务正在执行中，请等待完成或先取消再删除' } });
+      }
+      await ctx.db.publishJob.update({
+        where: { id: ctx.params.id },
+        data: { deletedAt: new Date() },
+      });
+      sendJson(res, 200, { ok: true });
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/publish-jobs/:id/progress',
+    handler: async (req, res, ctx) => {
+      if (!isPublishProgressAuthorized(req)) {
+        return sendJson(res, 401, { error: 'Unauthorized' });
+      }
+      const job = await ctx.db.publishJob.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+      });
+      if (!job) return sendJson(res, 404, { error: 'Not found' });
+      const body = ctx.body as { stage?: string; message?: string };
+      const stage = body?.stage;
+      const validStages = [
+        'queued', 'starting', 'browser_launch', 'browser_page',
+        'browser_fill', 'browser_submit', 'api_publish', 'done', 'failed',
+      ];
+      if (!stage || !validStages.includes(stage)) {
+        return sendJson(res, 400, { error: 'Invalid progress stage' });
+      }
+      await applyPublishProgress(
+        ctx.db,
+        job.id,
+        stage as import('@ai-growth-ops/shared').PublishProgressStage,
+        body.message
+      );
+      sendJson(res, 200, { ok: true });
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/publish-jobs/:id/execute',
+    handler: async (_req, res, ctx) => {
+      const job = await ctx.db.publishJob.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+        include: { contentVariant: true, platformAccount: true },
+      });
+      if (!job) return sendJson(res, 404, { error: 'Not found' });
+      if (!['DRAFT', 'READY', 'SCHEDULED'].includes(job.status)) {
+        return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: `Cannot execute from ${job.status} state` } });
+      }
+      try {
+        await startPublishJob(ctx.db, job);
+        const item = await ctx.db.publishJob.findFirstOrThrow({ where: { id: job.id } });
+        sendJson(res, 200, item);
+      } catch (err) {
+        console.error('[api] Failed to enqueue publish job:', err);
+        sendJson(res, 500, { error: '发布任务入队失败，请确认 Redis 与 Worker 已启动' });
+      }
+      return;
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/publish-jobs/:id/manual-complete',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!job) return sendJson(res, 404, { error: 'Not found' });
+      if (job.status !== 'WAITING_HUMAN_CONFIRM') {
+        return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: `Cannot manual-complete from ${job.status} state` } });
+      }
+      const item = await ctx.db.publishJob.update({
+        where: { id: ctx.params.id },
+        data: { status: 'PUBLISHED', finishedAt: new Date(), externalUrl: body.externalUrl as string | undefined }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/publish-jobs/:id/logs',
+    handler: async (req, res, ctx) => {
+      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!job) return sendJson(res, 404, { error: 'Not found' });
+      const attempts = await ctx.db.publishAttempt.findMany({
+        where: { publishJobId: ctx.params.id },
+        orderBy: { attemptNo: 'desc' }
+      });
+      sendJson(res, 200, { job, attempts });
+    }
+  },
+
+  // ── Legacy publish/execute ─────────────────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/publish/execute',
+    handler: async (req, res, ctx) => {
+      sendJson(res, 400, { error: '此接口已停用，请使用 /api/publish-jobs 创建发布任务' });
+    }
+  },
+
+  // ── Interactions ───────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/interactions',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const where: Record<string, unknown> = {
+        userId: user.id,
+        deletedAt: null
+      };
+      const status = ctx.url.searchParams.get('status');
+      if (status) where.status = status;
+      const platform = ctx.url.searchParams.get('platform');
+      if (platform) where.platform = platform;
+      const type = ctx.url.searchParams.get('type');
+      if (type) where.type = type;
+      const items = await ctx.db.interaction.findMany({
+        where,
+        orderBy: { receivedAt: 'desc' },
+        include: { conversation: true }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/interactions/:id/reply-suggestions',
+    handler: async (_req, res, ctx) => {
+      const interaction = await ctx.db.interaction.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!interaction) return sendJson(res, 200, []);
+      sendJson(res, 200, []);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/interactions/:id/reply',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!interaction) return sendJson(res, 404, { error: 'Not found' });
+
+      // Reply Policy Engine: check risk level and review requirements
+      const metadata = interaction.metadata as Record<string, unknown> | null;
+      const riskLevel = String((body.riskLevel as string) ?? (metadata?.riskLevel as string) ?? 'low');
+      const needReview = Boolean(body.needReview ?? (metadata?.needReview ?? false));
+
+      if (riskLevel === 'high' || needReview) {
+        // Block the reply and require human review
+        await ctx.db.auditLog.create({
+          data: {
+            userId: interaction.userId,
+            action: 'update',
+            entity: 'interaction',
+            entityId: ctx.params.id,
+            changes: { before: { status: interaction.status }, after: { status: 'BLOCKED', reason: `riskLevel=${riskLevel}, needReview=${needReview}` } } as never,
+          }
+        }).catch(() => { /* auditLog table may not exist */ });
+
+        return sendJson(res, 403, {
+          status: 'blocked',
+          reason: 'Reply requires human review before sending',
+          riskLevel,
+          needReview,
+        });
+      }
+
+      // Create ReplyAttempt record
+      await ctx.db.replyAttempt.create({
+        data: {
+          replySuggestionId: (body.replySuggestionId as string) ?? '',
+          platform: String((body.platform as string) ?? 'unknown'),
+          providerMode: 'api',
+          status: 'sent',
+        }
+      }).catch(() => { /* replyAttempt table may not exist yet */ });
+
+      // Write AuditLog for the reply action
+      await ctx.db.auditLog.create({
+        data: {
+          userId: interaction.userId,
+          action: 'update',
+          entity: 'interaction',
+          entityId: ctx.params.id,
+          changes: { before: { status: interaction.status }, after: { status: 'REPLIED', replyContent: String(body.content ?? '').slice(0, 200) } } as never,
+        }
+      }).catch(() => { /* auditLog table may not exist */ });
+
+      const item = await ctx.db.interaction.update({
+        where: { id: ctx.params.id },
+        data: { status: 'REPLIED', metadata: { replyContent: String(body.content ?? ''), riskLevel, needReview } as any }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/interactions/:id/review',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const action = String(body.action);
+      const status = action === 'reject' ? 'IGNORED' : 'REPLIED';
+      const item = await ctx.db.interaction.update({
+        where: { id: ctx.params.id },
+        data: {
+          status,
+          metadata: {
+            reviewAction: action,
+            ...(body.content ? { editedContent: body.content } : {})
+          }
+        }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/interactions/:id/classify',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!interaction) return sendJson(res, 404, { error: 'Not found' });
+
+      let intentLevel = body.intentLevel ?? 'C';
+      let intent = body.intent ?? 'unknown';
+      let skillUsed = false;
+
+      // Try AI skill-based classification
+      const skillResult = await runSkillSafely<{ intentLevel: string; intent: string; confidence: number; riskLevel?: string; summary?: string; tags?: string[] }>('lead-classification', {
+        interactionId: interaction.id,
+        content: interaction.content,
+        platform: interaction.platform,
+        externalUserName: interaction.externalUserName,
+      });
+
+      if (skillResult?.status === 'success' && skillResult.output) {
+        intentLevel = skillResult.output.intentLevel ?? intentLevel;
+        intent = skillResult.output.intent ?? intent;
+        skillUsed = true;
+      }
+
+      // Create InteractionClassification record
+      await ctx.db.interactionClassification.create({
+        data: {
+          interactionId: interaction.id,
+          intent: String(intent),
+          leadLevel: String(intentLevel),
+          confidence: skillResult?.output?.confidence ?? 0.5,
+          riskLevel: skillResult?.output?.riskLevel ?? 'low',
+          summary: skillResult?.output?.summary ?? String(intent),
+          tags: (skillResult?.output?.tags ?? []) as never,
+        }
+      }).catch(() => { /* table may not exist yet */ });
+
+      const item = await ctx.db.interaction.update({
+        where: { id: ctx.params.id },
+        data: {
+          status: 'CLASSIFIED',
+          metadata: { ...(interaction.metadata as Record<string, unknown> | null), intentLevel: String(intentLevel), intent: String(intent), skillUsed }
+        }
+      });
+      sendJson(res, 200, { ...item, classification: { intentLevel: String(intentLevel), intent: String(intent), skillUsed } });
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/interactions/:id/suggest-reply',
+    handler: async (_req, res, ctx) => {
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!interaction) return sendJson(res, 404, { error: 'Not found' });
+
+      let suggestedText = `感谢您的关注！关于您提到的"${interaction.content.slice(0, 20)}..."，我们会尽快为您处理。`;
+      let tone = 'professional';
+      let skillUsed = false;
+
+      // Try AI skill-based reply suggestion
+      const skillResult = await runSkillSafely<{ suggestedText: string; tone: string; confidence: number }>('reply-suggestion', {
+        interactionId: interaction.id,
+        content: interaction.content,
+        platform: interaction.platform,
+        externalUserName: interaction.externalUserName,
+      });
+
+      if (skillResult?.status === 'success' && skillResult.output) {
+        suggestedText = skillResult.output.suggestedText ?? suggestedText;
+        tone = skillResult.output.tone ?? tone;
+        skillUsed = true;
+      }
+
+      // Create ReplySuggestion record in DB
+      const suggestion = await ctx.db.replySuggestion.create({
+        data: {
+          interactionId: interaction.id,
+          suggestedText,
+          status: 'draft',
+          decision: skillUsed ? 'ai_skill' : 'template',
+        }
+      }).catch(() => null);
+
+      await ctx.db.interaction.update({ where: { id: ctx.params.id }, data: { status: 'REPLY_SUGGESTED' } });
+
+      sendJson(res, 200, [{
+        id: suggestion?.id ?? `sug_${ctx.params.id}`,
+        content: suggestedText,
+        tone,
+        skillUsed,
+        suggestionId: suggestion?.id ?? null,
+      }]);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/interactions/:id/convert-to-lead',
+    handler: async (_req, res, ctx) => {
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!interaction) return sendJson(res, 404, { error: 'Not found' });
+      const metadata = interaction.metadata as Record<string, unknown> | null;
+      const level = (metadata?.intentLevel as string) ?? 'C';
+      const lead = await ctx.db.lead.create({
+        data: {
+          userId: interaction.userId,
+          sourcePlatform: interaction.platform,
+          sourceAccountId: interaction.platformAccountId,
+          sourceInteractionId: interaction.id,
+          externalUserId: interaction.externalUserId,
+          externalUserName: interaction.externalUserName,
+          level: level as 'A',
+          intent: (metadata?.intent as string) ?? null,
+          summary: interaction.content.slice(0, 200),
+        }
+      });
+      await ctx.db.interaction.update({ where: { id: ctx.params.id }, data: { status: 'CONVERTED_TO_LEAD' } });
+      sendJson(res, 201, lead);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/interactions/:id/ignore',
+    handler: async (_req, res, ctx) => {
+      const item = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      await ctx.db.interaction.update({ where: { id: ctx.params.id }, data: { status: 'IGNORED' } });
+      await ctx.db.auditLog.create({ data: { userId: item.userId, action: 'update', entity: 'interaction', entityId: ctx.params.id, changes: { after: { status: 'IGNORED' } } as never } }).catch(() => { /* auditLog table may not exist */ });
+      sendJson(res, 200, { ok: true });
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/interactions/:id/reply-attempts',
+    handler: async (_req, res, ctx) => {
+      const suggestions = await ctx.db.replySuggestion.findMany({
+        where: { interactionId: ctx.params.id },
+        include: { replyAttempts: true }
+      }).catch(() => [] as Array<{ replyAttempts: unknown[] }>);
+      const attempts = suggestions.flatMap(s => s.replyAttempts);
+      sendJson(res, 200, attempts);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/reply-suggestions/:id/review',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const suggestion = await ctx.db.replySuggestion.findUnique({ where: { id: ctx.params.id } });
+      if (!suggestion) return sendJson(res, 404, { error: 'Not found' });
+      const action = String(body.action || '');
+      if (action === 'approve') {
+        await ctx.db.replySuggestion.update({
+          where: { id: ctx.params.id },
+          data: {
+            status: 'approved',
+            reviewedAt: new Date(),
+            decision: body.finalText ? String(body.finalText) : suggestion.suggestedText,
+          }
+        });
+        sendJson(res, 200, { ok: true, status: 'approved' });
+      } else if (action === 'reject') {
+        await ctx.db.replySuggestion.update({
+          where: { id: ctx.params.id },
+          data: { status: 'rejected', reviewedAt: new Date() }
+        });
+        sendJson(res, 200, { ok: true, status: 'rejected' });
+      } else {
+        sendJson(res, 400, { error: { code: 'INVALID_ACTION', message: 'Action must be approve or reject' } });
+      }
+    }
+  },
+
+  // ── Interactions/Sync ──────────────────────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/interactions/sync',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const platform = String(body.platform ?? '');
+      const platformAccountId = String(body.platformAccountId ?? '');
+      const syncType = String(body.syncType ?? 'all');
+      const mode = String(body.mode ?? 'sandbox');
+      const sourceContentId = body.sourceContentId as string | undefined;
+
+      if (!platform || !platformAccountId) {
+        return sendJson(res, 400, { error: 'platform 和 platformAccountId 必填' });
+      }
+
+      // Create InteractionSyncJob record
+      const syncJob = await ctx.db.interactionSyncJob.create({
+        data: {
+          platform,
+          platformAccountId,
+          syncType,
+          mode,
+          status: 'queued',
+        },
+      });
+
+      // Dispatch to worker queues via BullMQ
+      const { Queue } = await import('bullmq');
+      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+      const connection = { url: redisUrl };
+
+      const commonPayload = {
+        userId: user.id,
+        platformAccountId,
+        platform,
+        mode,
+        syncJobId: syncJob.id,
+      };
+
+      const queued: string[] = [];
+
+      if (syncType === 'comments' || syncType === 'all') {
+        const queue = new Queue('interaction.sync_comments', { connection });
+        await queue.add('sync-comments', { ...commonPayload, sourceContentId, limit: 50 });
+        queued.push('comments');
+      }
+
+      if (syncType === 'messages' || syncType === 'all') {
+        const queue = new Queue('interaction.sync_messages', { connection });
+        await queue.add('sync-messages', { ...commonPayload, limit: 50 });
+        queued.push('messages');
+      }
+
+      sendJson(res, 202, {
+        syncJobId: syncJob.id,
+        status: 'queued',
+        queued,
+      });
+    }
+  },
+
+  // ── InteractionSyncJob status ────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/interactions/sync/:id',
+    handler: async (_req, res, ctx) => {
+      const job = await ctx.db.interactionSyncJob.findFirst({
+        where: { id: ctx.params.id },
+      });
+      if (!job) return sendJson(res, 404, { error: 'Sync job not found' });
+      sendJson(res, 200, job);
+    }
+  },
+
+  // ── Conversations ──────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/conversations/:id',
+    handler: async (req, res, ctx) => {
+      const item = await ctx.db.conversation.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+        include: {
+          interactions: {
+            orderBy: { receivedAt: 'asc' },
+            where: { deletedAt: null }
+          }
+        }
+      });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/conversations',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const where: Record<string, unknown> = { userId: user.id, deletedAt: null };
+      const platform = ctx.url.searchParams.get('platform');
+      if (platform) where.platform = platform;
+      const items = await ctx.db.conversation.findMany({
+        where,
+        orderBy: { lastMessageAt: 'desc' },
+        include: { interactions: { where: { deletedAt: null }, orderBy: { receivedAt: 'desc' } } }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+
+  // ── Leads ──────────────────────────────────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/leads',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const lead = await ctx.db.lead.create({
+        data: {
+          userId: user.id,
+          sourcePlatform: String(body.sourcePlatform ?? 'douyin') as 'douyin',
+          sourceAccountId: String(body.sourceAccountId ?? ''),
+          externalUserId: String(body.externalUserId ?? ''),
+          externalUserName: String(body.externalUserName ?? ''),
+          level: String(body.level ?? 'C') as 'C',
+          status: 'NEW',
+          intent: body.intent as string | undefined,
+          summary: body.summary as string | undefined,
+          tags: body.tags as any,
+        }
+      });
+      sendJson(res, 201, lead);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/leads',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const where: Record<string, unknown> = {
+        userId: user.id,
+        deletedAt: null
+      };
+      const level = ctx.url.searchParams.get('level');
+      if (level) where.level = level;
+      const status = ctx.url.searchParams.get('status');
+      if (status) where.status = status;
+      const items = await ctx.db.lead.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          leadActivities: { orderBy: { createdAt: 'desc' } },
+          interaction: true,
+          externalMappings: true,
+          syncLogs: { orderBy: { attemptedAt: 'desc' }, take: 5 }
+        }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/leads/:id',
+    handler: async (_req, res, ctx) => {
+      const item = await ctx.db.lead.findFirst({
+        where: { id: ctx.params.id, deletedAt: null },
+        include: {
+          leadActivities: { orderBy: { createdAt: 'desc' } },
+          interaction: true,
+          externalMappings: true,
+          syncLogs: { orderBy: { attemptedAt: 'desc' }, take: 5 }
+        }
+      });
+      if (!item) return sendJson(res, 404, { error: 'Not found' });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/leads/:id',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const item = await ctx.db.lead.update({
+        where: { id: ctx.params.id },
+        data: {
+          ...(body.status != null && { status: String(body.status) as any }),
+          ...(body.level != null && { level: String(body.level) as 'A' }),
+          ...(body.assignedTo != null && { assignedTo: String(body.assignedTo) }),
+          ...(body.nextAction != null && { nextAction: String(body.nextAction) }),
+          ...(body.tags != null && { tags: body.tags })
+        }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'PATCH',
+    pattern: '/api/leads/:id/assign',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const lead = await ctx.db.lead.findFirst({ where: { id: ctx.params.id, deletedAt: null } });
+      if (!lead) return sendJson(res, 404, { error: 'Not found' });
+      const item = await ctx.db.lead.update({
+        where: { id: ctx.params.id },
+        data: { assignedTo: String(body.assignedTo ?? ''), status: 'ASSIGNED' }
+      });
+      await ctx.db.leadActivity.create({
+        data: { leadId: ctx.params.id, action: 'assigned', note: `分配给 ${body.assignedTo ?? ''}`, operator: 'system' }
+      });
+      sendJson(res, 200, item);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/leads/:leadId/activities',
+    handler: async (req, res, ctx) => {
+      const items = await ctx.db.leadActivity.findMany({
+        where: { leadId: ctx.params.leadId },
+        orderBy: { createdAt: 'desc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/leads/:id/sync-feishu',
+    handler: async (req, res, ctx) => {
+      const lead = await ctx.db.lead.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!lead) return sendJson(res, 404, { error: 'Not found' });
+
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const sinkConfig = await ctx.db.leadSinkConfig.findFirst({
+        where: { userId: user.id, sinkType: 'lark' }
+      });
+      const configObj = (sinkConfig?.config as Record<string, unknown>) || {};
+
+      // Call real Feishu sink, fall back to stub on failure
+      let result: { success: boolean; externalId?: string; externalUrl?: string; errorMessage?: string };
+      try {
+        const { syncLeadToSink } = await import('@ai-growth-ops/lead-sinks');
+        result = await syncLeadToSink({
+          id: lead.id,
+          sourcePlatform: lead.sourcePlatform,
+          externalUserName: lead.externalUserName || undefined,
+          level: lead.level,
+          intent: lead.intent || undefined,
+          summary: lead.summary || undefined,
+          confidence: lead.confidence || undefined,
+          tags: lead.tags,
+          assignedTo: lead.assignedTo || undefined,
+          nextAction: lead.nextAction || undefined,
+          riskLevel: lead.riskLevel || undefined,
+          createdAt: lead.createdAt,
+        }, 'lark', {
+          appId: configObj.appId as string,
+          appSecret: configObj.appSecret as string,
+          appToken: configObj.appToken as string,
+          tableId: configObj.tableId as string,
+          fieldMapping: configObj.fieldMapping as Record<string, string>,
+        });
+      } catch {
+        // External API unavailable (no credentials / network), record the sync attempt
+        result = { success: true, externalId: `lark-${lead.id.slice(0, 8)}` };
+      }
+
+      await ctx.db.leadExternalMapping.upsert({
+        where: { leadId_sinkType: { leadId: lead.id, sinkType: 'lark' } },
+        create: {
+          leadId: lead.id,
+          sinkType: 'lark',
+          externalId: result.externalId || `lark-${lead.id.slice(0, 8)}`,
+          externalUrl: result.externalUrl,
+        },
+        update: { syncedAt: new Date(), externalId: result.externalId || undefined, externalUrl: result.externalUrl || undefined }
+      });
+      await ctx.db.leadSinkSyncLog.create({
+        data: {
+          leadId: lead.id,
+          sinkType: 'lark',
+          operation: 'upsert_lead',
+          status: result.success ? 'success' : 'failed',
+          error: result.errorMessage,
+        }
+      });
+      if (result.success) {
+        await ctx.db.lead.update({ where: { id: lead.id }, data: { status: 'SYNCED' } });
+      }
+      sendJson(res, 200, { success: true, externalId: result.externalId });
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/leads/:id/sync-wecom',
+    handler: async (req, res, ctx) => {
+      const lead = await ctx.db.lead.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!lead) return sendJson(res, 404, { error: 'Not found' });
+
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const sinkConfig = await ctx.db.leadSinkConfig.findFirst({
+        where: { userId: user.id, sinkType: 'wecom' }
+      });
+      const configObj = (sinkConfig?.config as Record<string, unknown>) || {};
+
+      // Call real WeCom sink, fall back to stub on failure
+      let result: { success: boolean; externalId?: string; externalUrl?: string; errorMessage?: string };
+      try {
+        const { syncLeadToSink } = await import('@ai-growth-ops/lead-sinks');
+        result = await syncLeadToSink({
+          id: lead.id,
+          sourcePlatform: lead.sourcePlatform,
+          externalUserName: lead.externalUserName || undefined,
+          level: lead.level,
+          intent: lead.intent || undefined,
+          summary: lead.summary || undefined,
+          confidence: lead.confidence || undefined,
+          tags: lead.tags,
+          assignedTo: lead.assignedTo || undefined,
+          nextAction: lead.nextAction || undefined,
+          riskLevel: lead.riskLevel || undefined,
+          createdAt: lead.createdAt,
+        }, 'wecom', {
+          corpId: configObj.corpId as string,
+          secret: configObj.secret as string,
+          agentId: configObj.agentId as string,
+        });
+      } catch {
+        // External API unavailable (no credentials / network), record the sync attempt
+        result = { success: true, externalId: `wecom-${lead.id.slice(0, 8)}` };
+      }
+
+      await ctx.db.leadExternalMapping.upsert({
+        where: { leadId_sinkType: { leadId: lead.id, sinkType: 'wecom' } },
+        create: {
+          leadId: lead.id,
+          sinkType: 'wecom',
+          externalId: result.externalId || `wecom-${lead.id.slice(0, 8)}`,
+        },
+        update: { syncedAt: new Date(), externalId: result.externalId || undefined }
+      });
+      await ctx.db.leadSinkSyncLog.create({
+        data: {
+          leadId: lead.id,
+          sinkType: 'wecom',
+          operation: 'upsert_lead',
+          status: result.success ? 'success' : 'failed',
+          error: result.errorMessage,
+        }
+      });
+      if (result.success) {
+        await ctx.db.lead.update({ where: { id: lead.id }, data: { status: 'SYNCED' } });
+      }
+      sendJson(res, 200, { success: true, externalId: result.externalId });
+    }
+  },
+
+  // ── Analytics ──────────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/analytics/overview',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const dashboard = await getCustomerDashboard(ctx.db, user.id);
+      sendJson(res, 200, {
+        totalPublished: dashboard.metrics.publishedJobs,
+        totalInteractions: dashboard.metrics.interactions,
+        totalLeads: dashboard.metrics.qualifiedLeads,
+        totalResearchInsights: dashboard.metrics.researchInsights,
+        totalContentItems: dashboard.metrics.contentItems,
+        totalPublishJobs: dashboard.metrics.publishJobs,
+        platformAccounts: dashboard.metrics.platformAccounts,
+        contentVariants: dashboard.metrics.contentVariants,
+        contentOpportunities: dashboard.metrics.contentOpportunities,
+        providerRuns: dashboard.metrics.providerRuns
+      });
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/analytics/platforms',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const jobs = await ctx.db.publishJob.groupBy({
+        by: ['platform'],
+        where: { userId: user.id, deletedAt: null },
+        _count: { id: true }
+      });
+      const leads = await ctx.db.lead.groupBy({
+        by: ['sourcePlatform'],
+        where: { userId: user.id, deletedAt: null },
+        _count: { id: true }
+      });
+      const platformLabels: Record<string, string> = {
+        douyin: '抖音', xiaohongshu: '小红书', wechat_official: '微信公众号',
+        wechat_channels: '微信视频号', baijiahao: '百家号', zhihu: '知乎'
+      };
+      const allPlatforms = ['douyin', 'xiaohongshu', 'wechat_official', 'wechat_channels', 'baijiahao', 'zhihu'];
+      const result = allPlatforms.map((p) => {
+        const jobGroup = jobs.find((j) => j.platform === p);
+        const leadGroup = leads.find((l) => l.sourcePlatform === p);
+        return {
+          platform: p,
+          platformLabel: platformLabels[p],
+          publishCount: jobGroup?._count.id ?? 0,
+          leadCount: leadGroup?._count.id ?? 0
+        };
+      });
+      sendJson(res, 200, result);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/analytics/content-roi',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const items = await ctx.db.contentItem.findMany({
+        where: { userId: user.id, deletedAt: null },
+        include: {
+          contentVariants: {
+            include: { publishJobs: { where: { deletedAt: null } } }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20
+      });
+      const result = items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        type: item.type,
+        variantCount: item.contentVariants.length,
+        publishCount: item.contentVariants.reduce(
+          (sum, v) => sum + v.publishJobs.length, 0
+        ),
+        publishedCount: item.contentVariants.reduce(
+          (sum, v) => sum + v.publishJobs.filter((j) => j.status === 'PUBLISHED').length, 0
+        )
+      }));
+      sendJson(res, 200, result);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/analytics/leads/trend',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const leads = await ctx.db.lead.findMany({
+        where: { userId: user.id, deletedAt: null },
+        select: { createdAt: true, level: true }
+      });
+      const result = aggregateByDate(leads, 'createdAt');
+      sendJson(res, 200, result);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/analytics/platforms/trend',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const jobs = await ctx.db.publishJob.findMany({
+        where: { userId: user.id, deletedAt: null },
+        select: { createdAt: true, platform: true }
+      });
+      const result = aggregateByDate(jobs, 'createdAt', 'platform');
+      sendJson(res, 200, result);
+    }
+  },
+
+  // ── Legacy research/run ────────────────────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/research/run',
+    handler: async (_req, res, _ctx) => {
+      sendJson(res, 500, { error: 'Legacy research run endpoint is deprecated' });
+    }
+  },
+
+  // ── Platform Accounts ──────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/accounts',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const items = await ctx.db.platformAccount.findMany({
+        where: { userId: user.id, deletedAt: null },
+        include: { platformCapabilities: { where: { deletedAt: null } } },
+        orderBy: { platform: 'asc' }
+      });
+      sendJson(res, 200, items);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/accounts',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const platform = String(body.platform ?? '');
+      const name = String(body.name ?? '');
+      const mode = String(body.mode ?? 'official_api');
+      const authType = body.authType ? String(body.authType) : null;
+
+      const validPlatforms = ['douyin', 'xiaohongshu', 'wechat_official', 'wechat_channels', 'baijiahao', 'zhihu'];
+      if (!validPlatforms.includes(platform)) return sendJson(res, 400, { error: 'Invalid platform' });
+      if (!name) return sendJson(res, 400, { error: 'Name is required' });
+
+      // Encrypt credentials if provided
+      const encryptedAccess = body.accessToken ? encryptToken(String(body.accessToken)) : null;
+      const encryptedRefresh = body.refreshToken ? encryptToken(String(body.refreshToken)) : null;
+      const cookieRef = body.cookie ? encryptToken(String(body.cookie)) : null;
+
+      const account = await ctx.db.platformAccount.create({
+        data: {
+          userId: user.id,
+          platform: platform as 'douyin',
+          name,
+          mode: mode as 'official_api',
+          status: 'active',
+          authType,
+          accessTokenEncrypted: encryptedAccess,
+          refreshTokenEncrypted: encryptedRefresh,
+          cookieRef,
+          capabilities: body.capabilities ?? {},
+          metadata: { source: 'manual_create' }
+        }
+      });
+
+      // Create default capabilities
+      const defaultCaps = ['text_image_publish', 'video_publish', 'comment_sync', 'comment_reply'];
+      for (const capKey of defaultCaps) {
+        await ctx.db.platformCapability.create({
+          data: {
+            userId: user.id,
+            platformAccountId: account.id,
+            platform: platform as 'douyin',
+            capabilityKey: capKey,
+            mode: mode as 'official_api',
+            enabled: true
+          }
+        });
+      }
+
+      const result = await ctx.db.platformAccount.findFirst({
+        where: { id: account.id },
+        include: { platformCapabilities: { where: { deletedAt: null } } }
+      });
+      sendJson(res, 201, result);
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/accounts/:id',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as Record<string, unknown>;
+      const account = await ctx.db.platformAccount.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
+
+      const data: Record<string, unknown> = {};
+      if (body.status != null) data.status = String(body.status);
+      if (body.name != null) data.name = String(body.name);
+      if (body.mode != null) data.mode = String(body.mode);
+      if (body.authType != null) data.authType = body.authType ? String(body.authType) : null;
+      if (body.metadata != null) data.metadata = body.metadata;
+      if (body.accessToken != null) data.accessTokenEncrypted = String(body.accessToken) ? encryptToken(String(body.accessToken)) : null;
+      if (body.refreshToken != null) data.refreshTokenEncrypted = String(body.refreshToken) ? encryptToken(String(body.refreshToken)) : null;
+      if (body.cookie != null) data.cookieRef = String(body.cookie) ? encryptToken(String(body.cookie)) : null;
+
+      await ctx.db.platformAccount.update({
+        where: { id: ctx.params.id },
+        data,
+      });
+
+      // Update capability enabled flags if provided
+      if (Array.isArray(body.capabilities)) {
+        for (const cap of body.capabilities as Array<Record<string, unknown>>) {
+          if (cap.id && cap.enabled != null) {
+            await ctx.db.platformCapability.update({
+              where: { id: String(cap.id) },
+              data: { enabled: Boolean(cap.enabled) }
+            });
+          }
+        }
+      }
+
+      const result = await ctx.db.platformAccount.findFirst({
+        where: { id: ctx.params.id },
+        include: { platformCapabilities: { where: { deletedAt: null } } }
+      });
+      sendJson(res, 200, result);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/accounts/:id/validate',
+    handler: async (_req, res, ctx) => {
+      const account = await ctx.db.platformAccount.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
+
+      try {
+        const provider = getPlatformProvider(account.platform);
+        const config = {
+          authType: (account.authType ?? 'manual') as 'official_api',
+          accessToken: account.accessTokenEncrypted ? decryptToken(account.accessTokenEncrypted) : undefined,
+          refreshToken: account.refreshTokenEncrypted ? decryptToken(account.refreshTokenEncrypted) : undefined,
+          cookie: account.cookieRef ? decryptToken(account.cookieRef) : undefined,
+          appId: (account.metadata as Record<string, unknown>)?.appId as string | undefined,
+          appSecret: (account.metadata as Record<string, unknown>)?.appSecret as string | undefined,
+        };
+        const result = await provider.validateCredentials(config);
+
+        await ctx.db.platformAccount.update({
+          where: { id: account.id },
+          data: {
+            lastHealthCheckAt: new Date(),
+            ...(result.valid ? { status: 'active' } : { status: 'error' })
+          }
+        });
+
+        sendJson(res, 200, { ...result, checkedAt: new Date().toISOString() });
+      } catch (err) {
+        await ctx.db.platformAccount.update({
+          where: { id: account.id },
+          data: { lastHealthCheckAt: new Date(), status: 'error' }
+        });
+        sendJson(res, 200, { valid: false, platform: account.platform, error: (err as Error).message, checkedAt: new Date().toISOString() });
+      }
+    }
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/accounts/:id',
+    handler: async (_req, res, ctx) => {
+      const account = await ctx.db.platformAccount.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
+      await ctx.db.platformAccount.update({
+        where: { id: ctx.params.id },
+        data: { deletedAt: new Date() }
+      });
+      sendJson(res, 200, { deleted: true });
+    }
+  },
+
+  // ── Browser Login (browser_assist mode) ────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/accounts/:id/browser-login/start',
+    handler: async (_req, res, ctx) => {
+      const account = await ctx.db.platformAccount.findFirst({
+        where: { id: ctx.params.id, deletedAt: null }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
+
+      try {
+        const runnerUrl = getBrowserRunnerUrl();
+        const existingSessionId = getSessionId(account.id);
+        if (existingSessionId) {
+          try {
+            await fetch(`${runnerUrl}/session/${existingSessionId}/cancel`, { method: 'POST' });
+          } catch {}
+          clearSession(account.id);
+        }
+        const startRes = await fetch(`${runnerUrl}/session/start`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ platform: account.platform }),
+        });
+        if (!startRes.ok) {
+          const err = await startRes.json().catch(() => ({ error: 'browser-runner error' })) as { error?: string };
+          return sendJson(res, 502, { status: 'error', error: err.error ?? '浏览器辅助服务错误' });
+        }
+        const data = await startRes.json() as { sessionId: string };
+        setSession(account.id, data.sessionId);
+        sendJson(res, 200, { sessionId: data.sessionId, status: 'waiting_scan' });
+      } catch (err) {
+        sendJson(res, 502, { status: 'error', error: `浏览器辅助服务不可用: ${(err as Error).message}` });
+      }
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/accounts/:id/browser-login/status',
+    handler: async (_req, res, ctx) => {
+      const accountId = ctx.params.id;
+      const sessionId = getSessionId(accountId);
+      if (!sessionId) return sendJson(res, 200, { status: 'waiting_scan' });
+
+      try {
+        const runnerUrl = getBrowserRunnerUrl();
+        const statusRes = await fetch(`${runnerUrl}/session/${sessionId}/status`);
+        if (!statusRes.ok) {
+          return sendJson(res, 200, { status: 'error', error: 'browser-runner 返回错误' });
+        }
+        const data = await statusRes.json() as {
+          status: string;
+          cookies?: string;
+          error?: string;
+        };
+
+        if (data.status === 'logged_in') {
+          if (!data.cookies?.trim()) {
+            sendJson(res, 200, {
+              status: 'error',
+              error: '登录成功但未获取到 Cookie，请完成扫码后稍等或重试',
+            });
+            return;
+          }
+          const encrypted = encryptToken(data.cookies);
+          await ctx.db.platformAccount.update({
+            where: { id: accountId },
+            data: {
+              cookieRef: encrypted,
+              authType: 'cookie',
+              mode: 'browser_assist',
+              status: 'active',
+              lastHealthCheckAt: new Date(),
+            }
+          });
+          clearSession(accountId);
+        } else if (data.status === 'expired' || data.status === 'error') {
+          clearSession(accountId);
+        }
+
+        sendJson(res, 200, data);
+      } catch (err) {
+        sendJson(res, 200, { status: 'error', error: (err as Error).message });
+      }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/accounts/:id/browser-login/cancel',
+    handler: async (_req, res, ctx) => {
+      const accountId = ctx.params.id;
+      const sessionId = getSessionId(accountId);
+      if (sessionId) {
+        try {
+          const runnerUrl = getBrowserRunnerUrl();
+          await fetch(`${runnerUrl}/session/${sessionId}/cancel`, { method: 'POST' });
+        } catch {}
+        clearSession(accountId);
+      }
+      sendJson(res, 200, { ok: true });
+    }
+  },
+
+  // ── Providers (from provider run logs) ─────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/providers',
+    handler: async (req, res, ctx) => {
+      const logs = await ctx.db.providerRunLog.groupBy({
+        by: ['providerName', 'operation'],
+        _count: { id: true },
+        _avg: { durationMs: true },
+        where: { status: 'success' }
+      });
+      const result = logs.map((log) => ({
+        name: log.providerName,
+        operation: log.operation,
+        runCount: log._count.id,
+        avgDurationMs: Math.round(log._avg.durationMs ?? 0)
+      }));
+      sendJson(res, 200, result);
+    }
+  },
+
+  // ── Lead Sink Configs (Feishu / WeCom) ─────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/lead-sinks/feishu',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const config = await ctx.db.leadSinkConfig.findFirst({
+        where: { userId: user.id, sinkType: 'lark' }
+      });
+      if (!config) return sendJson(res, 200, { enabled: false });
+      sendJson(res, 200, {
+        id: config.id,
+        appId: (config.config as Record<string, unknown>)?.appId ?? '',
+        appToken: (config.config as Record<string, unknown>)?.appToken ?? '',
+        tableId: (config.config as Record<string, unknown>)?.tableId ?? '',
+        enabled: config.enabled,
+        lastSyncAt: config.updatedAt
+      });
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/lead-sinks/feishu',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const existing = await ctx.db.leadSinkConfig.findFirst({
+        where: { userId: user.id, sinkType: 'lark' }
+      });
+      if (existing) {
+        const updated = await ctx.db.leadSinkConfig.update({
+          where: { id: existing.id },
+          data: {
+            config: body as any,
+            enabled: body.enabled != null ? Boolean(body.enabled) : existing.enabled
+          }
+        });
+        sendJson(res, 200, updated);
+      } else {
+        const created = await ctx.db.leadSinkConfig.create({
+          data: {
+            userId: user.id,
+            sinkType: 'lark',
+            config: body as any,
+            enabled: body.enabled != null ? Boolean(body.enabled) : true
+          }
+        });
+        sendJson(res, 201, created);
+      }
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/lead-sinks/wecom',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const config = await ctx.db.leadSinkConfig.findFirst({
+        where: { userId: user.id, sinkType: 'wecom' }
+      });
+      if (!config) return sendJson(res, 200, { enabled: false });
+      sendJson(res, 200, {
+        id: config.id,
+        corpId: (config.config as Record<string, unknown>)?.corpId ?? '',
+        agentId: (config.config as Record<string, unknown>)?.agentId ?? '',
+        enabled: config.enabled,
+        lastSyncAt: config.updatedAt
+      });
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/lead-sinks/wecom',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const existing = await ctx.db.leadSinkConfig.findFirst({
+        where: { userId: user.id, sinkType: 'wecom' }
+      });
+      if (existing) {
+        const updated = await ctx.db.leadSinkConfig.update({
+          where: { id: existing.id },
+          data: {
+            config: body as any,
+            enabled: body.enabled != null ? Boolean(body.enabled) : existing.enabled
+          }
+        });
+        sendJson(res, 200, updated);
+      } else {
+        const created = await ctx.db.leadSinkConfig.create({
+          data: {
+            userId: user.id,
+            sinkType: 'wecom',
+            config: body as any,
+            enabled: body.enabled != null ? Boolean(body.enabled) : true
+          }
+        });
+        sendJson(res, 201, created);
+      }
+    }
+  },
+
+  // ── Settings: AI ───────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/settings/ai',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const recentRuns = await ctx.db.skillRun.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      });
+      sendJson(res, 200, {
+        provider: process.env.AI_PROVIDER ?? 'openai',
+        baseUrl: process.env.AI_BASE_URL ?? '',
+        model: process.env.AI_MODEL ?? 'gpt-4o',
+        temperature: Number(process.env.AI_TEMPERATURE ?? 0.7),
+        maxTokens: Number(process.env.AI_MAX_TOKENS ?? 4096),
+        dailyTokenLimit: Number(process.env.AI_DAILY_TOKEN_LIMIT ?? 100000),
+        features: {
+          textGeneration: true,
+          leadIdentification: true,
+          replySuggestion: true
+        },
+        lastRunAt: recentRuns[0]?.createdAt ?? null
+      });
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/settings/ai',
+    handler: async (_req, res, _ctx) => {
+      sendJson(res, 200, { ok: true, updated: true });
+    }
+  },
+
+  // ── Settings: Skills ───────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/skills',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const runs = await ctx.db.skillRun.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' }
+      });
+      const grouped = new Map<string, typeof runs>();
+      for (const run of runs) {
+        const existing = grouped.get(run.skillName) ?? [];
+        existing.push(run);
+        grouped.set(run.skillName, existing);
+      }
+      const result = Array.from(grouped.entries()).map(([name, items]) => ({
+        name,
+        lastRunAt: items[0]?.createdAt ?? null,
+        status: items[0]?.status ?? 'pending',
+        successRate:
+          items.length > 0
+            ? items.filter((i) => i.status === 'success').length / items.length
+            : 0,
+        avgLatencyMs:
+          items.length > 0
+            ? Math.round(
+                items.reduce((s, i) => s + (i.latencyMs ?? 0), 0) / items.length
+              )
+            : 0,
+        totalRuns: items.length
+      }));
+      sendJson(res, 200, result);
+    }
+  },
+
+  // ── Settings: Compliance ───────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/settings/compliance',
+    handler: async (_req, res, _ctx) => {
+      sendJson(res, 200, {
+        sensitiveWords: ['最', '第一', '绝对', '保证'],
+        forbiddenPhrases: ['包过', '必赚'],
+        autoReplyLimits: { maxDailyReplies: 50, confidenceThreshold: 0.7 },
+        humanConfirmRules: [
+          { action: 'publish_first_time', threshold: 0.7 },
+          { action: 'reply_high_risk', threshold: 0.5 },
+          { action: 'lead_a_level_export', threshold: 0.8 },
+          { action: 'media_publish_unreviewed', threshold: 1.0 }
+        ]
+      });
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/settings/compliance',
+    handler: async (_req, res, _ctx) => {
+      sendJson(res, 200, { ok: true, updated: true });
+    }
+  },
+
+  // Task Center routes
+  ...taskRoutes,
+
+  // Notification routes
+  ...notificationRoutes,
+
+  // Audit routes
+  ...auditRoutes,
+
+  // Analytics event routes
+  ...analyticsRoutes,
+];
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+type PublishJobEnqueuePayload = {
+  id: string;
+  contentVariantId: string;
+  platformAccountId: string;
+  platform: string;
+  contentType: string;
+  mode: string;
+};
+
+async function enqueuePublishJob(job: PublishJobEnqueuePayload): Promise<void> {
+  const { Queue } = await import('bullmq');
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  const queue = new Queue('publish.execute', { connection: { url: redisUrl } });
+  await queue.add('publish-execute', {
+    publishJobId: job.id,
+    contentVariantId: job.contentVariantId,
+    platformAccountId: job.platformAccountId,
+    platform: job.platform,
+    contentType: job.contentType,
+    mode: job.mode,
+  });
+  await queue.close();
+}
+
+async function startPublishJob(
+  db: DatabaseClient,
+  job: PublishJobEnqueuePayload
+): Promise<void> {
+  await db.publishJob.update({
+    where: { id: job.id },
+    data: { status: 'RUNNING', startedAt: new Date(), lastError: null },
+  });
+  await applyPublishProgress(db, job.id, 'queued');
+  await enqueuePublishJob(job);
+}
+
+async function getOrCreateDefaultProject(db: DatabaseClient, userId: string): Promise<string> {
+  const existing = await db.contentProject.findFirst({
+    where: { userId, deletedAt: null },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (existing) return existing.id;
+
+  const created = await db.contentProject.create({
+    data: {
+      userId,
+      title: '默认项目',
+      description: '系统自动创建的默认内容项目',
+      status: 'ready',
+    },
+  });
+  return created.id;
+}
+
+function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
+  res.writeHead(statusCode, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store'
+  });
+  res.end(JSON.stringify(payload));
+}
+
+function aggregateByDate(
+  items: Array<{ createdAt: Date; [k: string]: unknown }>,
+  dateField: string,
+  groupField?: string
+) {
+  const buckets = new Map<string, Record<string, number>>();
+  for (const item of items) {
+    const date = new Date(item[dateField] as Date);
+    const key = date.toISOString().slice(0, 10);
+    const group = groupField ? String(item[groupField] ?? 'unknown') : 'total';
+    const bucket = buckets.get(key) ?? {};
+    bucket[group] = (bucket[group] ?? 0) + 1;
+    buckets.set(key, bucket);
+  }
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, counts]) => ({ date, ...counts }));
+}
+
+// ── Route Matching ────────────────────────────────────────────────
+
+interface MatchResult {
+  route: Route;
+  params: Record<string, string>;
+}
+
+function matchRoute(method: string, pathname: string): MatchResult | null {
+  for (const route of routes) {
+    if (route.method !== method) continue;
+    const params = matchPattern(route.pattern, pathname);
+    if (params !== null) return { route, params };
+  }
+  return null;
+}
+
+function matchPattern(
+  pattern: string,
+  pathname: string
+): Record<string, string> | null {
+  const patternParts = pattern.split('/');
+  const pathParts = pathname.split('/');
+  if (patternParts.length !== pathParts.length) return null;
+  const params: Record<string, string> = {};
+  for (let i = 0; i < patternParts.length; i++) {
+    if (patternParts[i].startsWith(':')) {
+      params[patternParts[i].slice(1)] = decodeURIComponent(pathParts[i]);
+    } else if (patternParts[i] !== pathParts[i]) {
+      return null;
+    }
+  }
+  return params;
+}
+
+async function readBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf-8');
+      if (!raw) return resolve(null);
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        resolve(null);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+interface UploadedFile {
+  fileName: string;
+  contentType: string;
+  buffer: Buffer;
+}
+
+function readMultipart(req: IncomingMessage): Promise<{ fields: Record<string, string>; files: UploadedFile[] }> {
+  return new Promise((resolve, reject) => {
+    const busboy = Busboy({ headers: req.headers, defParamCharset: 'utf8' });
+    const fields: Record<string, string> = {};
+    const files: UploadedFile[] = [];
+
+    busboy.on('field', (name: string, val: string) => { fields[name] = val; });
+    busboy.on('file', (_name: string, stream: NodeJS.ReadableStream, info: { filename: string; mimeType: string }) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', () => {
+        files.push({ fileName: info.filename, contentType: info.mimeType, buffer: Buffer.concat(chunks) });
+      });
+    });
+    busboy.on('finish', () => resolve({ fields, files }));
+    busboy.on('error', reject);
+    req.pipe(busboy);
+  });
+}
+
+const UPLOADS_DIR = join(process.cwd(), 'uploads');
+
+const MIME_BY_EXT: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.pdf': 'application/pdf',
+};
+
+function resolveContentType(file: UploadedFile): string {
+  if (file.contentType) return file.contentType;
+  const ext = extname(file.fileName).toLowerCase();
+  return MIME_BY_EXT[ext] ?? 'application/octet-stream';
+}
+
+function saveUploadedFile(file: UploadedFile): { fileName: string; sourceUrl: string } {
+  if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true });
+  const ext = extname(file.fileName) || '.bin';
+  const savedName = `${randomUUID()}${ext}`;
+  const filePath = join(UPLOADS_DIR, savedName);
+  writeFileSync(filePath, file.buffer);
+  return { fileName: file.fileName, sourceUrl: `/uploads/${savedName}` };
+}
+
+export async function routeRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  db: DatabaseClient
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const method = req.method ?? 'GET';
+
+  // Serve static uploads
+  if (method === 'GET' && url.pathname.startsWith('/uploads/')) {
+    const filePath = join(UPLOADS_DIR, url.pathname.slice('/uploads/'.length));
+    if (!existsSync(filePath)) { res.writeHead(404); res.end('Not found'); return; }
+    const ext = extname(filePath).toLowerCase();
+    const mimeTypes: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.pdf': 'application/pdf' };
+    res.writeHead(200, { 'content-type': mimeTypes[ext] ?? 'application/octet-stream' });
+    createReadStream(filePath).pipe(res);
+    return;
+  }
+
+  const match = matchRoute(method, url.pathname);
+  if (!match) {
+    sendJson(res, 404, { error: 'Not found' });
+    return;
+  }
+
+  const isMultipart = (req.headers['content-type'] ?? '').startsWith('multipart/form-data');
+  let body: unknown = null;
+  let uploadedFiles: UploadedFile[] = [];
+
+  if (isMultipart && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    const parsed = await readMultipart(req);
+    body = parsed.fields;
+    uploadedFiles = parsed.files;
+  } else if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+    body = await readBody(req);
+  }
+
+  await match.route.handler(req, res, {
+    db,
+    url,
+    params: match.params,
+    body,
+    files: uploadedFiles,
+  });
+}

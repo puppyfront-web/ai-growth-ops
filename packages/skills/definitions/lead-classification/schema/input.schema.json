@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "platform": { "type": "string" },
+    "interactionType": { "type": "string" },
+    "content": { "type": "string" },
+    "sourceContentTitle": { "type": "string" },
+    "userHistory": { "type": "array", "items": { "type": "object" } }
+  },
+  "required": ["platform", "interactionType", "content"]
+}

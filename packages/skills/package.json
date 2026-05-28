@@ -1,0 +1,15 @@
+{
+  "name": "@ai-growth-ops/skills",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-growth-ops/ai": "workspace:*"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "sourceContent": { "type": "string" },
+    "sourceTitle": { "type": "string" },
+    "targetPlatform": { "type": "string" },
+    "contentType": { "type": "string" }
+  },
+  "required": ["sourceContent", "targetPlatform"]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@ai-growth-ops/provider-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-growth-ops/connectors": "workspace:*",
+    "@ai-growth-ops/shared": "workspace:*"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@ai-growth-ops/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-growth-ops/connectors": "workspace:*",
+    "@ai-growth-ops/database": "workspace:*",
+    "@ai-growth-ops/lead-sinks": "workspace:*",
+    "@ai-growth-ops/observability": "workspace:*",
+    "@ai-growth-ops/providers": "workspace:*",
+    "@ai-growth-ops/shared": "workspace:*",
+    "@ai-growth-ops/skills": "workspace:*",
+    "bullmq": "^5.0.0"
+  }
+}
