@@ -1,10 +1,13 @@
 export interface InteractionOpsInput {
   platform: 'douyin' | 'xiaohongshu';
   interactionType: 'comments' | 'messages';
+  account?: string;
 }
 
 export interface InteractionOpsResult {
   status: 'success' | 'failed';
+  mode?: 'executed' | 'fallback' | 'blocked';
+  reason?: string;
   items: Array<{
     platform: string;
     interactionType: string;

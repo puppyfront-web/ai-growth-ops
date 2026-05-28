@@ -35,6 +35,25 @@ Current live local CLI publish/auth support in this environment:
 
 Other publish capabilities remain registered as disabled placeholders until a compatible local executor is installed.
 
+## Interaction Runtime Notes
+
+Douyin / Xiaohongshu interaction workflows can use real browser-assist execution when both of these are available:
+
+- a valid cookie source
+- a running browser-runner service
+
+Recommended startup:
+
+```bash
+./node_modules/.bin/tsx apps/browser-runner/src/server.ts
+```
+
+Cookie sources:
+
+- `douyin`: `AI_GROWTH_OPS_DOUYIN_COOKIE=<cookie>` or a `social-publish-skills` account cookie file
+- `xiaohongshu`: `AI_GROWTH_OPS_XIAOHONGSHU_COOKIE=<cookie>`
+- `wechat_channels`: `AI_GROWTH_OPS_WECHAT_CHANNELS_COOKIE=<cookie>` or a `social-publish-skills` account cookie file
+
 Example commands:
 
 ```bash

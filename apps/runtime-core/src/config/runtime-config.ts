@@ -5,6 +5,7 @@ export interface RuntimeConfig {
   dataDir: string;
   manifestDir: string;
   socialPublishSkillsRoot?: string;
+  browserRunnerUrl: string;
 }
 
 export function loadRuntimeConfig(): RuntimeConfig {
@@ -18,5 +19,6 @@ export function loadRuntimeConfig(): RuntimeConfig {
     dataDir: process.env.AI_GROWTH_OPS_DATA_DIR ?? 'data',
     manifestDir: process.env.AI_GROWTH_OPS_MANIFEST_DIR ?? 'skills/manifests',
     socialPublishSkillsRoot,
+    browserRunnerUrl: process.env.BROWSER_RUNNER_URL ?? 'http://localhost:3200',
   };
 }

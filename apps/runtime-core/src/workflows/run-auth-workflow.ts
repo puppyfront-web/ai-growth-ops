@@ -1,6 +1,7 @@
-import { loadRuntimeConfig } from '../config/runtime-config.js';
 import { getRuntimeAdapter } from '../runtime-adapters/index.js';
 import { createDefaultPublishRegistry } from '../tools/publish-tools.js';
+import { validateCookieCredential } from '../tools/credential-tools.js';
+import { loadRuntimeConfig } from '../config/runtime-config.js';
 
 export async function runAuthWorkflow(input: {
   action: 'check' | 'login';
@@ -8,9 +9,24 @@ export async function runAuthWorkflow(input: {
   account?: string;
 }) {
   const registry = await createDefaultPublishRegistry();
-  const config = loadRuntimeConfig();
   const capability = input.action === 'check' ? 'auth.check' : 'auth.login';
   const manifest = registry.resolve(capability, { platform: input.platform });
+
+  if (input.action === 'check') {
+    const validation = await validateCookieCredential(input.platform, input.account);
+    return {
+      workflow: 'auth' as const,
+      status: validation.valid ? ('success' as const) : ('failed' as const),
+      result: {
+        platform: input.platform,
+        mode: 'validated',
+        detail: {
+          valid: validation.valid,
+          error: validation.error,
+        },
+      },
+    };
+  }
 
   if (!manifest) {
     return {
@@ -23,6 +39,7 @@ export async function runAuthWorkflow(input: {
     };
   }
 
+  const config = loadRuntimeConfig();
   if (!config.socialPublishSkillsRoot || !input.account) {
     return {
       workflow: 'auth' as const,
@@ -36,7 +53,7 @@ export async function runAuthWorkflow(input: {
   }
 
   const commandPlatform = (manifest.metadata?.commandPlatform as string | undefined) ?? input.platform;
-  const subcommand = input.action === 'check' ? 'check' : 'login';
+  const subcommand = 'login';
   const adapter = getRuntimeAdapter(manifest.runtime);
   const execution = await adapter.runSkill({
     skillId: manifest.skillId,

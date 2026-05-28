@@ -85,6 +85,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
       const interaction = await runInteractionOps({
         platform,
         interactionType: platform === 'douyin' ? 'comments' : 'messages',
+        account,
       });
       const lead = await runLeadMining({
         candidates: interaction.items.map((item) => ({
