@@ -32,12 +32,14 @@ export interface FetchCommentsInput {
   sourceContentId?: string;
   cursor?: string;
   limit?: number;
+  headed?: boolean;
 }
 
 export interface FetchMessagesInput {
   platformAccountId: string;
   cursor?: string;
   limit?: number;
+  headed?: boolean;
 }
 
 export interface ReplyCommentInput {
@@ -107,6 +109,7 @@ export interface InteractionConnectorConfig {
   accessToken?: string;
   refreshToken?: string;
   cookie?: string;
+  headed?: boolean;
   appId?: string;
   appSecret?: string;
   webhookSecret?: string;

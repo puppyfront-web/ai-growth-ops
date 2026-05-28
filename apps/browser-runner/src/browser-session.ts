@@ -20,23 +20,31 @@ export function cookiesForSite(cookie: string, siteDomain: string): Array<{ name
 
 const BROWSER_TTL_MS = 15 * 60 * 1000;
 
-let sharedBrowser: Browser | null = null;
-let browserLastUsed = 0;
+const sharedBrowsers = new Map<'headed' | 'headless', Browser>();
+const browserLastUsed = new Map<'headed' | 'headless', number>();
 
-async function getSharedBrowser(): Promise<Browser> {
+export function resolveHeadedPreference(override?: boolean): boolean {
+  if (typeof override === 'boolean') return override;
+  return process.env.BROWSER_RUNNER_HEADED === 'true';
+}
+
+async function getSharedBrowser(headedOverride?: boolean): Promise<Browser> {
+  const headed = resolveHeadedPreference(headedOverride);
+  const browserKey: 'headed' | 'headless' = headed ? 'headed' : 'headless';
   const now = Date.now();
-  if (sharedBrowser && now - browserLastUsed < BROWSER_TTL_MS && sharedBrowser.isConnected()) {
-    browserLastUsed = now;
-    return sharedBrowser;
+  const existing = sharedBrowsers.get(browserKey);
+  const lastUsed = browserLastUsed.get(browserKey) ?? 0;
+  if (existing && now - lastUsed < BROWSER_TTL_MS && existing.isConnected()) {
+    browserLastUsed.set(browserKey, now);
+    return existing;
   }
 
-  if (sharedBrowser) {
-    try { await sharedBrowser.close(); } catch { /* */ }
-    sharedBrowser = null;
+  if (existing) {
+    try { await existing.close(); } catch { /* */ }
+    sharedBrowsers.delete(browserKey);
   }
 
-  const headed = process.env.BROWSER_RUNNER_HEADED === 'true';
-  sharedBrowser = await chromium.launch({
+  const browser = await chromium.launch({
     headless: !headed,
     args: [
       '--disable-blink-features=AutomationControlled',
@@ -46,8 +54,9 @@ async function getSharedBrowser(): Promise<Browser> {
     ],
     ignoreDefaultArgs: ['--enable-automation'],
   });
-  browserLastUsed = now;
-  return sharedBrowser;
+  sharedBrowsers.set(browserKey, browser);
+  browserLastUsed.set(browserKey, now);
+  return browser;
 }
 
 /**
@@ -58,8 +67,9 @@ async function getSharedBrowser(): Promise<Browser> {
 export async function createStealthSession(
   cookie: string,
   siteDomain: string,
+  headedOverride?: boolean,
 ): Promise<{ context: BrowserContext; page: Page; close: () => Promise<void> }> {
-  const browser = await getSharedBrowser();
+  const browser = await getSharedBrowser(headedOverride);
 
   const context = await browser.newContext({
     userAgent:
@@ -97,8 +107,9 @@ export async function createStealthSession(
 export async function createHeadlessSession(
   cookie: string,
   siteDomain: string,
+  headedOverride?: boolean,
 ): Promise<{ browser: Browser; context: BrowserContext; page: Page; close: () => Promise<void> }> {
-  const browser = await getSharedBrowser();
+  const browser = await getSharedBrowser(headedOverride);
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',

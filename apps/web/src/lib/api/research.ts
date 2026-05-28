@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from './client';
-import type { ResearchTask, CollectedPost, CollectedComment, ResearchInsight, ContentOpportunity } from '@/types/research';
+import type { ResearchTask, CollectedPost, CollectedComment, ResearchInsight, ContentOpportunity, ResearchRunResult } from '@/types/research';
 
 export function listResearchTasks(): Promise<ResearchTask[]> {
   return apiGet<ResearchTask[]>('/api/research-tasks');
@@ -13,8 +13,8 @@ export function createResearchTask(data: Partial<ResearchTask>): Promise<Researc
   return apiPost<ResearchTask>('/api/research-tasks', data);
 }
 
-export function runResearchTask(id: string): Promise<ResearchTask> {
-  return apiPost<ResearchTask>(`/api/research-tasks/${id}/run`);
+export function runResearchTask(id: string): Promise<ResearchRunResult> {
+  return apiPost<ResearchRunResult>(`/api/research-tasks/${id}/run`);
 }
 
 export function getCollectedPosts(taskId: string): Promise<CollectedPost[]> {

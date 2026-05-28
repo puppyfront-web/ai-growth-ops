@@ -15,11 +15,13 @@ import type {
 export class BrowserAssistInteractionConnector implements InteractionConnector {
   readonly platform: PlatformCode;
   private readonly cookie: string;
+  private readonly headed: boolean | undefined;
   private readonly runnerUrl: string;
 
   constructor(platform: PlatformCode, config: InteractionConnectorConfig) {
     this.platform = platform;
     this.cookie = config.cookie ?? '';
+    this.headed = config.headed;
     this.runnerUrl = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
   }
 
@@ -51,6 +53,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
         sourceContentId: input.sourceContentId,
         cursor: input.cursor,
         limit: input.limit,
+        headed: input.headed ?? this.headed,
       }),
     });
     const data = await resp.json() as Array<Record<string, unknown>>;
@@ -77,6 +80,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
         cookie: this.cookie,
         cursor: input.cursor,
         limit: input.limit,
+        headed: input.headed ?? this.headed,
       }),
     });
     const data = await resp.json() as Array<Record<string, unknown>>;

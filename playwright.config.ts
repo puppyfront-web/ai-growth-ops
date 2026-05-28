@@ -21,7 +21,7 @@ export default defineConfig({
       env: { API_PORT: '3100' }
     },
     {
-      command: 'cd apps/web && pnpm dev',
+      command: 'cd apps/web && pnpm exec next dev --port 3000',
       url: 'http://127.0.0.1:3000',
       reuseExistingServer: true,
       timeout: 30_000

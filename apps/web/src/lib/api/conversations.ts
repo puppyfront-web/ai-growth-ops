@@ -32,6 +32,7 @@ export function triggerSync(params: {
   mode: string;
   syncType: 'comments' | 'messages' | 'all';
   sourceContentId?: string;
+  headed?: boolean;
 }): Promise<{ syncJobId: string; status: string; queued: string[] }> {
   return apiPost('/api/interactions/sync', params);
 }

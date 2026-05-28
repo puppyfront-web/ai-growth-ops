@@ -5,6 +5,7 @@ import type { DatabaseClient } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import type { Job } from 'bullmq';
 import type { InteractionSyncCommentsInput } from '../job-types.js';
+import { prepareCommentsForSync } from './interaction-sync-utils.js';
 
 export async function handleInteractionSyncComments(
   job: Job<InteractionSyncCommentsInput>
@@ -14,6 +15,7 @@ export async function handleInteractionSyncComments(
     platformAccountId,
     platform,
     mode,
+    headed,
     sourceContentId,
     cursor,
     limit,
@@ -43,16 +45,18 @@ export async function handleInteractionSyncComments(
     const connector = getOrCreateConnector(
       platform as PlatformCode,
       mode as InteractionMode,
-      { mode: mode as InteractionMode, cookie, accessToken },
+      { mode: mode as InteractionMode, cookie, accessToken, headed },
     );
 
     // Fetch comments from platform
-    const comments = await connector.fetchComments({
+    const fetchedComments = await connector.fetchComments({
       platformAccountId,
       sourceContentId,
       cursor,
       limit: limit || 50,
+      headed,
     });
+    const comments = prepareCommentsForSync(fetchedComments);
 
     // Process and deduplicate
     let newCount = 0;
@@ -103,7 +107,7 @@ export async function handleInteractionSyncComments(
     }
 
     job.log(
-      `Synced ${comments.length} comments: ${newCount} new, ${skippedCount} duplicates`
+      `Synced ${comments.length}/${fetchedComments.length} comments after today-filter: ${newCount} new, ${skippedCount} duplicates`
     );
   } catch (err) {
     // Update sync job as failed

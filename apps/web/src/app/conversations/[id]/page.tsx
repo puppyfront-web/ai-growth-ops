@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { getConversation, getReplySuggestions, sendReply } from '@/lib/api/conversations';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge, PlatformBadge, RiskBadge, LeadLevelBadge } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels } from '@/lib/constants';
@@ -36,7 +35,6 @@ export default function ConversationDetailPage() {
 
   return (
     <div>
-      <Breadcrumb />
       <PageHeader title={conversation.externalUserName ?? conversation.externalUserId} description={`${conversation.interactions.length} 条消息`} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

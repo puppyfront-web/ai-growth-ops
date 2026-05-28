@@ -1,6 +1,7 @@
 import type { ServerResponse } from 'node:http';
 import type { RouteHandler, Route } from './routes.js';
 import { createStealthSession } from './browser-session.js';
+import { dedupeByKey, isPublishedTodayInShanghai } from '@ai-growth-ops/shared';
 
 // ── Platform comment management page URLs ─────────────────────────
 
@@ -157,10 +158,10 @@ function extractDomain(url: string): string {
 }
 
 /** Thin wrapper that applies cookies on root domain and creates a stealth context. */
-async function createSession(cookie: string, targetUrl: string) {
+async function createSession(cookie: string, targetUrl: string, headed?: boolean) {
   const hostname = extractDomain(targetUrl);
   const domain = rootDomain(hostname);
-  return createStealthSession(cookie, domain);
+  return createStealthSession(cookie, domain, headed);
 }
 
 // ── Route handlers ────────────────────────────────────────────────
@@ -171,6 +172,7 @@ interface FetchCommentsBody {
   sourceContentId?: string;
   limit?: number;
   cursor?: string;
+  headed?: boolean;
 }
 
 /** Extract a normalised comment list from a raw XHR JSON payload. */
@@ -192,7 +194,7 @@ function extractCommentList(platform: string, json: Record<string, unknown>, sou
           replyCount: Number(item.reply_comment_total ?? 0),
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
-            : new Date().toISOString(),
+            : '',
           sourceContentId,
           rawPayload: item,
         };
@@ -212,7 +214,7 @@ function extractCommentList(platform: string, json: Record<string, unknown>, sou
           replyCount: Number(item.sub_comment_count ?? 0),
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
-            : new Date().toISOString(),
+            : '',
           sourceContentId,
           rawPayload: item,
         };
@@ -229,7 +231,7 @@ function extractCommentList(platform: string, json: Record<string, unknown>, sou
         likeCount: Number(item.like_num ?? 0),
         publishedAt: item.create_time
           ? new Date(Number(item.create_time) * 1000).toISOString()
-          : new Date().toISOString(),
+          : '',
         sourceContentId,
         rawPayload: item,
       }));
@@ -245,7 +247,7 @@ function extractCommentList(platform: string, json: Record<string, unknown>, sou
         likeCount: Number(item.like_count ?? item.like_num ?? 0),
         publishedAt: item.create_time
           ? new Date(Number(item.create_time) * 1000).toISOString()
-          : new Date().toISOString(),
+          : '',
         sourceContentId,
         rawPayload: item,
       }));
@@ -260,7 +262,7 @@ function extractCommentList(platform: string, json: Record<string, unknown>, sou
         content: String(item.content ?? ''),
         likeCount: Number(item.like_num ?? item.like_count ?? 0),
         replyCount: Number(item.reply_num ?? 0),
-        publishedAt: String(item.create_time ?? new Date().toISOString()),
+        publishedAt: item.create_time != null ? String(item.create_time) : '',
         sourceContentId,
         rawPayload: item,
       }));
@@ -279,7 +281,7 @@ function extractCommentList(platform: string, json: Record<string, unknown>, sou
           replyCount: Number(item.child_comment_count ?? 0),
           publishedAt: item.created_time
             ? new Date(Number(item.created_time) * 1000).toISOString()
-            : new Date().toISOString(),
+            : '',
           sourceContentId,
           rawPayload: item,
         };
@@ -310,6 +312,12 @@ function pickDouyinItemId(json: Record<string, unknown>): string | undefined {
   return match?.[1];
 }
 
+function dedupeAndFilterTodayComments(items: Array<Record<string, unknown>>, limit: number): Array<Record<string, unknown>> {
+  return dedupeByKey(items, (item) => String(item.externalCommentId ?? ''))
+    .filter((item) => isPublishedTodayInShanghai(item.publishedAt))
+    .slice(0, limit);
+}
+
 const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
   const body = ctx.body as FetchCommentsBody | null;
   if (!body?.platform || !body?.cookie) {
@@ -329,7 +337,7 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
 
   let session: Awaited<ReturnType<typeof createSession>> | null = null;
   try {
-    session = await createSession(body.cookie, targetUrl);
+    session = await createSession(body.cookie, targetUrl, body.headed);
     const { page } = session;
 
     const captured: Array<Record<string, unknown>> = [];
@@ -370,7 +378,7 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
 
     await scrollForLazyLoad(page);
 
-    sendJson(res, 200, captured.slice(0, body.limit ?? 50));
+    sendJson(res, 200, dedupeAndFilterTodayComments(captured, body.limit ?? 50));
   } catch {
     sendJson(res, 200, []);
   } finally {
@@ -383,6 +391,13 @@ interface FetchMessagesBody {
   cookie: string;
   limit?: number;
   cursor?: string;
+  headed?: boolean;
+}
+
+function dedupeAndFilterTodayMessages(items: Array<Record<string, unknown>>, limit: number): Array<Record<string, unknown>> {
+  return dedupeByKey(items, (item) => String(item.externalMessageId ?? ''))
+    .filter((item) => isPublishedTodayInShanghai(item.publishedAt))
+    .slice(0, limit);
 }
 
 /** Extract a normalised message list from a raw XHR JSON payload. */
@@ -401,14 +416,14 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
           try { content = (JSON.parse(contentRaw) as { text?: string }).text ?? contentRaw; } catch { content = contentRaw; }
         }
         return {
-          externalMessageId: String(item.message_id ?? item.msg_id ?? `msg-${Date.now()}`),
+          externalMessageId: String(item.message_id ?? item.msg_id ?? ''),
           externalUserId: String(sender?.uid ?? sender?.open_id ?? ''),
           userNickname: String(sender?.nickname ?? ''),
           content,
           type: item.content_type === 'image' ? 'image' : 'text',
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
-            : new Date().toISOString(),
+            : '',
           rawPayload: item,
         };
       });
@@ -419,14 +434,14 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
       return list.map((item: Record<string, unknown>) => {
         const userInfo = (item.user_info ?? item.contact ?? item.sender) as Record<string, unknown> | undefined;
         return {
-          externalMessageId: String(item.id ?? item.message_id ?? `msg-${Date.now()}`),
+          externalMessageId: String(item.id ?? item.message_id ?? ''),
           externalUserId: String(userInfo?.user_id ?? userInfo?.userid ?? ''),
           userNickname: String(userInfo?.nickname ?? ''),
           content: String(item.content ?? item.last_message ?? ''),
           type: item.msg_type === 'image' ? 'image' : 'text',
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
-            : new Date().toISOString(),
+            : '',
           rawPayload: item,
         };
       });
@@ -437,14 +452,14 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
       return list.map((item: Record<string, unknown>) => {
         const sender = (item.sender ?? item.contact) as Record<string, unknown> | undefined;
         return {
-          externalMessageId: String(item.message_id ?? item.id ?? `msg-${Date.now()}`),
+          externalMessageId: String(item.message_id ?? item.id ?? ''),
           externalUserId: String(sender?.openid ?? item.openid ?? ''),
           userNickname: String(sender?.nickname ?? item.nickname ?? ''),
           content: String(item.content ?? ''),
           type: item.msg_type === 'text' ? 'text' : 'other',
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
-            : new Date().toISOString(),
+            : '',
           rawPayload: item,
         };
       });
@@ -455,14 +470,14 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
       return list.map((item: Record<string, unknown>) => {
         const sender = (item.sender ?? item.from_member) as Record<string, unknown> | undefined;
         return {
-          externalMessageId: String(item.id ?? `msg-${Date.now()}`),
+          externalMessageId: String(item.id ?? ''),
           externalUserId: String(sender?.id ?? sender?.url_token ?? ''),
           userNickname: String(sender?.name ?? ''),
           content: String(item.content ?? ''),
           type: item.type === 'image' ? 'image' : 'text',
           publishedAt: item.created_time
             ? new Date(Number(item.created_time) * 1000).toISOString()
-            : new Date().toISOString(),
+            : '',
           rawPayload: item,
         };
       });
@@ -490,7 +505,7 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
 
   let session: Awaited<ReturnType<typeof createSession>> | null = null;
   try {
-    session = await createSession(body.cookie, targetUrl);
+    session = await createSession(body.cookie, targetUrl, body.headed);
     const { page } = session;
 
     // ── XHR response interception ──────────────────────────────
@@ -510,7 +525,7 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
 
     await scrollForLazyLoad(page);
 
-    sendJson(res, 200, captured.slice(0, body.limit ?? 50));
+    sendJson(res, 200, dedupeAndFilterTodayMessages(captured, body.limit ?? 50));
   } catch {
     sendJson(res, 200, []);
   } finally {

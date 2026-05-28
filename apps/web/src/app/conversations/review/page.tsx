@@ -3,7 +3,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listInteractions, reviewReply } from '@/lib/api/conversations';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels } from '@/lib/constants';
@@ -21,7 +20,6 @@ export default function ConversationReviewPage() {
 
   return (
     <div>
-      <Breadcrumb />
       <PageHeader title="人工确认回复" description={`${items.length} 条回复待审核`} />
       {isLoading ? <LoadingState /> : items.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">没有需要审核的回复</div>

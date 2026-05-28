@@ -43,12 +43,12 @@ export default function LoginPage() {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium">邮箱</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-md border p-2 text-sm" placeholder="your@email.com" required />
+            <label htmlFor="login-email" className="text-sm font-medium">邮箱</label>
+            <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-md border p-2 text-sm" placeholder="your@email.com" required />
           </div>
           <div>
-            <label className="text-sm font-medium">密码</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 w-full rounded-md border p-2 text-sm" required />
+            <label htmlFor="login-password" className="text-sm font-medium">密码</label>
+            <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 w-full rounded-md border p-2 text-sm" required />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={loading} className="w-full rounded-md bg-primary py-2 text-sm text-primary-foreground disabled:opacity-50">

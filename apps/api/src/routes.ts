@@ -17,6 +17,7 @@ import { applyPublishProgress, isPublishProgressAuthorized } from './publish-pro
 import { getBrowserRunnerUrl } from './browser-login-config';
 import { setSession, getSessionId, clearSession } from './browser-login-session';
 import { hashPassword, verifyPassword, createToken, getAuthenticatedUser } from './auth.js';
+import { executeResearchTaskSync, ResearchExecutionError } from './research-executor.js';
 
 // ── AI Skill Runner (lazy singleton) ────────────────────────────────
 let _skillRunner: DefaultSkillRunner | null = null;
@@ -160,34 +161,24 @@ const routes: Route[] = [
   {
     method: 'POST',
     pattern: '/api/research-tasks/:id/run',
-    handler: async (_req, res, ctx) => {
-      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.id } });
-      if (!task) return sendJson(res, 404, { error: 'Not found' });
-      if (!['DRAFT', 'PAUSED', 'FAILED'].includes(task.status)) {
-        return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: `Cannot run from ${task.status} state` } });
-      }
-
-      const item = await ctx.db.researchTask.update({
-        where: { id: ctx.params.id },
-        data: { status: 'RUNNING', startedAt: new Date() }
-      });
-
-      // Enqueue research task to worker
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       try {
-        const { Queue } = await import('bullmq');
-        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-        const queue = new Queue('research.run', { connection: { url: redisUrl } });
-        await queue.add('research-run', {
-          researchTaskId: task.id,
-          platform: Array.isArray(task.platforms) ? (task.platforms as string[])[0] || 'douyin' : 'douyin',
-          taskType: task.type,
-          keywords: task.keywords as string[] | undefined,
+        const result = await executeResearchTaskSync(ctx.db, ctx.params.id, user.id);
+        sendJson(res, 200, {
+          task: result.task,
+          posts: result.posts,
+          comments: result.comments,
+          insights: result.insights,
+          opportunities: result.opportunities,
         });
       } catch (err) {
-        console.error('[api] Failed to enqueue research task:', err);
+        if (err instanceof ResearchExecutionError) {
+          return sendJson(res, err.status, { error: { code: err.code, message: err.message } });
+        }
+        throw err;
       }
-
-      sendJson(res, 200, item);
     }
   },
   {
@@ -264,19 +255,17 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/content-opportunities/:id/create-content',
     handler: async (req, res, ctx) => {
-      const opp = await ctx.db.contentOpportunity.findFirst({
-        where: { id: ctx.params.id }
-      });
-      if (!opp) return sendJson(res, 404, { error: 'Not found' });
       const user = await getAuthenticatedUser(req, ctx.db);
       if (!user) return sendJson(res, 401, { error: '未登录' });
-      const project = await ctx.db.contentProject.findFirst({
-        where: { userId: user.id, deletedAt: null }
+      const opp = await ctx.db.contentOpportunity.findFirst({
+        where: { id: ctx.params.id, researchTask: { userId: user.id } }
       });
+      if (!opp) return sendJson(res, 404, { error: 'Not found' });
+      const projectId = await getOrCreateDefaultProject(ctx.db, user.id);
       const item = await ctx.db.contentItem.create({
         data: {
           userId: user.id,
-          projectId: project?.id ?? '',
+          projectId,
           type: 'text_image',
           title: opp.title,
           body: opp.description ?? '',
@@ -1424,6 +1413,7 @@ const routes: Route[] = [
       const platformAccountId = String(body.platformAccountId ?? '');
       const syncType = String(body.syncType ?? 'all');
       const mode = String(body.mode ?? 'sandbox');
+      const headed = typeof body.headed === 'boolean' ? body.headed : undefined;
       const sourceContentId = body.sourceContentId as string | undefined;
 
       if (!platform || !platformAccountId) {
@@ -1451,6 +1441,7 @@ const routes: Route[] = [
         platformAccountId,
         platform,
         mode,
+        headed,
         syncJobId: syncJob.id,
       };
 
@@ -2118,7 +2109,9 @@ const routes: Route[] = [
     handler: async (_req, res, ctx) => {
       const accountId = ctx.params.id;
       const sessionId = getSessionId(accountId);
-      if (!sessionId) return sendJson(res, 200, { status: 'waiting_scan' });
+      if (!sessionId) {
+        return sendJson(res, 200, { status: 'error', error: '登录会话不存在，请关闭后重新扫码' });
+      }
 
       try {
         const runnerUrl = getBrowserRunnerUrl();

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { authToken } from '@/lib/api/client';
+import { hiddenSectionPrefixes } from './navigation';
 
 const PUBLIC_PATHS = ['/login'];
 
@@ -14,14 +15,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   const isPublic = PUBLIC_PATHS.includes(pathname);
+  const isHiddenSection = hiddenSectionPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   useEffect(() => {
     if (!isPublic && !authToken.get()) {
       router.replace('/login');
+    } else if (!isPublic && isHiddenSection) {
+      router.replace('/dashboard');
     } else {
       setReady(true);
     }
-  }, [isPublic, router]);
+  }, [isHiddenSection, isPublic, router]);
 
   if (isPublic) {
     return <>{children}</>;

@@ -38,8 +38,10 @@ export function getConnector(platform: PlatformCode): InteractionConnector | und
  * - neither              → respects the explicit `mode` param, or disabled
  */
 export function getOrCreateConnector(platform: PlatformCode, mode: InteractionMode, config?: InteractionConnectorConfig): InteractionConnector {
-  const existing = connectors.get(platform);
-  if (existing) return existing;
+  if (!config) {
+    const existing = connectors.get(platform);
+    if (existing) return existing;
+  }
 
   const cfg = config || { mode };
   const hasOfficialApi = Boolean(cfg.accessToken);
@@ -51,24 +53,18 @@ export function getOrCreateConnector(platform: PlatformCode, mode: InteractionMo
     if (ConnectorClass) {
       const primary = new ConnectorClass(cfg);
       const fallback = new BrowserAssistInteractionConnector(platform, cfg);
-      const connector = new HybridInteractionConnector(primary, fallback);
-      connectors.set(platform, connector);
-      return connector;
+      return new HybridInteractionConnector(primary, fallback);
     }
   }
 
   switch (mode) {
     case 'browser_assist': {
-      const connector = new BrowserAssistInteractionConnector(platform, cfg);
-      connectors.set(platform, connector);
-      return connector;
+      return new BrowserAssistInteractionConnector(platform, cfg);
     }
     case 'official_api': {
       const ConnectorClass = platformConnectors[platform];
       if (ConnectorClass) {
-        const connector = new ConnectorClass(cfg);
-        connectors.set(platform, connector);
-        return connector;
+        return new ConnectorClass(cfg);
       }
       return new DisabledInteractionConnector(platform, cfg);
     }

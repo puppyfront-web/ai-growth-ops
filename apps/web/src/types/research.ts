@@ -21,6 +21,10 @@ export type ResearchTask = {
   insights?: ResearchInsight[];
   /** Included by backend list/detail endpoints */
   opportunities?: ContentOpportunity[];
+  /** Included by backend detail endpoint */
+  collectedPosts?: CollectedPost[];
+  /** Included by backend detail endpoint */
+  collectedComments?: CollectedComment[];
 };
 
 export type CollectedPost = {
@@ -73,4 +77,12 @@ export type ContentOpportunity = {
   priority: string | null;
   status: string;
   createdAt: string;
+};
+
+export type ResearchRunResult = {
+  task: ResearchTask;
+  posts: CollectedPost[];
+  comments: CollectedComment[];
+  insights: ResearchInsight[];
+  opportunities: ContentOpportunity[];
 };

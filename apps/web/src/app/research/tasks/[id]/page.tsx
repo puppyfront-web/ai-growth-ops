@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { getResearchTask, getCollectedPosts, getCollectedComments, runResearchTask } from '@/lib/api/research';
+import Link from 'next/link';
+import { createContentFromOpportunity, getResearchTask, runResearchTask } from '@/lib/api/research';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
@@ -16,20 +17,35 @@ export default function ResearchTaskDetailPage() {
   const id = params.id as string;
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<'info' | 'posts' | 'comments' | 'insights'>('info');
+  const [contentCreatedId, setContentCreatedId] = useState<string | null>(null);
 
   const { data: task, isLoading } = useQuery({ queryKey: ['research-task', id], queryFn: () => getResearchTask(id) });
-  const { data: posts } = useQuery({ queryKey: ['research-posts', id], queryFn: () => getCollectedPosts(id), enabled: activeTab === 'posts' });
-  const { data: comments } = useQuery({ queryKey: ['research-comments', id], queryFn: () => getCollectedComments(id), enabled: activeTab === 'comments' });
-
   const runMutation = useMutation({
     mutationFn: () => runResearchTask(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-task', id] })
+    onSuccess: () => {
+      setActiveTab('insights');
+      qc.invalidateQueries({ queryKey: ['research-task', id] });
+      qc.invalidateQueries({ queryKey: ['research-tasks'] });
+      qc.invalidateQueries({ queryKey: ['research-insights'] });
+      qc.invalidateQueries({ queryKey: ['content-opportunities'] });
+    }
+  });
+  const createContentMutation = useMutation({
+    mutationFn: (opportunityId: string) => createContentFromOpportunity(opportunityId),
+    onSuccess: (result) => {
+      setContentCreatedId(result.contentItemId);
+      qc.invalidateQueries({ queryKey: ['content-items'] });
+    }
   });
 
   if (isLoading) return <LoadingState />;
   if (!task) return null;
 
   const canRun = task.status === 'DRAFT' || task.status === 'FAILED';
+  const posts = task.collectedPosts ?? [];
+  const comments = task.collectedComments ?? [];
+  const insights = task.insights ?? [];
+  const opportunities = task.opportunities ?? [];
 
   return (
     <div>
@@ -70,6 +86,9 @@ export default function ResearchTaskDetailPage() {
 
       {activeTab === 'posts' && posts && (
         <div className="space-y-3">
+          {posts.length === 0 && (
+            <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">运行任务后会在这里展示采集内容。</div>
+          )}
           {posts.map((post) => (
             <div key={post.id} className="rounded-xl border bg-card p-4">
               <h4 className="font-medium">{post.title}</h4>
@@ -86,6 +105,9 @@ export default function ResearchTaskDetailPage() {
 
       {activeTab === 'comments' && comments && (
         <div className="space-y-2">
+          {comments.length === 0 && (
+            <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">运行任务后会在这里展示采集评论。</div>
+          )}
           {comments.map((comment) => (
             <div key={comment.id} className="rounded-lg border bg-card p-3">
               <p className="text-sm">{comment.content}</p>
@@ -96,8 +118,64 @@ export default function ResearchTaskDetailPage() {
       )}
 
       {activeTab === 'insights' && (
-        <div className="rounded-xl border bg-blue-50 p-4 text-sm text-blue-700">
-          洞察数据将在调研任务完成后自动生成。前往 <a href="/research/insights" className="underline font-medium">洞察列表</a> 查看所有已生成的洞察。
+        <div className="space-y-6">
+          {contentCreatedId && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+              已生成内容。
+              <Link href="/content" className="ml-2 font-medium underline">前往内容列表查看</Link>
+            </div>
+          )}
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">AI 洞察</h3>
+              <Link href="/research/insights" className="text-sm text-blue-600 hover:underline">查看全局洞察</Link>
+            </div>
+            {insights.length === 0 ? (
+              <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">运行任务后将自动生成洞察。</div>
+            ) : (
+              insights.map((insight) => (
+                <div key={insight.id} className="rounded-xl border bg-card p-4">
+                  <div className="flex items-center gap-3">
+                    <StatusBadge status="info" label={insight.type} />
+                    <h4 className="font-medium">{insight.title}</h4>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{insight.summary}</p>
+                </div>
+              ))
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">选题机会</h3>
+              <Link href="/research/opportunities" className="text-sm text-blue-600 hover:underline">查看全部机会</Link>
+            </div>
+            {opportunities.length === 0 ? (
+              <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">生成洞察后会在这里沉淀选题机会。</div>
+            ) : (
+              opportunities.map((opportunity) => (
+                <div key={opportunity.id} className="rounded-xl border bg-card p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="font-medium">{opportunity.title}</h4>
+                      <p className="mt-2 text-sm text-muted-foreground">{opportunity.description}</p>
+                      {opportunity.priority && (
+                        <div className="mt-2 text-xs text-muted-foreground">优先级：{opportunity.priority}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => createContentMutation.mutate(opportunity.id)}
+                      disabled={createContentMutation.isPending}
+                      className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                    >
+                      {createContentMutation.isPending ? '生成中...' : '生成内容'}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </section>
         </div>
       )}
     </div>

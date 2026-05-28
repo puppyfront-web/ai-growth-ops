@@ -19,6 +19,7 @@ export class BrowserAssistClient {
     sourceContentId?: string,
     limit?: number,
     cursor?: string,
+    headed?: boolean,
   ): Promise<any[]> {
     const url = `${this.runnerUrl}/assist/fetch-comments`;
     const result = await platformPost<any[]>(url, {
@@ -27,6 +28,7 @@ export class BrowserAssistClient {
       sourceContentId,
       limit: limit || 50,
       cursor,
+      headed,
     });
     if (!result.success) return [];
     return result.data || [];
@@ -36,6 +38,7 @@ export class BrowserAssistClient {
     config: BrowserAssistConfig,
     limit?: number,
     cursor?: string,
+    headed?: boolean,
   ): Promise<any[]> {
     const url = `${this.runnerUrl}/assist/fetch-messages`;
     const result = await platformPost<any[]>(url, {
@@ -43,6 +46,7 @@ export class BrowserAssistClient {
       cookie: config.cookie,
       limit: limit || 50,
       cursor,
+      headed,
     });
     if (!result.success) return [];
     return result.data || [];

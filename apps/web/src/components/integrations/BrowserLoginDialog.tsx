@@ -28,83 +28,118 @@ export function BrowserLoginDialog({ accountId, platform, open, onClose }: Brows
   const [countdown, setCountdown] = useState(TIMEOUT_SECONDS);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const launchRef = useRef(false);
+  const sessionActiveRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
   }, []);
 
-  const handleStart = useCallback(async () => {
-    if (launchRef.current) return;
-    launchRef.current = true;
+  const startPolling = useCallback((targetAccountId: string) => {
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          cleanup();
+          sessionActiveRef.current = false;
+          setState('expired');
+          setError('登录超时');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await getBrowserLoginStatus(targetAccountId);
+
+        if (status.status === 'logged_in') {
+          cleanup();
+          sessionActiveRef.current = false;
+          setState('logged_in');
+          qc.invalidateQueries({ queryKey: ['platform-accounts'] });
+        } else if (status.status === 'expired') {
+          cleanup();
+          sessionActiveRef.current = false;
+          setState('expired');
+          setError(status.error ?? '二维码已过期');
+        } else if (status.status === 'error') {
+          cleanup();
+          sessionActiveRef.current = false;
+          setState('error');
+          setError(status.error ?? '登录失败');
+        }
+      } catch {
+        // poll error - keep trying
+      }
+    }, POLL_INTERVAL);
+  }, [cleanup, qc]);
+
+  const handleClose = useCallback(() => {
+    cleanup();
+    const shouldCancel = sessionActiveRef.current;
+    sessionActiveRef.current = false;
+    setState('idle');
+    setError(null);
+    onClose();
+    if (shouldCancel) {
+      cancelBrowserLogin(accountId).catch(() => {});
+    }
+  }, [accountId, cleanup, onClose]);
+
+  const handleRetry = useCallback(async () => {
+    cleanup();
+    sessionActiveRef.current = false;
     setState('starting');
     setError(null);
     setCountdown(TIMEOUT_SECONDS);
     try {
       await startBrowserLogin(accountId);
+      sessionActiveRef.current = true;
       setState('waiting_scan');
-
-      countdownRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            cleanup();
-            setState('expired');
-            setError('登录超时');
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      pollRef.current = setInterval(async () => {
-        try {
-          const status = await getBrowserLoginStatus(accountId);
-
-          if (status.status === 'logged_in') {
-            cleanup();
-            setState('logged_in');
-            qc.invalidateQueries({ queryKey: ['platform-accounts'] });
-          } else if (status.status === 'expired') {
-            cleanup();
-            setState('expired');
-            setError(status.error ?? '二维码已过期');
-          } else if (status.status === 'error') {
-            cleanup();
-            setState('error');
-            setError(status.error ?? '登录失败');
-          }
-        } catch {
-          // poll error - keep trying
-        }
-      }, POLL_INTERVAL);
+      startPolling(accountId);
     } catch (err) {
-      launchRef.current = false;
+      sessionActiveRef.current = false;
       setState('error');
       setError((err as Error).message ?? '启动登录失败');
     }
-  }, [accountId, qc, cleanup]);
-
-  const handleClose = useCallback(async () => {
-    cleanup();
-    if (state === 'waiting_scan' || state === 'starting') {
-      try { await cancelBrowserLogin(accountId); } catch {}
-    }
-    launchRef.current = false;
-    setState('idle');
-    setError(null);
-    onClose();
-  }, [accountId, state, cleanup, onClose]);
+  }, [accountId, cleanup, startPolling]);
 
   useEffect(() => {
     if (!open) {
-      launchRef.current = false;
+      sessionActiveRef.current = false;
       cleanup();
+      setState('idle');
+      setError(null);
+      setCountdown(TIMEOUT_SECONDS);
       return;
     }
-    if (state === 'idle') handleStart();
-    return cleanup;
-  }, [open, state, handleStart, cleanup]);
+
+    let cancelled = false;
+
+    (async () => {
+      setState('starting');
+      setError(null);
+      setCountdown(TIMEOUT_SECONDS);
+      try {
+        await startBrowserLogin(accountId);
+        if (cancelled) return;
+        sessionActiveRef.current = true;
+        setState('waiting_scan');
+        startPolling(accountId);
+      } catch (err) {
+        if (cancelled) return;
+        sessionActiveRef.current = false;
+        setState('error');
+        setError((err as Error).message ?? '启动登录失败');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [open, accountId, cleanup, startPolling]);
 
   if (!open) return null;
 
@@ -160,7 +195,7 @@ export function BrowserLoginDialog({ accountId, platform, open, onClose }: Brows
             </div>
             <p className="mt-3 text-sm font-medium text-red-700">{error ?? '登录失败'}</p>
             <div className="mt-4 flex gap-2">
-              <button onClick={handleStart} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
+              <button onClick={handleRetry} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
                 重新登录
               </button>
               <button onClick={handleClose} className="rounded-md border px-4 py-2 text-sm hover:bg-accent">

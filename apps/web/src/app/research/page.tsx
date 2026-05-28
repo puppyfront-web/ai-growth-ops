@@ -1,7 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { listResearchTasks } from '@/lib/api/research';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { listResearchTasks, runResearchTask } from '@/lib/api/research';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { DataTable } from '@/components/shared/DataTable';
@@ -12,24 +12,43 @@ import type { ColumnDef } from '@tanstack/react-table';
 import type { ResearchTask } from '@/types/research';
 import Link from 'next/link';
 
-const columns: ColumnDef<ResearchTask>[] = [
-  { accessorKey: 'type', header: '任务类型', cell: ({ getValue }) => {
-    const labels: Record<string, string> = { keyword_search: '关键词搜索', competitor_analysis: '竞品分析', comment_sampling: '评论采样' };
-    return <span>{labels[getValue() as string] ?? getValue() as string}</span>;
-  }},
-  { accessorKey: 'platforms', header: '平台', cell: ({ getValue }) => <div className="flex gap-1">{(getValue() as string[]).map((p) => <PlatformBadge key={p} platform={p} />)}</div> },
-  { accessorKey: 'keywords', header: '关键词', cell: ({ getValue }) => <span className="text-sm">{(getValue() as string[]).join(', ') || '-'}</span> },
-  { accessorKey: 'status', header: '状态', cell: ({ getValue }) => <StatusBadge status={getValue() as string} label={researchStatusLabels[getValue() as keyof typeof researchStatusLabels]} /> },
-  { id: 'actions', header: '操作', cell: ({ row }) => (
-    <div className="flex gap-2">
-      <Link href={`/research/tasks/${row.original.id}`} className="text-sm text-blue-600 hover:underline">查看</Link>
-      <button className="text-sm text-muted-foreground hover:text-foreground">运行</button>
-    </div>
-  )},
-];
-
 export default function ResearchPage() {
+  const qc = useQueryClient();
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['research-tasks'], queryFn: listResearchTasks });
+  const runMutation = useMutation({
+    mutationFn: (id: string) => runResearchTask(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['research-tasks'] });
+    }
+  });
+
+  const columns: ColumnDef<ResearchTask>[] = [
+    { accessorKey: 'type', header: '任务类型', cell: ({ getValue }) => {
+      const labels: Record<string, string> = { keyword_search: '关键词搜索', competitor_analysis: '竞品分析', comment_sampling: '评论采样' };
+      return <span>{labels[getValue() as string] ?? getValue() as string}</span>;
+    }},
+    { accessorKey: 'platforms', header: '平台', cell: ({ getValue }) => <div className="flex gap-1">{(getValue() as string[]).map((p) => <PlatformBadge key={p} platform={p} />)}</div> },
+    { accessorKey: 'keywords', header: '关键词', cell: ({ getValue }) => <span className="text-sm">{(getValue() as string[]).join(', ') || '-'}</span> },
+    { accessorKey: 'status', header: '状态', cell: ({ getValue }) => <StatusBadge status={getValue() as string} label={researchStatusLabels[getValue() as keyof typeof researchStatusLabels]} /> },
+    { id: 'actions', header: '操作', cell: ({ row }) => {
+      const canRun = ['DRAFT', 'FAILED', 'PAUSED'].includes(row.original.status);
+      const isPending = runMutation.isPending && runMutation.variables === row.original.id;
+      return (
+        <div className="flex gap-2">
+          <Link href={`/research/tasks/${row.original.id}`} className="text-sm text-blue-600 hover:underline">查看</Link>
+          {canRun && (
+            <button
+              onClick={() => runMutation.mutate(row.original.id)}
+              disabled={isPending}
+              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {isPending ? '运行中...' : '运行'}
+            </button>
+          )}
+        </div>
+      );
+    }},
+  ];
 
   return (
     <div>

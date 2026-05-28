@@ -2,35 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  LayoutDashboard,
-  Search,
-  FileText,
-  Image,
-  Send,
-  MessageSquare,
-  UserCheck,
-  BarChart3,
-  Plug,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/hooks/use-app-store';
-
-const navItems = [
-  { label: '工作台', href: '/dashboard', icon: LayoutDashboard },
-  { label: '市场调研', href: '/research', icon: Search },
-  { label: '内容运营', href: '/content', icon: FileText },
-  { label: '素材库', href: '/media', icon: Image },
-  { label: '发布运营', href: '/publish', icon: Send },
-  { label: '评论私信', href: '/conversations', icon: MessageSquare },
-  { label: '线索管理', href: '/leads', icon: UserCheck },
-  { label: '数据复盘', href: '/analytics', icon: BarChart3 },
-  { label: '集成配置', href: '/integrations', icon: Plug },
-  { label: '系统设置', href: '/settings', icon: Settings },
-];
+import { navItems } from './navigation';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -60,7 +35,7 @@ export function Sidebar() {
         </button>
       </div>
       <nav className="flex-1 space-y-1 p-2">
-        {navItems.map((item) => {
+        {navItems.filter((item) => !item.hidden).map((item) => {
           const isActive = pathname.startsWith(item.href);
           return (
             <Link

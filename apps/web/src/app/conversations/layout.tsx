@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { Breadcrumb } from '@/components/layout/Breadcrumb';
 
 const tabs = [
   { label: '全部', href: '/conversations' },
@@ -17,6 +18,7 @@ export default function ConversationsLayout({ children }: { children: React.Reac
 
   return (
     <div>
+      <Breadcrumb />
       <div className="flex gap-1 border-b mb-6">
         {tabs.map((tab) => {
           const isActive = tab.href === '/conversations'

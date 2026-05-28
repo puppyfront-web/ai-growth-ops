@@ -1,8 +1,25 @@
+import 'dotenv/config';
 import { expect, test } from '@playwright/test';
+import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
 
-test('dashboard loads and shows seed data metrics', async ({ page }) => {
-  await page.goto('/dashboard');
+test.beforeEach(async () => {
+  const db = createDatabaseClient();
+  try {
+    await resetDatabase(db);
+    await seedDatabase(db);
+  } finally {
+    await db.$disconnect();
+  }
+});
 
-  // Dashboard should show metrics from seed data
-  await expect(page.locator('text=平台账号').or(page.locator('text=内容')).or(page.locator('text=发布'))).toBeVisible({ timeout: 15000 });
+test('dashboard loads after login and shows key metrics', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill('admin@ai-growth-ops.local');
+  await page.getByLabel('密码').fill('changeme123');
+  await page.getByRole('button', { name: '登录' }).click();
+  await page.waitForURL('**/dashboard');
+
+  await expect(page.getByText('运营工作台')).toBeVisible();
+  await expect(page.getByText('平台账号')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '调研洞察' })).toBeVisible();
 });

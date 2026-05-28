@@ -36,8 +36,8 @@ export default function NewResearchPage() {
     setSubmitting(true);
     try {
       const keywords = data.keywords ? data.keywords.split(',').map((k) => k.trim()).filter(Boolean) : [];
-      await createResearchTask({ type: data.type, platforms: data.platforms as any, keywords });
-      router.push('/research');
+      const created = await createResearchTask({ type: data.type, platforms: data.platforms as any, keywords });
+      router.push(`/research/tasks/${created.id}`);
     } finally {
       setSubmitting(false);
     }
@@ -49,8 +49,8 @@ export default function NewResearchPage() {
       <PageHeader title="新建调研任务" />
       <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-6">
         <div className="space-y-2">
-          <label className="text-sm font-medium">任务类型</label>
-          <select {...register('type')} className="w-full rounded-md border p-2 text-sm">
+          <label htmlFor="research-type" className="text-sm font-medium">任务类型</label>
+          <select id="research-type" {...register('type')} className="w-full rounded-md border p-2 text-sm">
             <option value="keyword_search">关键词搜索</option>
             <option value="competitor_analysis">竞品账号</option>
             <option value="comment_sampling">评论采样</option>
@@ -59,7 +59,7 @@ export default function NewResearchPage() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">调研平台</label>
+          <span className="text-sm font-medium">调研平台</span>
           <div className="flex gap-4">
             {['xiaohongshu', 'douyin', 'zhihu'].map((p) => (
               <label key={p} className="flex items-center gap-2">
@@ -73,27 +73,27 @@ export default function NewResearchPage() {
 
         {taskType === 'keyword_search' && (
           <div className="space-y-2">
-            <label className="text-sm font-medium">关键词（用逗号分隔）</label>
-            <input {...register('keywords')} className="w-full rounded-md border p-2 text-sm" placeholder="AI获客, 内容营销" />
+            <label htmlFor="research-keywords" className="text-sm font-medium">关键词（用逗号分隔）</label>
+            <input id="research-keywords" {...register('keywords')} className="w-full rounded-md border p-2 text-sm" placeholder="AI获客, 内容营销" />
           </div>
         )}
 
         {taskType === 'competitor_analysis' && (
           <div className="space-y-2">
-            <label className="text-sm font-medium">竞品账号 URL</label>
-            <input {...register('targetAccountUrl')} className="w-full rounded-md border p-2 text-sm" placeholder="https://www.xiaohongshu.com/user/profile/xxx" />
+            <label htmlFor="research-target-account-url" className="text-sm font-medium">竞品账号 URL</label>
+            <input id="research-target-account-url" {...register('targetAccountUrl')} className="w-full rounded-md border p-2 text-sm" placeholder="https://www.xiaohongshu.com/user/profile/xxx" />
             {errors.targetAccountUrl && <p className="text-xs text-destructive">{errors.targetAccountUrl.message}</p>}
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">采集内容数量上限</label>
-            <input type="number" {...register('contentLimit', { valueAsNumber: true })} className="w-full rounded-md border p-2 text-sm" />
+            <label htmlFor="research-content-limit" className="text-sm font-medium">采集内容数量上限</label>
+            <input id="research-content-limit" type="number" {...register('contentLimit', { valueAsNumber: true })} className="w-full rounded-md border p-2 text-sm" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">评论采样数量上限</label>
-            <input type="number" {...register('commentLimit', { valueAsNumber: true })} className="w-full rounded-md border p-2 text-sm" />
+            <label htmlFor="research-comment-limit" className="text-sm font-medium">评论采样数量上限</label>
+            <input id="research-comment-limit" type="number" {...register('commentLimit', { valueAsNumber: true })} className="w-full rounded-md border p-2 text-sm" />
           </div>
         </div>
 

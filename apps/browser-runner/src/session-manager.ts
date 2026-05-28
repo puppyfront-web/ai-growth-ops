@@ -68,11 +68,24 @@ class SessionManager {
       const contextCookies = await session.context.cookies();
       console.log(`[session:${sessionId.slice(0,8)}] platform=${session.platform} url=${currentUrl} cookies=[${contextCookies.map(c => c.name).join(',')}]`);
 
-      const result = await detectLoginWithBaseline(
+      let result = await detectLoginWithBaseline(
         session.page,
         config,
         session.baselineCookieKeys,
       );
+
+      // QR 扫码后 cookie 可能延迟写入，短暂等待后重试一次
+      if (!result.loggedIn && session.platform === 'douyin') {
+        const url = session.page.url();
+        if (url.includes('creator.douyin.com') && !url.includes('/login')) {
+          await session.page.waitForTimeout(1500);
+          result = await detectLoginWithBaseline(
+            session.page,
+            config,
+            session.baselineCookieKeys,
+          );
+        }
+      }
 
       console.log(`[session:${sessionId.slice(0,8)}] loggedIn=${result.loggedIn} cookieLen=${result.cookies.length}`);
 

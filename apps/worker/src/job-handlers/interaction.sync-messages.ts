@@ -5,6 +5,7 @@ import type { DatabaseClient } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import type { Job } from 'bullmq';
 import type { InteractionSyncMessagesInput } from '../job-types.js';
+import { prepareMessagesForSync } from './interaction-sync-utils.js';
 
 export async function handleInteractionSyncMessages(
   job: Job<InteractionSyncMessagesInput>
@@ -14,6 +15,7 @@ export async function handleInteractionSyncMessages(
     platformAccountId,
     platform,
     mode,
+    headed,
     cursor,
     limit,
     syncJobId,
@@ -42,15 +44,17 @@ export async function handleInteractionSyncMessages(
     const connector = getOrCreateConnector(
       platform as PlatformCode,
       mode as InteractionMode,
-      { mode: mode as InteractionMode, cookie, accessToken },
+      { mode: mode as InteractionMode, cookie, accessToken, headed },
     );
 
     // Fetch messages from platform
-    const messages = await connector.fetchMessages({
+    const fetchedMessages = await connector.fetchMessages({
       platformAccountId,
       cursor,
       limit: limit || 50,
+      headed,
     });
+    const messages = prepareMessagesForSync(fetchedMessages);
 
     // Process and deduplicate
     let newCount = 0;
@@ -99,7 +103,7 @@ export async function handleInteractionSyncMessages(
     }
 
     job.log(
-      `Synced ${messages.length} messages: ${newCount} new, ${skippedCount} duplicates`
+      `Synced ${messages.length}/${fetchedMessages.length} messages after today-filter: ${newCount} new, ${skippedCount} duplicates`
     );
   } catch (err) {
     if (syncJobId) {

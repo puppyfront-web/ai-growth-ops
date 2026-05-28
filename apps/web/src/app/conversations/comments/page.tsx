@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listInteractions, triggerSync } from '@/lib/api/conversations';
 import { getPlatformAccounts } from '@/lib/api/integrations';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels, platformLabels } from '@/lib/constants';
@@ -25,6 +24,7 @@ const columns: ColumnDef<Interaction>[] = [
 export default function CommentsPage() {
   const qc = useQueryClient();
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [useHeadedBrowser, setUseHeadedBrowser] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -46,6 +46,7 @@ export default function CommentsPage() {
         platform: account.platform,
         mode: account.mode,
         syncType: 'comments',
+        headed: useHeadedBrowser,
       });
     },
     onSuccess: (result) => {
@@ -63,7 +64,6 @@ export default function CommentsPage() {
 
   return (
     <div>
-      <Breadcrumb />
       <PageHeader
         title="评论管理"
         description="管理所有平台的评论"
@@ -89,6 +89,15 @@ export default function CommentsPage() {
               >
                 {syncMutation.isPending ? '同步中…' : '拉取评论'}
               </button>
+              <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={useHeadedBrowser}
+                  onChange={(e) => setUseHeadedBrowser(e.target.checked)}
+                  className="rounded"
+                />
+                使用有头浏览器
+              </label>
             </div>
           ) : (
             <Link href="/integrations/platforms" className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent">

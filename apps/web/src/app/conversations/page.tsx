@@ -3,7 +3,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { listInteractions } from '@/lib/api/conversations';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge, PlatformBadge, RiskBadge } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels } from '@/lib/constants';
@@ -33,7 +32,6 @@ export default function ConversationsPage() {
 
   return (
     <div>
-      <Breadcrumb />
       <PageHeader title="评论私信" description="统一管理所有平台的评论和私信" actions={
         <Link href="/conversations/review" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">审核回复</Link>
       } />

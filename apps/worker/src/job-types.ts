@@ -64,6 +64,7 @@ export interface InteractionSyncCommentsInput {
   platformAccountId: string;
   platform: string;
   mode: string;
+  headed?: boolean;
   sourceContentId?: string;
   cursor?: string;
   limit?: number;
@@ -75,6 +76,7 @@ export interface InteractionSyncMessagesInput {
   platformAccountId: string;
   platform: string;
   mode: string;
+  headed?: boolean;
   cursor?: string;
   limit?: number;
   syncJobId?: string;
