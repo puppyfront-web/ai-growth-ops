@@ -27,10 +27,19 @@ Current apps expose typed health-check functions and package placeholders so the
 
 The repository now includes an AI Native `runtime-core` app intended for OpenClaw-style installs.
 
+Current live local CLI publish/auth support in this environment:
+
+- `douyin`
+- `wechat_channels` via `tencent`
+- `kuaishou`
+
+Other publish capabilities remain registered as disabled placeholders until a compatible local executor is installed.
+
 Example commands:
 
 ```bash
 ./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts skills:list
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=auth.check --platforms=douyin --account=<account>
 ./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=publish --platforms=douyin --content=hello
 ./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=interaction.fetch --platforms=xiaohongshu
 ```

@@ -1,0 +1,12 @@
+{
+  "skillId": "baijiahao-publish",
+  "runtime": "local_cli",
+  "entrypoint": "skills/installed/baijiahao-article-upload/SKILL.md",
+  "capabilities": ["publish.article"],
+  "contexts": [{ "platform": "baijiahao" }],
+  "enabled": false,
+  "healthy": false,
+  "metadata": {
+    "commandPlatform": "baijiahao"
+  }
+}

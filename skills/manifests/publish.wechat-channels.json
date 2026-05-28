@@ -1,0 +1,12 @@
+{
+  "skillId": "wechat-channels-upload",
+  "runtime": "local_cli",
+  "entrypoint": "skills/installed/tencent-upload/SKILL.md",
+  "capabilities": ["publish.video", "auth.check", "auth.login"],
+  "contexts": [{ "platform": "wechat_channels" }],
+  "enabled": true,
+  "healthy": true,
+  "metadata": {
+    "commandPlatform": "tencent"
+  }
+}

@@ -1,5 +1,7 @@
 export type RuntimeIntent =
   | 'publish'
+  | 'auth.check'
+  | 'auth.login'
   | 'interaction.fetch'
   | 'interaction.reply'
   | 'lead.extract'

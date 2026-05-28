@@ -24,14 +24,18 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   }
 
   if (command === 'skills:list') {
+    const { discoverSkillManifests } = await import('../registry/skill-manifest.js');
+    const manifests = await discoverSkillManifests(config.manifestDir);
     console.log(
-      JSON.stringify([
-        {
-          skillId: 'douyin-upload',
-          runtime: 'openclaw',
-          capability: CAPABILITIES.PUBLISH_VIDEO,
-        },
-      ]),
+      JSON.stringify(
+        manifests.map((manifest) => ({
+          skillId: manifest.skillId,
+          runtime: manifest.runtime,
+          capability: manifest.capabilities[0] ?? CAPABILITIES.PUBLISH_VIDEO,
+          enabled: manifest.enabled,
+          healthy: manifest.healthy,
+        })),
+      ),
     );
     return;
   }
@@ -40,6 +44,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     const intent = readFlag(args, 'intent');
     const platforms = readPlatforms(args);
     const content = readFlag(args, 'content') ?? 'hello';
+    const account = readFlag(args, 'account');
+    const title = readFlag(args, 'title');
+    const file = readFlag(args, 'file');
+    const source = readFlag(args, 'source');
 
     if (intent === 'publish') {
       const result = await runRuntimeRequest({
@@ -47,8 +55,25 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         intent: 'publish',
         payload: {
           platforms,
+          account,
+          title,
           content,
-          mediaFilePaths: ['/tmp/demo.mp4'],
+          mediaFilePaths: file ? [file] : undefined,
+          source,
+        },
+      });
+      console.log(JSON.stringify(result));
+      return;
+    }
+
+    if (intent === 'auth.check' || intent === 'auth.login') {
+      const platform = platforms[0] ?? 'douyin';
+      const result = await runRuntimeRequest({
+        requestId: `cli-run-${intent}`,
+        intent,
+        payload: {
+          platform,
+          account,
         },
       });
       console.log(JSON.stringify(result));

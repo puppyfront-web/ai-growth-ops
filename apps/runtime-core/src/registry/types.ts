@@ -14,4 +14,5 @@ export interface SkillManifestRecord {
   contexts?: SkillContext[];
   enabled: boolean;
   healthy: boolean;
+  metadata?: Record<string, unknown>;
 }

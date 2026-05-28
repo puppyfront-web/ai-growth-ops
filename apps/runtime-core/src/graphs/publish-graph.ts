@@ -1,14 +1,18 @@
 export interface PublishGraphInput {
   platforms: string[];
+  account?: string;
   title?: string;
   content: string;
   mediaFilePaths?: string[];
+  source?: string;
 }
 
 export interface PublishGraphResultItem {
   platform: string;
   skillId: string;
   status: 'success' | 'failed';
+  mode?: 'planned' | 'executed' | 'unresolved';
+  detail?: unknown;
 }
 
 export interface PublishGraphResult {

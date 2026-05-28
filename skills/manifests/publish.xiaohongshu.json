@@ -1,0 +1,12 @@
+{
+  "skillId": "xiaohongshu-upload",
+  "runtime": "local_cli",
+  "entrypoint": "skills/installed/xiaohongshu-upload/SKILL.md",
+  "capabilities": ["publish.video"],
+  "contexts": [{ "platform": "xiaohongshu" }],
+  "enabled": false,
+  "healthy": false,
+  "metadata": {
+    "commandPlatform": "xiaohongshu"
+  }
+}

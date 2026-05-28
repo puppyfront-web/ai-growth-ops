@@ -6,10 +6,16 @@
    `./node_modules/.bin/tsc --project apps/runtime-core/tsconfig.json --noEmit`
 3. List available skills:
    `./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts skills:list`
-4. Run the publish smoke path:
+4. Verify auth check for a live platform account:
+   `./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=auth.check --platforms=douyin --account=<account>`
+5. Run the publish smoke path:
    `./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=publish --platforms=douyin --content=hello`
-5. Run the interaction + lead smoke path:
+6. Run the interaction + lead smoke path:
    `./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=interaction.fetch --platforms=xiaohongshu`
-6. Run the combined smoke script:
+7. Run the combined smoke script:
    `./node_modules/.bin/tsx scripts/runtime-core-smoke.ts`
-7. Capture outputs from steps 3 to 6 as the delivery verification record.
+8. Live publish/auth scope on this machine is currently:
+   - `douyin`
+   - `wechat_channels` via `tencent`
+   - `kuaishou`
+9. Capture outputs from steps 3 to 7 as the delivery verification record.

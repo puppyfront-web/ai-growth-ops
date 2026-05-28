@@ -1,0 +1,12 @@
+{
+  "skillId": "kuaishou-upload",
+  "runtime": "local_cli",
+  "entrypoint": "skills/installed/kuaishou-upload/SKILL.md",
+  "capabilities": ["publish.video", "auth.check", "auth.login"],
+  "contexts": [{ "platform": "kuaishou" }],
+  "enabled": true,
+  "healthy": true,
+  "metadata": {
+    "commandPlatform": "kuaishou"
+  }
+}
