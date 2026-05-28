@@ -4,9 +4,10 @@
   "entrypoint": "skills/installed/baijiahao-article-upload/SKILL.md",
   "capabilities": ["publish.article"],
   "contexts": [{ "platform": "baijiahao" }],
-  "enabled": false,
-  "healthy": false,
+  "enabled": true,
+  "healthy": true,
   "metadata": {
-    "commandPlatform": "baijiahao"
+    "commandPlatform": "baijiahao",
+    "executionMode": "browser_runner"
   }
 }

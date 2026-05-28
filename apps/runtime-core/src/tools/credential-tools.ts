@@ -37,6 +37,8 @@ export async function resolveCookieForPlatform(
     xiaohongshu: process.env.AI_GROWTH_OPS_XIAOHONGSHU_COOKIE,
     wechat_channels: process.env.AI_GROWTH_OPS_WECHAT_CHANNELS_COOKIE,
     kuaishou: process.env.AI_GROWTH_OPS_KUAISHOU_COOKIE,
+    zhihu: process.env.AI_GROWTH_OPS_ZHIHU_COOKIE,
+    baijiahao: process.env.AI_GROWTH_OPS_BAIJIAHAO_COOKIE,
   };
 
   const fromEnv = envMap[platform];

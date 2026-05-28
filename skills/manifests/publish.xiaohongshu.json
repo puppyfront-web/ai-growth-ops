@@ -4,9 +4,10 @@
   "entrypoint": "skills/installed/xiaohongshu-upload/SKILL.md",
   "capabilities": ["publish.video"],
   "contexts": [{ "platform": "xiaohongshu" }],
-  "enabled": false,
-  "healthy": false,
+  "enabled": true,
+  "healthy": true,
   "metadata": {
-    "commandPlatform": "xiaohongshu"
+    "commandPlatform": "xiaohongshu",
+    "executionMode": "browser_runner"
   }
 }

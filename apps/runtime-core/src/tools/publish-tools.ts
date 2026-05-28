@@ -24,9 +24,23 @@ export function buildPublishInvocation(
 ): { executable: boolean; payload: Record<string, unknown>; capability: string } {
   const platform = input.platform;
   const commandPlatform = (manifest.metadata?.commandPlatform as string | undefined) ?? platform;
+  const executionMode =
+    (manifest.metadata?.executionMode as 'local_cli' | 'browser_runner' | undefined) ?? 'local_cli';
   const root = socialPublishSkillsRoot;
   const file = input.mediaFilePaths?.[0];
   const capability = manifest.capabilities[0] ?? CAPABILITIES.PUBLISH_VIDEO;
+
+  if (executionMode === 'browser_runner') {
+    return {
+      executable: false,
+      capability,
+      payload: {
+        platform,
+        commandPlatform,
+        reason: 'browser_runner_execution',
+      },
+    };
+  }
 
   if (!root) {
     return {

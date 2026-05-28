@@ -4,9 +4,10 @@
   "entrypoint": "skills/installed/zhihu-article-upload/SKILL.md",
   "capabilities": ["publish.article"],
   "contexts": [{ "platform": "zhihu" }],
-  "enabled": false,
-  "healthy": false,
+  "enabled": true,
+  "healthy": true,
   "metadata": {
-    "commandPlatform": "zhihu"
+    "commandPlatform": "zhihu",
+    "executionMode": "browser_runner"
   }
 }
