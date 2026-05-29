@@ -1,5 +1,12 @@
 import { existsSync } from 'node:fs';
 
+export interface LLMConfig {
+  provider?: 'openai' | 'anthropic';
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+
 export interface RuntimeConfig {
   environment: string;
   dataDir: string;
@@ -15,6 +22,7 @@ export interface RuntimeConfig {
     zhihu: string;
     baijiahao: string;
   };
+  llm: LLMConfig;
 }
 
 export function loadRuntimeConfig(): RuntimeConfig {
@@ -37,6 +45,18 @@ export function loadRuntimeConfig(): RuntimeConfig {
       wechat_official: process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_SHARED_ACCOUNT ?? 'shared',
       zhihu: process.env.AI_GROWTH_OPS_ZHIHU_SHARED_ACCOUNT ?? 'shared',
       baijiahao: process.env.AI_GROWTH_OPS_BAIJIAHAO_SHARED_ACCOUNT ?? 'shared',
+    },
+    llm: {
+      provider: (process.env.LLM_PROVIDER as 'openai' | 'anthropic' | undefined) ?? undefined,
+      apiKey:
+        process.env.LLM_PROVIDER === 'anthropic'
+          ? process.env.ANTHROPIC_API_KEY || undefined
+          : process.env.OPENAI_API_KEY || undefined,
+      baseUrl:
+        process.env.LLM_PROVIDER === 'anthropic'
+          ? process.env.ANTHROPIC_BASE_URL || undefined
+          : process.env.OPENAI_BASE_URL || undefined,
+      model: process.env.LLM_MODEL || undefined,
     },
   };
 }

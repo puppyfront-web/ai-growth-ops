@@ -4,6 +4,7 @@ import { getDeliveryDoctorReport, listAvailableAccounts } from '../tools/deliver
 import { runInteractionOps } from '../workflows/run-interaction-ops.js';
 import { runLeadMining } from '../workflows/run-lead-mining.js';
 import { runRuntimeRequest } from '../workflows/run-runtime-request.js';
+import type { LeadCandidate } from '../graphs/lead-mining-graph.js';
 
 function readFlag(args: string[], name: string): string | undefined {
   const prefix = `--${name}=`;
@@ -113,13 +114,29 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         account,
       });
       const lead = await runLeadMining({
-        candidates: interaction.items.map((item) => ({
+        candidates: interaction.items.map((item): LeadCandidate => ({
           platform: item.platform,
+          interactionType: item.interactionType as 'comment' | 'message',
           content: item.content,
-          confidence: 0.9,
+          sourceContentTitle: item.sourceContentTitle,
+          userNickname: item.userNickname,
         })),
       });
       console.log(JSON.stringify({ interaction, lead }));
+      return;
+    }
+
+    if (intent === 'lead.extract') {
+      const rawContent = content;
+      const platform = platforms[0] ?? 'xiaohongshu';
+      const lead = await runLeadMining({
+        candidates: [{
+          platform,
+          interactionType: 'comment',
+          content: rawContent,
+        }],
+      });
+      console.log(JSON.stringify(lead));
       return;
     }
   }

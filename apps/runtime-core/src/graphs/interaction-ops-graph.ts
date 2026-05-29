@@ -12,6 +12,8 @@ export interface InteractionOpsResult {
     platform: string;
     interactionType: string;
     content: string;
+    sourceContentTitle?: string;
+    userNickname?: string;
   }>;
   replySuggestions: Array<{
     text: string;

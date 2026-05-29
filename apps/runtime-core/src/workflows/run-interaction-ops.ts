@@ -6,7 +6,6 @@ import {
   type InteractionOpsInput,
   type InteractionOpsResult,
 } from '../graphs/interaction-ops-graph.js';
-import { buildReplySuggestion } from '../tools/interaction-tools.js';
 
 export async function runInteractionOps(
   input: InteractionOpsInput,
@@ -42,12 +41,14 @@ export async function runInteractionOps(
         return {
           status: 'success',
           mode: 'executed',
-          items: comments.map((item) => ({
+          items: comments.map((item: Record<string, unknown>) => ({
             platform: graphInput.platform,
             interactionType: graphInput.interactionType,
-            content: item.content,
+            content: String(item.content ?? ''),
+            sourceContentTitle: item.sourceContentTitle ? String(item.sourceContentTitle) : undefined,
+            userNickname: item.userNickname ? String(item.userNickname) : undefined,
           })),
-          replySuggestions: comments.slice(0, 5).map((item) => buildReplySuggestion(item.content)),
+          replySuggestions: [],
         };
       }
 
@@ -63,12 +64,14 @@ export async function runInteractionOps(
       return {
         status: 'success',
         mode: 'executed',
-        items: messages.map((item) => ({
+        items: messages.map((item: Record<string, unknown>) => ({
           platform: graphInput.platform,
           interactionType: graphInput.interactionType,
-          content: item.content,
+          content: String(item.content ?? ''),
+          sourceContentTitle: item.sourceContentTitle ? String(item.sourceContentTitle) : undefined,
+          userNickname: item.userNickname ? String(item.userNickname) : undefined,
         })),
-        replySuggestions: messages.slice(0, 5).map((item) => buildReplySuggestion(item.content)),
+        replySuggestions: [],
       };
     } catch (error) {
       console.error('[interaction-ops] browser-runner fetch failed:', error);
