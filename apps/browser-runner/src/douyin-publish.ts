@@ -130,8 +130,30 @@ async function waitForSecondVerifyIfHeaded(page: Page): Promise<boolean> {
   return false;
 }
 
+async function handleDeclarationModal(page: Page): Promise<boolean> {
+  const title = page.getByText('未添加自主声明', { exact: true }).first();
+  if (!(await title.isVisible().catch(() => false))) return false;
+
+  const directPublishButton = page.getByRole('button', { name: '直接发布', exact: true }).first();
+  await directPublishButton.waitFor({ state: 'visible', timeout: 5_000 });
+
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const disabled = await directPublishButton.isDisabled().catch(() => false);
+    if (!disabled) {
+      await directPublishButton.click({ timeout: 5_000 });
+      await page.waitForTimeout(1_000);
+      return true;
+    }
+    await page.waitForTimeout(500);
+  }
+
+  throw new Error('抖音出现“未添加自主声明”弹窗，但“直接发布”按钮长时间不可点击，请人工确认声明设置');
+}
+
 async function clickPublish(page: Page): Promise<{ postId: string | null; postUrl: string }> {
   const deadline = Date.now() + 120_000;
+  let declarationHandled = false;
   while (Date.now() < deadline) {
     if (await page.locator('#uc-second-verify, .second-verify-mask').isVisible().catch(() => false)) {
       const verified = await waitForSecondVerifyIfHeaded(page);
@@ -144,6 +166,17 @@ async function clickPublish(page: Page): Promise<{ postId: string | null; postUr
     const btn = page.getByRole('button', { name: '发布', exact: true });
     if ((await btn.count()) > 0) {
       await btn.click({ timeout: 10_000 });
+      const declarationVisible = await page
+        .getByText('未添加自主声明', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (declarationVisible && (await handleDeclarationModal(page))) {
+        if (declarationHandled) {
+          throw new Error('抖音“未添加自主声明”弹窗重复出现，已停止重试以避免死循环，请人工确认发布配置');
+        }
+        declarationHandled = true;
+      }
       try {
         await page.waitForURL(MANAGE_PATTERN, { timeout: 15_000 });
       } catch {
