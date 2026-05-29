@@ -48,7 +48,7 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
 
       if (!invocation.executable) {
         const cookie = await resolveCookieForPlatform(platform, account);
-        if (cookie && ['xiaohongshu', 'wechat_channels', 'baijiahao', 'zhihu'].includes(platform)) {
+        if (cookie && ['xiaohongshu', 'wechat_official', 'wechat_channels', 'baijiahao', 'zhihu'].includes(platform)) {
           try {
             const execution = await publishViaBrowserRunner({
               platform,

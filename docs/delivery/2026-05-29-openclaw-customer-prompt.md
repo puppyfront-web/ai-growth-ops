@@ -58,11 +58,9 @@ Current live publish/auth platforms on this machine:
 
 Current fallback platforms that need extra cookie or browser-runner support:
 - xiaohongshu
+- wechat_official
 - zhihu
 - baijiahao
-
-Currently not live:
-- wechat_official
 
 Default operating procedure:
 1. Run doctor

@@ -46,10 +46,11 @@ export async function getDeliveryDoctorReport(): Promise<Record<string, unknown>
       kuaishou: accounts.kuaishou ?? [],
       wechat_channels: accounts.wechat_channels ?? [],
       xiaohongshu_env_cookie: Boolean(process.env.AI_GROWTH_OPS_XIAOHONGSHU_COOKIE),
+      wechat_official_env_cookie: Boolean(process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE),
       zhihu_env_cookie: Boolean(process.env.AI_GROWTH_OPS_ZHIHU_COOKIE),
       baijiahao_env_cookie: Boolean(process.env.AI_GROWTH_OPS_BAIJIAHAO_COOKIE),
     },
     livePublishPlatforms: ['douyin', 'wechat_channels', 'kuaishou'],
-    browserRunnerFallbackPlatforms: ['xiaohongshu', 'zhihu', 'baijiahao'],
+    browserRunnerFallbackPlatforms: ['xiaohongshu', 'wechat_official', 'zhihu', 'baijiahao'],
   };
 }

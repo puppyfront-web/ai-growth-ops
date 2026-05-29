@@ -59,6 +59,18 @@ AI_GROWTH_OPS_XIAOHONGSHU_COOKIE=<cookie> ./node_modules/.bin/tsx apps/runtime-c
 
 If not set, the command will return a structured `cookie_not_found` block result. That is expected behavior.
 
+### E. Wechat Official publish demo
+
+If `AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE` is set:
+
+```bash
+export AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE='<cookie>'
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=auth.check --platforms=wechat_official
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=publish --platforms=wechat_official --title="Demo Article" --content="hello"
+```
+
+If not set, the command will return `cookie_not_found` or `missing:["cookie"]`. That is expected behavior.
+
 ## 4. Interpretation guide
 
 - `mode=executed`: runtime-core called a real executor
@@ -74,7 +86,6 @@ If not set, the command will return a structured `cookie_not_found` block result
   - `kuaishou`
 - Browser-runner fallback path wired:
   - `xiaohongshu`
+  - `wechat_official`
   - `zhihu`
   - `baijiahao`
-- Not live on this machine:
-  - `wechat_official`

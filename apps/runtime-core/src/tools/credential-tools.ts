@@ -35,6 +35,7 @@ export async function resolveCookieForPlatform(
   const envMap: Record<string, string | undefined> = {
     douyin: process.env.AI_GROWTH_OPS_DOUYIN_COOKIE,
     xiaohongshu: process.env.AI_GROWTH_OPS_XIAOHONGSHU_COOKIE,
+    wechat_official: process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE,
     wechat_channels: process.env.AI_GROWTH_OPS_WECHAT_CHANNELS_COOKIE,
     kuaishou: process.env.AI_GROWTH_OPS_KUAISHOU_COOKIE,
     zhihu: process.env.AI_GROWTH_OPS_ZHIHU_COOKIE,

@@ -11,6 +11,7 @@ import { publishDouyin } from './douyin-publish.js';
 const PUBLISH_PAGE_URLS: Record<string, () => string> = {
   douyin: () => 'https://creator.douyin.com/creator-micro/content/upload',
   xiaohongshu: () => 'https://creator.xiaohongshu.com/publish/publish',
+  wechat_official: () => 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&isNew=1&type=10&action=edit',
   wechat_channels: () => 'https://channels.weixin.qq.com/platform/post/create',
   baijiahao: () => 'https://baijiahao.baidu.com/builder/rc/edit',
   zhihu: () => 'https://www.zhihu.com/creator/publish',
@@ -39,6 +40,12 @@ const PUBLISH_SELECTORS: Record<string, PublishSelectors> = {
     uploadButton: 'input[type="file"], [class*="upload"], [class*="add-image"]',
     submitButton: 'button:has-text("发布"), button:has-text("发表"), [class*="publish-btn"]',
     tagInput: 'input[placeholder*="标签"], input[placeholder*="tag"], [class*="tag-input"]',
+  },
+  wechat_official: {
+    titleInput: 'input[placeholder*="标题"], input[maxlength], #title, [class*="title"]',
+    contentInput: 'textarea, [contenteditable="true"], .ql-editor, .ProseMirror, iframe',
+    uploadButton: 'input[type="file"], [class*="upload"]',
+    submitButton: 'button:has-text("保存并群发"), button:has-text("保存"), button:has-text("发表"), [class*="publish"]',
   },
   wechat_channels: {
     titleInput: 'input[placeholder*="标题"], [class*="title-input"]',
@@ -219,6 +226,7 @@ const handleCheckPublishStatus: RouteHandler = async (_req, res, ctx) => {
   const managementUrls: Record<string, () => string> = {
     douyin: () => 'https://creator.douyin.com/creator-micro/content/manage',
     xiaohongshu: () => 'https://creator.xiaohongshu.com/publish/publish?source=official',
+    wechat_official: () => 'https://mp.weixin.qq.com/cgi-bin/appmsgpublish?action=list&begin=0&count=10&t=media/appmsg_list_v2',
     wechat_channels: () => 'https://channels.weixin.qq.com/platform/post',
     baijiahao: () => 'https://baijiahao.baidu.com/builder/rc/edit?type=article',
     zhihu: () => 'https://www.zhihu.com/creator/content',

@@ -4,9 +4,10 @@
   "entrypoint": "skills/installed/wechatmp-article-upload/SKILL.md",
   "capabilities": ["publish.article"],
   "contexts": [{ "platform": "wechat_official" }],
-  "enabled": false,
-  "healthy": false,
+  "enabled": true,
+  "healthy": true,
   "metadata": {
-    "commandPlatform": "wechatmp"
+    "commandPlatform": "wechatmp",
+    "executionMode": "browser_runner"
   }
 }

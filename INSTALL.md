@@ -72,15 +72,12 @@ node --version
 - `wechat_channels`（底层映射到 `tencent`）
 - `kuaishou`
 
-当前已接入但依赖 `browser-runner` 或额外 cookie 的平台：
+当前已接入并依赖 `browser-runner` 或额外 cookie 的平台：
 
 - `xiaohongshu`
+- `wechat_official`
 - `zhihu`
 - `baijiahao`
-
-当前未交付 live 的平台：
-
-- `wechat_official`
 
 ## 6. 客户在 OpenClaw 里怎么用
 
@@ -172,6 +169,23 @@ export AI_GROWTH_OPS_XIAOHONGSHU_COOKIE='<cookie>'
 export AI_GROWTH_OPS_DOUYIN_COOKIE='<cookie>'
 ./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=interaction.fetch --platforms=douyin --account=main
 ```
+
+### 微信公众号发布
+
+公众号发布当前走 `browser-runner` 链路，需要先提供 cookie：
+
+```bash
+export AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE='<cookie>'
+```
+
+然后执行文章发布：
+
+```bash
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=auth.check --platforms=wechat_official
+./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=publish --platforms=wechat_official --title="Demo Article" --content="这里是正文内容"
+```
+
+如果缺 cookie，系统会直接返回 `cookie_not_found` 或 `missing:["cookie"]`。
 
 ## 10. 推荐交付演示顺序
 

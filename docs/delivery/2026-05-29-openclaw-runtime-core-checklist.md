@@ -18,11 +18,20 @@
    `./node_modules/.bin/tsx apps/browser-runner/src/server.ts`
 9. If a Xiaohongshu cookie is available, run the interaction + lead smoke path:
    `AI_GROWTH_OPS_XIAOHONGSHU_COOKIE=<cookie> ./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=interaction.fetch --platforms=xiaohongshu --account=<account>`
-10. Run the combined smoke script:
+10. If a WeChat Official cookie is available, run the auth + publish smoke path:
+   `AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE=<cookie> ./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=auth.check --platforms=wechat_official`
+11. Then run the WeChat Official publish smoke path:
+   `AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE=<cookie> ./node_modules/.bin/tsx apps/runtime-core/src/entrypoints/cli.ts run --intent=publish --platforms=wechat_official --title="Demo Article" --content="hello"`
+12. Run the combined smoke script:
    `./node_modules/.bin/tsx scripts/runtime-core-smoke.ts`
-11. Live publish/auth scope on this machine is currently:
+13. Live publish/auth scope on this machine is currently:
    - `douyin`
    - `wechat_channels` via `tencent`
    - `kuaishou`
-12. Real interaction fetch requires cookie + browser-runner. Without them, runtime-core returns a structured blocked result instead of pretending success.
-13. Capture outputs from steps 2 to 10 as the delivery verification record.
+14. Browser-runner-backed publish or interaction currently covers:
+   - `xiaohongshu`
+   - `wechat_official`
+   - `zhihu`
+   - `baijiahao`
+15. Without cookie or browser-runner prerequisites, runtime-core returns a structured blocked result instead of pretending success.
+16. Capture outputs from steps 2 to 12 as the delivery verification record.
