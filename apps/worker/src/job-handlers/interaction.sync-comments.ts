@@ -6,6 +6,7 @@ import { decryptToken } from '@ai-growth-ops/providers';
 import type { Job } from 'bullmq';
 import type { InteractionSyncCommentsInput } from '../job-types.js';
 import { prepareCommentsForSync } from './interaction-sync-utils.js';
+import { classifyAndSuggestReply } from './interaction-pipeline.js';
 
 export async function handleInteractionSyncComments(
   job: Job<InteractionSyncCommentsInput>
@@ -77,7 +78,7 @@ export async function handleInteractionSyncComments(
       }
 
       // Create interaction record
-      await db.interaction.create({
+      const interaction = await db.interaction.create({
         data: {
           userId,
           externalInteractionId: comment.externalCommentId,
@@ -92,6 +93,15 @@ export async function handleInteractionSyncComments(
         },
       });
       newCount++;
+
+      // Inline classify + reply suggestion
+      await classifyAndSuggestReply(
+        db,
+        interaction.id,
+        comment.content,
+        platform,
+        'comment',
+      );
     }
 
     // Update sync job as completed

@@ -36,11 +36,3 @@ export async function closeAllWorkers(): Promise<void> {
   await Promise.all(workers.map(w => w.close()));
   console.log(`[worker] All ${workers.length} workers closed`);
 }
-
-// Placeholder job handlers — these will be replaced by real implementations
-export function createPlaceholderHandler(queueName: string) {
-  return async (job: Job) => {
-    console.log(`[worker] Processing ${queueName} job ${job.id}`, job.data);
-    // Placeholder: just log. Real handlers will be in job-handlers/
-  };
-}

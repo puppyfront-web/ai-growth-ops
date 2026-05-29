@@ -21,15 +21,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createHealthSnapshot } from '@ai-growth-ops/shared';
 import { createLogger } from '@ai-growth-ops/observability';
 import { initSkills } from '@ai-growth-ops/skills';
-import { getQueue, QUEUE_NAMES } from './queue.js';
+import { QUEUE_NAMES } from './queue.js';
 
 const logger = createLogger('worker');
-import { registerWorker, closeAllWorkers, createPlaceholderHandler } from './worker.js';
+import { registerWorker, closeAllWorkers } from './worker.js';
 import { handleInteractionSyncComments } from './job-handlers/interaction.sync-comments.js';
 import { handleInteractionSyncMessages } from './job-handlers/interaction.sync-messages.js';
 import { handlePublishExecute } from './job-handlers/publish.execute.js';
-import { handleInteractionClassify } from './job-handlers/interaction.classify.js';
-import { handleInteractionSuggestReply } from './job-handlers/interaction.suggest-reply.js';
 import { handleLeadSyncFeishuBitable } from './job-handlers/lead.sync.feishu-bitable.js';
 import { handleLeadSyncWeComContact } from './job-handlers/lead.sync.wecom-contact.js';
 import { handleResearchRun } from './job-handlers/research.run.js';
@@ -37,13 +35,11 @@ import { handleResearchRun } from './job-handlers/research.run.js';
 export const appName = 'worker';
 export const getWorkerHealth = () => createHealthSnapshot(appName);
 
-// Real handler overrides for queues with implemented logic
-const realHandlers: Partial<Record<string, (job: any) => Promise<void>>> = {
+// All 6 real handlers — one per active queue
+const realHandlers: Record<string, (job: any) => Promise<void>> = {
   [QUEUE_NAMES.INTERACTION_SYNC_COMMENTS]: handleInteractionSyncComments,
   [QUEUE_NAMES.INTERACTION_SYNC_MESSAGES]: handleInteractionSyncMessages,
   [QUEUE_NAMES.PUBLISH_EXECUTE]: handlePublishExecute,
-  [QUEUE_NAMES.INTERACTION_CLASSIFY]: handleInteractionClassify,
-  [QUEUE_NAMES.INTERACTION_SUGGEST_REPLY]: handleInteractionSuggestReply,
   [QUEUE_NAMES.LEAD_SYNC_FEISHU]: handleLeadSyncFeishuBitable,
   [QUEUE_NAMES.LEAD_SYNC_WECOM]: handleLeadSyncWeComContact,
   [QUEUE_NAMES.RESEARCH_RUN]: handleResearchRun,
@@ -53,11 +49,15 @@ export async function startWorker(): Promise<void> {
   initSkills();
   logger.info('Starting worker...');
 
-  // Register workers — use real handler where available, placeholder otherwise
+  // Register only real handlers — no placeholders, no stub queues
   for (const [key, queueName] of Object.entries(QUEUE_NAMES)) {
-    const handler = realHandlers[queueName] || createPlaceholderHandler(queueName);
+    const handler = realHandlers[queueName];
+    if (!handler) {
+      logger.error(`No handler for queue ${queueName} — skipping`);
+      continue;
+    }
     registerWorker(queueName, handler);
-    logger.info(`Registered worker for ${queueName}`, { mode: realHandlers[queueName] ? 'real' : 'placeholder' });
+    logger.info(`Registered worker for ${queueName}`);
   }
 
   logger.info(`${Object.keys(QUEUE_NAMES).length} workers registered`);
