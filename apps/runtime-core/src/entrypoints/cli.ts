@@ -1,5 +1,6 @@
 import { CAPABILITIES } from '@ai-growth-ops/capability-schema';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
+import { getDeliveryDoctorReport, listAvailableAccounts } from '../tools/delivery-tools.js';
 import { runInteractionOps } from '../workflows/run-interaction-ops.js';
 import { runLeadMining } from '../workflows/run-lead-mining.js';
 import { runRuntimeRequest } from '../workflows/run-runtime-request.js';
@@ -37,6 +38,18 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         })),
       ),
     );
+    return;
+  }
+
+  if (command === 'accounts:list') {
+    const accounts = await listAvailableAccounts();
+    console.log(JSON.stringify(accounts));
+    return;
+  }
+
+  if (command === 'doctor') {
+    const report = await getDeliveryDoctorReport();
+    console.log(JSON.stringify(report));
     return;
   }
 
