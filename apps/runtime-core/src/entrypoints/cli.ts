@@ -15,6 +15,17 @@ function readPlatforms(args: string[]): string[] {
   return raw ? raw.split(',').map((item) => item.trim()).filter(Boolean) : [];
 }
 
+export function resolveInteractionFetchType(
+  platform: 'douyin' | 'xiaohongshu',
+  args: string[],
+): 'comments' | 'messages' {
+  const requestedType = readFlag(args, 'type');
+  if (requestedType === 'comments' || requestedType === 'messages') {
+    return requestedType;
+  }
+  return platform === 'douyin' ? 'comments' : 'messages';
+}
+
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<void> {
   const [command, ...args] = argv;
   const config = loadRuntimeConfig();
@@ -95,9 +106,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 
     if (intent === 'interaction.fetch') {
       const platform = (platforms[0] ?? 'xiaohongshu') as 'douyin' | 'xiaohongshu';
+      const interactionType = resolveInteractionFetchType(platform, args);
       const interaction = await runInteractionOps({
         platform,
-        interactionType: platform === 'douyin' ? 'comments' : 'messages',
+        interactionType,
         account,
       });
       const lead = await runLeadMining({

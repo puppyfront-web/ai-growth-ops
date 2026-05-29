@@ -7,6 +7,24 @@ export interface BrowserAssistConfig {
   platform: string;
 }
 
+function requireArrayResponse(
+  result: { success: boolean; data: unknown; errorMessage?: string },
+  fetchType: 'comments' | 'messages',
+): any[] {
+  if (!result.success) {
+    throw new Error(result.errorMessage || `browser-assist ${fetchType} request failed`);
+  }
+  if (!Array.isArray(result.data)) {
+    const payload = result.data as Record<string, unknown> | null;
+    const detail =
+      (payload?.details as string | undefined) ||
+      (payload?.error as string | undefined) ||
+      `browser-assist ${fetchType} request returned an invalid payload`;
+    throw new Error(detail);
+  }
+  return result.data;
+}
+
 export class BrowserAssistClient {
   private runnerUrl: string;
 
@@ -30,8 +48,7 @@ export class BrowserAssistClient {
       cursor,
       headed,
     });
-    if (!result.success) return [];
-    return result.data || [];
+    return requireArrayResponse(result, 'comments');
   }
 
   async fetchMessages(
@@ -48,8 +65,7 @@ export class BrowserAssistClient {
       cursor,
       headed,
     });
-    if (!result.success) return [];
-    return result.data || [];
+    return requireArrayResponse(result, 'messages');
   }
 
   async replyComment(

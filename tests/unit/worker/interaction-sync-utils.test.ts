@@ -49,6 +49,33 @@ describe('prepareCommentsForSync', () => {
       }),
     ]);
   });
+
+  it('falls back to 10 most recent comments when there are no today comments', () => {
+    const now = new Date('2026-05-28T12:00:00+08:00');
+    const older = Array.from({ length: 12 }, (_, index) => ({
+      externalCommentId: `comment-${index}`,
+      externalUserId: `user-${index}`,
+      userNickname: `User ${index}`,
+      content: `older-${index}`,
+      publishedAt: `2026-05-${String(20 - index).padStart(2, '0')}T10:00:00+08:00`,
+    }));
+
+    const comments = prepareCommentsForSync(older, now);
+
+    expect(comments).toHaveLength(10);
+    expect(comments[0]).toEqual(
+      expect.objectContaining({
+        externalCommentId: 'comment-0',
+        content: 'older-0',
+      }),
+    );
+    expect(comments[9]).toEqual(
+      expect.objectContaining({
+        externalCommentId: 'comment-9',
+        content: 'older-9',
+      }),
+    );
+  });
 });
 
 describe('prepareMessagesForSync', () => {

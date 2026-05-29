@@ -24,9 +24,9 @@ export class XiaohongshuConnector implements InteractionConnector {
     return {
       platform: 'xiaohongshu',
       fetchComments: 'limited',
-      fetchMessages: false,
+      fetchMessages: 'limited',
       replyComments: 'limited',
-      replyMessages: false,
+      replyMessages: 'limited',
       webhookSupported: false,
       pollingSupported: false,
       browserAssistSupported: true,

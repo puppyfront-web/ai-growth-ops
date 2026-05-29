@@ -12,6 +12,9 @@ export default defineConfig({
       ),
       '@ai-growth-ops/providers': fileURLToPath(
         new URL('./packages/providers/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/capability-schema': fileURLToPath(
+        new URL('./packages/capability-schema/src/index.ts', import.meta.url)
       )
     }
   },

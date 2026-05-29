@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeByKey, isPublishedTodayInShanghai, parsePublishedAt } from '../../../packages/shared/src/interaction-sync';
+import {
+  dedupeByKey,
+  isPublishedTodayInShanghai,
+  parsePublishedAt,
+  selectTodayOrRecent,
+} from '../../../packages/shared/src/interaction-sync';
 
 describe('parsePublishedAt', () => {
   it('parses seconds timestamps', () => {
@@ -40,5 +45,36 @@ describe('dedupeByKey', () => {
       { id: 'a', value: 1 },
       { id: 'b', value: 3 },
     ]);
+  });
+});
+
+describe('selectTodayOrRecent', () => {
+  const now = new Date('2026-05-28T12:00:00+08:00');
+
+  it('returns today comments when present', () => {
+    const selected = selectTodayOrRecent(
+      [
+        { id: '1', publishedAt: '2026-05-28T08:00:00+08:00' },
+        { id: '2', publishedAt: '2026-05-27T10:00:00+08:00' },
+      ],
+      (item) => item.id,
+      (item) => item.publishedAt,
+      { now, limit: 50 },
+    );
+
+    expect(selected).toEqual([{ id: '1', publishedAt: '2026-05-28T08:00:00+08:00' }]);
+  });
+
+  it('returns 10 most recent comments when there are no today comments', () => {
+    const items = Array.from({ length: 12 }, (_, index) => ({
+      id: `c-${index}`,
+      publishedAt: `2026-05-${String(20 - index).padStart(2, '0')}T10:00:00+08:00`,
+    }));
+
+    const selected = selectTodayOrRecent(items, (item) => item.id, (item) => item.publishedAt, { now });
+
+    expect(selected).toHaveLength(10);
+    expect(selected[0]?.id).toBe('c-0');
+    expect(selected[9]?.id).toBe('c-9');
   });
 });

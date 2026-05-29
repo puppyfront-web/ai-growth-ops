@@ -5,7 +5,7 @@ import {
 } from '../graphs/publish-graph.js';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
 import { getRuntimeAdapter } from '../runtime-adapters/index.js';
-import { resolveCookieForPlatform } from '../tools/credential-tools.js';
+import { resolveCookieForPlatform, resolveSharedAccountForPlatform } from '../tools/credential-tools.js';
 import { publishViaBrowserRunner } from '../tools/browser-runner-tools.js';
 import { buildPublishInvocation, createDefaultPublishRegistry } from '../tools/publish-tools.js';
 
@@ -16,7 +16,8 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
     const results = [];
 
     for (const platform of graphInput.platforms) {
-      const account = (graphInput as PublishGraphInput & { account?: string }).account;
+      const requestedAccount = (graphInput as PublishGraphInput & { account?: string }).account;
+      const account = resolveSharedAccountForPlatform(platform, requestedAccount);
       const source = (graphInput as PublishGraphInput & { source?: string }).source;
       const resolved =
         registry.resolve('publish.video', { platform }) ??

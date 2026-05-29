@@ -47,3 +47,42 @@ export function dedupeByKey<T>(items: T[], getKey: (item: T) => string | null | 
 
   return unique;
 }
+
+export const RECENT_INTERACTION_FALLBACK_LIMIT = 10;
+
+export interface SelectTodayOrRecentOptions {
+  limit?: number;
+  fallbackLimit?: number;
+  now?: Date;
+}
+
+function sortByPublishedAtDesc<T>(
+  items: T[],
+  getPublishedAt: (item: T) => unknown,
+): T[] {
+  return [...items].sort((a, b) => {
+    const ta = parsePublishedAt(getPublishedAt(a))?.getTime() ?? 0;
+    const tb = parsePublishedAt(getPublishedAt(b))?.getTime() ?? 0;
+    return tb - ta;
+  });
+}
+
+/** Prefer today's items; if none, return the most recent fallbackLimit items. */
+export function selectTodayOrRecent<T>(
+  items: T[],
+  getKey: (item: T) => string | null | undefined,
+  getPublishedAt: (item: T) => unknown,
+  options: SelectTodayOrRecentOptions = {},
+): T[] {
+  const limit = options.limit ?? 50;
+  const fallbackLimit = options.fallbackLimit ?? RECENT_INTERACTION_FALLBACK_LIMIT;
+  const now = options.now ?? new Date();
+
+  const unique = dedupeByKey(items, getKey);
+  const today = unique.filter((item) => isPublishedTodayInShanghai(getPublishedAt(item), now));
+  if (today.length > 0) {
+    return sortByPublishedAtDesc(today, getPublishedAt).slice(0, limit);
+  }
+
+  return sortByPublishedAtDesc(unique, getPublishedAt).slice(0, fallbackLimit);
+}
