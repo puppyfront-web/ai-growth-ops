@@ -99,4 +99,37 @@ export class BrowserAssistClient {
     });
     return result.data || { success: false };
   }
+
+  /**
+   * Search for a keyword on a platform, then fetch comments for the top N results.
+   * Returns structured results with contentId, title, author, and comments per result.
+   */
+  async searchAndFetchComments(
+    config: BrowserAssistConfig,
+    keyword: string,
+    topN = 3,
+    headed?: boolean,
+  ): Promise<{
+    keyword: string;
+    results: Array<{
+      contentId: string;
+      title: string;
+      author: string;
+      comments: Array<Record<string, unknown>>;
+    }>;
+  }> {
+    const url = `${this.runnerUrl}/assist/search-and-fetch-comments`;
+    const result = await platformPost<any>(url, {
+      platform: config.platform,
+      cookie: config.cookie,
+      keyword,
+      topN,
+      headed,
+    });
+    if (!result.success) {
+      const detail = (result.data as Record<string, unknown>)?.details || result.errorMessage || 'search-and-fetch failed';
+      throw new Error(String(detail));
+    }
+    return result.data;
+  }
 }

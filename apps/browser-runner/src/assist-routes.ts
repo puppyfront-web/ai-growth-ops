@@ -111,6 +111,209 @@ const MESSAGE_API_PATTERNS: Record<string, string[]> = {
   ],
 };
 
+// ── Search API patterns ─────────────────────────────────────────────
+
+const SEARCH_API_PATTERNS: Record<string, string[]> = {
+  douyin: [
+    '/aweme/v1/web/search/item/',
+    '/aweme/v1/general/search/',
+    '/api/v2/search/',
+  ],
+  xiaohongshu: [
+    '/api/sns/web/v1/search/notes',
+    '/api/sns/web/v1/elrsearch',
+  ],
+};
+
+const SEARCH_PAGE_URLS: Record<string, (keyword: string) => string> = {
+  douyin: (keyword) => `https://www.douyin.com/search/${encodeURIComponent(keyword)}`,
+  xiaohongshu: (keyword) => `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keyword)}&source=web_search_result_notes`,
+};
+
+interface SearchResultItem {
+  contentId: string;
+  title: string;
+  author: string;
+}
+
+export function extractSearchResults(
+  platform: string,
+  json: Record<string, unknown>,
+): SearchResultItem[] {
+  if (platform === 'douyin') {
+    const data = json.data as Record<string, unknown> | undefined;
+    const list = (data?.list ?? json.list ?? []) as Array<Record<string, unknown>>;
+    return list
+      .filter((item) => {
+        const aweme = item.aweme_info as Record<string, unknown> | undefined;
+        return aweme?.aweme_id || aweme?.id;
+      })
+      .map((item) => {
+        const aweme = item.aweme_info as Record<string, unknown>;
+        const authorInfo = aweme.author as Record<string, unknown> | undefined;
+        return {
+          contentId: String(aweme.aweme_id ?? aweme.id ?? ''),
+          title: String(aweme.desc ?? aweme.title ?? ''),
+          author: String(authorInfo?.nickname ?? ''),
+        };
+      });
+  }
+
+  if (platform === 'xiaohongshu') {
+    const data = json.data as Record<string, unknown> | undefined;
+    const items = (data?.items ?? json.items ?? []) as Array<Record<string, unknown>>;
+    return items
+      .filter((item) => {
+        const card = item.note_card ?? item as Record<string, unknown>;
+        return (card as Record<string, unknown>).note_id;
+      })
+      .map((item) => {
+        const card = (item.note_card ?? item) as Record<string, unknown>;
+        const user = card.user as Record<string, unknown> | undefined;
+        return {
+          contentId: String(card.note_id ?? ''),
+          title: String(card.title ?? card.display_title ?? ''),
+          author: String(user?.nickname ?? ''),
+        };
+      });
+  }
+
+  return [];
+}
+
+// ── Search and fetch comments handler ──────────────────────────────
+
+interface SearchAndFetchCommentsBody {
+  platform: string;
+  cookie: string;
+  keyword: string;
+  topN?: number;
+  headed?: boolean;
+}
+
+const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
+  const body = ctx.body as SearchAndFetchCommentsBody;
+  if (!body.platform || !body.cookie || !body.keyword) {
+    sendJson(res, 400, { error: 'Missing required fields: platform, cookie, keyword' });
+    return;
+  }
+
+  const supportedPlatforms = ['douyin', 'xiaohongshu'];
+  if (!supportedPlatforms.includes(body.platform)) {
+    sendJson(res, 400, { error: `Unsupported platform for search: ${body.platform}. Supported: ${supportedPlatforms.join(', ')}` });
+    return;
+  }
+
+  const topN = body.topN ?? 3;
+  const searchPatterns = SEARCH_API_PATTERNS[body.platform] ?? [];
+  const commentPatterns = COMMENT_API_PATTERNS[body.platform] ?? [];
+  const searchUrl = SEARCH_PAGE_URLS[body.platform]?.(body.keyword);
+  if (!searchUrl) {
+    sendJson(res, 400, { error: `No search URL for platform: ${body.platform}` });
+    return;
+  }
+
+  let session: Awaited<ReturnType<typeof createSession>> | null = null;
+  try {
+    session = await createSession(body.cookie, searchUrl, body.headed);
+    const { page } = session;
+
+    // ── Phase 1: Search → extract top N content IDs ──────────────
+    const searchResults: SearchResultItem[] = [];
+    const searchTasks: Promise<void>[] = [];
+
+    const searchListener = (response: import('playwright').Response) => {
+      const url = response.url();
+      if (!searchPatterns.some((p) => url.includes(p))) return;
+      const task = (async () => {
+        try {
+          const json = await response.json() as Record<string, unknown>;
+          const results = extractSearchResults(body.platform, json);
+          searchResults.push(...results);
+        } catch { /* non-JSON, skip */ }
+      })();
+      searchTasks.push(task);
+    };
+    page.on('response', searchListener);
+
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await scrollForLazyLoad(page);
+    await page.waitForTimeout(2000);
+
+    page.off('response', searchListener);
+    await Promise.allSettled(searchTasks);
+
+    const topResults = searchResults.slice(0, topN);
+    if (topResults.length === 0) {
+      sendJson(res, 200, { keyword: body.keyword, results: [], message: 'No search results found' });
+      return;
+    }
+
+    // ── Phase 2: For each result, fetch comments ─────────────────
+    const allResults: Array<{
+      contentId: string;
+      title: string;
+      author: string;
+      comments: Array<Record<string, unknown>>;
+    }> = [];
+
+    for (const result of topResults) {
+      // Determine the content page URL
+      let contentUrl: string;
+      if (body.platform === 'douyin') {
+        contentUrl = `https://www.douyin.com/video/${result.contentId}`;
+      } else {
+        contentUrl = xhsNotePublicUrl(result.contentId);
+      }
+
+      const captured: Array<Record<string, unknown>> = [];
+      const commentTasks: Promise<void>[] = [];
+
+      const commentListener = (response: import('playwright').Response) => {
+        const url = response.url();
+        if (!commentPatterns.some((p) => url.includes(p))) return;
+        const task = (async () => {
+          try {
+            const json = await response.json() as Record<string, unknown>;
+            const items = extractCommentList(body.platform, json, result.contentId);
+            captured.push(...items);
+          } catch { /* non-JSON, skip */ }
+        })();
+        commentTasks.push(task);
+      };
+      page.on('response', commentListener);
+
+      try {
+        await page.goto(contentUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await scrollForLazyLoad(page);
+        await page.waitForTimeout(2000);
+      } catch {
+        // Navigation failed for this content — skip
+      }
+
+      page.off('response', commentListener);
+      await Promise.allSettled(commentTasks);
+
+      allResults.push({
+        contentId: result.contentId,
+        title: result.title,
+        author: result.author,
+        comments: dedupeByKey(captured, (c) => String(c.externalCommentId ?? '')).slice(0, 20),
+      });
+    }
+
+    sendJson(res, 200, { keyword: body.keyword, results: allResults });
+  } catch (error) {
+    sendJson(res, 502, {
+      error: 'Search and fetch comments failed',
+      errorCode: 'SEARCH_FETCH_COMMENTS_FAILED',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    await session?.close();
+  }
+};
+
 // ── Reply selectors per platform ──────────────────────────────────
 
 interface ReplySelectors {
@@ -1018,4 +1221,5 @@ export const assistRoutes: Route[] = [
   { method: 'POST', pattern: '/assist/fetch-messages', handler: handleFetchMessages },
   { method: 'POST', pattern: '/assist/reply-comment', handler: handleReplyComment },
   { method: 'POST', pattern: '/assist/reply-message', handler: handleReplyMessage },
+  { method: 'POST', pattern: '/assist/search-and-fetch-comments', handler: handleSearchAndFetchComments },
 ];

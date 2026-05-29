@@ -219,6 +219,65 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
       return;
     }
 
+    if (intent === 'interaction.search') {
+      const keyword = content; // --content holds the search keyword
+      if (!keyword || keyword === 'hello') {
+        console.error('[cli] Error: --content is required for interaction.search (the search keyword)');
+        process.exitCode = 1;
+        return;
+      }
+      const platform = (platforms[0] ?? 'douyin') as 'douyin' | 'xiaohongshu';
+      const topN = Number(readFlag(args, 'topN') ?? '3');
+
+      const { BrowserAssistClient } = await import('@ai-growth-ops/connectors');
+      const { resolveAuthStateForPlatform, resolveSharedAccountForPlatform } = await import('../tools/credential-tools.js');
+      const resolvedAccount = resolveSharedAccountForPlatform(platform, account);
+      const cookie = await (await import('../tools/credential-tools.js')).resolveAuthStateForPlatform(platform, resolvedAccount);
+      if (!cookie) {
+        console.error(`[cli] Error: No cookie found for ${platform}. Run auth.check first.`);
+        process.exitCode = 1;
+        return;
+      }
+
+      const client = new BrowserAssistClient(config.browserRunnerUrl);
+      console.error(`[cli] Searching "${keyword}" on ${platform}, fetching top ${topN} results...`);
+
+      const searchResult = await client.searchAndFetchComments(
+        { platform, cookie },
+        keyword,
+        topN,
+        false,
+      );
+
+      // Collect all comments across results for lead mining
+      const allComments = searchResult.results.flatMap((r) =>
+        r.comments.map((c) => ({
+          platform,
+          interactionType: 'comment' as const,
+          content: String(c.content ?? ''),
+          sourceContentTitle: r.title || undefined,
+        })),
+      );
+
+      let lead = null;
+      if (allComments.length > 0) {
+        lead = await runLeadMining({ candidates: allComments });
+        // Persist
+        try {
+          const { mkdir, writeFile } = await import('node:fs/promises');
+          const { join } = await import('node:path');
+          const leadsDir = join(config.dataDir, 'leads');
+          await mkdir(leadsDir, { recursive: true });
+          const ts = new Date().toISOString().replace(/[:.]/g, '-');
+          await writeFile(join(leadsDir, `${ts}-search-${platform}-${keyword}.json`), JSON.stringify(lead, null, 2));
+        } catch { /* ignore */ }
+      }
+
+      console.error(`[cli] Found ${searchResult.results.length} results, ${allComments.length} total comments`);
+      console.log(JSON.stringify({ search: searchResult, lead }));
+      return;
+    }
+
     if (intent === 'interaction.fetch-schedule') {
       const platform = (platforms[0] ?? 'xiaohongshu') as 'douyin' | 'xiaohongshu';
       const interactionType = resolveInteractionFetchType(platform, args);
