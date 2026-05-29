@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { getPlatformProvider } from '@ai-growth-ops/providers';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
+import { SOCIAL_PUBLISH_DIR_MAP } from './delivery-tools.js';
 
 interface StorageStateCookie {
   name: string;
@@ -13,22 +14,31 @@ interface StorageStateFile {
   cookies?: StorageStateCookie[];
 }
 
-function mapPlatformToSocialPublishDir(platform: string): string | null {
-  if (platform === 'douyin') return 'douyin';
-  if (platform === 'kuaishou') return 'kuaishou';
-  if (platform === 'wechat_channels') return 'tencent';
-  return null;
+export function resolveSharedAccountForPlatform(
+  platform: string,
+  account?: string,
+): string | undefined {
+  if (account?.trim()) return account.trim();
+
+  const config = loadRuntimeConfig();
+  const sharedAccountMap: Record<string, string> = {
+    douyin: config.sharedAccounts.douyin,
+    kuaishou: config.sharedAccounts.kuaishou,
+    wechat_channels: config.sharedAccounts.wechat_channels,
+    xiaohongshu: config.sharedAccounts.xiaohongshu,
+    wechat_official: config.sharedAccounts.wechat_official,
+    zhihu: config.sharedAccounts.zhihu,
+    baijiahao: config.sharedAccounts.baijiahao,
+  };
+
+  return sharedAccountMap[platform];
 }
 
 export async function storageStateToCookieHeader(path: string): Promise<string | null> {
-  const raw = await readFile(path, 'utf8');
-  const parsed = JSON.parse(raw) as StorageStateFile;
-  const cookies = parsed.cookies ?? [];
-  if (!cookies.length) return null;
-  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+  return storageStateToCookieHeaderFromRaw(await readFile(path, 'utf8'));
 }
 
-export async function resolveCookieForPlatform(
+async function readStorageStatePayload(
   platform: string,
   account?: string,
 ): Promise<string | null> {
@@ -45,15 +55,47 @@ export async function resolveCookieForPlatform(
   const fromEnv = envMap[platform];
   if (fromEnv?.trim()) return fromEnv.trim();
 
-  const mapped = mapPlatformToSocialPublishDir(platform);
-  if (!mapped || !account) return null;
+  const mapped = SOCIAL_PUBLISH_DIR_MAP[platform] ?? null;
+  const resolvedAccount = resolveSharedAccountForPlatform(platform, account);
+  if (!mapped || !resolvedAccount) return null;
 
-  const config = loadRuntimeConfig();
   const root = process.env.SOCIAL_PUBLISH_DATA_DIR ?? join(process.env.HOME ?? '', '.social-publish-skills');
-  const path = join(root, 'cookies', mapped, `${account}.json`);
+  const path = join(root, 'cookies', mapped, `${resolvedAccount}.json`);
   if (!existsSync(path)) return null;
 
-  return storageStateToCookieHeader(path);
+  return readFile(path, 'utf8');
+}
+
+export async function resolveCookieForPlatform(
+  platform: string,
+  account?: string,
+): Promise<string | null> {
+  const payload = await readStorageStatePayload(platform, account);
+  if (!payload) return null;
+  if (payload.trim().startsWith('{')) {
+    return await storageStateToCookieHeaderFromRaw(payload);
+  }
+  return payload.trim();
+}
+
+/** Prefer full Playwright storageState JSON for browser-runner (keeps per-domain cookies). */
+export async function resolveAuthStateForPlatform(
+  platform: string,
+  account?: string,
+): Promise<string | null> {
+  return readStorageStatePayload(platform, account);
+}
+
+async function storageStateToCookieHeaderFromRaw(raw: string): Promise<string | null> {
+  let parsed: StorageStateFile;
+  try {
+    parsed = JSON.parse(raw) as StorageStateFile;
+  } catch {
+    return null;
+  }
+  const cookies = parsed.cookies ?? [];
+  if (!cookies.length) return null;
+  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
 }
 
 export async function validateCookieCredential(

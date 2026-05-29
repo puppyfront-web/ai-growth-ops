@@ -5,12 +5,27 @@ export interface PlatformResponse<T> {
   errorMessage?: string;
 }
 
+/** Fetch with AbortController timeout so stalled connections don't hang forever. */
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 60_000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function platformGet<T>(
   url: string,
   headers: Record<string, string>,
 ): Promise<PlatformResponse<T>> {
   try {
-    const res = await fetch(url, { method: 'GET', headers });
+    const res = await fetchWithTimeout(url, { method: 'GET', headers });
     const json = await res.json();
     return { success: true, data: json as T };
   } catch (err) {
@@ -28,7 +43,7 @@ export async function platformPost<T>(
   headers: Record<string, string> = {},
 ): Promise<PlatformResponse<T>> {
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),

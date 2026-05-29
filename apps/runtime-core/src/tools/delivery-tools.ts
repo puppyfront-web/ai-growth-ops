@@ -3,10 +3,14 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
 
-const SOCIAL_PUBLISH_DIR_MAP: Record<string, string> = {
+export const SOCIAL_PUBLISH_DIR_MAP: Record<string, string> = {
   douyin: 'douyin',
+  xiaohongshu: 'xiaohongshu',
+  wechat_official: 'wechatmp',
   kuaishou: 'kuaishou',
   wechat_channels: 'tencent',
+  zhihu: 'zhihu',
+  baijiahao: 'baijiahao',
 };
 
 export async function listAvailableAccounts(): Promise<Record<string, string[]>> {
@@ -41,10 +45,15 @@ export async function getDeliveryDoctorReport(): Promise<Record<string, unknown>
     },
     browserRunnerUrl: config.browserRunnerUrl,
     manifestsDir: config.manifestDir,
+    sharedAccounts: config.sharedAccounts,
     cookies: {
       douyin: accounts.douyin ?? [],
+      xiaohongshu: accounts.xiaohongshu ?? [],
+      wechat_official: accounts.wechat_official ?? [],
       kuaishou: accounts.kuaishou ?? [],
       wechat_channels: accounts.wechat_channels ?? [],
+      zhihu: accounts.zhihu ?? [],
+      baijiahao: accounts.baijiahao ?? [],
       xiaohongshu_env_cookie: Boolean(process.env.AI_GROWTH_OPS_XIAOHONGSHU_COOKIE),
       wechat_official_env_cookie: Boolean(process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE),
       zhihu_env_cookie: Boolean(process.env.AI_GROWTH_OPS_ZHIHU_COOKIE),

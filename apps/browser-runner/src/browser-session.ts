@@ -16,6 +16,50 @@ export function cookiesForSite(cookie: string, siteDomain: string): Array<{ name
   return parseCookieHeader(cookie).map((c) => ({ ...c, domain: parent, path: '/' }));
 }
 
+interface StorageStateCookie {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+}
+
+/** Accept Playwright storageState JSON or a `name=value; ...` header. */
+export function resolveContextCookies(
+  cookie: string,
+  siteDomain: string,
+): Array<{ name: string; value: string; domain: string; path: string }> {
+  const trimmed = cookie.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const state = JSON.parse(trimmed) as { cookies?: StorageStateCookie[] };
+      const fromState = state.cookies ?? [];
+      if (fromState.length > 0) {
+        return fromState
+          .filter((item) => item.name && item.value)
+          .map((item) => ({
+            name: item.name,
+            value: item.value,
+            domain: item.domain?.startsWith('.')
+              ? item.domain
+              : item.domain
+                ? `.${item.domain}`
+                : siteDomain.startsWith('.')
+                  ? siteDomain
+                  : `.${siteDomain}`,
+            path: item.path || '/',
+          }));
+      }
+      // Valid JSON but empty cookies — return empty array instead of
+      // falling through to header parsing which would produce garbage.
+      return [];
+    } catch {
+      // fall through to header parsing
+    }
+  }
+
+  return cookiesForSite(cookie, siteDomain);
+}
+
 // ── Shared browser pool ───────────────────────────────────────────
 
 const BROWSER_TTL_MS = 15 * 60 * 1000;
@@ -88,7 +132,7 @@ export async function createStealthSession(
     Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en'] });
   });
 
-  const cookies = cookiesForSite(cookie, siteDomain);
+  const cookies = resolveContextCookies(cookie, siteDomain);
   if (cookies.length > 0) await context.addCookies(cookies);
 
   const page = await context.newPage();
@@ -116,7 +160,7 @@ export async function createHeadlessSession(
     viewport: { width: 1280, height: 900 },
   });
 
-  const cookies = cookiesForSite(cookie, siteDomain);
+  const cookies = resolveContextCookies(cookie, siteDomain);
   if (cookies.length > 0) await context.addCookies(cookies);
 
   const page = await context.newPage();

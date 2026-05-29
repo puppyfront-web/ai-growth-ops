@@ -1,19 +1,32 @@
 import type { ServerResponse } from 'node:http';
 import type { RouteHandler, Route } from './routes.js';
 import { createStealthSession } from './browser-session.js';
-import { dedupeByKey, isPublishedTodayInShanghai } from '@ai-growth-ops/shared';
+import {
+  dedupeByKey,
+  isPublishedTodayInShanghai,
+  RECENT_INTERACTION_FALLBACK_LIMIT,
+  selectTodayOrRecent,
+} from '@ai-growth-ops/shared';
 
 // ── Platform comment management page URLs ─────────────────────────
 
+/** 抖音创作者中心：互动管理 → 评论管理 */
+const DOUYIN_COMMENT_MANAGE_URL = 'https://creator.douyin.com/creator-micro/interaction/comment';
+const DOUYIN_ITEM_LIST_PATTERNS = [
+  '/web/api/creator/item/list',
+  '/aweme/v1/creator/item/list',
+  '/creator/item/list',
+];
+
+function douyinPostCommentUrl(itemId: string): string {
+  return `https://creator.douyin.com/creator-micro/content/post-comment/${encodeURIComponent(itemId)}`;
+}
+
 const COMMENT_PAGE_URLS: Record<string, (sourceContentId?: string) => string> = {
   douyin: (sourceContentId) =>
-    sourceContentId
-      ? `https://creator.douyin.com/creator-micro/content/post-comment/${sourceContentId}`
-      : 'https://creator.douyin.com/creator-micro/content/manage',
+    sourceContentId ? douyinPostCommentUrl(sourceContentId) : DOUYIN_COMMENT_MANAGE_URL,
   xiaohongshu: (sourceContentId) =>
-    sourceContentId
-      ? `https://creator.xiaohongshu.com/creator/edit?noteId=${sourceContentId}`
-      : 'https://creator.xiaohongshu.com/creator/notemanage',
+    sourceContentId ? xhsNotePublicUrl(sourceContentId) : XHS_NOTE_MANAGE_URL,
   wechat_official: () => 'https://mp.weixin.qq.com/',
   wechat_channels: () => 'https://channels.weixin.qq.com/platform/comment',
   baijiahao: (sourceContentId) =>
@@ -47,8 +60,11 @@ const COMMENT_API_PATTERNS: Record<string, string[]> = {
   ],
   xiaohongshu: [
     '/api/sns/web/v2/comment/page',
+    '/api/sns/web/v3/note/comment',
     '/web_api/sns/v3/note/comment',
     '/api/sns/web/v1/feed/comment',
+    '/api/sns/web/v1/note/comment/page',
+    '/web_api/sns/v2/note/comment',
   ],
   wechat_official: [
     '/cgi-bin/appmsg_comment',
@@ -143,6 +159,21 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
+function sendAssistFetchError(
+  res: ServerResponse,
+  fetchType: 'comments' | 'messages',
+  error: unknown,
+) {
+  sendJson(res, 502, {
+    error: `Failed to fetch ${fetchType}`,
+    errorCode:
+      fetchType === 'comments'
+        ? 'ASSIST_FETCH_COMMENTS_FAILED'
+        : 'ASSIST_FETCH_MESSAGES_FAILED',
+    details: error instanceof Error ? error.message : String(error),
+  });
+}
+
 /** Extract root domain (e.g. `creator.douyin.com` → `douyin.com`) for cross-subdomain cookie scope. */
 function rootDomain(hostname: string): string {
   const parts = hostname.split('.');
@@ -175,50 +206,77 @@ interface FetchCommentsBody {
   headed?: boolean;
 }
 
+function douyinCommentPublishedAt(item: Record<string, unknown>): string {
+  const raw = item.time_stamp ?? item.create_time;
+  if (raw == null || raw === '') return '';
+  return new Date(Number(raw) * 1000).toISOString();
+}
+
+function xhsCommentPublishedAt(item: Record<string, unknown>): string {
+  const raw = item.create_time;
+  if (raw == null || raw === '') return '';
+  const timestamp = Number(raw);
+  return new Date(timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000).toISOString();
+}
+
 /** Extract a normalised comment list from a raw XHR JSON payload. */
-function extractCommentList(platform: string, json: Record<string, unknown>, sourceContentId?: string): Array<Record<string, unknown>> {
+export function extractCommentList(platform: string, json: Record<string, unknown>, sourceContentId?: string): Array<Record<string, unknown>> {
   const data = json?.data as Record<string, unknown> | undefined;
 
   switch (platform) {
     case 'douyin': {
-      const list = data?.list ?? data?.comments ?? json?.comments ?? json?.list;
+      const list =
+        (Array.isArray(data) ? data : null) ??
+        data?.list ??
+        data?.comments ??
+        json?.comments ??
+        json?.list;
       if (!Array.isArray(list)) return [];
-      return list.map((item: Record<string, unknown>) => {
-        const user = (item.user ?? item.author) as Record<string, unknown> | undefined;
-        return {
-          externalCommentId: String(item.cid ?? item.comment_id ?? ''),
-          externalUserId: String(user?.uid ?? user?.open_id ?? ''),
-          userNickname: String(user?.nickname ?? ''),
-          content: String(item.text ?? item.content ?? ''),
-          likeCount: Number(item.digg_count ?? item.like_count ?? 0),
-          replyCount: Number(item.reply_comment_total ?? 0),
-          publishedAt: item.create_time
-            ? new Date(Number(item.create_time) * 1000).toISOString()
-            : '',
-          sourceContentId,
-          rawPayload: item,
-        };
-      });
+      return list
+        .map((item: Record<string, unknown>) => {
+          const user = (item.user ?? item.author) as Record<string, unknown> | undefined;
+          const itemId = item.item_id != null ? String(item.item_id) : undefined;
+          const externalCommentId = String(item.id ?? item.cid ?? item.comment_id ?? '');
+          return {
+            externalCommentId,
+            externalUserId: String(user?.uid ?? user?.open_id ?? item.user_id ?? item.uid ?? ''),
+            userNickname: String(user?.nickname ?? item.nick_name ?? item.nickname ?? ''),
+            content: String(item.text ?? item.content ?? ''),
+            likeCount: Number(item.digg_count ?? item.like_count ?? 0),
+            replyCount: Number(item.reply_comment_total ?? item.all_comment_num ?? 0),
+            publishedAt: douyinCommentPublishedAt(item),
+            sourceContentId: sourceContentId ?? itemId,
+            rawPayload: item,
+          };
+        })
+        .filter((item) => item.externalCommentId.length > 0);
     }
     case 'xiaohongshu': {
-      const list = data?.comments ?? data?.list ?? (json?.data as Record<string, unknown>)?.data;
+      const list =
+        data?.comments ??
+        data?.list ??
+        data?.data ??
+        json?.comments ??
+        json?.list;
       if (!Array.isArray(list)) return [];
-      return list.map((item: Record<string, unknown>) => {
-        const userInfo = (item.user_info ?? item.author) as Record<string, unknown> | undefined;
-        return {
-          externalCommentId: String(item.id ?? item.comment_id ?? ''),
-          externalUserId: String(userInfo?.user_id ?? userInfo?.userid ?? ''),
-          userNickname: String(userInfo?.nickname ?? ''),
-          content: String(item.content ?? item.note_content ?? ''),
-          likeCount: Number(item.like_count ?? 0),
-          replyCount: Number(item.sub_comment_count ?? 0),
-          publishedAt: item.create_time
-            ? new Date(Number(item.create_time) * 1000).toISOString()
-            : '',
-          sourceContentId,
-          rawPayload: item,
-        };
-      });
+      return list
+        .map((item: Record<string, unknown>) => {
+          const userInfo = (item.user_info ?? item.author ?? item.user) as Record<string, unknown> | undefined;
+          const itemNoteId = item.note_id != null ? String(item.note_id) : undefined;
+          const externalCommentId = String(item.id ?? item.comment_id ?? '');
+          return {
+            externalCommentId,
+            externalUserId: String(userInfo?.user_id ?? userInfo?.userid ?? userInfo?.id ?? item.user_id ?? ''),
+            userNickname: String(userInfo?.nickname ?? userInfo?.name ?? ''),
+            content: String(item.content ?? item.note_content ?? ''),
+            likeCount: Number(item.like_count ?? item.liked_count ?? 0),
+            replyCount: Number(item.sub_comment_count ?? item.reply_count ?? item.sub_comment_num ?? 0),
+            publishedAt: xhsCommentPublishedAt(item),
+            sourceContentId: sourceContentId ?? itemNoteId,
+            rawPayload: item,
+          };
+        })
+        .filter((item) => item.externalCommentId.length > 0);
     }
     case 'wechat_official': {
       const list = (json?.commentlist ?? data?.commentlist) as Array<Record<string, unknown>> | undefined;
@@ -292,6 +350,29 @@ function extractCommentList(platform: string, json: Record<string, unknown>, sou
   }
 }
 
+async function openDouyinCommentManagement(page: import('playwright').Page): Promise<void> {
+  await page.goto(DOUYIN_COMMENT_MANAGE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(2000);
+
+  if (!page.url().includes('interaction')) {
+    const interactionEntry = page.getByText('互动管理').first();
+    try {
+      await interactionEntry.click({ timeout: 5000 });
+      await page.waitForTimeout(1000);
+    } catch {
+      // sidebar may already expose comment entry
+    }
+  }
+
+  const commentEntry = page.getByText('评论管理').first();
+  try {
+    await commentEntry.click({ timeout: 5000 });
+    await page.waitForTimeout(2000);
+  } catch {
+    // direct route may already load comment inbox
+  }
+}
+
 async function scrollForLazyLoad(page: import('playwright').Page): Promise<void> {
   for (let i = 0; i < 4; i++) {
     await page.mouse.wheel(0, 900);
@@ -300,22 +381,192 @@ async function scrollForLazyLoad(page: import('playwright').Page): Promise<void>
   await page.waitForTimeout(1500);
 }
 
-function pickDouyinItemId(json: Record<string, unknown>): string | undefined {
-  const items = json.items;
-  if (!Array.isArray(items) || items.length === 0) return undefined;
-  const item = items[0] as Record<string, unknown>;
-  const direct = item.item_id ?? item.aweme_id ?? item.id ?? item.group_id;
-  if (direct != null) return String(direct);
+/** XHS note management page — used to discover the latest note ID when none is supplied. */
+const XHS_NOTE_MANAGE_URL = 'https://creator.xiaohongshu.com/creator/notemanage';
+
+/**
+ * API paths fired by the note management page that carry note IDs.
+ * The homepage fires `/latest_note_data` with the most recent note; note management
+ * pages fire `/user/posted` / `/note/list` variants.
+ */
+const XHS_NOTE_LIST_PATTERNS = [
+  '/api/galaxy/creator/home/latest_note_data',
+  '/api/galaxy/creator/data/note_detail_new',
+  '/api/creator/note/user/posted',
+  '/api/creator/note/list',
+  '/api/galaxy/creator/home/notemanage',
+];
+
+export function xhsNotePublicUrl(noteId: string, xsecToken?: string): string {
+  const url = new URL(`https://www.xiaohongshu.com/explore/${noteId}`);
+  if (xsecToken) {
+    url.searchParams.set('xsec_token', xsecToken);
+    url.searchParams.set('xsec_source', 'pc_creator');
+  }
+  return url.toString();
+}
+
+interface XhsNoteRef {
+  id: string;
+  xsecToken?: string;
+}
+
+export function pickXhsNoteRef(json: Record<string, unknown>): XhsNoteRef | undefined {
+  const data = json.data as Record<string, unknown> | undefined;
+
+  // latest_note_data format: { data: { noteInfo: { id: '...' } } }
+  const noteInfo = data?.noteInfo as Record<string, unknown> | undefined;
+  if (noteInfo?.id) {
+    const xsecToken = noteInfo.xsec_token ?? noteInfo.xsecToken;
+    return {
+      id: String(noteInfo.id),
+      xsecToken: xsecToken != null ? String(xsecToken) : undefined,
+    };
+  }
+
+  // note_detail_new / note list formats: { data: { notes: [{id, note_id}] } }
+  const notes =
+    (data?.notes ?? data?.list ?? data?.items ?? json.notes ?? json.list) as unknown[] | undefined;
+  if (Array.isArray(notes) && notes.length > 0) {
+    const first = notes[0] as Record<string, unknown>;
+    const id = first.note_id ?? first.id ?? first.noteId;
+    const xsecToken = first.xsec_token ?? first.xsecToken;
+    if (id != null) {
+      return {
+        id: String(id),
+        xsecToken: xsecToken != null ? String(xsecToken) : undefined,
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function pickXhsNoteId(json: Record<string, unknown>): string | undefined {
+  return pickXhsNoteRef(json)?.id;
+}
+
+async function waitForXhsNoteRef(page: import('playwright').Page): Promise<XhsNoteRef | undefined> {
+  try {
+    const response = await page.waitForResponse(
+      (item) => XHS_NOTE_LIST_PATTERNS.some((pattern) => item.url().includes(pattern)),
+      { timeout: 10000 },
+    );
+    return pickXhsNoteRef(await response.json() as Record<string, unknown>);
+  } catch {
+    return undefined;
+  }
+}
+
+export function isDouyinEncodedItemId(value: string): boolean {
+  return value.startsWith('@') || (value.length > 18 && !/^\d+$/.test(value));
+}
+
+function pickDouyinItemIdFromItem(item: Record<string, unknown>): string | undefined {
+  const encodedInJson = JSON.stringify(item).match(/"(?:item_id|open_item_id)"\s*:\s*"(@[^"]+)"/);
+  if (encodedInJson?.[1]) return encodedInJson[1];
+
+  const candidates = [item.item_id, item.open_item_id, item.id, item.aweme_id, item.group_id];
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    const value = String(candidate);
+    if (isDouyinEncodedItemId(value)) return value;
+  }
+
   const nested = item.aweme as Record<string, unknown> | undefined;
+  if (nested?.aweme_id != null && isDouyinEncodedItemId(String(nested.aweme_id))) {
+    return String(nested.aweme_id);
+  }
+
+  for (const candidate of candidates) {
+    if (candidate != null) return String(candidate);
+  }
   if (nested?.aweme_id != null) return String(nested.aweme_id);
-  const match = JSON.stringify(item).match(/"(?:item_id|aweme_id)"\s*:\s*"?(\d+)"?/);
-  return match?.[1];
+  return undefined;
+}
+
+export function pickDouyinItemId(json: Record<string, unknown>): string | undefined {
+  const noticeComments = json.comments;
+  if (Array.isArray(noticeComments) && noticeComments.length > 0) {
+    const first = noticeComments[0] as Record<string, unknown>;
+    if (first.item_id != null) return String(first.item_id);
+  }
+
+  const data = json.data as Record<string, unknown> | undefined;
+  const items =
+    json.items ??
+    data?.items ??
+    data?.item_list ??
+    json.item_list;
+  if (!Array.isArray(items) || items.length === 0) return undefined;
+  return pickDouyinItemIdFromItem(items[0] as Record<string, unknown>);
+}
+
+export function pickDouyinEncodedItemId(json: Record<string, unknown>): string | undefined {
+  const id = pickDouyinItemId(json);
+  return id && isDouyinEncodedItemId(id) ? id : undefined;
+}
+
+async function trySelectVideoOnCommentPage(page: import('playwright').Page): Promise<void> {
+  const selectVideo = page.getByText('选择视频').first();
+  try {
+    await selectVideo.click({ timeout: 4000 });
+    await page.waitForTimeout(1500);
+  } catch {
+    // selector may already show the video list
+  }
+
+  const rowSelectors = [
+    '[class*="video-item"]',
+    '[class*="content-card"]',
+    '[class*="item-card"]',
+    '[class*="video-card"]',
+    '[class*="list"] [class*="item"]',
+    'tr',
+  ];
+  for (const selector of rowSelectors) {
+    try {
+      const row = page.locator(selector).first();
+      await row.click({ timeout: 3000 });
+      await page.waitForTimeout(2500);
+      return;
+    } catch {
+      // try next selector
+    }
+  }
+}
+
+async function loadDouyinCommentsFromLatestVideo(
+  page: import('playwright').Page,
+  itemIdRef: { encoded?: string; numeric?: string },
+): Promise<void> {
+  if (!itemIdRef.encoded && !itemIdRef.numeric) {
+    // Page should already be on comment management from caller;
+    // just try to select a video directly instead of re-navigating.
+    await trySelectVideoOnCommentPage(page);
+    await page.waitForTimeout(3000);
+    return;
+  }
+
+  if (itemIdRef.encoded) {
+    await page.goto(douyinPostCommentUrl(itemIdRef.encoded), { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(5000);
+    return;
+  }
+
+  await openDouyinCommentManagement(page);
+  await page.waitForTimeout(2000);
+  await trySelectVideoOnCommentPage(page);
+  await page.waitForTimeout(3000);
 }
 
 function dedupeAndFilterTodayComments(items: Array<Record<string, unknown>>, limit: number): Array<Record<string, unknown>> {
-  return dedupeByKey(items, (item) => String(item.externalCommentId ?? ''))
-    .filter((item) => isPublishedTodayInShanghai(item.publishedAt))
-    .slice(0, limit);
+  return selectTodayOrRecent(
+    items,
+    (item) => String(item.externalCommentId ?? ''),
+    (item) => item.publishedAt,
+    { limit, fallbackLimit: RECENT_INTERACTION_FALLBACK_LIMIT },
+  );
 }
 
 const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
@@ -331,9 +582,14 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
     return;
   }
 
-  let targetUrl = urlFn(body.sourceContentId);
+  const targetUrl = urlFn(body.sourceContentId);
   const xhrPatterns = COMMENT_API_PATTERNS[body.platform] ?? [];
-  let resolvedContentId = body.sourceContentId;
+  const itemIdRef: { encoded?: string; numeric?: string } = {};
+  if (body.sourceContentId) {
+    if (isDouyinEncodedItemId(body.sourceContentId)) itemIdRef.encoded = body.sourceContentId;
+    else itemIdRef.numeric = body.sourceContentId;
+  }
+  const resolveDouyinItemId = () => itemIdRef.encoded ?? itemIdRef.numeric ?? body.sourceContentId;
 
   let session: Awaited<ReturnType<typeof createSession>> | null = null;
   try {
@@ -341,46 +597,106 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
     const { page } = session;
 
     const captured: Array<Record<string, unknown>> = [];
+    const responseTasks: Array<Promise<void>> = [];
 
-    page.on('response', async (response) => {
+    const rememberDouyinItemId = (json: Record<string, unknown>) => {
+      const encoded = pickDouyinEncodedItemId(json);
+      if (encoded) {
+        itemIdRef.encoded = encoded;
+        return;
+      }
+      const id = pickDouyinItemId(json);
+      if (!id) return;
+      if (isDouyinEncodedItemId(id)) itemIdRef.encoded = id;
+      else itemIdRef.numeric = id;
+    };
+
+    // XHS: capture the first note ref from creator APIs so we can pivot to the
+    // public note page with its xsec token.
+    const xhsNoteRef: { value?: XhsNoteRef } = {};
+    if (body.sourceContentId) xhsNoteRef.value = { id: body.sourceContentId };
+
+    const responseListener = (response: import('playwright').Response) => {
+      const task = (async () => {
       const url = response.url();
-      if (body.platform === 'douyin' && !resolvedContentId && url.includes('/web/api/creator/item/list')) {
+      if (body.platform === 'douyin' && DOUYIN_ITEM_LIST_PATTERNS.some((pattern) => url.includes(pattern))) {
         try {
-          const json = await response.json() as Record<string, unknown>;
-          const id = pickDouyinItemId(json);
-          if (id) resolvedContentId = id;
+          rememberDouyinItemId(await response.json() as Record<string, unknown>);
+        } catch { /* skip */ }
+      }
+      if (body.platform === 'douyin' && url.includes('/aweme/v1/creator/notice/comment')) {
+        try {
+          rememberDouyinItemId(await response.json() as Record<string, unknown>);
+        } catch { /* skip */ }
+      }
+      if (body.platform === 'xiaohongshu' && !xhsNoteRef.value?.xsecToken && XHS_NOTE_LIST_PATTERNS.some((p) => url.includes(p))) {
+        try {
+          const note = pickXhsNoteRef(await response.json() as Record<string, unknown>);
+          if (note && (!xhsNoteRef.value || note.id === xhsNoteRef.value.id)) xhsNoteRef.value = note;
         } catch { /* skip */ }
       }
       if (!xhrPatterns.some((p) => url.includes(p))) return;
       try {
         const json = await response.json() as Record<string, unknown>;
-        const items = extractCommentList(body.platform, json, resolvedContentId ?? body.sourceContentId);
+        const items = extractCommentList(
+          body.platform,
+          json,
+          body.platform === 'xiaohongshu' ? xhsNoteRef.value?.id : resolveDouyinItemId(),
+        );
         captured.push(...items);
       } catch { /* non-JSON, skip */ }
-    });
-
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      })();
+      responseTasks.push(task);
+    };
+    page.on('response', responseListener);
 
     if (body.platform === 'douyin' && !body.sourceContentId) {
-      await page.waitForTimeout(4000);
-      if (!resolvedContentId) {
-        await page.goto('https://creator.douyin.com/creator-micro/home/message', {
-          waitUntil: 'domcontentloaded',
-          timeout: 30000,
-        });
-        await page.waitForTimeout(3000);
+      await openDouyinCommentManagement(page);
+      await scrollForLazyLoad(page);
+      await page.waitForTimeout(2500);
+      if (captured.length === 0) {
+        await loadDouyinCommentsFromLatestVideo(page, itemIdRef);
+        await scrollForLazyLoad(page);
+        await page.waitForTimeout(2500);
       }
-      if (resolvedContentId) {
-        targetUrl = urlFn(resolvedContentId);
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } else if (body.platform === 'xiaohongshu' && !body.sourceContentId) {
+      // Step 1: note management page → triggers note list API → captures note ID
+      await page.goto(XHS_NOTE_MANAGE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      xhsNoteRef.value ??= await waitForXhsNoteRef(page);
+      await Promise.allSettled(responseTasks.splice(0));
+      // Step 2: if we got a note ref, navigate to its public page where comments load
+      if (xhsNoteRef.value) {
+        await page.goto(xhsNotePublicUrl(xhsNoteRef.value.id, xhsNoteRef.value.xsecToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(3000);
+        await scrollForLazyLoad(page);
+        await page.waitForTimeout(2000);
+      }
+    } else {
+      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      if (body.platform === 'douyin') {
+        await page.waitForTimeout(5000);
+        if (body.sourceContentId) {
+          await scrollForLazyLoad(page);
+        }
+      } else if (body.platform === 'xiaohongshu') {
+        // With sourceContentId: on the public note page, wait then scroll
+        await page.waitForTimeout(3000);
+        await scrollForLazyLoad(page);
+        await page.waitForTimeout(2000);
       }
     }
 
-    await scrollForLazyLoad(page);
+    if (body.platform !== 'douyin' && body.platform !== 'xiaohongshu') {
+      await scrollForLazyLoad(page);
+    } else if (body.platform === 'douyin' && body.sourceContentId) {
+      await scrollForLazyLoad(page);
+    }
 
+    page.off('response', responseListener);
+    await Promise.allSettled(responseTasks.splice(0));
     sendJson(res, 200, dedupeAndFilterTodayComments(captured, body.limit ?? 50));
-  } catch {
-    sendJson(res, 200, []);
+  } catch (error) {
+    sendAssistFetchError(res, 'comments', error);
   } finally {
     await session?.close();
   }
@@ -395,9 +711,12 @@ interface FetchMessagesBody {
 }
 
 function dedupeAndFilterTodayMessages(items: Array<Record<string, unknown>>, limit: number): Array<Record<string, unknown>> {
-  return dedupeByKey(items, (item) => String(item.externalMessageId ?? ''))
-    .filter((item) => isPublishedTodayInShanghai(item.publishedAt))
-    .slice(0, limit);
+  return selectTodayOrRecent(
+    items,
+    (item) => String(item.externalMessageId ?? ''),
+    (item) => item.publishedAt,
+    { limit, fallbackLimit: RECENT_INTERACTION_FALLBACK_LIMIT },
+  );
 }
 
 /** Extract a normalised message list from a raw XHR JSON payload. */
@@ -511,7 +830,7 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
     // ── XHR response interception ──────────────────────────────
     const captured: Array<Record<string, unknown>> = [];
 
-    page.on('response', async (response) => {
+    const messageListener = async (response: import('playwright').Response) => {
       const url = response.url();
       if (!xhrPatterns.some((p) => url.includes(p))) return;
       try {
@@ -519,15 +838,17 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
         const items = extractMessageList(body.platform, json);
         captured.push(...items);
       } catch { /* non-JSON, skip */ }
-    });
+    };
+    page.on('response', messageListener);
 
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
     await scrollForLazyLoad(page);
 
+    page.off('response', messageListener);
     sendJson(res, 200, dedupeAndFilterTodayMessages(captured, body.limit ?? 50));
-  } catch {
-    sendJson(res, 200, []);
+  } catch (error) {
+    sendAssistFetchError(res, 'messages', error);
   } finally {
     await session?.close();
   }
@@ -571,11 +892,11 @@ const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
     }
 
     // Find the target comment by data-id attribute or by content matching
-    const commentLocator = await page.locator(
+    const commentLocator = page.locator(
       `[data-id="${body.externalCommentId}"], [data-comment-id="${body.externalCommentId}"]`
     ).first();
 
-    if (commentLocator) {
+    if (await commentLocator.count() > 0) {
       // Click reply button within the comment
       const replyBtn = commentLocator.locator(replySels.replyButton).first();
       try {

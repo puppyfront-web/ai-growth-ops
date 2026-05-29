@@ -11,6 +11,7 @@ import type {
   PlatformMessage,
   ReplyResult,
 } from './types.js';
+import { fetchWithTimeout } from './http-client.js';
 
 export class BrowserAssistInteractionConnector implements InteractionConnector {
   readonly platform: PlatformCode;
@@ -44,7 +45,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
   }
 
   async fetchComments(input: FetchCommentsInput): Promise<PlatformComment[]> {
-    const resp = await fetch(`${this.runnerUrl}/assist/fetch-comments`, {
+    const resp = await fetchWithTimeout(`${this.runnerUrl}/assist/fetch-comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -56,7 +57,15 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
         headed: input.headed ?? this.headed,
       }),
     });
-    const data = await resp.json() as Array<Record<string, unknown>>;
+    const payload = await resp.json() as Array<Record<string, unknown>> | Record<string, unknown>;
+    if (!resp.ok || !Array.isArray(payload)) {
+      const detail =
+        (!Array.isArray(payload) && (payload.details as string | undefined)) ||
+        (!Array.isArray(payload) && (payload.error as string | undefined)) ||
+        `browser-assist comment fetch failed with status ${resp.status}`;
+      throw new Error(detail);
+    }
+    const data = payload;
     return data.map((item) => ({
       externalCommentId: String(item.externalCommentId ?? ''),
       externalUserId: String(item.externalUserId ?? ''),
@@ -72,7 +81,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
   }
 
   async fetchMessages(input: FetchMessagesInput): Promise<PlatformMessage[]> {
-    const resp = await fetch(`${this.runnerUrl}/assist/fetch-messages`, {
+    const resp = await fetchWithTimeout(`${this.runnerUrl}/assist/fetch-messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -83,7 +92,15 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
         headed: input.headed ?? this.headed,
       }),
     });
-    const data = await resp.json() as Array<Record<string, unknown>>;
+    const payload = await resp.json() as Array<Record<string, unknown>> | Record<string, unknown>;
+    if (!resp.ok || !Array.isArray(payload)) {
+      const detail =
+        (!Array.isArray(payload) && (payload.details as string | undefined)) ||
+        (!Array.isArray(payload) && (payload.error as string | undefined)) ||
+        `browser-assist message fetch failed with status ${resp.status}`;
+      throw new Error(detail);
+    }
+    const data = payload;
     return data.map((item) => ({
       externalMessageId: String(item.externalMessageId ?? ''),
       externalUserId: String(item.externalUserId ?? ''),
@@ -96,7 +113,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
   }
 
   async replyComment(input: ReplyCommentInput): Promise<ReplyResult> {
-    const resp = await fetch(`${this.runnerUrl}/assist/reply-comment`, {
+    const resp = await fetchWithTimeout(`${this.runnerUrl}/assist/reply-comment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -111,7 +128,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
   }
 
   async replyMessage(input: ReplyMessageInput): Promise<ReplyResult> {
-    const resp = await fetch(`${this.runnerUrl}/assist/reply-message`, {
+    const resp = await fetchWithTimeout(`${this.runnerUrl}/assist/reply-message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
