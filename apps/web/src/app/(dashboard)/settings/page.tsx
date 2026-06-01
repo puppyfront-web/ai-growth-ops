@@ -7,6 +7,7 @@ export default function SettingsPage() {
     { href: '/settings/ai', title: 'AI 配置', desc: '配置 LLM Provider 和功能开关' },
     { href: '/settings/skills', title: 'Skill 管理', desc: '管理 AI 技能模块' },
     { href: '/settings/compliance', title: '合规规则', desc: '配置敏感词和审核规则' },
+    { href: '/settings/storage', title: '存储配置', desc: '配置文件存储方式（本地/MinIO/S3）' },
     { href: '/settings/profile', title: '个人设置', desc: '管理个人资料' },
     { href: '/settings/team', title: '团队管理', desc: '管理团队成员和权限' },
     { href: '/settings/logs', title: '操作日志', desc: '查看系统操作日志' },

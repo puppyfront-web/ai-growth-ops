@@ -1,6 +1,20 @@
 import type { PublishJobStatus, Platform, ContentType, ProviderMode } from './enums';
 import type { ContentVariant } from './content';
-import type { PlatformAccount } from './platform';
+
+export type PlatformAccount = {
+  id: string;
+  userId: string;
+  platform: string;
+  name: string;
+  mode: string;
+  status: string;
+  authType?: string | null;
+  cookieRef?: string | null;
+  capabilities?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  lastHealthCheckAt?: string | null;
+  expiresAt?: string | null;
+};
 
 export type PublishAttempt = {
   id: string;

@@ -1,6 +1,7 @@
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import type { AuditAction } from '@prisma/client';
+import { getAuthenticatedUser } from './auth.js';
 
 interface AuditRouteContext {
   db: DatabaseClient;
@@ -19,14 +20,14 @@ export const auditRoutes: Array<{ method: string; pattern: string; handler: (req
   {
     method: 'GET',
     pattern: '/api/audit-logs',
-    handler: async (_req, res, ctx) => {
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       const action = ctx.url.searchParams.get('action');
       const entity = ctx.url.searchParams.get('entityType') ?? ctx.url.searchParams.get('entity');
-      const userId = ctx.url.searchParams.get('userId');
-      const where: Record<string, unknown> = {};
+      const where: Record<string, unknown> = { userId: user.id };
       if (action) where.action = action;
       if (entity) where.entity = entity;
-      if (userId) where.userId = userId;
       const items = await ctx.db.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },

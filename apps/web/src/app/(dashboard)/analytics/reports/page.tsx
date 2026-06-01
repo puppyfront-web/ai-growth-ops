@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getAnalyticsOverview } from '@/lib/api/analytics';
-import { queryKeys } from '@/lib/query-keys';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getReports, generateReport } from '@/lib/api/settings';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
+import { LoadingState } from '@/components/shared/LoadingState';
+import { ErrorState } from '@/components/shared/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { formatNumber } from '@/lib/utils';
 import { FileText, Calendar, TrendingUp, Users, Send } from 'lucide-react';
+import { toast } from '@/components/ui/toast';
+import { formatDate } from '@/lib/utils';
 
 const reportTypes = [
   { key: 'daily', label: '日报', icon: Calendar, desc: '每日运营数据汇总' },
@@ -21,30 +23,34 @@ const reportTypes = [
   { key: 'platform', label: '平台复盘报告', icon: Send, desc: '各平台表现对比分析' },
 ];
 
-type GeneratedReport = { type: string; label: string; date: string; summary: string };
-
 export default function ReportsPage() {
+  const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [reports, setReports] = useState<GeneratedReport[]>([]);
 
-  const { data: overview } = useQuery({ queryKey: queryKeys.analytics.overview, queryFn: getAnalyticsOverview });
+  const { data: reports = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['reports'],
+    queryFn: getReports,
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: (type: string) => generateReport(type),
+    onSuccess: () => {
+      toast.success('报告已生成');
+      qc.invalidateQueries({ queryKey: ['reports'] });
+      setDialogOpen(false);
+      setSelectedType(null);
+    },
+    onError: (err: Error) => toast.error(`生成失败: ${err.message}`),
+  });
 
   const handleGenerate = (key: string) => {
     setSelectedType(key);
     setDialogOpen(true);
   };
 
-  const confirmGenerate = () => {
-    if (!selectedType) return;
-    const rt = reportTypes.find((r) => r.key === selectedType)!;
-    const summary = overview
-      ? `发布 ${formatNumber(overview.totalPublished)} 篇，互动 ${formatNumber(overview.totalInteractions)} 次，合格线索 ${formatNumber(overview.totalLeads)} 条，内容 ${formatNumber(overview.totalContentItems)} 项。`
-      : '暂无数据';
-    setReports((prev) => [{ type: selectedType, label: rt.label, date: new Date().toLocaleDateString('zh-CN'), summary }, ...prev]);
-    setDialogOpen(false);
-    setSelectedType(null);
-  };
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState message="加载报告失败" onRetry={() => refetch()} />;
 
   return (
     <div>
@@ -74,11 +80,11 @@ export default function ReportsPage() {
         <div>
           <h3 className="text-lg font-semibold mb-4">已生成报告</h3>
           <div className="space-y-3">
-            {reports.map((report, i) => (
-              <div key={i} className="rounded-lg border bg-card p-4">
+            {reports.map((report) => (
+              <div key={report.id} className="rounded-lg border bg-card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">{report.label}</span>
-                  <span className="text-xs text-muted-foreground">{report.date}</span>
+                  <span className="text-xs text-muted-foreground">{formatDate(report.createdAt)}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">{report.summary}</p>
               </div>
@@ -94,7 +100,11 @@ export default function ReportsPage() {
           <p className="py-2 text-sm text-muted-foreground">
             系统将汇总当前数据生成 {reportTypes.find((r) => r.key === selectedType)?.label ?? '报告'}。
           </p>
-          <DialogFooter><Button size="sm" onClick={confirmGenerate}>确认生成</Button></DialogFooter>
+          <DialogFooter>
+            <Button size="sm" onClick={() => selectedType && generateMutation.mutate(selectedType)} disabled={generateMutation.isPending}>
+              {generateMutation.isPending ? '生成中...' : '确认生成'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

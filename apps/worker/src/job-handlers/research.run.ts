@@ -124,6 +124,6 @@ export async function handleResearchRun(job: Job<ResearchRunInput>): Promise<voi
     }).catch(() => {});
     throw err;
   } finally {
-    await db.$disconnect();
+    
   }
 }

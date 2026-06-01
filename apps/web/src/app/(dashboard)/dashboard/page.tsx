@@ -75,7 +75,7 @@ export default function DashboardPage() {
                 <p className="py-4 text-center text-sm text-muted-foreground">暂无发布任务</p>
               )}
               {data.recentPublishJobs.map((job) => (
-                <Link key={job.id} href={`/publish/${job.id}`} className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-accent/50">
+                <Link key={job.id} href={`/publish/jobs/${job.id}`} className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-accent/50">
                   <div className="flex items-center gap-2">
                     <PlatformBadge platform={job.platform} />
                     <span className="text-xs text-muted-foreground">{contentTypeLabels[job.contentType] ?? job.contentType}</span>

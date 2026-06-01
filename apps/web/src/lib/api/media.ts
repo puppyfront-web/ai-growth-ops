@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from './client';
+import { apiGet, apiPost, apiPut, apiUpload } from './client';
 import type { MediaAsset } from '@/types/media';
 
 export function listMediaAssets(filters?: { reviewStatus?: string; sourceType?: string }): Promise<MediaAsset[]> {
@@ -15,7 +15,7 @@ export function getMediaAssetsByIds(ids: string[]): Promise<MediaAsset[]> {
 }
 
 export function uploadMedia(formData: FormData): Promise<MediaAsset> {
-  return fetch('/api/media-assets', { method: 'POST', body: formData }).then((r) => r.json());
+  return apiUpload<MediaAsset>('/api/media-assets', formData);
 }
 
 export function reviewMedia(id: string, status: 'approved' | 'rejected', note?: string): Promise<MediaAsset> {

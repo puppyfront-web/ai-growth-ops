@@ -1,5 +1,6 @@
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import { getAuthenticatedUser } from './auth.js';
 
 interface TaskRouteContext {
   db: DatabaseClient;
@@ -18,7 +19,9 @@ export const taskRoutes: Array<{ method: string; pattern: string; handler: (req:
   {
     method: 'GET',
     pattern: '/api/tasks',
-    handler: async (_req, res, ctx) => {
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       const status = ctx.url.searchParams.get('status');
       const taskType = ctx.url.searchParams.get('taskType');
       const where: Record<string, unknown> = {};
@@ -36,7 +39,9 @@ export const taskRoutes: Array<{ method: string; pattern: string; handler: (req:
   {
     method: 'GET',
     pattern: '/api/tasks/:id',
-    handler: async (_req, res, ctx) => {
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.systemTask.findUnique({ where: { id: ctx.params.id } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
       sendJson(res, 200, item);
@@ -46,7 +51,9 @@ export const taskRoutes: Array<{ method: string; pattern: string; handler: (req:
   {
     method: 'POST',
     pattern: '/api/tasks/:id/retry',
-    handler: async (_req, res, ctx) => {
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.systemTask.findUnique({ where: { id: ctx.params.id } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
       if (item.status !== 'failed') return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: 'Only failed tasks can be retried' } });
@@ -58,7 +65,9 @@ export const taskRoutes: Array<{ method: string; pattern: string; handler: (req:
   {
     method: 'POST',
     pattern: '/api/tasks/:id/cancel',
-    handler: async (_req, res, ctx) => {
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.systemTask.findUnique({ where: { id: ctx.params.id } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
       if (!['queued', 'running'].includes(item.status as string)) return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: 'Only queued or running tasks can be cancelled' } });

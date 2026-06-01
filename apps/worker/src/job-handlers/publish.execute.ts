@@ -86,6 +86,13 @@ export async function handlePublishExecute(job: Job<PublishExecuteInput>): Promi
             externalUrl: result.externalUrl,
           },
         });
+        // Update parent ContentItem status to reflect published state
+        if (variant?.contentItem?.id) {
+          await db.contentItem.update({
+            where: { id: variant.contentItem.id },
+            data: { status: 'ready' },
+          });
+        }
       } else {
         const err = result.errorMessage || 'Browser assist publish failed';
         const needsHuman = /二次安全验证|二次验证|second-verify|uc-second-verify|登录已失效|需要.*素材|图文素材已上传/.test(err);
@@ -151,6 +158,13 @@ export async function handlePublishExecute(job: Job<PublishExecuteInput>): Promi
           externalUrl: publishResult.externalUrl,
         },
       });
+      // Update parent ContentItem status to reflect published state
+      if (publishResult.status !== 'pending_review' && variant?.contentItem?.id) {
+        await db.contentItem.update({
+          where: { id: variant.contentItem.id },
+          data: { status: 'ready' },
+        });
+      }
     } else {
       await updatePublishProgress(db, publishJobId, 'failed', publishResult.errorMessage);
       await handlePublishFailure(db, publishJobId, attempt.id, publishResult.errorMessage || 'Publish failed');
@@ -166,7 +180,7 @@ export async function handlePublishExecute(job: Job<PublishExecuteInput>): Promi
     }).catch(() => {});
     throw err;
   } finally {
-    await db.$disconnect();
+    
   }
 }
 

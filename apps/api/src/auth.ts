@@ -2,7 +2,16 @@ import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypt
 import type { IncomingMessage } from 'node:http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 
-const AUTH_SECRET = process.env.AUTH_SECRET || 'development-secret-change-in-production';
+let _authSecret: string | null = null;
+function getAuthSecret(): string {
+  if (!_authSecret) {
+    _authSecret = process.env.AUTH_SECRET || null;
+    if (!_authSecret) {
+      throw new Error('AUTH_SECRET environment variable is not set. Refusing to operate with insecure defaults.');
+    }
+  }
+  return _authSecret;
+}
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ── Password ─────────────────────────────────────────────────────────────────
@@ -34,7 +43,7 @@ interface TokenPayload {
 export function createToken(userId: string): string {
   const payload: TokenPayload = { userId, issuedAt: Date.now() };
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = createHmac('sha256', AUTH_SECRET).update(data).digest('base64url');
+  const sig = createHmac('sha256', getAuthSecret()).update(data).digest('base64url');
   return `${data}.${sig}`;
 }
 
@@ -42,7 +51,7 @@ export function verifyToken(token: string): TokenPayload | null {
   const [data, sig] = token.split('.');
   if (!data || !sig) return null;
 
-  const expected = createHmac('sha256', AUTH_SECRET).update(data).digest('base64url');
+  const expected = createHmac('sha256', getAuthSecret()).update(data).digest('base64url');
   try {
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   } catch {

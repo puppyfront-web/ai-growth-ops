@@ -38,11 +38,57 @@ export interface ApiServerOptions {
   db?: DatabaseClient;
 }
 
+function addSecurityHeaders(res: ServerResponse): void {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+}
+
+function handleCORS(req: IncomingMessage, res: ServerResponse): boolean {
+  const origin = req.headers.origin;
+  // Allow same-origin (Next.js proxy) or known dev origins
+  const allowed = ['http://localhost:3001', 'http://localhost:3000'];
+  if (origin && allowed.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID, X-Publish-Progress-Key');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+  return false;
+}
+
+// Simple in-memory rate limiter for login endpoint
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_RATE_LIMIT = 10; // max attempts
+const LOGIN_RATE_WINDOW = 60_000; // per minute
+
+function isLoginRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_RATE_WINDOW });
+    return false;
+  }
+  entry.count++;
+  return entry.count > LOGIN_RATE_LIMIT;
+}
+
 export function createApiServer(options: ApiServerOptions = {}): Server {
   initSkills();
   const db = options.db ?? createDatabaseClient();
 
   return createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    addSecurityHeaders(response);
+
+    if (handleCORS(request, response)) return;
+
     try {
       await routeRequest(request, response, db);
     } catch (error) {
@@ -62,6 +108,8 @@ export function createApiServer(options: ApiServerOptions = {}): Server {
     }
   });
 }
+
+export { isLoginRateLimited };
 
 export async function startApiServer(
   options: ApiServerOptions & { port?: number; host?: string } = {}

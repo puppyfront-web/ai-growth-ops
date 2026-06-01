@@ -78,6 +78,6 @@ export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promi
 
     job.log(`WeCom sync for lead ${leadId}: ${result.success ? 'success' : 'failed'}`);
   } finally {
-    await db.$disconnect();
+    
   }
 }

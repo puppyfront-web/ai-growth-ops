@@ -8,6 +8,7 @@ export default function IntegrationsPage() {
     { href: '/integrations/feishu', title: '飞书配置', desc: '配置飞书多维表格同步' },
     { href: '/integrations/wecom', title: '企微配置', desc: '配置企业微信客户联系' },
     { href: '/integrations/providers', title: 'Provider 配置', desc: '管理各 Provider 状态' },
+    { href: '/integrations/webhooks', title: 'Webhook 管理', desc: '管理 Webhook 订阅和事件推送' },
   ];
 
   return (

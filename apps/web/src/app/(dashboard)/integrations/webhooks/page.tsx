@@ -1,12 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getWebhooks, createWebhook, deleteWebhook } from '@/lib/api/settings';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
+import { LoadingState } from '@/components/shared/LoadingState';
+import { ErrorState } from '@/components/shared/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Webhook, Plus, Trash2, Zap, Send, Users } from 'lucide-react';
+import { toast } from '@/components/ui/toast';
+import { formatDate } from '@/lib/utils';
 
 const webhookEvents = [
   { value: 'publish.completed', label: '发布完成', icon: Send, desc: '内容成功发布到平台时触发' },
@@ -14,44 +20,44 @@ const webhookEvents = [
   { value: 'interaction.received', label: '收到互动', icon: Zap, desc: '收到新评论或私信时触发' },
 ];
 
-type WebhookEntry = {
-  id: string;
-  url: string;
-  events: string[];
-  createdAt: string;
-  status: 'active' | 'inactive';
-};
-
 export default function WebhooksPage() {
+  const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
 
-  const [webhooks, setWebhooks] = useState<WebhookEntry[]>([
-    { id: '1', url: 'https://example.com/webhook', events: ['publish.completed'], createdAt: '2026-05-20', status: 'active' },
-  ]);
+  const { data: webhooks = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['webhooks'],
+    queryFn: getWebhooks,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => createWebhook({ url: webhookUrl, events: selectedEvents }),
+    onSuccess: () => {
+      toast.success('Webhook 已添加');
+      qc.invalidateQueries({ queryKey: ['webhooks'] });
+      setAddOpen(false);
+      setWebhookUrl('');
+      setSelectedEvents([]);
+    },
+    onError: (err: Error) => toast.error(`添加失败: ${err.message}`),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteWebhook(id),
+    onSuccess: () => {
+      toast.success('Webhook 已删除');
+      qc.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+    onError: (err: Error) => toast.error(`删除失败: ${err.message}`),
+  });
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) => prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]);
   };
 
-  const handleAdd = () => {
-    if (!webhookUrl || selectedEvents.length === 0) return;
-    setWebhooks((prev) => [...prev, {
-      id: String(Date.now()),
-      url: webhookUrl,
-      events: selectedEvents,
-      createdAt: new Date().toISOString().split('T')[0],
-      status: 'active',
-    }]);
-    setWebhookUrl('');
-    setSelectedEvents([]);
-    setAddOpen(false);
-  };
-
-  const handleDelete = (id: string) => {
-    setWebhooks((prev) => prev.filter((w) => w.id !== id));
-  };
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState message="加载 Webhook 失败" onRetry={() => refetch()} />;
 
   return (
     <div>
@@ -106,7 +112,9 @@ export default function WebhooksPage() {
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${wh.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                   {wh.status === 'active' ? '已启用' : '已禁用'}
                 </span>
-                <button onClick={() => handleDelete(wh.id)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-500">
+                <span className="text-xs text-muted-foreground">{formatDate(wh.createdAt)}</span>
+                <button onClick={() => { if (confirm('确认删除该 Webhook？')) deleteMutation.mutate(wh.id); }}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-500">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -139,7 +147,11 @@ export default function WebhooksPage() {
               </div>
             </div>
           </div>
-          <DialogFooter><Button size="sm" onClick={handleAdd}>添加</Button></DialogFooter>
+          <DialogFooter>
+            <Button size="sm" onClick={() => createMutation.mutate()} disabled={!webhookUrl.trim() || selectedEvents.length === 0 || createMutation.isPending}>
+              {createMutation.isPending ? '添加中...' : '添加'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -81,6 +81,6 @@ export async function handleLeadSyncFeishuBitable(job: Job<LeadSyncInput>): Prom
 
     job.log(`Feishu sync for lead ${leadId}: ${result.success ? 'success' : 'failed'}`);
   } finally {
-    await db.$disconnect();
+    
   }
 }

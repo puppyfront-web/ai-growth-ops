@@ -133,6 +133,6 @@ export async function handleInteractionSyncComments(
     }
     throw err;
   } finally {
-    await db.$disconnect();
+    
   }
 }

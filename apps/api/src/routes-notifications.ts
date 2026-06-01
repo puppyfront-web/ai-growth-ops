@@ -1,5 +1,6 @@
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import { getAuthenticatedUser } from './auth.js';
 
 interface NotificationRouteContext {
   db: DatabaseClient;
@@ -18,11 +19,11 @@ export const notificationRoutes: Array<{ method: string; pattern: string; handle
   {
     method: 'GET',
     pattern: '/api/notifications',
-    handler: async (_req, res, ctx) => {
-      const userId = ctx.url.searchParams.get('userId');
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       const unreadOnly = ctx.url.searchParams.get('unread') === 'true';
-      const where: Record<string, unknown> = {};
-      if (userId) where.userId = userId;
+      const where: Record<string, unknown> = { userId: user.id };
       if (unreadOnly) where.readAt = null;
       const items = await ctx.db.notification.findMany({
         where,
@@ -36,7 +37,9 @@ export const notificationRoutes: Array<{ method: string; pattern: string; handle
   {
     method: 'PATCH',
     pattern: '/api/notifications/:id/read',
-    handler: async (_req, res, ctx) => {
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.notification.findUnique({ where: { id: ctx.params.id } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
       const updated = await ctx.db.notification.update({ where: { id: ctx.params.id }, data: { readAt: new Date() } });
@@ -47,12 +50,10 @@ export const notificationRoutes: Array<{ method: string; pattern: string; handle
   {
     method: 'POST',
     pattern: '/api/notifications/mark-all-read',
-    handler: async (_req, res, ctx) => {
-      const body = ctx.body as Record<string, unknown>;
-      const userId = String(body.userId || '');
-      const where: Record<string, unknown> = { readAt: null };
-      if (userId) where.userId = userId;
-      await ctx.db.notification.updateMany({ where, data: { readAt: new Date() } });
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      await ctx.db.notification.updateMany({ where: { userId: user.id, readAt: null }, data: { readAt: new Date() } });
       sendJson(res, 200, { ok: true });
     },
   },

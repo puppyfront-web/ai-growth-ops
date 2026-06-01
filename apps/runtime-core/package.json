@@ -13,6 +13,7 @@
   "dependencies": {
     "@ai-growth-ops/ai": "workspace:*",
     "@ai-growth-ops/capability-schema": "workspace:*",
+    "@ai-growth-ops/providers": "workspace:*",
     "@ai-growth-ops/shared-types": "workspace:*",
     "@ai-growth-ops/skills": "workspace:*",
     "@langchain/langgraph": "^0.2.39"

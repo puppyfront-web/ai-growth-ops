@@ -1,4 +1,4 @@
-import { apiPost } from './client';
+import { apiGet, apiPost } from './client';
 
 export interface User {
   id: string;
@@ -17,7 +17,7 @@ export function login(data: { email: string; password: string }): Promise<LoginR
 }
 
 export function getMe(): Promise<User> {
-  return apiPost<User>('/api/auth/me');
+  return apiGet<User>('/api/auth/me');
 }
 
 export function logout(): Promise<void> {

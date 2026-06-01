@@ -128,6 +128,6 @@ export async function handleInteractionSyncMessages(
     }
     throw err;
   } finally {
-    await db.$disconnect();
+    
   }
 }

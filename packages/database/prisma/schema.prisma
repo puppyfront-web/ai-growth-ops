@@ -811,6 +811,18 @@ model SystemTask {
   @@map("system_tasks")
 }
 
+model AppConfig {
+  id        String   @id @default(uuid())
+  userId    String
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@map("app_configs")
+}
+
 model SecretRef {
   id             String   @id @default(uuid())
   scope          String

@@ -49,7 +49,7 @@ export async function generateInsights(input: GenerateInsightsInput): Promise<vo
       });
     }
   } finally {
-    await db.$disconnect();
+    
   }
 }
 

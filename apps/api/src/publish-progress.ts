@@ -30,7 +30,15 @@ export async function applyPublishProgress(
 
 export function isPublishProgressAuthorized(req: import('node:http').IncomingMessage): boolean {
   const secret = process.env.PUBLISH_PROGRESS_SECRET;
-  if (!secret) return true;
+  if (!secret) return false;
   const key = req.headers['x-publish-progress-key'];
-  return typeof key === 'string' && key === secret;
+  if (typeof key !== 'string') return false;
+  try {
+    const { timingSafeEqual } = require('node:crypto');
+    const a = Buffer.from(key);
+    const b = Buffer.from(secret);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }

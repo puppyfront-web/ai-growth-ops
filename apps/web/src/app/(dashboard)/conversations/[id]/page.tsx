@@ -2,18 +2,21 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { getConversation, getReplySuggestions, sendReply } from '@/lib/api/conversations';
+import { getConversation, getReplySuggestions, sendReply, convertToLead, reviewReply } from '@/lib/api/conversations';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge, PlatformBadge, RiskBadge, LeadLevelBadge } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from '@/components/ui/toast';
 
 export default function ConversationDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const qc = useQueryClient();
+  const router = useRouter();
   const [replyText, setReplyText] = useState('');
 
   const { data: conversation, isLoading } = useQuery({ queryKey: ['conversation', id], queryFn: () => getConversation(id) });
@@ -26,6 +29,36 @@ export default function ConversationDetailPage() {
       return sendReply(latestInteraction.id, content);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['conversation', id] }); setReplyText(''); }
+  });
+
+  const convertToLeadMutation = useMutation({
+    mutationFn: () => {
+      const latestInteraction = conversation?.interactions[conversation.interactions.length - 1];
+      if (!latestInteraction) throw new Error('No interaction');
+      return convertToLead(latestInteraction.id);
+    },
+    onSuccess: () => {
+      toast.success('已标记为线索 — 该互动已转为线索，可在线索列表中查看');
+      qc.invalidateQueries({ queryKey: ['conversation', id] });
+    },
+    onError: () => {
+      toast.error('标记为线索失败，请重试');
+    },
+  });
+
+  const transferToHumanMutation = useMutation({
+    mutationFn: () => {
+      const latestInteraction = conversation?.interactions[conversation.interactions.length - 1];
+      if (!latestInteraction) throw new Error('No interaction');
+      return reviewReply(latestInteraction.id, 'reject');
+    },
+    onSuccess: () => {
+      toast.success('已转人工处理');
+      qc.invalidateQueries({ queryKey: ['conversation', id] });
+    },
+    onError: () => {
+      toast.error('转人工失败，请重试');
+    },
   });
 
   if (isLoading) return <LoadingState />;
@@ -64,8 +97,12 @@ export default function ConversationDetailPage() {
               <button onClick={() => replyText.trim() && replyMutation.mutate(replyText)} disabled={!replyText.trim() || replyMutation.isPending} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">
                 {replyMutation.isPending ? '发送中...' : '发送回复'}
               </button>
-              <button className="rounded-md border px-4 py-2 text-sm hover:bg-accent">转人工</button>
-              <button className="rounded-md border px-4 py-2 text-sm hover:bg-accent">标记为线索</button>
+              <button onClick={() => transferToHumanMutation.mutate()} disabled={transferToHumanMutation.isPending} className="rounded-md border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50">
+                {transferToHumanMutation.isPending ? '处理中...' : '转人工'}
+              </button>
+              <button onClick={() => convertToLeadMutation.mutate()} disabled={convertToLeadMutation.isPending} className="rounded-md border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50">
+                {convertToLeadMutation.isPending ? '处理中...' : '标记为线索'}
+              </button>
             </div>
           </div>
         </div>

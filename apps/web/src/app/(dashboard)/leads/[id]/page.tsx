@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { getLead, getLeadActivities, updateLeadStatus, syncLeadToFeishu, syncLeadToWecom } from '@/lib/api/leads';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
@@ -75,6 +76,33 @@ export default function LeadDetailPage() {
             <div><span className="text-muted-foreground">创建时间</span><div>{formatDate(lead.createdAt)}</div></div>
           </div>
           {lead.summary && <div className="mt-3"><span className="text-sm text-muted-foreground">摘要</span><p className="mt-1 text-sm">{lead.summary}</p></div>}
+
+          {/* Source traceability */}
+          {(lead.sourceInteractionId || lead.sourcePublishJobId) && (
+            <div className="mt-4 rounded-lg border-t pt-3">
+              <h4 className="text-sm font-medium text-muted-foreground mb-2">来源追踪</h4>
+              <div className="flex flex-wrap gap-3 text-sm">
+                {lead.sourceInteractionId && (
+                  <Link
+                    href={`/conversations/${lead.sourceInteractionId}`}
+                    className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    <span>💬</span>
+                    <span>查看来源互动</span>
+                  </Link>
+                )}
+                {lead.sourcePublishJobId && (
+                  <Link
+                    href={`/publish/jobs/${lead.sourcePublishJobId}`}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    <span>📤</span>
+                    <span>查看来源发布</span>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border bg-card p-5">
