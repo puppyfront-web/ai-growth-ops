@@ -3,8 +3,11 @@
 import { GlobalSearch } from '@/components/shared/GlobalSearch';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { UserMenu } from '@/components/shared/UserMenu';
+import { useTheme } from '@/providers/ThemeProvider';
+import { Sun, Moon } from 'lucide-react';
 
 export function Topbar() {
+  const { theme, toggleTheme } = useTheme();
   const isMocking = typeof window !== 'undefined' && process.env.NEXT_PUBLIC_API_MOCKING === 'enabled';
   const envLabel = isMocking ? 'Mock' : 'Live';
   const envColor = isMocking ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700';
@@ -18,6 +21,13 @@ export function Topbar() {
         </span>
       </div>
       <div className="flex items-center gap-3">
+        <button
+          onClick={toggleTheme}
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          aria-label={theme === 'light' ? '切换暗色模式' : '切换亮色模式'}
+        >
+          {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+        </button>
         <NotificationBell />
         <UserMenu />
       </div>
