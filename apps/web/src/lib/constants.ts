@@ -100,6 +100,25 @@ export const leadStatusLabels: Record<string, string> = {
 
 export const leadPipelineFlow = ['NEW', 'QUALIFIED', 'SYNCED', 'ASSIGNED', 'CONTACTED', 'ADDED_WECOM', 'WON'] as const;
 
+export const contentStatusLabels: Record<string, string> = {
+  draft: '草稿',
+  ready: '就绪',
+  archived: '已归档',
+};
+
+export const calendarItemColors: Record<string, string> = {
+  content: 'bg-teal-400',
+  PUBLISHED: 'bg-emerald-500',
+  SCHEDULED: 'bg-amber-400',
+  RUNNING: 'bg-blue-500',
+  FAILED: 'bg-red-500',
+  NEED_MANUAL_REPAIR: 'bg-orange-500',
+  WAITING_HUMAN_CONFIRM: 'bg-purple-400',
+  DRAFT: 'bg-gray-400',
+  READY: 'bg-gray-300',
+  CANCELLED: 'bg-gray-300',
+};
+
 export const platformColorMap: Record<string, string> = {
   douyin: '#FE2C55',
   xiaohongshu: '#FF2442',
