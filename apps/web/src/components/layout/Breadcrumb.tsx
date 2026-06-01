@@ -15,6 +15,7 @@ const labelMap: Record<string, string> = {
   analytics: '数据复盘',
   integrations: '集成配置',
   settings: '系统设置',
+  login: '登录',
   new: '新建',
   insights: '洞察',
   opportunities: '选题机会',

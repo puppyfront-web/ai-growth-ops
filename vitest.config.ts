@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   resolve: {
     alias: {
+      '@': fileURLToPath(new URL('./apps/web/src', import.meta.url)),
       '@ai-growth-ops/database': fileURLToPath(
         new URL('./packages/database/src/index.ts', import.meta.url)
       ),

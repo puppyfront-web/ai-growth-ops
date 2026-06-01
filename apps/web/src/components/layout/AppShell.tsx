@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '@/providers/AuthProvider';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
-import { authToken } from '@/lib/api/client';
 import { hiddenSectionPrefixes } from './navigation';
 
 const PUBLIC_PATHS = ['/login'];
@@ -12,27 +11,42 @@ const PUBLIC_PATHS = ['/login'];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const { isAuthenticated, isLoading } = useAuth();
 
   const isPublic = PUBLIC_PATHS.includes(pathname);
   const isHiddenSection = hiddenSectionPrefixes.some((prefix) => pathname.startsWith(prefix));
 
-  useEffect(() => {
-    if (!isPublic && !authToken.get()) {
-      router.replace('/login');
-    } else if (!isPublic && isHiddenSection) {
-      router.replace('/dashboard');
-    } else {
-      setReady(true);
-    }
-  }, [isHiddenSection, isPublic, router]);
+  // Show nothing while auth state is loading
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
+      </div>
+    );
+  }
 
+  // Redirect unauthenticated users to login
+  if (!isPublic && !isAuthenticated) {
+    if (typeof window !== 'undefined') {
+      router.replace('/login');
+    }
+    return null;
+  }
+
+  // Redirect hidden sections
+  if (!isPublic && isHiddenSection) {
+    if (typeof window !== 'undefined') {
+      router.replace('/dashboard');
+    }
+    return null;
+  }
+
+  // Public pages (login) render without shell
   if (isPublic) {
     return <>{children}</>;
   }
 
-  if (!ready) return null;
-
+  // Authenticated layout with sidebar + topbar
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

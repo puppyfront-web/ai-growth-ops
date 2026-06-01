@@ -1,5 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 
 type ErrorStateProps = {
   message?: string;
@@ -9,15 +11,16 @@ type ErrorStateProps = {
 
 export function ErrorState({ message = '加载失败，请重试', onRetry, className }: ErrorStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center py-16 text-center', className)}>
-      <AlertTriangle className="mb-4 h-12 w-12 text-destructive" />
-      <h3 className="text-lg font-semibold">出错了</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="mt-4 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
-          重试
-        </button>
-      )}
-    </div>
+    <Alert variant="destructive" className={cn('max-w-lg mx-auto', className)}>
+      <AlertTriangle className="h-4 w-4" />
+      <AlertDescription className="flex flex-col items-start gap-3">
+        <span>{message}</span>
+        {onRetry && (
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            重试
+          </Button>
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }

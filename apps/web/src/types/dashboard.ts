@@ -1,3 +1,5 @@
+export type DateRange = '7d' | '30d' | '90d';
+
 export type DashboardMetrics = {
   platformAccounts: number;
   contentItems: number;
@@ -20,6 +22,7 @@ export type DashboardData = {
     contentType: string;
     status: string;
     externalUrl: string | null;
+    createdAt?: string;
   }>;
   leadSummaries: Array<{
     id: string;

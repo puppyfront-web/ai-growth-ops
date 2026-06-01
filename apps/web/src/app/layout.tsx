@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { QueryProvider } from '@/providers/QueryProvider';
-import { AppShell } from '@/components/layout/AppShell';
+import { ThemeProvider } from '@/providers/ThemeProvider';
+import { AuthProvider } from '@/providers/AuthProvider';
+import { ToastContainer } from '@/components/ui/toast';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,7 +18,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-CN">
       <body className={inter.className}>
         <QueryProvider>
-          <AppShell>{children}</AppShell>
+          <ThemeProvider>
+            <AuthProvider>
+              {children}
+              <ToastContainer />
+            </AuthProvider>
+          </ThemeProvider>
         </QueryProvider>
       </body>
     </html>

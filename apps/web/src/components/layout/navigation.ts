@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-type NavItem = {
+export type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
@@ -32,4 +32,4 @@ export const navItems: NavItem[] = [
   { label: '数据复盘', href: '/analytics', icon: BarChart3 },
   { label: '集成配置', href: '/integrations', icon: Plug },
   { label: '系统设置', href: '/settings', icon: Settings },
-] as const;
+];

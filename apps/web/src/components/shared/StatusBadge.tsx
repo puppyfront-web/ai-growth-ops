@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
-import { statusVariantMap } from '@/lib/constants';
+import { statusVariantMap, platformLabels, platformIcons, riskLevelLabels, leadLevelLabels } from '@/lib/constants';
+import type { Platform, RiskLevel, LeadLevel } from '@/types/enums';
 
 const variantStyles = {
   success: 'bg-green-50 text-green-700 border-green-200',
@@ -12,11 +13,14 @@ const variantStyles = {
 type StatusBadgeProps = {
   status: string;
   label?: string;
+  labelsMap?: Record<string, string>;
   className?: string;
 };
 
-export function StatusBadge({ status, label, className }: StatusBadgeProps) {
-  const variant = statusVariantMap[status] ?? 'muted';
+export function StatusBadge({ status, label, labelsMap, className }: StatusBadgeProps) {
+  const lowerStatus = status.toLowerCase();
+  const variant = statusVariantMap[status] ?? statusVariantMap[lowerStatus] ?? 'muted';
+  const displayLabel = label ?? labelsMap?.[status] ?? labelsMap?.[lowerStatus] ?? status;
   return (
     <span
       className={cn(
@@ -25,79 +29,83 @@ export function StatusBadge({ status, label, className }: StatusBadgeProps) {
         className,
       )}
     >
-      {label ?? status}
+      {displayLabel}
     </span>
   );
 }
 
-type RiskBadgeProps = {
-  level: string;
-  className?: string;
-};
-
-export function RiskBadge({ level, className }: RiskBadgeProps) {
-  const variant = statusVariantMap[level] ?? 'muted';
-  const labels: Record<string, string> = { low: '低风险', medium: '中风险', high: '高风险' };
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
-        variantStyles[variant],
-        className,
-      )}
-    >
-      {labels[level] ?? level}
-    </span>
-  );
-}
-
-type LeadLevelBadgeProps = {
-  level: string;
-  className?: string;
-};
-
-export function LeadLevelBadge({ level, className }: LeadLevelBadgeProps) {
-  const styles: Record<string, string> = {
-    A: 'bg-red-50 text-red-700 border-red-200',
-    B: 'bg-orange-50 text-orange-700 border-orange-200',
-    C: 'bg-gray-50 text-gray-600 border-gray-200',
-    D: 'bg-gray-50 text-gray-400 border-gray-200',
-  };
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold',
-        styles[level] ?? styles.C,
-        className,
-      )}
-    >
-      {level}级
-    </span>
-  );
-}
+/* ---------- PlatformBadge ---------- */
 
 type PlatformBadgeProps = {
-  platform: string;
-  className?: string;
+  platform: Platform | string;
+  showIcon?: boolean;
 };
 
-export function PlatformBadge({ platform, className }: PlatformBadgeProps) {
-  const labels: Record<string, string> = {
-    douyin: '抖音',
-    xiaohongshu: '小红书',
-    wechat_official: '公众号',
-    wechat_channels: '视频号',
-    baijiahao: '百家号',
-    zhihu: '知乎',
-  };
+export function PlatformBadge({ platform, showIcon = true }: PlatformBadgeProps) {
+  const p = platform as Platform;
+  const name = platformLabels[p] ?? String(platform);
+  const icon = platformIcons[p] ?? '';
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
+      {showIcon && icon && <span>{icon}</span>}
+      {name}
+    </span>
+  );
+}
+
+/* ---------- LeadLevelBadge ---------- */
+
+const leadLevelStyles: Record<LeadLevel, string> = {
+  A: 'bg-red-50 text-red-700 border-red-200',
+  B: 'bg-amber-50 text-amber-700 border-amber-200',
+  C: 'bg-blue-50 text-blue-700 border-blue-200',
+  D: 'bg-gray-50 text-gray-500 border-gray-200',
+};
+
+type LeadLevelBadgeProps = {
+  level: LeadLevel | string;
+};
+
+export function LeadLevelBadge({ level }: LeadLevelBadgeProps) {
+  const l = level as LeadLevel;
+  const label = leadLevelLabels[l] ?? String(level);
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium',
-        className,
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+        leadLevelStyles[l] ?? leadLevelStyles.D,
       )}
     >
-      {labels[platform] ?? platform}
+      {label}
+    </span>
+  );
+}
+
+/* ---------- RiskBadge ---------- */
+
+const riskStyles: Record<RiskLevel, string> = {
+  low: 'bg-green-50 text-green-700 border-green-200',
+  medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  high: 'bg-red-50 text-red-700 border-red-200',
+};
+
+type RiskBadgeProps = {
+  risk?: RiskLevel | string;
+  /** @deprecated Use risk instead */
+  level?: RiskLevel | string;
+};
+
+export function RiskBadge({ risk, level }: RiskBadgeProps) {
+  const r = (risk ?? level ?? 'low') as RiskLevel;
+  const label = riskLevelLabels[r] ?? String(risk);
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+        riskStyles[r] ?? riskStyles.low,
+      )}
+    >
+      {label}
     </span>
   );
 }

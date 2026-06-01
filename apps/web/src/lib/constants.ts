@@ -85,6 +85,30 @@ export const publishModeLabels: Record<string, string> = {
   manual_import: '手动导入',
 };
 
+export const leadStatusLabels: Record<string, string> = {
+  NEW: '新线索',
+  QUALIFIED: '已验证',
+  SYNCING: '同步中',
+  SYNCED: '已同步飞书',
+  ASSIGNED: '已分配',
+  CONTACTED: '已联系',
+  ADDED_WECOM: '已加企微',
+  WON: '已成交',
+  LOST: '已流失',
+  INVALID: '无效',
+};
+
+export const leadPipelineFlow = ['NEW', 'QUALIFIED', 'SYNCED', 'ASSIGNED', 'CONTACTED', 'ADDED_WECOM', 'WON'] as const;
+
+export const platformColorMap: Record<string, string> = {
+  douyin: '#FE2C55',
+  xiaohongshu: '#FF2442',
+  wechat_official: '#07C160',
+  wechat_channels: '#07C160',
+  baijiahao: '#2932E1',
+  zhihu: '#0066FF',
+};
+
 export const statusVariantMap: Record<string, 'success' | 'warning' | 'danger' | 'muted' | 'info'> = {
   success: 'success',
   published: 'success',

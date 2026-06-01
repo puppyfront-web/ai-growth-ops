@@ -25,7 +25,11 @@ export const authToken = {
 };
 
 function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Request-ID': typeof crypto !== 'undefined' ? crypto.randomUUID() : '',
+    ...extra,
+  };
   const token = authToken.get();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
@@ -61,8 +65,8 @@ async function parseError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, extractErrorCode(body), message);
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: buildHeaders() });
+export async function apiGet<T>(path: string, opts?: RequestInit): Promise<T> {
+  const res = await fetch(path, { headers: buildHeaders(), ...opts });
   if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw await parseError(res);
   return res.json();
@@ -90,6 +94,17 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'PATCH',
+    headers: buildHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 401) handleUnauthorized();
+  if (!res.ok) throw await parseError(res);
+  return res.json();
+}
+
 export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(path, { method: 'DELETE', headers: buildHeaders() });
   if (res.status === 401) handleUnauthorized();
@@ -97,7 +112,6 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return res.json();
 }
 
-/** Multipart upload — do not set Content-Type; Authorization is attached automatically. */
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const token = authToken.get();
@@ -107,4 +121,15 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
   if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw await parseError(res);
   return res.json();
+}
+
+export async function apiGetPage<T>(path: string, params: Record<string, unknown> = {}): Promise<{ items: T[]; total: number; page: number; pageSize: number }> {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+  });
+  const separator = path.includes('?') ? '&' : '?';
+  const result = await apiGet<{ success: boolean; data: { items: T[]; total: number; page: number; pageSize: number } }>(`${path}${separator}${qs.toString()}`);
+  if (result && typeof result === 'object' && 'data' in result) return result.data;
+  return result as unknown as { items: T[]; total: number; page: number; pageSize: number };
 }
