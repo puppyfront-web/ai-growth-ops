@@ -40,3 +40,19 @@ export function triggerSync(params: {
 export function getSyncStatus(syncJobId: string): Promise<{ id: string; status: string; fetchedCount: number | null; errorMessage: string | null }> {
   return apiGet(`/api/interactions/sync/${syncJobId}`);
 }
+
+export function classifyInteraction(id: string): Promise<Interaction> {
+  return apiPost<Interaction>(`/api/interactions/${id}/classify`, {});
+}
+
+export function suggestReply(id: string): Promise<ReplySuggestion[]> {
+  return apiPost<ReplySuggestion[]>(`/api/interactions/${id}/suggest-reply`, {});
+}
+
+export function convertToLead(id: string): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(`/api/interactions/${id}/convert-to-lead`, {});
+}
+
+export function ignoreInteraction(id: string): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(`/api/interactions/${id}/ignore`, {});
+}

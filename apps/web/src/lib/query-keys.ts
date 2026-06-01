@@ -34,11 +34,13 @@ export const queryKeys = {
   conversations: {
     all: ['conversations'] as const,
     detail: (id: string) => ['conversations', id] as const,
+    replies: ['conversations', 'replies'] as const,
   },
   leads: {
     all: ['leads'] as const,
     lead: (id: string) => ['leads', id] as const,
     activities: (leadId: string) => ['leads', leadId, 'activities'] as const,
+    sinks: (type: string) => ['leads', 'sinks', type] as const,
   },
   analytics: {
     overview: ['analytics', 'overview'] as const,

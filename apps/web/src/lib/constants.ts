@@ -71,6 +71,20 @@ export const riskLevelLabels: Record<RiskLevel, string> = {
   high: '高风险',
 };
 
+export const interactionTypeLabels: Record<string, string> = {
+  comment: '评论',
+  message: '私信',
+  official_message: '官方消息',
+  form_submission: '表单提交',
+};
+
+export const syncStatusLabels: Record<string, string> = {
+  none: '未同步',
+  syncing: '同步中',
+  synced: '已同步',
+  failed: '同步失败',
+};
+
 export const contentTypeLabels: Record<string, string> = {
   text_image: '图文',
   video: '视频',
