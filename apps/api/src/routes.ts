@@ -813,6 +813,121 @@ const routes: Route[] = [
       sendJson(res, 200, item);
     }
   },
+  {
+    method: 'POST',
+    pattern: '/api/media-assets/generate',
+    handler: async (req, res, ctx) => {
+      const user = await getAuthenticatedUser(req, ctx.db);
+      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const prompt = String(body.prompt ?? '');
+      const generationType = String(body.generationType ?? 'image');
+      const style = String(body.style ?? '');
+      const size = String(body.size ?? '1024x1024');
+
+      if (!prompt.trim()) return sendJson(res, 400, { error: '请输入生成描述' });
+
+      try {
+        // Determine which provider to use
+        const genMode = process.env.MEDIA_GEN_MODE ?? 'llm_provider';
+        const genProvider = process.env.MEDIA_GEN_PROVIDER ?? 'openai';
+        let apiKey: string;
+        let baseUrl: string;
+        let model: string;
+
+        if (genMode === 'dedicated' && process.env.MEDIA_GEN_API_KEY) {
+          apiKey = process.env.MEDIA_GEN_API_KEY;
+          baseUrl = process.env.MEDIA_GEN_BASE_URL ?? 'https://api.openai.com/v1';
+          model = process.env.MEDIA_GEN_MODEL ?? 'dall-e-3';
+        } else {
+          // Reuse LLM provider config
+          apiKey = process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY ?? '';
+          baseUrl = process.env.AI_BASE_URL ?? 'https://api.openai.com/v1';
+          model = process.env.AI_IMAGE_MODEL ?? 'dall-e-3';
+        }
+
+        if (!apiKey) return sendJson(res, 503, { error: 'AI 服务未配置，请先在设置中配置 API Key' });
+
+        // Call image generation API (OpenAI-compatible /v1/images/generations)
+        const fullPrompt = style ? `${prompt}, ${style}风格` : prompt;
+        const genResponse = await fetch(`${baseUrl}/images/generations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            prompt: fullPrompt,
+            n: 1,
+            size,
+            response_format: 'b64_json',
+          }),
+        });
+
+        if (!genResponse.ok) {
+          const errBody = await genResponse.text();
+          console.error('Image generation failed:', genResponse.status, errBody);
+          return sendJson(res, 502, { error: '图片生成失败，请检查 AI 配置' });
+        }
+
+        const genResult = await genResponse.json() as any;
+        const imageData = genResult.data?.[0];
+        if (!imageData) return sendJson(res, 502, { error: '生成结果为空' });
+
+        // Save generated image to uploads
+        const imageBuffer = imageData.b64_json
+          ? Buffer.from(imageData.b64_json, 'base64')
+          : null;
+        const imageUrl = imageData.url ?? null;
+
+        if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true });
+        const savedName = `${randomUUID()}.png`;
+        const filePath = join(UPLOADS_DIR, savedName);
+
+        if (imageBuffer) {
+          writeFileSync(filePath, imageBuffer);
+        } else if (imageUrl) {
+          // Download from URL
+          const imgResp = await fetch(imageUrl);
+          const imgBuf = Buffer.from(await imgResp.arrayBuffer());
+          writeFileSync(filePath, imgBuf);
+        } else {
+          return sendJson(res, 502, { error: '无法获取生成图片' });
+        }
+
+        // Create a simple hash for dedup
+        const promptHash = prompt.trim().slice(0, 64);
+
+        const asset = await ctx.db.mediaAsset.create({
+          data: {
+            userId: user.id,
+            fileName: `ai-generated-${savedName}`,
+            fileType: 'image/png',
+            fileSize: imageBuffer?.length ?? 0,
+            sourceType: 'generated_future',
+            sourceUrl: `/uploads/${savedName}`,
+            reviewStatus: 'pending_review',
+            generationProvider: `${genProvider}/${model}`,
+            generationPromptHash: promptHash,
+            costEstimate: genResult.usage?.total_tokens ? genResult.usage.total_tokens * 0.00004 : 0.04,
+            metadata: {
+              prompt,
+              generationType,
+              style,
+              size,
+              revisedPrompt: imageData.revised_prompt ?? null,
+            } as any,
+          },
+        });
+
+        sendJson(res, 201, asset);
+      } catch (err: any) {
+        console.error('Media generation error:', err);
+        sendJson(res, 500, { error: '素材生成失败: ' + (err.message ?? '未知错误') });
+      }
+    }
+  },
 
   // ── Publish Jobs ───────────────────────────────────────────────
   {
@@ -2322,7 +2437,14 @@ const routes: Route[] = [
           leadIdentification: true,
           replySuggestion: true
         },
-        lastRunAt: recentRuns[0]?.createdAt ?? null
+        lastRunAt: recentRuns[0]?.createdAt ?? null,
+        mediaGeneration: {
+          mode: process.env.MEDIA_GEN_MODE ?? 'llm_provider',
+          provider: process.env.MEDIA_GEN_PROVIDER ?? 'openai',
+          apiKey: process.env.MEDIA_GEN_API_KEY ? '••••••••' : '',
+          baseUrl: process.env.MEDIA_GEN_BASE_URL ?? '',
+          model: process.env.MEDIA_GEN_MODEL ?? 'dall-e-3',
+        }
       });
     }
   },

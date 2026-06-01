@@ -1,5 +1,13 @@
 import { apiGet, apiPut } from './client';
 
+export interface MediaGenerationConfig {
+  mode: 'llm_provider' | 'dedicated';
+  provider: string;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 export interface AiConfig {
   provider: string;
   baseUrl: string;
@@ -9,6 +17,7 @@ export interface AiConfig {
   dailyTokenLimit: number;
   features: { textGeneration: boolean; leadIdentification: boolean; replySuggestion: boolean };
   lastRunAt: string | null;
+  mediaGeneration: MediaGenerationConfig;
 }
 
 export interface SkillInfo {
