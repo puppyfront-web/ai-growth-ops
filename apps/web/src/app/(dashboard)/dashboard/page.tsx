@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Lightbulb, Send, Users } from 'lucide-react';
 import Link from 'next/link';
 import type { DateRange } from '@/types/dashboard';
+import { OnboardingGuide } from '@/components/shared/OnboardingGuide';
 
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>('30d');
@@ -42,6 +43,9 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <Breadcrumb />
       <PageHeader title="运营工作台" description="运营数据总览" />
+
+      {/* Onboarding Guide */}
+      <OnboardingGuide />
 
       {/* Metric Cards with Trends */}
       <MetricGrid metrics={m} leadTrend={leadTrend} />

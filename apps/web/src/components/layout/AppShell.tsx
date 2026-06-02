@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { MobileNav } from './MobileNav';
 import { hiddenSectionPrefixes } from './navigation';
 
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
@@ -52,8 +53,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar />
-        <main className="flex-1 overflow-y-auto bg-muted/30 p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-muted/30 p-6 pb-20 md:pb-6">{children}</main>
       </div>
+      <MobileNav />
     </div>
   );
 }
