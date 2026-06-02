@@ -16,6 +16,18 @@ export default defineConfig({
       ),
       '@ai-growth-ops/capability-schema': fileURLToPath(
         new URL('./packages/capability-schema/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/observability': fileURLToPath(
+        new URL('./packages/observability/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/skills': fileURLToPath(
+        new URL('./packages/skills/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/connectors': fileURLToPath(
+        new URL('./packages/connectors/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/email': fileURLToPath(
+        new URL('./packages/email/src/index.ts', import.meta.url)
       )
     }
   },
