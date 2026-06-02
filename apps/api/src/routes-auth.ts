@@ -12,6 +12,7 @@ import {
   createEmailVerificationToken,
   verifyEmailVerificationToken,
   markEmailVerified,
+  createDefaultOrganization,
 } from './auth.js';
 
 interface AuthRouteContext {
@@ -56,6 +57,9 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
         },
       });
 
+      // Create default organization for the new user
+      const defaultOrg = await createDefaultOrganization(ctx.db, user.id, user.name);
+
       // Generate email verification token
       const verifyToken = await createEmailVerificationToken(ctx.db, user.id);
       // TODO: Send verification email via email service (Week 4)
@@ -67,6 +71,12 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
       sendJson(res, 201, {
         token,
         user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        organizations: [{
+          id: defaultOrg.id,
+          name: defaultOrg.name,
+          slug: defaultOrg.slug,
+          role: 'owner',
+        }],
       });
     },
   },

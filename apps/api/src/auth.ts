@@ -207,3 +207,103 @@ export async function getAuthenticatedUser(req: IncomingMessage, db: DatabaseCli
   });
   return user ?? null;
 }
+
+// ── Organization Context ─────────────────────────────────────────────────────
+
+export interface OrganizationContext {
+  user: NonNullable<Awaited<ReturnType<typeof getAuthenticatedUser>>>;
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  memberRole: string;
+}
+
+/**
+ * Resolve the organization context from the request.
+ * Reads X-Organization-Id header, verifies membership.
+ * Falls back to the user's first (default) org if no header provided.
+ */
+export async function getOrganizationContext(
+  req: IncomingMessage,
+  db: DatabaseClient
+): Promise<OrganizationContext | null> {
+  const user = await getAuthenticatedUser(req, db);
+  if (!user) return null;
+
+  const headerOrgId = req.headers['x-organization-id'] as string | undefined;
+  let orgId = headerOrgId?.trim();
+
+  // If no org header, find user's default org
+  if (!orgId) {
+    const firstMembership = await db.organizationMember.findFirst({
+      where: { userId: user.id, status: 'active' },
+      orderBy: { joinedAt: 'asc' },
+      include: { organization: true },
+    });
+    if (!firstMembership) return null;
+    return {
+      user,
+      organization: {
+        id: firstMembership.organization.id,
+        name: firstMembership.organization.name,
+        slug: firstMembership.organization.slug,
+      },
+      memberRole: firstMembership.role,
+    };
+  }
+
+  // Verify membership
+  const membership = await db.organizationMember.findFirst({
+    where: { organizationId: orgId, userId: user.id, status: 'active' },
+    include: { organization: true },
+  });
+  if (!membership) return null;
+
+  return {
+    user,
+    organization: {
+      id: membership.organization.id,
+      name: membership.organization.name,
+      slug: membership.organization.slug,
+    },
+    memberRole: membership.role,
+  };
+}
+
+/**
+ * Create a default organization for a new user.
+ * Called during registration.
+ */
+export async function createDefaultOrganization(
+  db: DatabaseClient,
+  userId: string,
+  userName: string
+): Promise<{ id: string; name: string; slug: string }> {
+  const slugBase = userName
+    .toLowerCase()
+    .replace(/[^a-z0-9一-龥]+/g, '-')
+    .replace(/^-|-$/g, '') || 'workspace';
+  const slug = `${slugBase}-${randomBytes(4).toString('hex')}`;
+
+  const org = await db.organization.create({
+    data: {
+      name: `${userName}的工作空间`,
+      slug,
+      status: 'active',
+      metadata: { isDefault: true },
+    },
+  });
+
+  await db.organizationMember.create({
+    data: {
+      organizationId: org.id,
+      userId,
+      role: 'owner',
+      status: 'active',
+    },
+  });
+
+  return { id: org.id, name: org.name, slug: org.slug };
+}

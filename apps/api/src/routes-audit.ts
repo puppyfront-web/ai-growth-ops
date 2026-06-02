@@ -1,7 +1,7 @@
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import type { AuditAction } from '@prisma/client';
-import { getAuthenticatedUser } from './auth.js';
+import { getOrganizationContext } from './auth.js';
 
 interface AuditRouteContext {
   db: DatabaseClient;
@@ -21,11 +21,11 @@ export const auditRoutes: Array<{ method: string; pattern: string; handler: (req
     method: 'GET',
     pattern: '/api/audit-logs',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const action = ctx.url.searchParams.get('action');
       const entity = ctx.url.searchParams.get('entityType') ?? ctx.url.searchParams.get('entity');
-      const where: Record<string, unknown> = { userId: user.id };
+      const where: Record<string, unknown> = { organizationId: orgCtx.organization.id };
       if (action) where.action = action;
       if (entity) where.entity = entity;
       const items = await ctx.db.auditLog.findMany({
@@ -41,7 +41,7 @@ export const auditRoutes: Array<{ method: string; pattern: string; handler: (req
 // Helper to write audit logs from any route
 export async function writeAuditLog(
   db: DatabaseClient,
-  data: { userId: string; action: AuditAction; entity: string; entityId: string; before?: unknown; after?: unknown }
+  data: { userId: string; organizationId: string; action: AuditAction; entity: string; entityId: string; before?: unknown; after?: unknown }
 ): Promise<void> {
   const changes = (data.before !== undefined || data.after !== undefined)
     ? { before: data.before ?? null, after: data.after ?? null }
@@ -50,6 +50,7 @@ export async function writeAuditLog(
   await db.auditLog.create({
     data: {
       userId: data.userId,
+      organizationId: data.organizationId,
       action: data.action,
       entity: data.entity,
       entityId: data.entityId,
@@ -61,7 +62,7 @@ export async function writeAuditLog(
 // Helper to create notifications
 export async function createNotification(
   db: DatabaseClient,
-  data: { type: string; title: string; content: string; level?: string; userId?: string; actionUrl?: string }
+  data: { type: string; title: string; content: string; level?: string; userId?: string; organizationId?: string; actionUrl?: string }
 ): Promise<void> {
   await db.notification.create({
     data: {
@@ -70,6 +71,7 @@ export async function createNotification(
       content: data.content,
       level: (data.level || 'info') as any,
       userId: data.userId,
+      organizationId: data.organizationId,
       actionUrl: data.actionUrl,
     },
   });

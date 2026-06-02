@@ -1,6 +1,6 @@
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
-import { getAuthenticatedUser } from './auth.js';
+import { getOrganizationContext } from './auth.js';
 
 interface AnalyticsRouteContext {
   db: DatabaseClient;
@@ -20,8 +20,8 @@ export const analyticsRoutes: Array<{ method: string; pattern: string; handler: 
     method: 'GET',
     pattern: '/api/analytics/events',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const eventType = ctx.url.searchParams.get('eventType');
       const platform = ctx.url.searchParams.get('platform');
       const startDate = ctx.url.searchParams.get('startDate');
@@ -48,8 +48,8 @@ export const analyticsRoutes: Array<{ method: string; pattern: string; handler: 
     method: 'POST',
     pattern: '/api/analytics/events',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const item = await ctx.db.analyticsEvent.create({
         data: {

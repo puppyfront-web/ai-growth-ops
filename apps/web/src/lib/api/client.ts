@@ -10,6 +10,7 @@ export class ApiError extends Error {
 }
 
 const TOKEN_KEY = 'auth_token';
+const ORG_KEY = 'current_org_id';
 
 export const authToken = {
   get(): string | null {
@@ -24,6 +25,19 @@ export const authToken = {
   },
 };
 
+export const currentOrg = {
+  get(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(ORG_KEY);
+  },
+  set(orgId: string): void {
+    localStorage.setItem(ORG_KEY, orgId);
+  },
+  clear(): void {
+    localStorage.removeItem(ORG_KEY);
+  },
+};
+
 function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -32,6 +46,8 @@ function buildHeaders(extra: Record<string, string> = {}): Record<string, string
   };
   const token = authToken.get();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  const orgId = currentOrg.get();
+  if (orgId) headers['X-Organization-Id'] = orgId;
   return headers;
 }
 
@@ -116,6 +132,8 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
   const headers: Record<string, string> = {};
   const token = authToken.get();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  const orgId = currentOrg.get();
+  if (orgId) headers['X-Organization-Id'] = orgId;
 
   const res = await fetch(path, { method: 'POST', headers, body: formData });
   if (res.status === 401) handleUnauthorized();

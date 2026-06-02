@@ -13,11 +13,12 @@ import { notificationRoutes } from './routes-notifications.js';
 import { auditRoutes } from './routes-audit.js';
 import { analyticsRoutes } from './routes-analytics.js';
 import { authRoutes } from './routes-auth.js';
+import { orgRoutes } from './routes-org.js';
 import { getCustomerDashboard } from './mvp-service';
 import { applyPublishProgress, isPublishProgressAuthorized } from './publish-progress.js';
 import { getBrowserRunnerUrl } from './browser-login-config';
 import { setSession, getSessionId, clearSession } from './browser-login-session';
-import { hashPassword, verifyPassword, createToken, getAuthenticatedUser } from './auth.js';
+import { hashPassword, verifyPassword, createToken, getAuthenticatedUser, getOrganizationContext } from './auth.js';
 import { isLoginRateLimited } from './server.js';
 import { executeResearchTaskSync, ResearchExecutionError } from './research-executor.js';
 
@@ -88,16 +89,52 @@ const routes: Route[] = [
         return sendJson(res, 401, { error: '邮箱或密码错误' });
       }
       const token = createToken(user.id);
-      sendJson(res, 200, { token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      // Fetch user's organizations for frontend context
+      const memberships = await ctx.db.organizationMember.findMany({
+        where: { userId: user.id, status: 'active' },
+        include: { organization: { select: { id: true, name: true, slug: true } } },
+        orderBy: { joinedAt: 'asc' },
+      });
+      const organizations = memberships.map(m => ({
+        id: m.organization.id,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        role: m.role,
+      }));
+      sendJson(res, 200, {
+        token,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        organizations,
+      });
     }
   },
   {
     method: 'GET',
     pattern: '/api/auth/me',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      sendJson(res, 200, { id: user.id, name: user.name, email: user.email, role: user.role });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      // Also return organizations for context
+      const memberships = await ctx.db.organizationMember.findMany({
+        where: { userId: orgCtx.user.id, status: 'active' },
+        include: { organization: { select: { id: true, name: true, slug: true } } },
+        orderBy: { joinedAt: 'asc' },
+      });
+      const organizations = memberships.map(m => ({
+        id: m.organization.id,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        role: m.role,
+      }));
+      sendJson(res, 200, {
+        id: orgCtx.user.id,
+        name: orgCtx.user.name,
+        email: orgCtx.user.email,
+        role: orgCtx.user.role,
+        emailVerifiedAt: orgCtx.user.emailVerifiedAt,
+        avatarUrl: orgCtx.user.avatarUrl,
+        organizations,
+      });
     }
   },
 
@@ -106,9 +143,9 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/dashboard',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      sendJson(res, 200, await getCustomerDashboard(ctx.db, user.id));
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      sendJson(res, 200, await getCustomerDashboard(ctx.db, orgCtx.user.id));
     }
   },
 
@@ -117,10 +154,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/research-tasks',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.researchTask.findMany({
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         include: { insights: true, opportunities: true }
       });
@@ -131,10 +168,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/research-tasks/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.researchTask.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
         include: {
           researchKeywords: true,
           targetAccounts: true,
@@ -152,12 +189,13 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/research-tasks',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const item = await ctx.db.researchTask.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           type: String(body.type ?? 'keyword_search'),
           platforms: body.platforms as string[] ?? [],
           keywords: body.keywords as string[] ?? [],
@@ -171,10 +209,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/research-tasks/:id/run',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       try {
-        const result = await executeResearchTaskSync(ctx.db, ctx.params.id, user.id);
+        const result = await executeResearchTaskSync(ctx.db, ctx.params.id, orgCtx.user.id);
         sendJson(res, 200, {
           task: result.task,
           posts: result.posts,
@@ -194,9 +232,9 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/research-tasks/:id/pause',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.id, userId: user.id } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id } });
       if (!task) return sendJson(res, 404, { error: 'Not found' });
       if (!['RUNNING', 'QUEUED'].includes(task.status)) {
         return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: `Cannot pause from ${task.status} state` } });
@@ -214,9 +252,9 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/research-tasks/:taskId/posts',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.taskId, userId: user.id } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.taskId, organizationId: orgCtx.organization.id } });
       if (!task) return sendJson(res, 404, { error: 'Not found' });
       const items = await ctx.db.collectedPost.findMany({
         where: { researchTaskId: ctx.params.taskId },
@@ -229,9 +267,9 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/research-tasks/:taskId/comments',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.taskId, userId: user.id } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const task = await ctx.db.researchTask.findFirst({ where: { id: ctx.params.taskId, organizationId: orgCtx.organization.id } });
       if (!task) return sendJson(res, 404, { error: 'Not found' });
       const items = await ctx.db.collectedComment.findMany({
         where: { researchTaskId: ctx.params.taskId },
@@ -246,10 +284,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/research-insights',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.researchInsight.findMany({
-        where: { researchTask: { userId: user.id } },
+        where: { researchTask: { organizationId: orgCtx.organization.id } },
         orderBy: { createdAt: 'desc' }
       });
       sendJson(res, 200, items);
@@ -261,10 +299,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/content-opportunities',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.contentOpportunity.findMany({
-        where: { researchTask: { userId: user.id } },
+        where: { researchTask: { organizationId: orgCtx.organization.id } },
         orderBy: { createdAt: 'desc' }
       });
       sendJson(res, 200, items);
@@ -274,16 +312,17 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/content-opportunities/:id/create-content',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const opp = await ctx.db.contentOpportunity.findFirst({
-        where: { id: ctx.params.id, researchTask: { userId: user.id } }
+        where: { id: ctx.params.id, researchTask: { organizationId: orgCtx.organization.id } }
       });
       if (!opp) return sendJson(res, 404, { error: 'Not found' });
-      const projectId = await getOrCreateDefaultProject(ctx.db, user.id);
+      const projectId = await getOrCreateDefaultProject(ctx.db, orgCtx.user.id, orgCtx.organization.id);
       const item = await ctx.db.contentItem.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           projectId,
           type: 'text_image',
           title: opp.title,
@@ -302,10 +341,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/content-items',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.contentItem.findMany({
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         include: { contentVariants: true }
       });
@@ -316,10 +355,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/content-items/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.contentItem.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
         include: { contentVariants: true }
       });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
@@ -330,12 +369,12 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/content-items',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       let projectId = body.projectId as string | undefined;
       if (!projectId) {
-        projectId = await getOrCreateDefaultProject(ctx.db, user.id);
+        projectId = await getOrCreateDefaultProject(ctx.db, orgCtx.user.id, orgCtx.organization.id);
       }
 
       // Handle uploaded files
@@ -344,7 +383,8 @@ const routes: Route[] = [
         const saved = saveUploadedFile(file);
         const asset = await ctx.db.mediaAsset.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             fileName: saved.fileName,
             fileType: resolveContentType(file),
             fileSize: file.buffer.length,
@@ -361,7 +401,8 @@ const routes: Route[] = [
 
       const item = await ctx.db.contentItem.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           projectId,
           type: String(body.type ?? 'text_image') as any,
           title: String(body.title ?? ''),
@@ -378,10 +419,10 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/content-items/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const existing = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const existing = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!existing) return sendJson(res, 404, { error: 'Not found' });
 
       const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
@@ -417,9 +458,9 @@ const routes: Route[] = [
     method: 'DELETE',
     pattern: '/api/content-items/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const item = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null }, include: { contentVariants: { include: { publishJobs: true } } } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const item = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }, include: { contentVariants: { include: { publishJobs: true } } } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
       const hasPublished = item.contentVariants.some(v => v.publishJobs.some(j => j.status === 'PUBLISHED'));
       if (hasPublished) return sendJson(res, 400, { error: { code: 'HAS_PUBLISHED', message: 'Cannot delete content with published variants' } });
@@ -431,12 +472,13 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/content-items/:id/compliance-check',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const item = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const item = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
       const result = await ctx.db.skillRun.create({
         data: {
+          organizationId: orgCtx.organization.id,
           userId: item.userId, skillName: 'compliance_check', status: 'success',
           input: { contentItemId: item.id }, output: { passed: true, issues: [] },
         }
@@ -448,10 +490,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/content-items/:contentItemId/variants',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.contentVariant.findMany({
-        where: { contentItemId: ctx.params.contentItemId, userId: user.id, deletedAt: null },
+        where: { contentItemId: ctx.params.contentItemId, organizationId: orgCtx.organization.id, deletedAt: null },
         orderBy: { platform: 'asc' }
       });
       sendJson(res, 200, items);
@@ -461,8 +503,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/content-items/:contentItemId/generate-variants',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const contentItem = await ctx.db.contentItem.findFirstOrThrow({
         where: { id: ctx.params.contentItemId, deletedAt: null }
       });
@@ -515,7 +557,8 @@ const routes: Route[] = [
 
           return ctx.db.contentVariant.create({
             data: {
-              userId: user.id,
+              organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
               contentItemId: contentItem.id,
               platform: platform as 'douyin',
               contentType: contentItem.type as 'text_image',
@@ -538,8 +581,8 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/content-variants/:variantId',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as { title?: string; body?: string; tags?: string[] } | null;
       if (!body) return sendJson(res, 400, { error: 'Missing body' });
       try {
@@ -561,10 +604,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/content-variants/:id/compliance-check',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const variant = await ctx.db.contentVariant.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!variant) return sendJson(res, 404, { error: 'Not found' });
 
@@ -636,10 +679,10 @@ const routes: Route[] = [
     method: 'PATCH',
     pattern: '/api/content-variants/:id/approve',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const variant = await ctx.db.contentVariant.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
         include: { complianceChecks: { orderBy: { createdAt: 'desc' }, take: 1 } }
       });
       if (!variant) return sendJson(res, 404, { error: 'Not found' });
@@ -664,7 +707,8 @@ const routes: Route[] = [
       // Write audit log
       await ctx.db.auditLog.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           action: 'approve',
           entity: 'ContentVariant',
           entityId: variant.id,
@@ -682,10 +726,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/content-variants/:id/create-publish-job',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const variant = await ctx.db.contentVariant.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!variant) return sendJson(res, 404, { error: 'Not found' });
 
@@ -721,7 +765,7 @@ const routes: Route[] = [
 
       // Find a matching platform account for this variant's platform
       const account = await ctx.db.platformAccount.findFirst({
-        where: { userId: user.id, platform: variant.platform, deletedAt: null }
+        where: { organizationId: orgCtx.organization.id, platform: variant.platform, deletedAt: null }
       });
       if (!account) {
         return sendJson(res, 400, {
@@ -750,7 +794,8 @@ const routes: Route[] = [
 
       const job = await ctx.db.publishJob.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           contentVariantId: variant.id,
           platformAccountId: account.id,
           platform: variant.platform,
@@ -770,10 +815,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/media-assets',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const where: Record<string, unknown> = {
-        userId: user.id,
+        organizationId: orgCtx.organization.id,
         deletedAt: null
       };
       const reviewStatus = ctx.url.searchParams.get('reviewStatus');
@@ -793,14 +838,15 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/media-assets',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = [];
       for (const file of ctx.files) {
         const saved = saveUploadedFile(file);
         const item = await ctx.db.mediaAsset.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             fileName: saved.fileName,
             fileType: resolveContentType(file),
             fileSize: file.buffer.length,
@@ -815,7 +861,8 @@ const routes: Route[] = [
         const body = ctx.body as Record<string, unknown>;
         const item = await ctx.db.mediaAsset.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             fileName: String(body.fileName ?? 'untitled'),
             fileType: String(body.fileType ?? 'application/octet-stream'),
             fileSize: body.fileSize as number | undefined,
@@ -835,10 +882,10 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/media-assets/:id/review',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const existing = await ctx.db.mediaAsset.findFirst({ where: { id: ctx.params.id, userId: user.id } });
+      const existing = await ctx.db.mediaAsset.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id } });
       if (!existing) return sendJson(res, 404, { error: 'Not found' });
       const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
       const item = await ctx.db.mediaAsset.update({
@@ -855,8 +902,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/media-assets/generate',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const prompt = String(body.prompt ?? '');
       const generationType = String(body.generationType ?? 'image');
@@ -939,7 +986,8 @@ const routes: Route[] = [
 
         const asset = await ctx.db.mediaAsset.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             fileName: `ai-generated-${savedName}`,
             fileType: 'image/png',
             fileSize: imageBuffer?.length ?? 0,
@@ -972,10 +1020,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/publish-jobs',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const where: Record<string, unknown> = {
-        userId: user.id,
+        organizationId: orgCtx.organization.id,
         deletedAt: null
       };
       const status = ctx.url.searchParams.get('status');
@@ -998,10 +1046,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/publish-jobs/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.publishJob.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
         include: {
           contentVariant: true,
           platformAccount: true,
@@ -1016,8 +1064,8 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/publish-jobs/:jobId/attempts',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.publishAttempt.findMany({
         where: { publishJobId: ctx.params.jobId },
         orderBy: { attemptNo: 'desc' }
@@ -1029,17 +1077,18 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/publish-jobs',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const account = await ctx.db.platformAccount.findFirst({
-        where: { id: String(body.platformAccountId ?? ''), userId: user.id, deletedAt: null }
+        where: { id: String(body.platformAccountId ?? ''), organizationId: orgCtx.organization.id, deletedAt: null }
       });
       const mode = account?.mode ?? String(body.mode ?? 'official_api');
       const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt as string) : null;
       const item = await ctx.db.publishJob.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           contentVariantId: String(body.contentVariantId ?? ''),
           platformAccountId: String(body.platformAccountId ?? ''),
           platform: String(body.platform ?? 'douyin') as 'douyin',
@@ -1056,8 +1105,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/publish-jobs/batch',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as { contentItemId?: string; platformAccountIds?: string[]; scheduledAt?: string };
       const { contentItemId, platformAccountIds, scheduledAt } = body;
       if (!contentItemId || !platformAccountIds?.length) {
@@ -1065,9 +1114,9 @@ const routes: Route[] = [
       }
 
       const [contentItem, variants, accounts] = await Promise.all([
-        ctx.db.contentItem.findFirst({ where: { id: contentItemId, userId: user.id, deletedAt: null } }),
-        ctx.db.contentVariant.findMany({ where: { contentItemId, userId: user.id, deletedAt: null } }),
-        ctx.db.platformAccount.findMany({ where: { id: { in: platformAccountIds }, userId: user.id, deletedAt: null } }),
+        ctx.db.contentItem.findFirst({ where: { id: contentItemId, organizationId: orgCtx.organization.id, deletedAt: null } }),
+        ctx.db.contentVariant.findMany({ where: { contentItemId, organizationId: orgCtx.organization.id, deletedAt: null } }),
+        ctx.db.platformAccount.findMany({ where: { id: { in: platformAccountIds }, organizationId: orgCtx.organization.id, deletedAt: null } }),
       ]);
       if (!contentItem) return sendJson(res, 404, { error: '内容不存在' });
 
@@ -1093,7 +1142,8 @@ const routes: Route[] = [
         }
         const job = await ctx.db.publishJob.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             contentVariantId: variant.id,
             platformAccountId: account.id,
             platform: account.platform,
@@ -1120,10 +1170,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/publish-jobs/:id/retry',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const existing = await ctx.db.publishJob.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!existing) return sendJson(res, 404, { error: 'Not found' });
       if (existing.retryCount >= 3) {
@@ -1152,9 +1202,9 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/publish-jobs/:id/cancel',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!job) return sendJson(res, 404, { error: 'Not found' });
       const item = await ctx.db.publishJob.update({
         where: { id: ctx.params.id },
@@ -1167,10 +1217,10 @@ const routes: Route[] = [
     method: 'DELETE',
     pattern: '/api/publish-jobs/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const job = await ctx.db.publishJob.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
       });
       if (!job) return sendJson(res, 404, { error: '发布任务不存在' });
       if (job.status === 'RUNNING') {
@@ -1216,10 +1266,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/publish-jobs/:id/execute',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const job = await ctx.db.publishJob.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
         include: { contentVariant: true, platformAccount: true },
       });
       if (!job) return sendJson(res, 404, { error: 'Not found' });
@@ -1241,10 +1291,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/publish-jobs/:id/manual-complete',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!job) return sendJson(res, 404, { error: 'Not found' });
       if (job.status !== 'WAITING_HUMAN_CONFIRM') {
         return sendJson(res, 400, { error: { code: 'INVALID_STATE', message: `Cannot manual-complete from ${job.status} state` } });
@@ -1260,9 +1310,9 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/publish-jobs/:id/logs',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const job = await ctx.db.publishJob.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!job) return sendJson(res, 404, { error: 'Not found' });
       const attempts = await ctx.db.publishAttempt.findMany({
         where: { publishJobId: ctx.params.id },
@@ -1286,10 +1336,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/interactions',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const where: Record<string, unknown> = {
-        userId: user.id,
+        organizationId: orgCtx.organization.id,
         deletedAt: null
       };
       const status = ctx.url.searchParams.get('status');
@@ -1310,10 +1360,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/interactions/:id/reply-suggestions',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const interaction = await ctx.db.interaction.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!interaction) return sendJson(res, 200, []);
       sendJson(res, 200, []);
@@ -1323,10 +1373,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/interactions/:id/reply',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
 
       // Reply Policy Engine: check risk level and review requirements
@@ -1338,6 +1388,7 @@ const routes: Route[] = [
         // Block the reply and require human review
         await ctx.db.auditLog.create({
           data: {
+            organizationId: orgCtx.organization.id,
             userId: interaction.userId,
             action: 'update',
             entity: 'interaction',
@@ -1367,6 +1418,7 @@ const routes: Route[] = [
       // Write AuditLog for the reply action
       await ctx.db.auditLog.create({
         data: {
+          organizationId: orgCtx.organization.id,
           userId: interaction.userId,
           action: 'update',
           entity: 'interaction',
@@ -1386,12 +1438,12 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/interactions/:id/review',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const action = String(body.action);
       const status = action === 'reject' ? 'IGNORED' : 'REPLIED';
-      const existing = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const existing = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!existing) return sendJson(res, 404, { error: 'Not found' });
       const item = await ctx.db.interaction.update({
         where: { id: ctx.params.id },
@@ -1410,10 +1462,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/interactions/:id/classify',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
 
       let intentLevel = body.intentLevel ?? 'C';
@@ -1461,9 +1513,9 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/interactions/:id/suggest-reply',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
 
       let suggestedText = `感谢您的关注！关于您提到的"${interaction.content.slice(0, 20)}..."，我们会尽快为您处理。`;
@@ -1509,9 +1561,9 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/interactions/:id/convert-to-lead',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
       const metadata = interaction.metadata as Record<string, unknown> | null;
       const level = (metadata?.intentLevel as string) ?? 'C';
@@ -1536,12 +1588,12 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/interactions/:id/ignore',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const item = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const item = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
       await ctx.db.interaction.update({ where: { id: ctx.params.id }, data: { status: 'IGNORED' } });
-      await ctx.db.auditLog.create({ data: { userId: item.userId, action: 'update', entity: 'interaction', entityId: ctx.params.id, changes: { after: { status: 'IGNORED' } } as never } }).catch(() => { /* auditLog table may not exist */ });
+      await ctx.db.auditLog.create({ data: { organizationId: orgCtx.organization.id, userId: item.userId, action: 'update', entity: 'interaction', entityId: ctx.params.id, changes: { after: { status: 'IGNORED' } } as never } }).catch(() => { /* auditLog table may not exist */ });
       sendJson(res, 200, { ok: true });
     }
   },
@@ -1549,8 +1601,8 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/interactions/:id/reply-attempts',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const suggestions = await ctx.db.replySuggestion.findMany({
         where: { interactionId: ctx.params.id },
         include: { replyAttempts: true }
@@ -1563,8 +1615,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/reply-suggestions/:id/review',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const suggestion = await ctx.db.replySuggestion.findUnique({ where: { id: ctx.params.id } });
       if (!suggestion) return sendJson(res, 404, { error: 'Not found' });
@@ -1596,8 +1648,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/interactions/sync',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const platform = String(body.platform ?? '');
       const platformAccountId = String(body.platformAccountId ?? '');
@@ -1627,7 +1679,8 @@ const routes: Route[] = [
       const connection = { url: redisUrl };
 
       const commonPayload = {
-        userId: user.id,
+        organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
         platformAccountId,
         platform,
         mode,
@@ -1662,8 +1715,8 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/interactions/sync/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const job = await ctx.db.interactionSyncJob.findFirst({
         where: { id: ctx.params.id },
       });
@@ -1677,10 +1730,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/conversations/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.conversation.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
         include: {
           interactions: {
             orderBy: { receivedAt: 'asc' },
@@ -1696,9 +1749,9 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/conversations',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const where: Record<string, unknown> = { userId: user.id, deletedAt: null };
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const where: Record<string, unknown> = { organizationId: orgCtx.organization.id, deletedAt: null };
       const platform = ctx.url.searchParams.get('platform');
       if (platform) where.platform = platform;
       const items = await ctx.db.conversation.findMany({
@@ -1715,12 +1768,13 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/leads',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const lead = await ctx.db.lead.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           sourcePlatform: String(body.sourcePlatform ?? 'douyin') as 'douyin',
           sourceAccountId: String(body.sourceAccountId ?? ''),
           externalUserId: String(body.externalUserId ?? ''),
@@ -1739,10 +1793,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/leads',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const where: Record<string, unknown> = {
-        userId: user.id,
+        organizationId: orgCtx.organization.id,
         deletedAt: null
       };
       const level = ctx.url.searchParams.get('level');
@@ -1766,10 +1820,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/leads/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.lead.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null },
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
         include: {
           leadActivities: { orderBy: { createdAt: 'desc' } },
           interaction: true,
@@ -1785,10 +1839,10 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/leads/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const lead = await ctx.db.lead.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const lead = await ctx.db.lead.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!lead) return sendJson(res, 404, { error: 'Not found' });
       const item = await ctx.db.lead.update({
         where: { id: ctx.params.id },
@@ -1807,10 +1861,10 @@ const routes: Route[] = [
     method: 'PATCH',
     pattern: '/api/leads/:id/assign',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const lead = await ctx.db.lead.findFirst({ where: { id: ctx.params.id, userId: user.id, deletedAt: null } });
+      const lead = await ctx.db.lead.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!lead) return sendJson(res, 404, { error: 'Not found' });
       const item = await ctx.db.lead.update({
         where: { id: ctx.params.id },
@@ -1826,8 +1880,8 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/leads/:leadId/activities',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.leadActivity.findMany({
         where: { leadId: ctx.params.leadId },
         orderBy: { createdAt: 'desc' }
@@ -1839,15 +1893,15 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/leads/:id/sync-feishu',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const lead = await ctx.db.lead.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!lead) return sendJson(res, 404, { error: 'Not found' });
 
       const sinkConfig = await ctx.db.leadSinkConfig.findFirst({
-        where: { userId: user.id, sinkType: 'lark' }
+        where: { organizationId: orgCtx.organization.id, sinkType: 'lark' }
       });
       const configObj = (sinkConfig?.config as Record<string, unknown>) || {};
 
@@ -1908,15 +1962,15 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/leads/:id/sync-wecom',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const lead = await ctx.db.lead.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!lead) return sendJson(res, 404, { error: 'Not found' });
 
       const sinkConfig = await ctx.db.leadSinkConfig.findFirst({
-        where: { userId: user.id, sinkType: 'wecom' }
+        where: { organizationId: orgCtx.organization.id, sinkType: 'wecom' }
       });
       const configObj = (sinkConfig?.config as Record<string, unknown>) || {};
 
@@ -1976,9 +2030,9 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/analytics/overview',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      const dashboard = await getCustomerDashboard(ctx.db, user.id);
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const dashboard = await getCustomerDashboard(ctx.db, orgCtx.user.id);
       sendJson(res, 200, {
         totalPublished: dashboard.metrics.publishedJobs,
         totalInteractions: dashboard.metrics.interactions,
@@ -1997,16 +2051,16 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/analytics/platforms',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const jobs = await ctx.db.publishJob.groupBy({
         by: ['platform'],
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         _count: { id: true }
       });
       const leads = await ctx.db.lead.groupBy({
         by: ['sourcePlatform'],
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         _count: { id: true }
       });
       const platformLabels: Record<string, string> = {
@@ -2031,10 +2085,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/analytics/content-roi',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.contentItem.findMany({
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         include: {
           contentVariants: {
             include: { publishJobs: { where: { deletedAt: null } } }
@@ -2062,10 +2116,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/analytics/leads/trend',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const leads = await ctx.db.lead.findMany({
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         select: { createdAt: true, level: true }
       });
       const result = aggregateByDate(leads, 'createdAt');
@@ -2076,10 +2130,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/analytics/platforms/trend',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const jobs = await ctx.db.publishJob.findMany({
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         select: { createdAt: true, platform: true }
       });
       const result = aggregateByDate(jobs, 'createdAt', 'platform');
@@ -2101,10 +2155,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/accounts',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const items = await ctx.db.platformAccount.findMany({
-        where: { userId: user.id, deletedAt: null },
+        where: { organizationId: orgCtx.organization.id, deletedAt: null },
         include: { platformCapabilities: { where: { deletedAt: null } } },
         orderBy: { platform: 'asc' }
       });
@@ -2115,8 +2169,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/accounts',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const platform = String(body.platform ?? '');
       const name = String(body.name ?? '');
@@ -2134,7 +2188,8 @@ const routes: Route[] = [
 
       const account = await ctx.db.platformAccount.create({
         data: {
-          userId: user.id,
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
           platform: platform as 'douyin',
           name,
           mode: mode as 'official_api',
@@ -2153,7 +2208,8 @@ const routes: Route[] = [
       for (const capKey of defaultCaps) {
         await ctx.db.platformCapability.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             platformAccountId: account.id,
             platform: platform as 'douyin',
             capabilityKey: capKey,
@@ -2174,11 +2230,11 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/accounts/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const account = await ctx.db.platformAccount.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
 
@@ -2220,10 +2276,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/accounts/:id/validate',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const account = await ctx.db.platformAccount.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
 
@@ -2261,10 +2317,10 @@ const routes: Route[] = [
     method: 'DELETE',
     pattern: '/api/accounts/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const account = await ctx.db.platformAccount.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
       await ctx.db.platformAccount.update({
@@ -2280,10 +2336,10 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/accounts/:id/browser-login/start',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const account = await ctx.db.platformAccount.findFirst({
-        where: { id: ctx.params.id, userId: user.id, deletedAt: null }
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
 
@@ -2317,8 +2373,8 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/accounts/:id/browser-login/status',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const accountId = ctx.params.id;
       const sessionId = getSessionId(accountId);
       if (!sessionId) {
@@ -2371,8 +2427,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/accounts/:id/browser-login/cancel',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const accountId = ctx.params.id;
       const sessionId = getSessionId(accountId);
       if (sessionId) {
@@ -2391,8 +2447,8 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/providers',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const logs = await ctx.db.providerRunLog.groupBy({
         by: ['providerName', 'operation'],
         _count: { id: true },
@@ -2414,10 +2470,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/lead-sinks/feishu',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const config = await ctx.db.leadSinkConfig.findFirst({
-        where: { userId: user.id, sinkType: 'lark' }
+        where: { organizationId: orgCtx.organization.id, sinkType: 'lark' }
       });
       if (!config) return sendJson(res, 200, { enabled: false });
       sendJson(res, 200, {
@@ -2434,11 +2490,11 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/lead-sinks/feishu',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const existing = await ctx.db.leadSinkConfig.findFirst({
-        where: { userId: user.id, sinkType: 'lark' }
+        where: { organizationId: orgCtx.organization.id, sinkType: 'lark' }
       });
       if (existing) {
         const updated = await ctx.db.leadSinkConfig.update({
@@ -2452,7 +2508,8 @@ const routes: Route[] = [
       } else {
         const created = await ctx.db.leadSinkConfig.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             sinkType: 'lark',
             config: body as any,
             enabled: body.enabled != null ? Boolean(body.enabled) : true
@@ -2466,10 +2523,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/lead-sinks/wecom',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const config = await ctx.db.leadSinkConfig.findFirst({
-        where: { userId: user.id, sinkType: 'wecom' }
+        where: { organizationId: orgCtx.organization.id, sinkType: 'wecom' }
       });
       if (!config) return sendJson(res, 200, { enabled: false });
       sendJson(res, 200, {
@@ -2485,11 +2542,11 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/lead-sinks/wecom',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
       const existing = await ctx.db.leadSinkConfig.findFirst({
-        where: { userId: user.id, sinkType: 'wecom' }
+        where: { organizationId: orgCtx.organization.id, sinkType: 'wecom' }
       });
       if (existing) {
         const updated = await ctx.db.leadSinkConfig.update({
@@ -2503,7 +2560,8 @@ const routes: Route[] = [
       } else {
         const created = await ctx.db.leadSinkConfig.create({
           data: {
-            userId: user.id,
+            organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
             sinkType: 'wecom',
             config: body as any,
             enabled: body.enabled != null ? Boolean(body.enabled) : true
@@ -2519,17 +2577,17 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/settings/ai',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const recentRuns = await ctx.db.skillRun.findMany({
-        where: { userId: user.id },
+        where: { organizationId: orgCtx.organization.id },
         orderBy: { createdAt: 'desc' },
         take: 1
       });
 
       // Load saved config from database, fallback to env vars
       const savedConfig = await ctx.db.appConfig.findUnique({
-        where: { userId_key: { userId: user.id, key: 'ai_config' } }
+        where: { userId_key: { userId: orgCtx.user.id, key: 'ai_config' } }
       });
       const saved = savedConfig?.value as Record<string, unknown> | null;
 
@@ -2560,8 +2618,8 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/settings/ai',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
 
@@ -2580,8 +2638,8 @@ const routes: Route[] = [
       };
 
       await ctx.db.appConfig.upsert({
-        where: { userId_key: { userId: user.id, key: 'ai_config' } },
-        create: { userId: user.id, key: 'ai_config', value: configValue as any },
+        where: { userId_key: { userId: orgCtx.user.id, key: 'ai_config' } },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'ai_config', value: configValue as any },
         update: { value: configValue as any },
       });
 
@@ -2594,10 +2652,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/skills',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const runs = await ctx.db.skillRun.findMany({
-        where: { userId: user.id },
+        where: { organizationId: orgCtx.organization.id },
         orderBy: { createdAt: 'desc' }
       });
       const grouped = new Map<string, typeof runs>();
@@ -2631,11 +2689,11 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/settings/compliance',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
 
       const savedConfig = await ctx.db.appConfig.findUnique({
-        where: { userId_key: { userId: user.id, key: 'compliance_config' } }
+        where: { userId_key: { userId: orgCtx.user.id, key: 'compliance_config' } }
       });
 
       if (savedConfig?.value) {
@@ -2660,14 +2718,14 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/settings/compliance',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
 
       await ctx.db.appConfig.upsert({
-        where: { userId_key: { userId: user.id, key: 'compliance_config' } },
-        create: { userId: user.id, key: 'compliance_config', value: body as any },
+        where: { userId_key: { userId: orgCtx.user.id, key: 'compliance_config' } },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'compliance_config', value: body as any },
         update: { value: body as any },
       });
 
@@ -2680,10 +2738,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/settings/storage',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const saved = await ctx.db.appConfig.findUnique({
-        where: { userId_key: { userId: user.id, key: 'storage_config' } }
+        where: { userId_key: { userId: orgCtx.user.id, key: 'storage_config' } }
       });
       if (saved?.value) {
         sendJson(res, 200, saved.value);
@@ -2702,13 +2760,13 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/settings/storage',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
       await ctx.db.appConfig.upsert({
-        where: { userId_key: { userId: user.id, key: 'storage_config' } },
-        create: { userId: user.id, key: 'storage_config', value: body as any },
+        where: { userId_key: { userId: orgCtx.user.id, key: 'storage_config' } },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'storage_config', value: body as any },
         update: { value: body as any },
       });
       sendJson(res, 200, { ok: true, updated: true });
@@ -2720,14 +2778,14 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/user/profile',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       sendJson(res, 200, {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        createdAt: user.createdAt,
+        id: orgCtx.user.id,
+        name: orgCtx.user.name,
+        email: orgCtx.user.email,
+        role: orgCtx.user.role,
+        createdAt: orgCtx.user.createdAt,
       });
     }
   },
@@ -2735,12 +2793,12 @@ const routes: Route[] = [
     method: 'PUT',
     pattern: '/api/user/profile',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
       const updated = await ctx.db.user.update({
-        where: { id: user.id },
+        where: { id: orgCtx.user.id },
         data: {
           name: typeof body.name === 'string' ? body.name : undefined,
           email: typeof body.email === 'string' ? body.email : undefined,
@@ -2761,8 +2819,8 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/team/members',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const members = await ctx.db.user.findMany({
         where: { deletedAt: null },
         select: { id: true, name: true, email: true, role: true, createdAt: true },
@@ -2775,9 +2833,9 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/team/invite',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      if (user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可邀请成员' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (orgCtx.user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可邀请成员' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.email) return sendJson(res, 400, { error: '邮箱必填' });
       const existing = await ctx.db.user.findUnique({ where: { email: body.email as string } });
@@ -2799,9 +2857,9 @@ const routes: Route[] = [
     method: 'PATCH',
     pattern: '/api/team/members/:id/role',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      if (user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可修改角色' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (orgCtx.user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可修改角色' });
       const targetId = (ctx.params as Record<string, string>)?.id;
       if (!targetId) return sendJson(res, 400, { error: '缺少成员 ID' });
       const body = ctx.body as Record<string, unknown> | null;
@@ -2820,12 +2878,12 @@ const routes: Route[] = [
     method: 'DELETE',
     pattern: '/api/team/members/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
-      if (user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可删除成员' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (orgCtx.user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可删除成员' });
       const targetId = (ctx.params as Record<string, string>)?.id;
       if (!targetId) return sendJson(res, 400, { error: '缺少成员 ID' });
-      if (targetId === user.id) return sendJson(res, 400, { error: '不能删除自己' });
+      if (targetId === orgCtx.user.id) return sendJson(res, 400, { error: '不能删除自己' });
       await ctx.db.user.update({
         where: { id: targetId },
         data: { deletedAt: new Date() },
@@ -2839,10 +2897,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/webhooks',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const webhooks = await ctx.db.appConfig.findMany({
-        where: { userId: user.id, key: { startsWith: 'webhook_' } },
+        where: { organizationId: orgCtx.organization.id, key: { startsWith: 'webhook_' } },
         orderBy: { createdAt: 'desc' },
       });
       sendJson(res, 200, webhooks.map((w) => ({
@@ -2856,8 +2914,8 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/webhooks',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.url || !(body.events as string[])?.length) {
         return sendJson(res, 400, { error: 'URL 和事件类型必填' });
@@ -2865,7 +2923,7 @@ const routes: Route[] = [
       const webhookId = `webhook_${Date.now()}`;
       const value = { url: body.url, events: body.events, status: 'active' };
       const created = await ctx.db.appConfig.create({
-        data: { userId: user.id, key: webhookId, value: value as any },
+        data: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: webhookId, value: value as any },
       });
       sendJson(res, 201, { id: created.id, ...value, createdAt: created.createdAt });
     }
@@ -2874,12 +2932,12 @@ const routes: Route[] = [
     method: 'DELETE',
     pattern: '/api/webhooks/:id',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const targetId = (ctx.params as Record<string, string>)?.id;
       if (!targetId) return sendJson(res, 400, { error: '缺少 Webhook ID' });
       const existing = await ctx.db.appConfig.findFirst({
-        where: { id: targetId, userId: user.id, key: { startsWith: 'webhook_' } },
+        where: { id: targetId, organizationId: orgCtx.organization.id, key: { startsWith: 'webhook_' } },
       });
       if (!existing) return sendJson(res, 404, { error: 'Webhook 不存在' });
       await ctx.db.appConfig.delete({ where: { id: targetId } });
@@ -2892,10 +2950,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/analytics/reports',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const reports = await ctx.db.appConfig.findMany({
-        where: { userId: user.id, key: { startsWith: 'report_' } },
+        where: { organizationId: orgCtx.organization.id, key: { startsWith: 'report_' } },
         orderBy: { createdAt: 'desc' },
         take: 20,
       });
@@ -2910,17 +2968,17 @@ const routes: Route[] = [
     method: 'POST',
     pattern: '/api/analytics/reports/generate',
     handler: async (req, res, ctx) => {
-      const user = await getAuthenticatedUser(req, ctx.db);
-      if (!user) return sendJson(res, 401, { error: '未登录' });
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.type) return sendJson(res, 400, { error: '报告类型必填' });
 
       // Aggregate data from all modules for the report
       const [publishJobs, interactions, leads, contentItems] = await Promise.all([
-        ctx.db.publishJob.count({ where: { userId: user.id, status: 'PUBLISHED' } }),
-        ctx.db.interaction.count({ where: { userId: user.id } }),
-        ctx.db.lead.count({ where: { userId: user.id } }),
-        ctx.db.contentItem.count({ where: { userId: user.id } }),
+        ctx.db.publishJob.count({ where: { organizationId: orgCtx.organization.id, status: 'PUBLISHED' } }),
+        ctx.db.interaction.count({ where: { organizationId: orgCtx.organization.id } }),
+        ctx.db.lead.count({ where: { organizationId: orgCtx.organization.id } }),
+        ctx.db.contentItem.count({ where: { organizationId: orgCtx.organization.id } }),
       ]);
 
       const typeLabels: Record<string, string> = {
@@ -2938,7 +2996,7 @@ const routes: Route[] = [
 
       const reportId = `report_${Date.now()}`;
       const created = await ctx.db.appConfig.create({
-        data: { userId: user.id, key: reportId, value: reportValue as any },
+        data: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: reportId, value: reportValue as any },
       });
       sendJson(res, 201, { id: created.id, ...reportValue, createdAt: created.createdAt });
     }
@@ -2958,6 +3016,9 @@ const routes: Route[] = [
 
   // Auth routes (register, verify-email, forgot-password, reset-password, etc.)
   ...authRoutes,
+
+  // Organization routes (CRUD, members, invitations)
+  ...orgRoutes,
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -2998,7 +3059,7 @@ async function startPublishJob(
   await enqueuePublishJob(job);
 }
 
-async function getOrCreateDefaultProject(db: DatabaseClient, userId: string): Promise<string> {
+async function getOrCreateDefaultProject(db: DatabaseClient, userId: string, organizationId: string): Promise<string> {
   const existing = await db.contentProject.findFirst({
     where: { userId, deletedAt: null },
     orderBy: { createdAt: 'asc' },
@@ -3008,6 +3069,7 @@ async function getOrCreateDefaultProject(db: DatabaseClient, userId: string): Pr
   try {
     const created = await db.contentProject.create({
       data: {
+        organizationId,
         userId,
         title: '默认项目',
         description: '系统自动创建的默认内容项目',

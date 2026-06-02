@@ -254,6 +254,8 @@ model User {
   tokenBlacklist          TokenBlacklist[]
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  organizationMemberships OrganizationMember[]
+  organizationInvitations OrganizationInvitation[]
 }
 
 model TokenBlacklist {
@@ -298,8 +300,86 @@ model EmailVerificationToken {
   @@map("email_verification_tokens")
 }
 
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  avatarUrl   String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  metadata    Json?
+
+  members     OrganizationMember[]
+  invitations OrganizationInvitation[]
+
+  platformAccounts     PlatformAccount[]
+  platformCapabilities PlatformCapability[]
+  contentProjects      ContentProject[]
+  contentItems         ContentItem[]
+  contentVariants      ContentVariant[]
+  mediaAssets          MediaAsset[]
+  publishJobs          PublishJob[]
+  interactions         Interaction[]
+  conversations        Conversation[]
+  leads                Lead[]
+  researchTasks        ResearchTask[]
+  leadSinkConfigs      LeadSinkConfig[]
+  appConfigs           AppConfig[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  skillRuns            SkillRun[]
+  agentRuns            AgentRun[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  role           String   @default("member")
+  status         String   @default("active")
+  joinedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  metadata       Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model OrganizationInvitation {
+  id              String    @id @default(uuid())
+  organizationId  String
+  invitedByUserId String
+  inviteeEmail    String
+  role            String    @default("member")
+  token           String    @unique
+  status          String    @default("pending")
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  metadata        Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation(fields: [invitedByUserId], references: [id])
+
+  @@index([inviteeEmail, status])
+  @@index([organizationId])
+  @@map("organization_invitations")
+}
+
 model PlatformAccount {
   id                    String        @id @default(uuid())
+  organizationId        String
   userId                String
   platform              Platform
   name                  String
@@ -318,17 +398,20 @@ model PlatformAccount {
   metadata              Json?
 
   user                 User                 @relation(fields: [userId], references: [id])
+  organization         Organization?        @relation(fields: [organizationId], references: [id])
   publishJobs          PublishJob[]
   platformCapabilities PlatformCapability[]
   conversations        Conversation[]
   interactions         Interaction[]
 
   @@unique([userId, platform, name])
+  @@index([organizationId])
   @@map("platform_accounts")
 }
 
 model PlatformCapability {
   id                String       @id @default(uuid())
+  organizationId    String
   userId            String
   platformAccountId String
   platform          Platform
@@ -342,15 +425,18 @@ model PlatformCapability {
   metadata          Json?
 
   user            User            @relation(fields: [userId], references: [id])
+  organization    Organization?   @relation(fields: [organizationId], references: [id])
   platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
 
   @@unique([platformAccountId, capabilityKey])
+  @@index([organizationId])
   @@map("platform_capabilities")
 }
 
 model ContentProject {
-  id          String        @id @default(uuid())
-  userId      String
+  id             String        @id @default(uuid())
+  organizationId String
+  userId         String
   title       String
   description String?
   status      ContentStatus @default(draft)
@@ -360,13 +446,16 @@ model ContentProject {
   metadata    Json?
 
   user         User          @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
   contentItems ContentItem[]
 
+  @@index([organizationId])
   @@map("content_projects")
 }
 
 model ContentItem {
   id                   String        @id @default(uuid())
+  organizationId       String?
   userId               String
   projectId            String
   type                 ContentType
@@ -381,14 +470,17 @@ model ContentItem {
   metadata             Json?
 
   user            User             @relation(fields: [userId], references: [id])
+  organization    Organization?    @relation(fields: [organizationId], references: [id])
   project         ContentProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   contentVariants ContentVariant[]
 
+  @@index([organizationId])
   @@map("content_items")
 }
 
 model ContentVariant {
   id               String           @id @default(uuid())
+  organizationId   String?
   userId           String
   contentItemId    String
   platform         Platform
@@ -405,16 +497,19 @@ model ContentVariant {
   metadata         Json?
 
   user        User         @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
   contentItem ContentItem  @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
   publishJobs PublishJob[]
   complianceChecks ContentComplianceCheck[]
 
+  @@index([organizationId])
   @@unique([contentItemId, platform, contentType])
   @@map("content_variants")
 }
 
 model MediaAsset {
   id                   String            @id @default(uuid())
+  organizationId       String?
   userId               String
   fileName             String
   fileType             String
@@ -431,12 +526,15 @@ model MediaAsset {
   metadata             Json?
 
   user User @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
 
+  @@index([organizationId])
   @@map("media_assets")
 }
 
 model PublishJob {
   id                String           @id @default(uuid())
+  organizationId    String
   userId            String
   contentVariantId  String
   platformAccountId String
@@ -457,6 +555,7 @@ model PublishJob {
   metadata          Json?
 
   user            User             @relation(fields: [userId], references: [id])
+  organization    Organization?    @relation(fields: [organizationId], references: [id])
   contentVariant  ContentVariant   @relation(fields: [contentVariantId], references: [id])
   platformAccount PlatformAccount  @relation(fields: [platformAccountId], references: [id])
   publishAttempts PublishAttempt[]
@@ -464,6 +563,7 @@ model PublishJob {
   leads           Lead[]
   manualChecklist ManualPublishChecklist?
 
+  @@index([organizationId])
   @@unique([contentVariantId, platformAccountId, mode])
   @@map("publish_jobs")
 }
@@ -486,6 +586,7 @@ model PublishAttempt {
 
 model Interaction {
   id                    String            @id @default(uuid())
+  organizationId        String
   userId                String
   platform              Platform
   platformAccountId     String
@@ -505,6 +606,7 @@ model Interaction {
   metadata              Json?
 
   user            User            @relation(fields: [userId], references: [id])
+  organization    Organization?   @relation(fields: [organizationId], references: [id])
   platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id])
   conversation    Conversation?   @relation(fields: [conversationId], references: [id])
   publishJob      PublishJob?     @relation(fields: [publishJobId], references: [id])
@@ -512,12 +614,14 @@ model Interaction {
   classification  InteractionClassification?
   replySuggestions ReplySuggestion[]
 
+  @@index([organizationId])
   @@unique([platformAccountId, externalInteractionId])
   @@map("interactions")
 }
 
 model Conversation {
   id                String            @id @default(uuid())
+  organizationId    String
   userId            String
   platform          Platform
   platformAccountId String
@@ -531,15 +635,18 @@ model Conversation {
   metadata          Json?
 
   user            User            @relation(fields: [userId], references: [id])
+  organization    Organization?   @relation(fields: [organizationId], references: [id])
   platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id])
   interactions    Interaction[]
 
+  @@index([organizationId])
   @@unique([platformAccountId, externalUserId])
   @@map("conversations")
 }
 
 model Lead {
   id                  String     @id @default(uuid())
+  organizationId      String?
   userId              String
   sourcePlatform      Platform
   sourceAccountId     String
@@ -562,12 +669,14 @@ model Lead {
   metadata            Json?
 
   user             User                  @relation(fields: [userId], references: [id])
+  organization     Organization?         @relation(fields: [organizationId], references: [id])
   interaction      Interaction?          @relation(fields: [sourceInteractionId], references: [id])
   publishJob       PublishJob?           @relation(fields: [sourcePublishJobId], references: [id])
   leadActivities   LeadActivity[]
   externalMappings LeadExternalMapping[]
   syncLogs         LeadSinkSyncLog[]
 
+  @@index([organizationId])
   @@unique([sourcePlatform, sourceAccountId, externalUserId])
   @@map("leads")
 }
@@ -587,15 +696,19 @@ model LeadActivity {
 }
 
 model LeadSinkConfig {
-  id        String   @id @default(uuid())
-  userId    String
-  sinkType  String
-  config    Json
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  metadata  Json?
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  sinkType       String
+  config         Json
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  metadata       Json?
 
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
   @@map("lead_sink_configs")
 }
 
@@ -631,6 +744,7 @@ model LeadSinkSyncLog {
 
 model ResearchTask {
   id                   String         @id @default(uuid())
+  organizationId       String?
   userId               String
   type                 String
   platforms            Json?
@@ -648,6 +762,7 @@ model ResearchTask {
   metadata             Json?
 
   user              User                    @relation(fields: [userId], references: [id])
+  organization      Organization?           @relation(fields: [organizationId], references: [id])
   researchKeywords  ResearchKeyword[]
   targetAccounts    ResearchTargetAccount[]
   collectedPosts    CollectedPost[]
@@ -655,6 +770,7 @@ model ResearchTask {
   insights          ResearchInsight[]
   opportunities     ContentOpportunity[]
 
+  @@index([organizationId])
   @@map("research_tasks")
 }
 
@@ -752,38 +868,46 @@ model ContentOpportunity {
 }
 
 model SkillRun {
-  id         String         @id @default(uuid())
-  userId     String
-  skillName  String
-  status     SkillRunStatus @default(pending)
-  input      Json?
-  output     Json?
-  error      String?
-  tokensUsed Int?
-  latencyMs  Int?
-  traceId    String?
-  startedAt  DateTime?
-  finishedAt DateTime?
-  createdAt  DateTime       @default(now())
-  metadata   Json?
+  id             String         @id @default(uuid())
+  organizationId String
+  userId         String
+  skillName      String
+  status         SkillRunStatus @default(pending)
+  input          Json?
+  output         Json?
+  error          String?
+  tokensUsed     Int?
+  latencyMs      Int?
+  traceId        String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  metadata       Json?
 
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
   @@map("skill_runs")
 }
 
 model AgentRun {
-  id         String    @id @default(uuid())
-  userId     String
-  agentName  String
-  status     String    @default("pending")
-  input      Json?
-  output     Json?
-  error      String?
-  traceId    String?
-  startedAt  DateTime?
-  finishedAt DateTime?
-  createdAt  DateTime  @default(now())
-  metadata   Json?
+  id             String    @id @default(uuid())
+  organizationId String
+  userId         String
+  agentName      String
+  status         String    @default("pending")
+  input          Json?
+  output         Json?
+  error          String?
+  traceId        String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  metadata       Json?
 
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
   @@map("agent_runs")
 }
 
@@ -809,32 +933,39 @@ model ProviderRunLog {
 }
 
 model AuditLog {
-  id        String      @id @default(uuid())
-  userId    String
-  action    AuditAction
-  entity    String
-  entityId  String
-  changes   Json?
-  traceId   String?
-  createdAt DateTime    @default(now())
-  metadata  Json?
+  id             String      @id @default(uuid())
+  organizationId String
+  userId         String
+  action         AuditAction
+  entity         String
+  entityId       String
+  changes        Json?
+  traceId        String?
+  createdAt      DateTime    @default(now())
+  metadata       Json?
 
-  user User @relation(fields: [userId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
+  @@index([organizationId])
   @@map("audit_logs")
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  type      String
-  title     String
-  content   String
-  level     NotificationLevel @default(info)
-  readAt    DateTime?
-  actionUrl String?
-  userId    String?
-  createdAt DateTime @default(now())
+  id             String            @id @default(uuid())
+  organizationId String?
+  type           String
+  title          String
+  content        String
+  level          NotificationLevel @default(info)
+  readAt         DateTime?
+  actionUrl      String?
+  userId         String?
+  createdAt      DateTime          @default(now())
 
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
   @@index([userId, readAt])
   @@map("notifications")
 }
@@ -859,13 +990,17 @@ model SystemTask {
 }
 
 model AppConfig {
-  id        String   @id @default(uuid())
-  userId    String
-  key       String
-  value     Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  key            String
+  value          Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
   @@unique([userId, key])
   @@map("app_configs")
 }

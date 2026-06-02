@@ -9,9 +9,17 @@ export interface User {
   avatarUrl?: string | null;
 }
 
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+}
+
 export interface LoginResponse {
   token: string;
   user: User;
+  organizations?: Organization[];
 }
 
 export function login(data: { email: string; password: string }): Promise<LoginResponse> {
