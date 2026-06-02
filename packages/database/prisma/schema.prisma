@@ -227,28 +227,75 @@ enum ResearchMode {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  name         String
-  role         String    @default("operator")
-  passwordHash String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
-  metadata     Json?
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String
+  role            String    @default("operator")
+  passwordHash    String?
+  emailVerifiedAt DateTime?
+  avatarUrl       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  metadata        Json?
 
-  platformAccounts     PlatformAccount[]
-  platformCapabilities PlatformCapability[]
-  contentProjects      ContentProject[]
-  contentItems         ContentItem[]
-  contentVariants      ContentVariant[]
-  publishJobs          PublishJob[]
-  conversations        Conversation[]
-  interactions         Interaction[]
-  leads                Lead[]
-  researchTasks        ResearchTask[]
-  auditLogs            AuditLog[]
-  mediaAssets          MediaAsset[]
+  platformAccounts        PlatformAccount[]
+  platformCapabilities    PlatformCapability[]
+  contentProjects         ContentProject[]
+  contentItems            ContentItem[]
+  contentVariants         ContentVariant[]
+  publishJobs             PublishJob[]
+  conversations           Conversation[]
+  interactions            Interaction[]
+  leads                   Lead[]
+  researchTasks           ResearchTask[]
+  auditLogs               AuditLog[]
+  mediaAssets             MediaAsset[]
+  tokenBlacklist          TokenBlacklist[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+}
+
+model TokenBlacklist {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([jti])
+  @@index([expiresAt])
+  @@map("token_blacklist")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id         String    @id @default(uuid())
+  userId     String
+  token      String    @unique
+  verifiedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
 }
 
 model PlatformAccount {

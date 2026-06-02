@@ -6,7 +6,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { hiddenSectionPrefixes } from './navigation';
 
-const PUBLIC_PATHS = ['/login'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

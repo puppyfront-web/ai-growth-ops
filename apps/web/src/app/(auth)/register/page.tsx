@@ -14,42 +14,45 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ApiError } from '@/lib/api/client';
 
-const loginSchema = z.object({
+const registerSchema = z.object({
+  name: z.string().min(1, '请输入用户名').max(50, '用户名最多 50 个字符'),
   email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(1, '请输入密码'),
+  password: z.string().min(8, '密码至少 8 个字符'),
+  confirmPassword: z.string().min(8, '请确认密码'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: '两次输入的密码不一致',
+  path: ['confirmPassword'],
 });
 
-type LoginForm = z.infer<typeof loginSchema>;
+type RegisterForm = z.infer<typeof registerSchema>;
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
-  const { login, isAuthenticated } = useAuth();
+  const { setAuthFromRegister } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
+  } = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
   });
 
-  // If already authenticated, redirect to dashboard
-  if (isAuthenticated) {
-    router.replace('/dashboard');
-    return null;
-  }
-
-  const onSubmit = async (data: LoginForm) => {
+  const onSubmit = async (data: RegisterForm) => {
     setServerError(null);
     try {
-      await login(data.email, data.password);
+      const result = await setAuthFromRegister(data);
       router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
-        setServerError(err.message);
+        if (err.status === 409) {
+          setServerError('该邮箱已注册，请直接登录');
+        } else {
+          setServerError(err.message);
+        }
       } else {
-        setServerError('登录失败，请检查邮箱和密码');
+        setServerError('注册失败，请稍后重试');
       }
     }
   };
@@ -63,8 +66,8 @@ export default function LoginPage() {
               AI
             </div>
           </div>
-          <CardTitle className="text-2xl">AI Growth Ops</CardTitle>
-          <CardDescription>AI 全域内容获客运营系统</CardDescription>
+          <CardTitle className="text-2xl">创建账号</CardTitle>
+          <CardDescription>注册 AI Growth Ops，开启智能内容运营</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -73,6 +76,16 @@ export default function LoginPage() {
                 <AlertDescription>{serverError}</AlertDescription>
               </Alert>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="name">用户名</Label>
+              <Input
+                id="name"
+                placeholder="输入用户名"
+                error={errors.name?.message}
+                {...register('name')}
+              />
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="email">邮箱</Label>
@@ -86,29 +99,35 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">密码</Label>
-                <Link href="/forgot-password" className="text-xs text-teal-700 hover:underline">
-                  忘记密码？
-                </Link>
-              </div>
+              <Label htmlFor="password">密码</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="输入密码"
+                placeholder="至少 8 个字符"
                 error={errors.password?.message}
                 {...register('password')}
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">确认密码</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="再次输入密码"
+                error={errors.confirmPassword?.message}
+                {...register('confirmPassword')}
+              />
+            </div>
+
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? '登录中...' : '登录'}
+              {isSubmitting ? '注册中...' : '注册'}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              还没有账号？{' '}
-              <Link href="/register" className="text-teal-700 hover:underline">
-                注册
+              已有账号？{' '}
+              <Link href="/login" className="text-teal-700 hover:underline">
+                登录
               </Link>
             </p>
           </form>

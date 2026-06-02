@@ -12,6 +12,7 @@ import { taskRoutes } from './routes-tasks.js';
 import { notificationRoutes } from './routes-notifications.js';
 import { auditRoutes } from './routes-audit.js';
 import { analyticsRoutes } from './routes-analytics.js';
+import { authRoutes } from './routes-auth.js';
 import { getCustomerDashboard } from './mvp-service';
 import { applyPublishProgress, isPublishProgressAuthorized } from './publish-progress.js';
 import { getBrowserRunnerUrl } from './browser-login-config';
@@ -2954,6 +2955,9 @@ const routes: Route[] = [
 
   // Analytics event routes
   ...analyticsRoutes,
+
+  // Auth routes (register, verify-email, forgot-password, reset-password, etc.)
+  ...authRoutes,
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────
