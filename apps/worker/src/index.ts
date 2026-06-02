@@ -31,11 +31,13 @@ import { handlePublishExecute } from './job-handlers/publish.execute.js';
 import { handleLeadSyncFeishuBitable } from './job-handlers/lead.sync.feishu-bitable.js';
 import { handleLeadSyncWeComContact } from './job-handlers/lead.sync.wecom-contact.js';
 import { handleResearchRun } from './job-handlers/research.run.js';
+import { handleScheduledChecker } from './job-handlers/scheduled-checker.js';
+import { startScheduler, SCHEDULED_QUEUE } from './scheduler.js';
 
 export const appName = 'worker';
 export const getWorkerHealth = () => createHealthSnapshot(appName);
 
-// All 6 real handlers — one per active queue
+// All real handlers — one per active queue
 const realHandlers: Record<string, (job: any) => Promise<void>> = {
   [QUEUE_NAMES.INTERACTION_SYNC_COMMENTS]: handleInteractionSyncComments,
   [QUEUE_NAMES.INTERACTION_SYNC_MESSAGES]: handleInteractionSyncMessages,
@@ -43,6 +45,7 @@ const realHandlers: Record<string, (job: any) => Promise<void>> = {
   [QUEUE_NAMES.LEAD_SYNC_FEISHU]: handleLeadSyncFeishuBitable,
   [QUEUE_NAMES.LEAD_SYNC_WECOM]: handleLeadSyncWeComContact,
   [QUEUE_NAMES.RESEARCH_RUN]: handleResearchRun,
+  [SCHEDULED_QUEUE]: handleScheduledChecker,
 };
 
 export async function startWorker(): Promise<void> {
@@ -61,6 +64,9 @@ export async function startWorker(): Promise<void> {
   }
 
   logger.info(`${Object.keys(QUEUE_NAMES).length} workers registered`);
+
+  // Start the scheduler for periodic tasks
+  await startScheduler();
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {

@@ -33,6 +33,19 @@ export const notificationRoutes: Array<{ method: string; pattern: string; handle
       sendJson(res, 200, items);
     },
   },
+  // GET /api/notifications/unread-count - Get unread count
+  {
+    method: 'GET',
+    pattern: '/api/notifications/unread-count',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const count = await ctx.db.notification.count({
+        where: { organizationId: orgCtx.organization.id, readAt: null },
+      });
+      sendJson(res, 200, { count });
+    },
+  },
   // PATCH /api/notifications/:id/read - Mark notification as read
   {
     method: 'PATCH',

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ai-growth-ops/database": "workspace:*",
+    "@ai-growth-ops/email": "workspace:*",
     "@ai-growth-ops/observability": "workspace:*",
     "@ai-growth-ops/providers": "workspace:*",
     "@ai-growth-ops/shared": "workspace:*",

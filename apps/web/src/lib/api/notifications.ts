@@ -1,13 +1,14 @@
-import { apiGet } from './client';
+import { apiGet, apiPatch, apiPost } from './client';
 
 export interface Notification {
   id: string;
   type: string;
   title: string;
-  message: string;
-  read: boolean;
+  content: string;
+  level: string;
+  readAt: string | null;
+  actionUrl: string | null;
   createdAt: string;
-  metadata: unknown;
 }
 
 export function listNotifications(): Promise<Notification[]> {
@@ -16,4 +17,12 @@ export function listNotifications(): Promise<Notification[]> {
 
 export function getUnreadCount(): Promise<{ count: number }> {
   return apiGet<{ count: number }>('/api/notifications/unread-count');
+}
+
+export function markNotificationRead(id: string): Promise<void> {
+  return apiPatch(`/api/notifications/${id}/read`);
+}
+
+export function markAllNotificationsRead(): Promise<void> {
+  return apiPost('/api/notifications/mark-all-read');
 }

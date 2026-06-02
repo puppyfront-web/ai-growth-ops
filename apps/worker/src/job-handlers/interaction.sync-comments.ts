@@ -81,6 +81,7 @@ export async function handleInteractionSyncComments(
       const interaction = await db.interaction.create({
         data: {
           userId,
+          organizationId: account?.organizationId || '',
           externalInteractionId: comment.externalCommentId,
           platformAccountId,
           platform: platform as any,

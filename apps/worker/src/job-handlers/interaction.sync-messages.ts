@@ -77,6 +77,7 @@ export async function handleInteractionSyncMessages(
       const interaction = await db.interaction.create({
         data: {
           userId,
+          organizationId: account?.organizationId || '',
           externalInteractionId: message.externalMessageId,
           platformAccountId,
           platform: platform as any,

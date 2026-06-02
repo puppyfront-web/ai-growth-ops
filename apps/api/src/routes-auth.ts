@@ -22,6 +22,7 @@ import {
   resetPasswordSchema,
   changePasswordSchema,
 } from './schemas/auth.js';
+import { getEmailProvider, welcomeEmail, resetPasswordEmail } from '@ai-growth-ops/email';
 
 interface AuthRouteContext {
   db: DatabaseClient;
@@ -71,6 +72,20 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
       const verifyToken = await createEmailVerificationToken(ctx.db, user.id);
       console.log(`[AUTH] Email verification token for ${email}: ${verifyToken}`);
 
+      // Send welcome + verification email (non-blocking)
+      const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+      const verifyUrl = `${baseUrl}/verify-email?token=${verifyToken}`;
+      const emailProvider = getEmailProvider();
+      const emailContent = welcomeEmail({ name: user.name, verifyUrl });
+      emailProvider.send({
+        to: email,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      }).catch(err => {
+        console.error(`[AUTH] Failed to send welcome email to ${email}:`, err);
+      });
+
       // Auto-login after registration
       const token = createToken(user.id);
       sendJson(res, 201, {
@@ -116,6 +131,20 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
 
       const resetToken = await createPasswordResetToken(ctx.db, user.id);
       console.log(`[AUTH] Password reset token for ${result.data.email}: ${resetToken}`);
+
+      // Send password reset email (non-blocking)
+      const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+      const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+      const emailProvider = getEmailProvider();
+      const emailContent = resetPasswordEmail({ name: user.name, resetUrl });
+      emailProvider.send({
+        to: result.data.email,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      }).catch(err => {
+        console.error(`[AUTH] Failed to send reset email to ${result.data.email}:`, err);
+      });
 
       sendJson(res, 200, { success: true, message: '如果该邮箱已注册，重置邮件已发送' });
     },
@@ -213,6 +242,20 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
 
       const verifyToken = await createEmailVerificationToken(ctx.db, user.id);
       console.log(`[AUTH] Resent verification token for ${user.email}: ${verifyToken}`);
+
+      // Send verification email (non-blocking)
+      const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+      const verifyUrl = `${baseUrl}/verify-email?token=${verifyToken}`;
+      const emailProvider = getEmailProvider();
+      const emailContent = welcomeEmail({ name: user.name, verifyUrl });
+      emailProvider.send({
+        to: user.email,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      }).catch(err => {
+        console.error(`[AUTH] Failed to send verification email to ${user.email}:`, err);
+      });
 
       sendJson(res, 200, { success: true, message: '验证邮件已重新发送' });
     },

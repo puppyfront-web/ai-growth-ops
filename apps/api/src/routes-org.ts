@@ -5,6 +5,7 @@ import {
   getAuthenticatedUser,
   getOrganizationContext,
 } from './auth.js';
+import { getEmailProvider, inviteMemberEmail } from '@ai-growth-ops/email';
 
 interface OrgRouteContext {
   db: DatabaseClient;
@@ -247,6 +248,24 @@ export const orgRoutes: Array<{
 
       // TODO: Send invitation email (Week 4)
       console.log(`[ORG] Invitation token for ${email}: ${token}`);
+
+      // Send invitation email (non-blocking)
+      const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+      const acceptUrl = `${baseUrl}/accept-invite?token=${token}&orgId=${ctx.params.orgId}`;
+      const emailProvider = getEmailProvider();
+      const emailContent = inviteMemberEmail({
+        inviterName: orgCtx.user.name,
+        orgName: orgCtx.organization.name,
+        acceptUrl,
+      });
+      emailProvider.send({
+        to: email,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      }).catch(err => {
+        console.error(`[ORG] Failed to send invite email to ${email}:`, err);
+      });
 
       sendJson(res, 201, {
         id: invitation.id,
