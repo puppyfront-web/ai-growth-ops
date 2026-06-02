@@ -70,9 +70,44 @@ const routes: Route[] = [
   {
     method: 'GET',
     pattern: '/health',
-    handler: async (_req, res, _ctx) => {
-      const { getApiHealth } = await import('./index');
-      sendJson(res, 200, getApiHealth());
+    handler: async (_req, res, ctx) => {
+      const checks: Record<string, { status: string; latencyMs?: number; error?: string }> = {};
+      let overall: 'ok' | 'degraded' | 'unhealthy' = 'ok';
+
+      // Check database
+      try {
+        const start = Date.now();
+        await ctx.db.$queryRaw`SELECT 1`;
+        checks.database = { status: 'ok', latencyMs: Date.now() - start };
+      } catch (err) {
+        checks.database = { status: 'error', error: err instanceof Error ? err.message : String(err) };
+        overall = 'unhealthy';
+      }
+
+      // Check Redis
+      try {
+        const { default: Redis } = await import('ioredis');
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+        const start = Date.now();
+        const redis = new Redis(redisUrl, { lazyConnect: true, connectTimeout: 3000 });
+        await redis.connect();
+        await redis.ping();
+        checks.redis = { status: 'ok', latencyMs: Date.now() - start };
+        redis.disconnect();
+      } catch (err) {
+        checks.redis = { status: 'error', error: err instanceof Error ? err.message : String(err) };
+        overall = overall === 'unhealthy' ? 'unhealthy' : 'degraded';
+      }
+
+      const statusCode = overall === 'ok' ? 200 : overall === 'degraded' ? 200 : 503;
+      sendJson(res, statusCode, {
+        name: 'api',
+        status: overall,
+        version: process.env.APP_VERSION || 'dev',
+        uptime: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+        checks,
+      });
     }
   },
 
@@ -3209,7 +3244,27 @@ interface MatchResult {
   params: Record<string, string>;
 }
 
+// Route matching cache for static paths (no :params)
+const routeCache = new Map<string, { route: Route; params: Record<string, string> } | null>();
+const ROUTE_CACHE_MAX = 500;
+
 function matchRoute(method: string, pathname: string): MatchResult | null {
+  // Check cache for static routes
+  const cacheKey = `${method}:${pathname}`;
+  const cached = routeCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const result = matchRouteUncached(method, pathname);
+
+  // Only cache static paths (no param segments) and limit cache size
+  if (!pathname.split('/').some(p => p.match(/^[0-9a-f]{8,}/i)) && routeCache.size < ROUTE_CACHE_MAX) {
+    routeCache.set(cacheKey, result);
+  }
+
+  return result;
+}
+
+function matchRouteUncached(method: string, pathname: string): MatchResult | null {
   for (const route of routes) {
     if (route.method !== method) continue;
     const params = matchPattern(route.pattern, pathname);
