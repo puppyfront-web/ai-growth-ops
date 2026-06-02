@@ -6,6 +6,7 @@ import {
   getOrganizationContext,
 } from './auth.js';
 import { getEmailProvider, inviteMemberEmail } from '@ai-growth-ops/email';
+import { hasPermission } from './middleware/rbac.js';
 
 interface OrgRouteContext {
   db: DatabaseClient;
@@ -212,8 +213,8 @@ export const orgRoutes: Array<{
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       if (orgCtx.organization.id !== ctx.params.orgId) return sendJson(res, 403, { error: '无权操作' });
-      if (orgCtx.memberRole !== 'owner' && orgCtx.memberRole !== 'admin') {
-        return sendJson(res, 403, { error: '需要管理员权限' });
+      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
       }
 
       const body = ctx.body as Record<string, unknown>;
@@ -325,8 +326,8 @@ export const orgRoutes: Array<{
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       if (orgCtx.organization.id !== ctx.params.orgId) return sendJson(res, 403, { error: '无权操作' });
-      if (orgCtx.memberRole !== 'owner' && orgCtx.memberRole !== 'admin') {
-        return sendJson(res, 403, { error: '需要管理员权限' });
+      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
       }
 
       const member = await ctx.db.organizationMember.findUnique({
@@ -351,8 +352,8 @@ export const orgRoutes: Array<{
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       if (orgCtx.organization.id !== ctx.params.orgId) return sendJson(res, 403, { error: '无权操作' });
-      if (orgCtx.memberRole !== 'owner') {
-        return sendJson(res, 403, { error: '仅所有者可变更角色' });
+      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
       }
 
       const body = ctx.body as Record<string, unknown>;

@@ -22,6 +22,7 @@ import { hashPassword, verifyPassword, createToken, getAuthenticatedUser, getOrg
 import { isLoginRateLimited } from './server.js';
 import { parsePagination, paginate } from './middleware/pagination.js';
 import { validateBody } from './middleware/validate.js';
+import { hasPermission, hasAnyPermission } from './middleware/rbac.js';
 import { createResearchTaskSchema } from './schemas/research.js';
 import { createContentItemSchema, updateContentItemSchema, createContentVariantSchema, updateContentVariantSchema, batchGenerateVariantsSchema } from './schemas/content.js';
 import { createPublishJobSchema, batchPublishSchema } from './schemas/publish.js';
@@ -2610,6 +2611,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
 
@@ -2710,6 +2714,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
 
@@ -2752,6 +2759,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
       await ctx.db.appConfig.upsert({
@@ -2825,7 +2835,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      if (orgCtx.user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可邀请成员' });
+      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.email) return sendJson(res, 400, { error: '邮箱必填' });
       const existing = await ctx.db.user.findUnique({ where: { email: body.email as string } });
@@ -2849,7 +2861,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      if (orgCtx.user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可修改角色' });
+      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const targetId = (ctx.params as Record<string, string>)?.id;
       if (!targetId) return sendJson(res, 400, { error: '缺少成员 ID' });
       const body = ctx.body as Record<string, unknown> | null;
@@ -2870,7 +2884,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      if (orgCtx.user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可删除成员' });
+      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const targetId = (ctx.params as Record<string, string>)?.id;
       if (!targetId) return sendJson(res, 400, { error: '缺少成员 ID' });
       if (targetId === orgCtx.user.id) return sendJson(res, 400, { error: '不能删除自己' });
@@ -2906,6 +2922,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'webhook:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.url || !(body.events as string[])?.length) {
         return sendJson(res, 400, { error: 'URL 和事件类型必填' });
@@ -2924,6 +2943,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'webhook:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const targetId = (ctx.params as Record<string, string>)?.id;
       if (!targetId) return sendJson(res, 400, { error: '缺少 Webhook ID' });
       const existing = await ctx.db.appConfig.findFirst({
@@ -3019,6 +3041,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasAnyPermission(orgCtx.memberRole, ['lead:export', 'analytics:export'])) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const { exportToCSV, LEAD_EXPORT_COLUMNS } = await import('./services/export-service.js');
       const leads = await ctx.db.lead.findMany({
         where: { organizationId: orgCtx.organization.id },
@@ -3040,6 +3065,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'analytics:export')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const { exportToCSV, CONTENT_EXPORT_COLUMNS } = await import('./services/export-service.js');
       const items = await ctx.db.contentItem.findMany({
         where: { organizationId: orgCtx.organization.id },
@@ -3061,6 +3089,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'analytics:export')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const { exportToCSV, INTERACTION_EXPORT_COLUMNS } = await import('./services/export-service.js');
       const interactions = await ctx.db.interaction.findMany({
         where: { organizationId: orgCtx.organization.id },
