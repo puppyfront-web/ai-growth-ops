@@ -120,7 +120,7 @@ export default function MediaGenerationPage() {
 
           {/* Generated preview */}
           {generateMutation.isSuccess && generateMutation.data && (
-            <Card className="border-emerald-200 bg-emerald-50/50">
+            <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/50">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-emerald-500" />

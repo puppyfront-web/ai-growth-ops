@@ -11,7 +11,7 @@ import { useState } from 'react';
 
 import type { Platform } from '@/types/enums';
 
-const priorityStyles: Record<string, string> = { high: 'bg-red-50 text-red-700 border-red-200', medium: 'bg-yellow-50 text-yellow-700 border-yellow-200', low: 'bg-gray-50 text-gray-600 border-gray-200' };
+const priorityStyles: Record<string, string> = { high: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800', medium: 'bg-yellow-50 text-yellow-700 border-yellow-200', low: 'bg-gray-50 text-gray-600 border-gray-200' };
 const priorityLabels: Record<string, string> = { high: '高优先', medium: '中优先', low: '低优先' };
 
 export default function OpportunitiesPage() {
@@ -33,7 +33,7 @@ export default function OpportunitiesPage() {
       <Breadcrumb />
       <PageHeader title="选题机会" description="从调研数据中发现的选题建议" />
       {createdId && (
-        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+        <div className="mb-4 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-4 text-sm text-emerald-700">
           已生成内容。
           <Link href="/content" className="ml-2 font-medium underline">前往内容列表查看</Link>
         </div>

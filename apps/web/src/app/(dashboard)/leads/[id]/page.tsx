@@ -85,7 +85,7 @@ export default function LeadDetailPage() {
                 {lead.sourceInteractionId && (
                   <Link
                     href={`/conversations/${lead.sourceInteractionId}`}
-                    className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-950 px-2.5 py-1 text-blue-700 hover:bg-blue-100 transition-colors"
                   >
                     <span>💬</span>
                     <span>查看来源互动</span>
@@ -94,7 +94,7 @@ export default function LeadDetailPage() {
                 {lead.sourcePublishJobId && (
                   <Link
                     href={`/publish/jobs/${lead.sourcePublishJobId}`}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 transition-colors"
                   >
                     <span>📤</span>
                     <span>查看来源发布</span>

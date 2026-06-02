@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Webhook, Plus, Trash2, Zap, Send, Users } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
 import { formatDate } from '@/lib/utils';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 const webhookEvents = [
   { value: 'publish.completed', label: '发布完成', icon: Send, desc: '内容成功发布到平台时触发' },
@@ -22,6 +23,7 @@ const webhookEvents = [
 
 export default function WebhooksPage() {
   const qc = useQueryClient();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [addOpen, setAddOpen] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
@@ -109,11 +111,11 @@ export default function WebhooksPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${wh.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${wh.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
                   {wh.status === 'active' ? '已启用' : '已禁用'}
                 </span>
                 <span className="text-xs text-muted-foreground">{formatDate(wh.createdAt)}</span>
-                <button onClick={() => { if (confirm('确认删除该 Webhook？')) deleteMutation.mutate(wh.id); }}
+                <button onClick={() => { confirm({ title: '删除 Webhook', description: '确认删除该 Webhook？删除后将停止接收事件通知。' }).then(ok => { if (ok) deleteMutation.mutate(wh.id); }); }}
                   className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-500">
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -154,6 +156,7 @@ export default function WebhooksPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 }

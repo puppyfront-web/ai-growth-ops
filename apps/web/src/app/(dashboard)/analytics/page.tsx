@@ -5,14 +5,16 @@ import { getAnalyticsOverview, getLeadTrend } from '@/lib/api/analytics';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { ErrorState } from '@/components/shared/ErrorState';
 import { formatNumber } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function AnalyticsPage() {
-  const { data: overview, isLoading } = useQuery({ queryKey: ['analytics-overview'], queryFn: getAnalyticsOverview });
-  const { data: trend } = useQuery({ queryKey: ['lead-trend'], queryFn: getLeadTrend });
+  const { data: overview, isLoading, isError: overviewError, refetch: refetchOverview } = useQuery({ queryKey: ['analytics-overview'], queryFn: getAnalyticsOverview });
+  const { data: trend, isError: trendError, refetch: refetchTrend } = useQuery({ queryKey: ['lead-trend'], queryFn: getLeadTrend });
 
   if (isLoading) return <LoadingState />;
+  if (overviewError) return <ErrorState onRetry={() => refetchOverview()} />;
 
   const metrics = overview ? [
     { label: '已发布', value: overview.totalPublished },

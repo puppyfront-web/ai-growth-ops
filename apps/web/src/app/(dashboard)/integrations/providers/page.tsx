@@ -34,7 +34,7 @@ export default function ProvidersPage() {
               {provider.platforms.length > 0 && <div>关联平台: {provider.platforms.join(', ')}</div>}
             </div>
             <div className="mt-3 flex items-center gap-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full ${provider.enabled ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-500'}`}>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${provider.enabled ? 'bg-green-50 dark:bg-green-950 text-green-700' : 'bg-gray-50 text-gray-500'}`}>
                 {provider.enabled ? '已启用' : '已禁用'}
               </span>
             </div>

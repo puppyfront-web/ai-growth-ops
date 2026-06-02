@@ -13,6 +13,7 @@ import { publishStatusLabels, publishModeLabels, platformLabels } from '@/lib/co
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
 import { PublishProgressInline } from '@/components/publish/PublishProgressInline';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 interface PublishJob {
   id: string;
@@ -30,6 +31,7 @@ interface PublishJob {
 
 export default function PublishQueuePage() {
   const qc = useQueryClient();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [statusFilter, setStatusFilter] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
 
@@ -85,7 +87,7 @@ export default function PublishQueuePage() {
       </div>
 
       {isLoading && <LoadingState />}
-      {error && <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error.message}</div>}
+      {error && <div className="rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700">{error.message}</div>}
 
       {!isLoading && jobs.length === 0 && (
         <div className="rounded-xl border bg-card p-12 text-center">
@@ -144,12 +146,12 @@ export default function PublishQueuePage() {
                       {job.status !== 'RUNNING' && (
                         <button
                           onClick={() => {
-                            if (confirm('确认删除该发布任务？此操作不可撤销。')) {
-                              deleteMutation.mutate(job.id);
-                            }
+                            confirm({ title: '删除发布任务', description: '确认删除该发布任务？此操作不可撤销。' }).then(ok => {
+                              if (ok) deleteMutation.mutate(job.id);
+                            });
                           }}
                           disabled={deleteMutation.isPending}
-                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                          className="text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
                         >
                           删除
                         </button>
@@ -162,6 +164,7 @@ export default function PublishQueuePage() {
           </table>
         </div>
       )}
+      {ConfirmDialog}
     </div>
   );
 }

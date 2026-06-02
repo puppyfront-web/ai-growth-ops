@@ -10,7 +10,7 @@ export function Topbar() {
   const { theme, toggleTheme } = useTheme();
   const isMocking = typeof window !== 'undefined' && process.env.NEXT_PUBLIC_API_MOCKING === 'enabled';
   const envLabel = isMocking ? 'Mock' : 'Live';
-  const envColor = isMocking ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700';
+  const envColor = isMocking ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-6">

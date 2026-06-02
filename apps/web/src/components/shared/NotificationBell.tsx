@@ -39,10 +39,11 @@ function timeAgo(dateStr: string): string {
 
 function levelColor(level: string): string {
   switch (level) {
-    case 'success': return 'bg-green-500';
-    case 'warning': return 'bg-amber-500';
-    case 'error': return 'bg-red-500';
-    default: return 'bg-blue-500';
+    case 'success': return 'bg-green-500 dark:bg-green-400';
+    case 'warning': return 'bg-amber-500 dark:bg-amber-400';
+    case 'error': return 'bg-red-500 dark:bg-red-400';
+    case 'critical': return 'bg-red-600 dark:bg-red-400';
+    default: return 'bg-blue-500 dark:bg-blue-400';
   }
 }
 

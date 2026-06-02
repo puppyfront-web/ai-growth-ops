@@ -118,7 +118,7 @@ export default function ConversationDetailPage() {
                 <div className="flex items-center gap-2"><span className="text-sm text-muted-foreground">风险</span><RiskBadge level={suggestion.riskLevel} /></div>
                 <div className="mt-3">
                   <span className="text-sm text-muted-foreground block mb-2">建议回复</span>
-                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">{suggestion.suggestedReply || '风险过高，不建议自动回复'}</div>
+                  <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 text-sm">{suggestion.suggestedReply || '风险过高，不建议自动回复'}</div>
                   {suggestion.suggestedReply && (
                     <div className="mt-2 flex gap-2">
                       <button onClick={() => setReplyText(suggestion.suggestedReply)} className="text-xs text-blue-600 hover:underline">采纳此回复</button>
@@ -131,7 +131,7 @@ export default function ConversationDetailPage() {
             )}
           </div>
 
-          <div className="rounded-xl border bg-blue-50 p-4 text-xs text-blue-700">
+          <div className="rounded-xl border bg-blue-50 dark:bg-blue-950 p-4 text-xs text-blue-700">
             所有 AI 输出均可编辑、可采纳、可拒绝。高风险回复不会自动发送。
           </div>
         </div>

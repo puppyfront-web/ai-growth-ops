@@ -80,7 +80,7 @@ export default function ResearchTaskDetailPage() {
             <div><span className="text-sm text-muted-foreground">关键词</span><div className="font-medium">{Array.isArray(task.keywords) ? task.keywords.join(', ') || '-' : '-'}</div></div>
             <div><span className="text-sm text-muted-foreground">最近运行</span><div className="font-medium">{task.startedAt ? formatDate(task.startedAt) : '未运行'}</div></div>
           </div>
-          {task.lastError && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">失败原因: {task.lastError}</div>}
+          {task.lastError && <div className="rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700">失败原因: {task.lastError}</div>}
         </div>
       )}
 
@@ -120,7 +120,7 @@ export default function ResearchTaskDetailPage() {
       {activeTab === 'insights' && (
         <div className="space-y-6">
           {contentCreatedId && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-4 text-sm text-emerald-700">
               已生成内容。
               <Link href="/content" className="ml-2 font-medium underline">前往内容列表查看</Link>
             </div>

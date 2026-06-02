@@ -9,11 +9,11 @@ import { LeadLevelBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import type { Lead } from '@/types/lead';
 
 const pipelineColumns = [
-  { key: 'NEW', label: '新线索', color: 'bg-blue-50 border-blue-200' },
+  { key: 'NEW', label: '新线索', color: 'bg-blue-50 dark:bg-blue-950 border-blue-200' },
   { key: 'ASSIGNED', label: '待联系', color: 'bg-yellow-50 border-yellow-200' },
   { key: 'CONTACTED', label: '已联系', color: 'bg-orange-50 border-orange-200' },
-  { key: 'ADDED_WECOM', label: '已加企微', color: 'bg-green-50 border-green-200' },
-  { key: 'WON', label: '已成交', color: 'bg-emerald-50 border-emerald-200' },
+  { key: 'ADDED_WECOM', label: '已加企微', color: 'bg-green-50 dark:bg-green-950 border-green-200' },
+  { key: 'WON', label: '已成交', color: 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200' },
   { key: 'LOST', label: '已流失', color: 'bg-gray-50 border-gray-200' },
 ];
 
@@ -40,7 +40,7 @@ export default function LeadPipelinePage() {
               </div>
               <div className="rounded-b-lg border border-t-0 bg-muted/30 p-2 space-y-2 min-h-[300px]">
                 {colLeads.map((lead) => (
-                  <div key={lead.id} className={`rounded-lg border bg-card p-3 cursor-grab hover:shadow-sm ${lead.level === 'A' ? 'border-red-200 bg-red-50/30' : ''}`}>
+                  <div key={lead.id} className={`rounded-lg border bg-card p-3 cursor-grab hover:shadow-sm ${lead.level === 'A' ? 'border-red-200 dark:border-red-800 bg-red-50/30' : ''}`}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-medium text-sm">{lead.externalUserName}</span>
                       <LeadLevelBadge level={lead.level} />

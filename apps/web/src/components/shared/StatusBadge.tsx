@@ -3,11 +3,11 @@ import { statusVariantMap, platformLabels, platformIcons, riskLevelLabels, leadL
 import type { Platform, RiskLevel, LeadLevel } from '@/types/enums';
 
 const variantStyles = {
-  success: 'bg-green-50 text-green-700 border-green-200',
-  warning: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  danger: 'bg-red-50 text-red-700 border-red-200',
-  muted: 'bg-gray-50 text-gray-600 border-gray-200',
-  info: 'bg-blue-50 text-blue-700 border-blue-200',
+  success: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
+  warning: 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800',
+  danger: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+  muted: 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700',
+  info: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
 };
 
 type StatusBadgeProps = {
@@ -46,7 +46,7 @@ export function PlatformBadge({ platform, showIcon = true }: PlatformBadgeProps)
   const name = platformLabels[p] ?? String(platform);
   const icon = platformIcons[p] ?? '';
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
+    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
       {showIcon && icon && <span>{icon}</span>}
       {name}
     </span>
@@ -56,10 +56,10 @@ export function PlatformBadge({ platform, showIcon = true }: PlatformBadgeProps)
 /* ---------- LeadLevelBadge ---------- */
 
 const leadLevelStyles: Record<LeadLevel, string> = {
-  A: 'bg-red-50 text-red-700 border-red-200',
-  B: 'bg-amber-50 text-amber-700 border-amber-200',
-  C: 'bg-blue-50 text-blue-700 border-blue-200',
-  D: 'bg-gray-50 text-gray-500 border-gray-200',
+  A: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+  B: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800',
+  C: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
+  D: 'bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700',
 };
 
 type LeadLevelBadgeProps = {
@@ -84,9 +84,9 @@ export function LeadLevelBadge({ level }: LeadLevelBadgeProps) {
 /* ---------- RiskBadge ---------- */
 
 const riskStyles: Record<RiskLevel, string> = {
-  low: 'bg-green-50 text-green-700 border-green-200',
-  medium: 'bg-amber-50 text-amber-700 border-amber-200',
-  high: 'bg-red-50 text-red-700 border-red-200',
+  low: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
+  medium: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800',
+  high: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
 };
 
 type RiskBadgeProps = {

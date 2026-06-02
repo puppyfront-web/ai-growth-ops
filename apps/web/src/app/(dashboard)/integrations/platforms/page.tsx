@@ -8,6 +8,7 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { BrowserLoginDialog } from '@/components/integrations/BrowserLoginDialog';
 import { platformLabels, platformIcons, publishModeLabels } from '@/lib/constants';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { formatDate } from '@/lib/utils';
 import { useState } from 'react';
 
@@ -57,6 +58,7 @@ const emptyDialog = (mode: 'create' | 'edit'): AccountDialog => ({
 
 export default function PlatformsPage() {
   const qc = useQueryClient();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const { data, isLoading } = useQuery({ queryKey: ['platform-accounts'], queryFn: getPlatformAccounts });
   const [dialog, setDialog] = useState<AccountDialog | null>(null);
   const [validatingId, setValidatingId] = useState<string | null>(null);
@@ -177,7 +179,7 @@ export default function PlatformsPage() {
       } />
 
       {mutationError && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between">
+        <div className="mb-4 rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 flex items-center justify-between">
           <span>{mutationError}</span>
           <button onClick={() => setMutationError(null)} className="text-red-500 hover:text-red-700">&times;</button>
         </div>
@@ -236,7 +238,7 @@ export default function PlatformsPage() {
 
               {/* Validate result */}
               {validateResult?.accountId === account.id && (
-                <div className={`mb-2 rounded-md p-2 text-xs ${validateResult.valid ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                <div className={`mb-2 rounded-md p-2 text-xs ${validateResult.valid ? 'bg-green-50 dark:bg-green-950 text-green-700' : 'bg-red-50 dark:bg-red-950 text-red-700'}`}>
                   {validateResult.valid ? '凭证有效' : `无效: ${validateResult.error ?? '未知错误'}`}
                 </div>
               )}
@@ -254,7 +256,7 @@ export default function PlatformsPage() {
                     {validatingId === account.id ? '验证中...' : '验证'}
                   </button>
                   <button onClick={() => openEditDialog(account)} className="text-xs text-blue-600 hover:underline">编辑</button>
-                  <button onClick={() => { if (confirm('确定删除此账号？')) deleteMutation.mutate(account.id); }} className="text-xs text-red-600 hover:underline">删除</button>
+                  <button onClick={() => { confirm({ title: '删除账号', description: '确定删除此平台账号？相关发布任务不会受影响。' }).then(ok => { if (ok) deleteMutation.mutate(account.id); }); }} className="text-xs text-red-600 hover:underline dark:text-red-400">删除</button>
                 </div>
               </div>
             </div>
@@ -415,6 +417,7 @@ export default function PlatformsPage() {
           onClose={() => setBrowserLogin(null)}
         />
       )}
+      {ConfirmDialog}
     </div>
   );
 }

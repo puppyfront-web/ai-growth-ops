@@ -173,7 +173,7 @@ export default function ContentPage() {
       />
 
       {toastError && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-md">
+        <div className="fixed bottom-4 right-4 z-50 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-3 text-sm text-red-700 shadow-md">
           {toastError}
           <button onClick={() => setToastError(null)} className="ml-3 text-red-400 hover:text-red-600">×</button>
         </div>

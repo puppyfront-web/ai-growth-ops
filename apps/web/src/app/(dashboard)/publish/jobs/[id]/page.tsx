@@ -8,6 +8,7 @@ import { getPublishJob, getPublishAttempts, retryPublishJob, cancelPublishJob, d
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { publishStatusLabels, publishModeLabels, contentTypeLabels } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
@@ -43,6 +44,7 @@ export default function PublishJobDetailPage() {
   const id = params.id as string;
   const router = useRouter();
   const qc = useQueryClient();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const { data: job, isLoading, isError, error } = useQuery({
     queryKey: ['publish-job', id],
@@ -114,12 +116,12 @@ export default function PublishJobDetailPage() {
           {job.status !== 'RUNNING' && (
             <button
               onClick={() => {
-                if (confirm('确认删除该发布任务？此操作不可撤销。')) {
-                  deleteMutation.mutate();
-                }
+                confirm({ title: '删除发布任务', description: '确认删除该发布任务？此操作不可撤销。' }).then(ok => {
+                  if (ok) deleteMutation.mutate();
+                });
               }}
               disabled={deleteMutation.isPending}
-              className="rounded-md border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="rounded-md border border-red-300 dark:border-red-800 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:bg-red-950 disabled:opacity-50"
             >
               {deleteMutation.isPending ? '删除中...' : '删除'}
             </button>
@@ -178,7 +180,7 @@ export default function PublishJobDetailPage() {
       </div>
 
       {job.lastError && (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5">
+        <div className="mt-6 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-5">
           <h3 className="font-semibold text-red-700">错误信息</h3>
           <p className="mt-1 text-sm text-red-600">{job.lastError}</p>
         </div>
@@ -193,6 +195,7 @@ export default function PublishJobDetailPage() {
           ))}</tbody></table>
         </div>
       )}
+      {ConfirmDialog}
     </div>
   );
 }

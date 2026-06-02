@@ -109,7 +109,7 @@ export default function CommentsPage() {
 
       {syncMsg && (
         <div className={`mb-4 rounded-md px-4 py-2 text-sm flex items-center justify-between ${
-          syncMsg.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
+          syncMsg.type === 'error' ? 'bg-red-50 dark:bg-red-950 text-red-700' : 'bg-blue-50 dark:bg-blue-950 text-blue-700'
         }`}>
           <span>{syncMsg.text}</span>
           <button onClick={() => setSyncMsg(null)} className="opacity-60 hover:opacity-100 ml-4">✕</button>
@@ -117,7 +117,7 @@ export default function CommentsPage() {
       )}
 
       {!hasAccounts && (accounts !== undefined) && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="mb-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 text-sm text-amber-800">
           尚未配置平台账号。请先前往
           <Link href="/integrations/platforms" className="mx-1 underline font-medium">集成 → 平台账号</Link>
           添加抖音等账号，选择「浏览器辅助」或「官方 API」模式后即可拉取评论。

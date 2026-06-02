@@ -14,13 +14,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Users, Plus, Shield, Edit, Eye } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
 import { formatDate } from '@/lib/utils';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 const roleLabels = { admin: '管理员', operator: '运营', viewer: '只读' };
-const roleColors = { admin: 'bg-purple-100 text-purple-700', operator: 'bg-blue-100 text-blue-700', viewer: 'bg-gray-100 text-gray-700' };
+const roleColors = { admin: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300', operator: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300', viewer: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' };
 const roleIcons = { admin: Shield, operator: Edit, viewer: Eye };
 
 export default function TeamPage() {
   const qc = useQueryClient();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('operator');
@@ -113,7 +115,7 @@ export default function TeamPage() {
                   )}
                 </div>
                 <span className="text-xs text-muted-foreground">加入于 {formatDate(member.createdAt)}</span>
-                <button onClick={() => { if (confirm('确认移除该成员？')) removeMutation.mutate(member.id); }}
+                <button onClick={() => { confirm({ title: '移除成员', description: '确认移除该成员？移除后该成员将无法访问组织数据。' }).then(ok => { if (ok) removeMutation.mutate(member.id); }); }}
                   className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-500 text-xs">
                   移除
                 </button>
@@ -147,6 +149,7 @@ export default function TeamPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 }

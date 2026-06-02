@@ -202,7 +202,7 @@ export default function ContentDetailPage() {
                   <span className="text-xs text-muted-foreground">最多 9 张，支持 JPG / PNG / WebP</span>
                 </div>
                 {saveError && (
-                  <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{saveError}</p>
+                  <p className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-600">{saveError}</p>
                 )}
                 <FileUpload
                   accept="image/*"
@@ -226,7 +226,7 @@ export default function ContentDetailPage() {
             </div>
 
             {isTextImage && (
-              <div className={`rounded-xl border p-4 text-xs ${mediaAssetIds.length > 0 ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+              <div className={`rounded-xl border p-4 text-xs ${mediaAssetIds.length > 0 ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 text-green-700' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-700'}`}>
                 {mediaAssetIds.length > 0
                   ? `✓ 已上传 ${mediaAssetIds.length} 张图片`
                   : '⚠ 图文内容尚未上传图片，保存和发布前请先添加配图'}
@@ -239,7 +239,7 @@ export default function ContentDetailPage() {
       {activeTab === 'variants' && (
         <div className="space-y-3">
           {isTextImage && mediaAssetIds.length === 0 && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-start gap-3">
               <span className="text-amber-500 text-base mt-0.5">⚠</span>
               <div>
                 <p className="text-sm font-medium text-amber-800">图文内容缺少配图</p>
@@ -249,7 +249,7 @@ export default function ContentDetailPage() {
           )}
 
           {platformsToGenerate.length > 0 && (
-            <div className="rounded-xl border bg-blue-50 p-4 flex items-center justify-between">
+            <div className="rounded-xl border bg-blue-50 dark:bg-blue-950 p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-800">未生成版本的平台</p>
                 <p className="text-xs text-blue-600 mt-1">
@@ -366,7 +366,7 @@ export default function ContentDetailPage() {
           })}
 
           {publishError && (
-            <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{publishError}</div>
+            <div className="rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700">{publishError}</div>
           )}
 
           {variants.length > 0 && (

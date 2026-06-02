@@ -121,16 +121,16 @@ export const contentStatusLabels: Record<string, string> = {
 };
 
 export const calendarItemColors: Record<string, string> = {
-  content: 'bg-teal-400',
-  PUBLISHED: 'bg-emerald-500',
-  SCHEDULED: 'bg-amber-400',
-  RUNNING: 'bg-blue-500',
-  FAILED: 'bg-red-500',
-  NEED_MANUAL_REPAIR: 'bg-orange-500',
-  WAITING_HUMAN_CONFIRM: 'bg-purple-400',
-  DRAFT: 'bg-gray-400',
-  READY: 'bg-gray-300',
-  CANCELLED: 'bg-gray-300',
+  content: 'bg-teal-400 dark:bg-teal-600',
+  PUBLISHED: 'bg-emerald-500 dark:bg-emerald-600',
+  SCHEDULED: 'bg-amber-400 dark:bg-amber-600',
+  RUNNING: 'bg-blue-500 dark:bg-blue-600',
+  FAILED: 'bg-red-500 dark:bg-red-600',
+  NEED_MANUAL_REPAIR: 'bg-orange-500 dark:bg-orange-600',
+  WAITING_HUMAN_CONFIRM: 'bg-purple-400 dark:bg-purple-600',
+  DRAFT: 'bg-gray-400 dark:bg-gray-500',
+  READY: 'bg-gray-300 dark:bg-gray-600',
+  CANCELLED: 'bg-gray-300 dark:bg-gray-600',
 };
 
 export const platformColorMap: Record<string, string> = {

@@ -5,12 +5,14 @@ import { getContentMetrics } from '@/lib/api/analytics';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { ErrorState } from '@/components/shared/ErrorState';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ContentAnalyticsPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['content-metrics'], queryFn: getContentMetrics });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['content-metrics'], queryFn: getContentMetrics });
 
   if (isLoading) return <LoadingState />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   return (
     <div>

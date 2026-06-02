@@ -5,12 +5,14 @@ import { getPlatformMetrics } from '@/lib/api/analytics';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { ErrorState } from '@/components/shared/ErrorState';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function PlatformAnalyticsPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['platform-metrics'], queryFn: getPlatformMetrics });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['platform-metrics'], queryFn: getPlatformMetrics });
 
   if (isLoading) return <LoadingState />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   return (
     <div>

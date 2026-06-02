@@ -17,8 +17,8 @@ import type { ContentStatus } from '@/types/enums';
 
 const columns: { key: ContentStatus; label: string; color: string }[] = [
   { key: 'draft', label: '草稿', color: 'bg-gray-50 border-gray-200' },
-  { key: 'ready', label: '就绪', color: 'bg-blue-50 border-blue-200' },
-  { key: 'archived', label: '已归档', color: 'bg-emerald-50 border-emerald-200' },
+  { key: 'ready', label: '就绪', color: 'bg-blue-50 dark:bg-blue-950 border-blue-200' },
+  { key: 'archived', label: '已归档', color: 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200' },
 ];
 
 function PlanCard({ item }: { item: ContentItem }) {

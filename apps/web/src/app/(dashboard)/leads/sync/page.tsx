@@ -118,7 +118,7 @@ export default function LeadSyncPage() {
                   <div className="text-xs text-muted-foreground">最近同步: {formatDate(feishuConfig.lastSyncAt)}</div>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${feishuConfig?.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${feishuConfig?.enabled ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
                     {feishuConfig?.enabled ? '已启用' : '未启用'}
                   </span>
                   <button onClick={() => saveFeishu.mutate()} disabled={saveFeishu.isPending} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">
@@ -154,7 +154,7 @@ export default function LeadSyncPage() {
                   <div className="text-xs text-muted-foreground">最近同步: {formatDate(wecomConfig.lastSyncAt)}</div>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${wecomConfig?.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${wecomConfig?.enabled ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
                     {wecomConfig?.enabled ? '已启用' : '未启用'}
                   </span>
                   <button onClick={() => saveWecom.mutate()} disabled={saveWecom.isPending} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">

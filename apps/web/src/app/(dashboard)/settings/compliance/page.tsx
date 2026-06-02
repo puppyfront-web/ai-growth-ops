@@ -38,7 +38,7 @@ export default function CompliancePage() {
             <h3 className="font-semibold">敏感词</h3>
             <div className="flex flex-wrap gap-2">
               {localWords.map((word) => (
-                <span key={word} className="rounded-full bg-red-50 border border-red-200 px-3 py-1 text-sm text-red-700 flex items-center gap-1">
+                <span key={word} className="rounded-full bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-3 py-1 text-sm text-red-700 flex items-center gap-1">
                   {word}
                   <button onClick={() => setLocalWords((w) => w.filter((x) => x !== word))} className="ml-1 text-red-400 hover:text-red-600">&times;</button>
                 </span>

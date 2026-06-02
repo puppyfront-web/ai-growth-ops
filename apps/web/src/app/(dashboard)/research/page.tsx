@@ -58,7 +58,7 @@ export default function ResearchPage() {
       } />
 
       {/* Disclaimer */}
-      <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
+      <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-700">
         仅用于单品牌自用的低频公开内容调研。仅采集公开内容和公开评论。不采集私信，不绕过平台风控，不做高频批量采集。
       </div>
 

@@ -48,7 +48,7 @@ export default function FeishuPage() {
         <div className="rounded-xl border bg-card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">启用状态</span>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${c.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${c.enabled ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
               {c.enabled ? '已启用' : '未启用'}
             </span>
           </div>
