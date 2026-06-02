@@ -36,7 +36,7 @@ export default function PublishCalendarPage() {
 
   const dateMap = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
-    for (const job of publishJobs ?? []) {
+    for (const job of publishJobs?.items ?? []) {
       const dateStr = job.scheduledAt ?? job.createdAt;
       const key = toDateKey(dateStr);
       const arr = map.get(key) ?? [];

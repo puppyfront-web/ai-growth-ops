@@ -16,7 +16,8 @@
     "@ai-growth-ops/providers": "workspace:*",
     "@ai-growth-ops/shared": "workspace:*",
     "@ai-growth-ops/skills": "workspace:*",
+    "bullmq": "^5.0.0",
     "busboy": "^1.6.0",
-    "bullmq": "^5.0.0"
+    "zod": "^3.25.76"
   }
 }

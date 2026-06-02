@@ -52,7 +52,7 @@ export default function PublishPage() {
           <option value="FAILED">失败</option>
         </select>
       </div>
-      <DataTable columns={columns} data={data ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无发布任务" />
+      <DataTable columns={columns} data={data?.items ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无发布任务" />
     </div>
   );
 }

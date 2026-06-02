@@ -62,7 +62,7 @@ export default function ResearchPage() {
         仅用于单品牌自用的低频公开内容调研。仅采集公开内容和公开评论。不采集私信，不绕过平台风控，不做高频批量采集。
       </div>
 
-      <DataTable columns={columns} data={data ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无调研任务" emptyDescription="创建一个调研任务来开始发现选题机会" />
+      <DataTable columns={columns} data={data?.items ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无调研任务" emptyDescription="创建一个调研任务来开始发现选题机会" />
     </div>
   );
 }

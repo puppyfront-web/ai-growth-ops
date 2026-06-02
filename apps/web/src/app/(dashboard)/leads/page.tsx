@@ -63,7 +63,7 @@ export default function LeadsPage() {
           <option value="WON">已成交</option>
         </select>
       </div>
-      <DataTable columns={columns} data={data ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无线索" emptyDescription="新线索将在这里显示" />
+      <DataTable columns={columns} data={data?.items ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无线索" emptyDescription="新线索将在这里显示" />
     </div>
   );
 }

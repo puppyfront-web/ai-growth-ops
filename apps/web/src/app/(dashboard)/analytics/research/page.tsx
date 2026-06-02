@@ -20,9 +20,9 @@ export default function ResearchAnalyticsPage() {
 
   if (loadingTrend || loadingPlatforms || loadingTasks) return <LoadingState rows={4} />;
 
-  const taskCount = (tasks ?? []).length;
-  const completedTasks = (tasks ?? []).filter((t: any) => t.status === 'INSIGHT_GENERATED').length;
-  const totalInsights = (tasks ?? []).reduce((sum: number, t: any) => sum + ((t as any).insights?.length ?? 0), 0);
+  const taskCount = (tasks?.items ?? []).length;
+  const completedTasks = (tasks?.items ?? []).filter((t: any) => t.status === 'INSIGHT_GENERATED').length;
+  const totalInsights = (tasks?.items ?? []).reduce((sum: number, t: any) => sum + ((t as any).insights?.length ?? 0), 0);
 
   return (
     <div>

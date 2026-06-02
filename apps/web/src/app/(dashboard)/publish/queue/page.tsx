@@ -33,15 +33,15 @@ export default function PublishQueuePage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
 
-  const { data, isLoading, error } = useQuery({
+  const { data: jobsData, isLoading, error } = useQuery({
     queryKey: ['publish-jobs', statusFilter, platformFilter],
     queryFn: () => listPublishJobs({
       status: statusFilter || undefined,
       platform: platformFilter || undefined,
     }),
     refetchInterval: (query) => {
-      const jobs = query.state.data as PublishJob[] | undefined;
-      return jobs?.some((j) => j.status === 'RUNNING') ? 2000 : false;
+      const result = query.state.data;
+      return result?.items?.some((j) => j.status === 'RUNNING') ? 2000 : false;
     },
   });
 
@@ -65,7 +65,7 @@ export default function PublishQueuePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['publish-jobs'] }),
   });
 
-  const jobs = data ?? [];
+  const jobs = jobsData?.items ?? [];
 
   return (
     <div>

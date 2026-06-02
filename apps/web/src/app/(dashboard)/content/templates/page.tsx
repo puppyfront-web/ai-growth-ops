@@ -16,13 +16,13 @@ import { Copy, Plus } from 'lucide-react';
 import type { ContentItem } from '@/types/content';
 
 export default function ContentTemplatesPage() {
-  const { data: items, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.content.items,
-    queryFn: listContentItems,
+    queryFn: () => listContentItems(),
   });
 
   // Templates = content items with status 'ready' that have variants
-  const templates = (items ?? []).filter(
+  const templates = (data?.items ?? []).filter(
     (item: ContentItem) => item.status === 'ready' && (item.contentVariants?.length ?? 0) > 0
   );
 

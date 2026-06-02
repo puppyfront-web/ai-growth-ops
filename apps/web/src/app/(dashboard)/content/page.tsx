@@ -29,7 +29,7 @@ export default function ContentPage() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['content-items'],
-    queryFn: listContentItems,
+    queryFn: () => listContentItems(),
   });
 
   const closeDialog = () => setDialog(null);
@@ -133,7 +133,7 @@ export default function ContentPage() {
       />
       <DataTable
         columns={columns}
-        data={data ?? []}
+        data={data?.items ?? []}
         loading={isLoading}
         error={error?.message}
         onRetry={() => refetch()}

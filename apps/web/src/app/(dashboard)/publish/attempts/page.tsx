@@ -18,7 +18,7 @@ export default function PublishAttemptsPage() {
       <PageHeader title="发布尝试记录" description="查看所有失败的发布尝试" />
       {isLoading ? <LoadingState /> : (
         <div className="space-y-3">
-          {jobs?.map((job) => (
+          {jobs?.items?.map((job) => (
             <div key={job.id} className="rounded-xl border bg-card p-4">
               <div className="flex items-center gap-2 mb-2">
                 <PlatformBadge platform={job.platform} />
@@ -29,7 +29,7 @@ export default function PublishAttemptsPage() {
               <p className="text-xs text-muted-foreground mt-1">{job.finishedAt ? formatDate(job.finishedAt) : ''}</p>
             </div>
           ))}
-          {(!jobs || jobs.length === 0) && <div className="text-center py-16 text-muted-foreground">没有失败的发布尝试</div>}
+          {(!jobs?.items || jobs.items.length === 0) && <div className="text-center py-16 text-muted-foreground">没有失败的发布尝试</div>}
         </div>
       )}
     </div>

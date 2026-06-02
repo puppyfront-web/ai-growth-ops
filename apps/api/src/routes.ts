@@ -20,6 +20,12 @@ import { getBrowserRunnerUrl } from './browser-login-config';
 import { setSession, getSessionId, clearSession } from './browser-login-session';
 import { hashPassword, verifyPassword, createToken, getAuthenticatedUser, getOrganizationContext } from './auth.js';
 import { isLoginRateLimited } from './server.js';
+import { parsePagination, paginate } from './middleware/pagination.js';
+import { validateBody } from './middleware/validate.js';
+import { createResearchTaskSchema } from './schemas/research.js';
+import { createContentItemSchema, updateContentItemSchema, createContentVariantSchema, updateContentVariantSchema, batchGenerateVariantsSchema } from './schemas/content.js';
+import { createPublishJobSchema, batchPublishSchema } from './schemas/publish.js';
+import { updateLeadSchema } from './schemas/leads.js';
 import { executeResearchTaskSync, ResearchExecutionError } from './research-executor.js';
 
 // ── AI Skill Runner (lazy singleton) ────────────────────────────────
@@ -156,12 +162,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const items = await ctx.db.researchTask.findMany({
-        where: { organizationId: orgCtx.organization.id, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        include: { insights: true, opportunities: true }
-      });
-      sendJson(res, 200, items);
+      const { page, pageSize } = parsePagination(ctx.url);
+      const result = await paginate(ctx.db.researchTask, { organizationId: orgCtx.organization.id, deletedAt: null }, { page, pageSize }, { createdAt: 'desc' }, { insights: true, opportunities: true });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -191,7 +194,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as Record<string, unknown>;
+      const bodyResult = validateBody(createResearchTaskSchema, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as Record<string, unknown>;
       const item = await ctx.db.researchTask.create({
         data: {
           organizationId: orgCtx.organization.id,
@@ -343,12 +348,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const items = await ctx.db.contentItem.findMany({
-        where: { organizationId: orgCtx.organization.id, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        include: { contentVariants: true }
-      });
-      sendJson(res, 200, items);
+      const { page, pageSize } = parsePagination(ctx.url);
+      const result = await paginate(ctx.db.contentItem, { organizationId: orgCtx.organization.id, deletedAt: null }, { page, pageSize }, { createdAt: 'desc' }, { contentVariants: true });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -371,7 +373,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as Record<string, unknown>;
+      const bodyResult = validateBody(createContentItemSchema, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as Record<string, unknown>;
       let projectId = body.projectId as string | undefined;
       if (!projectId) {
         projectId = await getOrCreateDefaultProject(ctx.db, orgCtx.user.id, orgCtx.organization.id);
@@ -421,7 +425,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as Record<string, unknown>;
+      const bodyResult = validateBody(updateContentItemSchema, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as Record<string, unknown>;
       const existing = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!existing) return sendJson(res, 404, { error: 'Not found' });
 
@@ -492,11 +498,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const items = await ctx.db.contentVariant.findMany({
-        where: { contentItemId: ctx.params.contentItemId, organizationId: orgCtx.organization.id, deletedAt: null },
-        orderBy: { platform: 'asc' }
-      });
-      sendJson(res, 200, items);
+      const { page, pageSize } = parsePagination(ctx.url);
+      const result = await paginate(ctx.db.contentVariant, { contentItemId: ctx.params.contentItemId, organizationId: orgCtx.organization.id, deletedAt: null }, { page, pageSize }, { platform: 'asc' });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -505,10 +509,12 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const bodyResult = validateBody(batchGenerateVariantsSchema, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as { platforms?: string[] } | null;
       const contentItem = await ctx.db.contentItem.findFirstOrThrow({
         where: { id: ctx.params.contentItemId, deletedAt: null }
       });
-      const body = ctx.body as { platforms?: string[] } | null;
       const allPlatforms = [
         'douyin', 'xiaohongshu', 'wechat_official',
         'wechat_channels', 'baijiahao', 'zhihu'
@@ -583,8 +589,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as { title?: string; body?: string; tags?: string[] } | null;
-      if (!body) return sendJson(res, 400, { error: 'Missing body' });
+      const bodyResult = validateBody(updateContentVariantSchema, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as { title?: string; body?: string; tags?: string[] };
       try {
         const variant = await ctx.db.contentVariant.update({
           where: { id: ctx.params.variantId },
@@ -817,6 +824,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { page, pageSize } = parsePagination(ctx.url);
       const where: Record<string, unknown> = {
         organizationId: orgCtx.organization.id,
         deletedAt: null
@@ -827,11 +835,8 @@ const routes: Route[] = [
       if (sourceType) where.sourceType = sourceType;
       const idsParam = ctx.url.searchParams.get('ids');
       if (idsParam) where.id = { in: idsParam.split(',').filter(Boolean) };
-      const items = await ctx.db.mediaAsset.findMany({
-        where,
-        orderBy: { createdAt: 'desc' }
-      });
-      sendJson(res, 200, items);
+      const result = await paginate(ctx.db.mediaAsset, where, { page, pageSize }, { createdAt: 'desc' });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -1022,6 +1027,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { page, pageSize } = parsePagination(ctx.url);
       const where: Record<string, unknown> = {
         organizationId: orgCtx.organization.id,
         deletedAt: null
@@ -1030,16 +1036,8 @@ const routes: Route[] = [
       if (status) where.status = status;
       const platform = ctx.url.searchParams.get('platform');
       if (platform) where.platform = platform;
-      const items = await ctx.db.publishJob.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          contentVariant: true,
-          platformAccount: true,
-          publishAttempts: { orderBy: { attemptNo: 'desc' } }
-        }
-      });
-      sendJson(res, 200, items);
+      const result = await paginate(ctx.db.publishJob, where, { page, pageSize }, { createdAt: 'desc' }, { contentVariant: true, platformAccount: true, publishAttempts: { orderBy: { attemptNo: 'desc' } } });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -1079,12 +1077,14 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as Record<string, unknown>;
+      const bodyResult = validateBody(createPublishJobSchema as any, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as Record<string, unknown>;
       const account = await ctx.db.platformAccount.findFirst({
         where: { id: String(body.platformAccountId ?? ''), organizationId: orgCtx.organization.id, deletedAt: null }
       });
       const mode = account?.mode ?? String(body.mode ?? 'official_api');
-      const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt as string) : null;
+      const scheduledAt = body.scheduledAt instanceof Date ? body.scheduledAt : (body.scheduledAt ? new Date(body.scheduledAt as string) : null);
       const item = await ctx.db.publishJob.create({
         data: {
           organizationId: orgCtx.organization.id,
@@ -1107,11 +1107,10 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as { contentItemId?: string; platformAccountIds?: string[]; scheduledAt?: string };
+      const bodyResult = validateBody(batchPublishSchema, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as { contentItemId?: string; platformAccountIds?: string[]; scheduledAt?: string };
       const { contentItemId, platformAccountIds, scheduledAt } = body;
-      if (!contentItemId || !platformAccountIds?.length) {
-        return sendJson(res, 400, { error: 'contentItemId 和 platformAccountIds 不能为空' });
-      }
 
       const [contentItem, variants, accounts] = await Promise.all([
         ctx.db.contentItem.findFirst({ where: { id: contentItemId, organizationId: orgCtx.organization.id, deletedAt: null } }),
@@ -1338,6 +1337,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { page, pageSize } = parsePagination(ctx.url);
       const where: Record<string, unknown> = {
         organizationId: orgCtx.organization.id,
         deletedAt: null
@@ -1348,12 +1348,8 @@ const routes: Route[] = [
       if (platform) where.platform = platform;
       const type = ctx.url.searchParams.get('type');
       if (type) where.type = type;
-      const items = await ctx.db.interaction.findMany({
-        where,
-        orderBy: { receivedAt: 'desc' },
-        include: { conversation: true }
-      });
-      sendJson(res, 200, items);
+      const result = await paginate(ctx.db.interaction, where, { page, pageSize }, { receivedAt: 'desc' }, { conversation: true });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -1795,6 +1791,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { page, pageSize } = parsePagination(ctx.url);
       const where: Record<string, unknown> = {
         organizationId: orgCtx.organization.id,
         deletedAt: null
@@ -1803,17 +1800,8 @@ const routes: Route[] = [
       if (level) where.level = level;
       const status = ctx.url.searchParams.get('status');
       if (status) where.status = status;
-      const items = await ctx.db.lead.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          leadActivities: { orderBy: { createdAt: 'desc' } },
-          interaction: true,
-          externalMappings: true,
-          syncLogs: { orderBy: { attemptedAt: 'desc' }, take: 5 }
-        }
-      });
-      sendJson(res, 200, items);
+      const result = await paginate(ctx.db.lead, where, { page, pageSize }, { createdAt: 'desc' }, { leadActivities: { orderBy: { createdAt: 'desc' } }, interaction: true, externalMappings: true, syncLogs: { orderBy: { attemptedAt: 'desc' }, take: 5 } });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -1841,7 +1829,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as Record<string, unknown>;
+      const bodyResult = validateBody(updateLeadSchema, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as Record<string, unknown>;
       const lead = await ctx.db.lead.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!lead) return sendJson(res, 404, { error: 'Not found' });
       const item = await ctx.db.lead.update({
@@ -3243,6 +3233,9 @@ export async function routeRequest(
 ): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const method = req.method ?? 'GET';
+
+  // API versioning: strip /v1/ prefix so /api/v1/content → /api/content
+  url.pathname = url.pathname.replace(/^\/api\/v\d+\//, '/api/');
 
   // Serve static uploads (with path traversal protection)
   if (method === 'GET' && url.pathname.startsWith('/uploads/')) {

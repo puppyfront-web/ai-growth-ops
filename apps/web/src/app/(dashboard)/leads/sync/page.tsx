@@ -65,12 +65,13 @@ export default function LeadSyncPage() {
   });
 
   // Recent sync activity
-  const { data: leads } = useQuery({
+  const { data: leadsData } = useQuery({
     queryKey: queryKeys.leads.all,
     queryFn: () => listLeads(),
   });
+  const leads = leadsData?.items ?? [];
 
-  const syncedLeads = (leads ?? [])
+  const syncedLeads = leads
     .filter((l) => (l.externalMappings ?? []).length > 0)
     .slice(0, 10);
 

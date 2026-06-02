@@ -1,8 +1,20 @@
 import { apiGet, apiPost, apiPut, apiDelete } from './client';
 import type { ContentItem, ContentVariant } from '@/types/content';
 
-export function listContentItems(): Promise<ContentItem[]> {
-  return apiGet<ContentItem[]>('/api/content-items');
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export function listContentItems(page?: number, pageSize?: number): Promise<PaginatedResponse<ContentItem>> {
+  const params = new URLSearchParams();
+  if (page) params.set('page', String(page));
+  if (pageSize) params.set('pageSize', String(pageSize));
+  const qs = params.toString();
+  return apiGet<PaginatedResponse<ContentItem>>(`/api/content-items${qs ? `?${qs}` : ''}`);
 }
 
 export function getContentItem(id: string): Promise<ContentItem> {
@@ -20,8 +32,8 @@ export function updateContentItem(
   return apiPut<ContentItem>(`/api/content-items/${id}`, data);
 }
 
-export function getContentVariants(contentItemId: string): Promise<ContentVariant[]> {
-  return apiGet<ContentVariant[]>(`/api/content-items/${contentItemId}/variants`);
+export function getContentVariants(contentItemId: string): Promise<PaginatedResponse<ContentVariant>> {
+  return apiGet<PaginatedResponse<ContentVariant>>(`/api/content-items/${contentItemId}/variants`);
 }
 
 export function generatePlatformVariants(contentItemId: string, platforms?: string[]): Promise<ContentVariant[]> {

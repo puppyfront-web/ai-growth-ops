@@ -29,9 +29,9 @@ export default function ContentCalendarPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  const { data: contentItems, isLoading: loadingContent, error: errContent, refetch: refetchContent } = useQuery({
+  const { data: contentData, isLoading: loadingContent, error: errContent, refetch: refetchContent } = useQuery({
     queryKey: queryKeys.content.items,
-    queryFn: listContentItems,
+    queryFn: () => listContentItems(),
   });
   const { data: publishJobs, isLoading: loadingPublish, error: errPublish, refetch: refetchPublish } = useQuery({
     queryKey: queryKeys.publish.jobs,
@@ -41,16 +41,18 @@ export default function ContentCalendarPage() {
   if (loadingContent || loadingPublish) return <LoadingState rows={6} />;
   if (errContent || errPublish) return <ErrorState message="加载日历数据失败" onRetry={() => { refetchContent(); refetchPublish(); }} />;
 
+  const contentItems = contentData?.items ?? [];
+
   // Build date → CalendarItem[] index
   const dateMap = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
-    for (const item of contentItems ?? []) {
+    for (const item of contentItems) {
       const key = toDateKey(item.createdAt);
       const arr = map.get(key) ?? [];
       arr.push({ kind: 'content', item });
       map.set(key, arr);
     }
-    for (const job of publishJobs ?? []) {
+    for (const job of publishJobs?.items ?? []) {
       const dateStr = job.scheduledAt ?? job.createdAt;
       const key = toDateKey(dateStr);
       const arr = map.get(key) ?? [];

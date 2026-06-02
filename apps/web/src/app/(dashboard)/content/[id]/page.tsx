@@ -63,7 +63,8 @@ export default function ContentDetailPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id]);
-  const { data: variants } = useQuery({ queryKey: ['content-variants', id], queryFn: () => getContentVariants(id) });
+  const { data: variantsData } = useQuery({ queryKey: ['content-variants', id], queryFn: () => getContentVariants(id) });
+  const variants = variantsData?.items ?? [];
   const { data: accounts } = useQuery({ queryKey: ['platform-accounts'], queryFn: getPlatformAccounts });
 
   const isTextImage = item?.type === 'text_image';
@@ -76,7 +77,7 @@ export default function ContentDetailPage() {
     return map;
   }, [accounts]);
 
-  const existingPlatforms = useMemo(() => new Set((variants ?? []).map(v => v.platform)), [variants]);
+  const existingPlatforms = useMemo(() => new Set(variants.map(v => v.platform)), [variants]);
   const platformsToGenerate = allPlatforms.filter(p => !existingPlatforms.has(p));
 
   const saveMutation = useMutation({
@@ -265,7 +266,7 @@ export default function ContentDetailPage() {
             </div>
           )}
 
-          {(variants ?? []).length === 0 && (
+          {variants.length === 0 && (
             <div className="rounded-xl border bg-card p-8 text-center">
               <p className="text-sm text-muted-foreground">尚未生成平台版本</p>
               <button
@@ -278,7 +279,7 @@ export default function ContentDetailPage() {
             </div>
           )}
 
-          {(variants ?? []).map((v) => {
+          {variants.map((v) => {
             const account = accountMap.get(v.platform);
             const isRejected = v.complianceStatus === 'rejected';
             const canSelect = !!account && !isRejected;
@@ -368,7 +369,7 @@ export default function ContentDetailPage() {
             <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{publishError}</div>
           )}
 
-          {(variants ?? []).length > 0 && (
+          {variants.length > 0 && (
             <div className="sticky bottom-0 rounded-xl border bg-card p-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <span className="text-sm">已选 <strong>{selectedPlatforms.size}</strong> 个平台</span>

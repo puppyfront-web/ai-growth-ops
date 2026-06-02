@@ -18,7 +18,8 @@ const pipelineColumns = [
 ];
 
 export default function LeadPipelinePage() {
-  const { data: leads, isLoading } = useQuery({ queryKey: ['leads-pipeline'], queryFn: () => listLeads() });
+  const { data, isLoading } = useQuery({ queryKey: ['leads-pipeline'], queryFn: () => listLeads() });
+  const leads = data?.items ?? [];
 
   if (isLoading) return <LoadingState />;
 
@@ -28,7 +29,7 @@ export default function LeadPipelinePage() {
       <PageHeader title="跟进看板" description="拖拽线索卡片变更跟进状态" />
       <div className="grid grid-cols-6 gap-3 overflow-x-auto">
         {pipelineColumns.map((col) => {
-          const colLeads = (leads ?? []).filter((l) => l.status === col.key);
+          const colLeads = leads.filter((l) => l.status === col.key);
           return (
             <div key={col.key} className="min-w-[200px]">
               <div className={`rounded-t-lg border p-3 ${col.color}`}>

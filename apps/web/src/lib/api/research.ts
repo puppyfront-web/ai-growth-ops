@@ -1,8 +1,8 @@
 import { apiGet, apiPost } from './client';
 import type { ResearchTask, CollectedPost, CollectedComment, ResearchInsight, ContentOpportunity, ResearchRunResult } from '@/types/research';
 
-export function listResearchTasks(): Promise<ResearchTask[]> {
-  return apiGet<ResearchTask[]>('/api/research-tasks');
+export function listResearchTasks(): Promise<{ items: ResearchTask[]; total: number; page: number; pageSize: number; totalPages: number }> {
+  return apiGet('/api/research-tasks');
 }
 
 export function getResearchTask(id: string): Promise<ResearchTask> {

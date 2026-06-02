@@ -14,6 +14,14 @@ import {
   markEmailVerified,
   createDefaultOrganization,
 } from './auth.js';
+import { validateBody } from './middleware/validate.js';
+import {
+  registerSchema,
+  verifyEmailSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+} from './schemas/auth.js';
 
 interface AuthRouteContext {
   db: DatabaseClient;
@@ -27,21 +35,20 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
   res.end(JSON.stringify(payload));
 }
 
+function sendValidationErrors(res: ServerResponse, errors: Array<{ field: string; message: string }>) {
+  sendJson(res, 400, { error: '输入验证失败', errors });
+}
+
 export const authRoutes: Array<{ method: string; pattern: string; handler: (req: IncomingMessage, res: ServerResponse, ctx: AuthRouteContext) => Promise<void> }> = [
   // POST /api/auth/register
   {
     method: 'POST',
     pattern: '/api/auth/register',
     handler: async (_req, res, ctx) => {
-      const body = ctx.body as Record<string, unknown>;
-      const email = String(body.email || '').trim().toLowerCase();
-      const password = String(body.password || '');
-      const name = String(body.name || '').trim();
+      const result = validateBody(registerSchema, ctx.body);
+      if (!result.success) return sendValidationErrors(res, result.errors);
 
-      // Validation
-      if (!email || !email.includes('@')) return sendJson(res, 400, { error: '请输入有效的邮箱地址' });
-      if (password.length < 8) return sendJson(res, 400, { error: '密码至少需要 8 个字符' });
-      if (!name) return sendJson(res, 400, { error: '请输入用户名' });
+      const { email, password, name } = result.data;
 
       // Check duplicate
       const existing = await ctx.db.user.findUnique({ where: { email } });
@@ -53,7 +60,7 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
           email,
           name,
           passwordHash: hashPassword(password),
-          role: 'admin', // First user is admin of their own workspace
+          role: 'admin',
         },
       });
 
@@ -62,8 +69,6 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
 
       // Generate email verification token
       const verifyToken = await createEmailVerificationToken(ctx.db, user.id);
-      // TODO: Send verification email via email service (Week 4)
-      // For now, log the token for development
       console.log(`[AUTH] Email verification token for ${email}: ${verifyToken}`);
 
       // Auto-login after registration
@@ -86,14 +91,13 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
     method: 'POST',
     pattern: '/api/auth/verify-email',
     handler: async (_req, res, ctx) => {
-      const body = ctx.body as Record<string, unknown>;
-      const token = String(body.token || '');
-      if (!token) return sendJson(res, 400, { error: '缺少验证令牌' });
+      const result = validateBody(verifyEmailSchema, ctx.body);
+      if (!result.success) return sendValidationErrors(res, result.errors);
 
-      const userId = await verifyEmailVerificationToken(ctx.db, token);
+      const userId = await verifyEmailVerificationToken(ctx.db, result.data.token);
       if (!userId) return sendJson(res, 400, { error: '验证令牌无效或已过期' });
 
-      await markEmailVerified(ctx.db, token);
+      await markEmailVerified(ctx.db, result.data.token);
       sendJson(res, 200, { success: true, message: '邮箱验证成功' });
     },
   },
@@ -103,17 +107,15 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
     method: 'POST',
     pattern: '/api/auth/forgot-password',
     handler: async (_req, res, ctx) => {
-      const body = ctx.body as Record<string, unknown>;
-      const email = String(body.email || '').trim().toLowerCase();
-      if (!email) return sendJson(res, 400, { error: '请输入邮箱地址' });
+      const result = validateBody(forgotPasswordSchema, ctx.body);
+      if (!result.success) return sendValidationErrors(res, result.errors);
 
-      const user = await ctx.db.user.findUnique({ where: { email, deletedAt: null } });
+      const user = await ctx.db.user.findUnique({ where: { email: result.data.email, deletedAt: null } });
       // Always return success to prevent email enumeration
       if (!user) return sendJson(res, 200, { success: true, message: '如果该邮箱已注册，重置邮件已发送' });
 
       const resetToken = await createPasswordResetToken(ctx.db, user.id);
-      // TODO: Send reset email via email service (Week 4)
-      console.log(`[AUTH] Password reset token for ${email}: ${resetToken}`);
+      console.log(`[AUTH] Password reset token for ${result.data.email}: ${resetToken}`);
 
       sendJson(res, 200, { success: true, message: '如果该邮箱已注册，重置邮件已发送' });
     },
@@ -124,21 +126,17 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
     method: 'POST',
     pattern: '/api/auth/reset-password',
     handler: async (_req, res, ctx) => {
-      const body = ctx.body as Record<string, unknown>;
-      const token = String(body.token || '');
-      const newPassword = String(body.password || '');
+      const result = validateBody(resetPasswordSchema, ctx.body);
+      if (!result.success) return sendValidationErrors(res, result.errors);
 
-      if (!token) return sendJson(res, 400, { error: '缺少重置令牌' });
-      if (newPassword.length < 8) return sendJson(res, 400, { error: '密码至少需要 8 个字符' });
-
-      const userId = await verifyPasswordResetToken(ctx.db, token);
+      const userId = await verifyPasswordResetToken(ctx.db, result.data.token);
       if (!userId) return sendJson(res, 400, { error: '重置令牌无效或已过期' });
 
       await ctx.db.user.update({
         where: { id: userId },
-        data: { passwordHash: hashPassword(newPassword) },
+        data: { passwordHash: hashPassword(result.data.password) },
       });
-      await markResetTokenUsed(ctx.db, token);
+      await markResetTokenUsed(ctx.db, result.data.token);
 
       sendJson(res, 200, { success: true, message: '密码重置成功' });
     },
@@ -152,21 +150,17 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
       const user = await getAuthenticatedUser(req, ctx.db);
       if (!user) return sendJson(res, 401, { error: '未登录' });
 
-      const body = ctx.body as Record<string, unknown>;
-      const oldPassword = String(body.oldPassword || '');
-      const newPassword = String(body.newPassword || '');
-
-      if (!oldPassword || !newPassword) return sendJson(res, 400, { error: '请输入当前密码和新密码' });
-      if (newPassword.length < 8) return sendJson(res, 400, { error: '新密码至少需要 8 个字符' });
+      const result = validateBody(changePasswordSchema, ctx.body);
+      if (!result.success) return sendValidationErrors(res, result.errors);
 
       // Verify old password
-      if (!user.passwordHash || !verifyPassword(oldPassword, user.passwordHash)) {
+      if (!user.passwordHash || !verifyPassword(result.data.oldPassword, user.passwordHash)) {
         return sendJson(res, 400, { error: '当前密码不正确' });
       }
 
       await ctx.db.user.update({
         where: { id: user.id },
-        data: { passwordHash: hashPassword(newPassword) },
+        data: { passwordHash: hashPassword(result.data.newPassword) },
       });
 
       sendJson(res, 200, { success: true, message: '密码修改成功' });
@@ -195,7 +189,6 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
       const user = await getAuthenticatedUser(req, ctx.db);
       if (!user) return sendJson(res, 401, { error: '未登录' });
 
-      // Revoke current token
       const authHeader = req.headers.authorization;
       const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
       if (token) {
@@ -219,7 +212,6 @@ export const authRoutes: Array<{ method: string; pattern: string; handler: (req:
       }
 
       const verifyToken = await createEmailVerificationToken(ctx.db, user.id);
-      // TODO: Send verification email via email service (Week 4)
       console.log(`[AUTH] Resent verification token for ${user.email}: ${verifyToken}`);
 
       sendJson(res, 200, { success: true, message: '验证邮件已重新发送' });

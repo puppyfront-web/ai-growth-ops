@@ -1,12 +1,22 @@
 import { apiGet, apiPost, apiPut } from './client';
 import type { Lead, LeadActivity } from '@/types/lead';
 
-export function listLeads(filters?: { level?: string; status?: string }): Promise<Lead[]> {
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export function listLeads(filters?: { level?: string; status?: string; page?: number; pageSize?: number }): Promise<PaginatedResponse<Lead>> {
   const params = new URLSearchParams();
   if (filters?.level) params.set('level', filters.level);
   if (filters?.status) params.set('status', filters.status);
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
   const qs = params.toString();
-  return apiGet<Lead[]>(`/api/leads${qs ? `?${qs}` : ''}`);
+  return apiGet<PaginatedResponse<Lead>>(`/api/leads${qs ? `?${qs}` : ''}`);
 }
 
 export function getLead(id: string): Promise<Lead> {

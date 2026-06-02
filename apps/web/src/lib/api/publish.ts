@@ -1,12 +1,22 @@
 import { apiGet, apiPost, apiDelete } from './client';
 import type { PublishJob, PublishAttempt } from '@/types/publish';
 
-export function listPublishJobs(filters?: { status?: string; platform?: string }): Promise<PublishJob[]> {
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export function listPublishJobs(filters?: { status?: string; platform?: string; page?: number; pageSize?: number }): Promise<PaginatedResponse<PublishJob>> {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.platform) params.set('platform', filters.platform);
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
   const qs = params.toString();
-  return apiGet<PublishJob[]>(`/api/publish-jobs${qs ? `?${qs}` : ''}`);
+  return apiGet<PaginatedResponse<PublishJob>>(`/api/publish-jobs${qs ? `?${qs}` : ''}`);
 }
 
 export function getPublishJob(id: string): Promise<PublishJob> {

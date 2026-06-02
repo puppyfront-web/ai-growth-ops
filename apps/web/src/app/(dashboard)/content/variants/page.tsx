@@ -11,8 +11,10 @@ import { useState } from 'react';
 
 export default function VariantsPage() {
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const { data: items } = useQuery({ queryKey: ['content-items'], queryFn: listContentItems });
-  const { data: variants } = useQuery({ queryKey: ['content-variants', selectedItem], queryFn: () => getContentVariants(selectedItem!), enabled: !!selectedItem });
+  const { data: contentData } = useQuery({ queryKey: ['content-items'], queryFn: () => listContentItems() });
+  const { data: variantsData } = useQuery({ queryKey: ['content-variants', selectedItem], queryFn: () => getContentVariants(selectedItem!), enabled: !!selectedItem });
+  const items = contentData?.items ?? [];
+  const variants = variantsData?.items ?? [];
 
   return (
     <div>
@@ -21,7 +23,7 @@ export default function VariantsPage() {
       <div className="mb-4">
         <select value={selectedItem ?? ''} onChange={(e) => setSelectedItem(e.target.value)} className="rounded-md border p-2 text-sm">
           <option value="">选择内容</option>
-          {items?.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          {items.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
         </select>
       </div>
       {selectedItem && variants && (

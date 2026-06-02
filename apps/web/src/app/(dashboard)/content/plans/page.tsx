@@ -37,10 +37,11 @@ function PlanCard({ item }: { item: ContentItem }) {
 }
 
 export default function ContentPlansPage() {
-  const { data: items, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.content.items,
-    queryFn: listContentItems,
+    queryFn: () => listContentItems(),
   });
+  const items = data?.items ?? [];
 
   if (isLoading) return <LoadingState rows={4} />;
   if (error) return <ErrorState message="加载内容计划失败" onRetry={() => refetch()} />;
@@ -56,7 +57,7 @@ export default function ContentPlansPage() {
 
       <div className="grid grid-cols-3 gap-3 overflow-x-auto">
         {columns.map((col) => {
-          const colItems = (items ?? []).filter((i) => i.status === col.key);
+          const colItems = items.filter((i) => i.status === col.key);
           return (
             <div key={col.key} className="min-w-[220px]">
               <div className={`rounded-t-lg border p-3 ${col.color}`}>
