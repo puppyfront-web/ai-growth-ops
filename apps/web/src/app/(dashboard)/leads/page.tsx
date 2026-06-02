@@ -11,6 +11,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import type { Lead } from '@/types/lead';
 import Link from 'next/link';
 import { useState } from 'react';
+import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
 
 const leadStatusLabels: Record<string, string> = {
   NEW: '新线索', QUALIFIED: '已验证', SYNCING: '同步中', SYNCED: '已同步飞书', ASSIGNED: '已分配', CONTACTED: '已联系', ADDED_WECOM: '已加企微', WON: '已成交', LOST: '已流失', INVALID: '无效',
@@ -63,7 +64,9 @@ export default function LeadsPage() {
           <option value="WON">已成交</option>
         </select>
       </div>
-      <DataTable columns={columns} data={data?.items ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无线索" emptyDescription="新线索将在这里显示" />
+      <DataTable columns={columns} data={data?.items ?? []} loading={isLoading} error={error?.message} onRetry={() => refetch()} emptyTitle="暂无线索" emptyDescription="新线索将在这里显示"
+        toolbar={<div className="mb-3 flex justify-end"><ExportCSVButton url="/api/export/leads.csv" filename="leads.csv" /></div>}
+      />
     </div>
   );
 }

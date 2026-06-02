@@ -3009,6 +3009,72 @@ const routes: Route[] = [
 
   // Organization routes (CRUD, members, invitations)
   ...orgRoutes,
+
+  // ── CSV Export endpoints ─────────────────────────────────────────────────
+
+  // GET /api/export/leads.csv
+  {
+    method: 'GET',
+    pattern: '/api/export/leads.csv',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { exportToCSV, LEAD_EXPORT_COLUMNS } = await import('./services/export-service.js');
+      const leads = await ctx.db.lead.findMany({
+        where: { organizationId: orgCtx.organization.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      const csv = exportToCSV(leads as unknown as Record<string, unknown>[], LEAD_EXPORT_COLUMNS);
+      res.writeHead(200, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="leads.csv"',
+      });
+      res.end(csv);
+    },
+  },
+
+  // GET /api/export/content.csv
+  {
+    method: 'GET',
+    pattern: '/api/export/content.csv',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { exportToCSV, CONTENT_EXPORT_COLUMNS } = await import('./services/export-service.js');
+      const items = await ctx.db.contentItem.findMany({
+        where: { organizationId: orgCtx.organization.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      const csv = exportToCSV(items as unknown as Record<string, unknown>[], CONTENT_EXPORT_COLUMNS);
+      res.writeHead(200, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="content.csv"',
+      });
+      res.end(csv);
+    },
+  },
+
+  // GET /api/export/interactions.csv
+  {
+    method: 'GET',
+    pattern: '/api/export/interactions.csv',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { exportToCSV, INTERACTION_EXPORT_COLUMNS } = await import('./services/export-service.js');
+      const interactions = await ctx.db.interaction.findMany({
+        where: { organizationId: orgCtx.organization.id },
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+      });
+      const csv = exportToCSV(interactions as unknown as Record<string, unknown>[], INTERACTION_EXPORT_COLUMNS);
+      res.writeHead(200, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="interactions.csv"',
+      });
+      res.end(csv);
+    },
+  },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────

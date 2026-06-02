@@ -9,6 +9,7 @@ import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels, platformLabels } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
+import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Interaction } from '@/types/interaction';
@@ -124,7 +125,9 @@ export default function CommentsPage() {
         </div>
       )}
 
-      <DataTable columns={columns} data={data ?? []} loading={isLoading} emptyTitle="暂无评论" />
+      <DataTable columns={columns} data={data ?? []} loading={isLoading} emptyTitle="暂无评论"
+        toolbar={<div className="mb-3 flex justify-end"><ExportCSVButton url="/api/export/interactions.csv" filename="interactions.csv" label="导出互动" /></div>}
+      />
     </div>
   );
 }

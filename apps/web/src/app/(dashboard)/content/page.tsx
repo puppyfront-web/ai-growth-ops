@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { contentTypeLabels } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
+import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { ContentItem } from '@/types/content';
 import Link from 'next/link';
@@ -139,6 +140,7 @@ export default function ContentPage() {
         onRetry={() => refetch()}
         emptyTitle="还没有内容"
         emptyDescription="你可以从调研选题生成内容，也可以手动创建一条图文或视频脚本。"
+        toolbar={<div className="mb-3 flex justify-end"><ExportCSVButton url="/api/export/content.csv" filename="content.csv" /></div>}
       />
 
       {/* Delete confirmation */}
