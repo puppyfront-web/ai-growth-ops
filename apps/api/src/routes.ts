@@ -3311,6 +3311,32 @@ const routes: Route[] = [
     }
   },
 
+  // ── Analytics: Engagement ──────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/analytics/engagement',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const days = Math.min(90, Math.max(1, Number(ctx.url.searchParams.get('days')) || 7));
+      const { aggregateEngagementMetrics } = await import('./services/engagement-analytics.js');
+      const metrics = await aggregateEngagementMetrics(ctx.db, orgCtx.organization.id, days);
+      sendJson(res, 200, metrics);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/analytics/content-performance',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const days = Math.min(90, Math.max(1, Number(ctx.url.searchParams.get('days')) || 30));
+      const { computeContentPerformance } = await import('./services/engagement-analytics.js');
+      const performance = await computeContentPerformance(ctx.db, orgCtx.organization.id, days);
+      sendJson(res, 200, { items: performance });
+    }
+  },
+
   // ── Analytics: Reports ────────────────────────────────────────
   {
     method: 'GET',

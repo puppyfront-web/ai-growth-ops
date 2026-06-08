@@ -9,7 +9,11 @@
     "leadsByPlatform": { "type": "object" },
     "publishSuccessRate": { "type": "number" },
     "topPerformingContent": { "type": "array", "items": { "type": "object" } },
-    "syncSuccessRate": { "type": "number" }
+    "syncSuccessRate": { "type": "number" },
+    "interactionCounts": { "type": "object", "description": "Interaction counts by platform and type" },
+    "replyRates": { "type": "object", "description": "Reply rates: manual vs auto" },
+    "avgConfidence": { "type": "number", "description": "Average classification confidence" },
+    "contentPerformance": { "type": "array", "items": { "type": "object" }, "description": "Per-content engagement scores" }
   },
   "required": ["period"]
 }

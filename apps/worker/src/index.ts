@@ -35,7 +35,8 @@ import { handleScheduledChecker } from './job-handlers/scheduled-checker.js';
 import { handleCampaignExecute } from './job-handlers/campaign.execute.js';
 import { handleCampaignCheckSchedule } from './job-handlers/campaign.check-schedule.js';
 import { handleInteractionAutoReply } from './job-handlers/interaction.auto-reply.js';
-import { startScheduler, SCHEDULED_QUEUE, CAMPAIGN_CHECK_QUEUE } from './scheduler.js';
+import { handleScheduledInteractionSync } from './job-handlers/scheduled.interaction-sync.js';
+import { startScheduler, SCHEDULED_QUEUE, CAMPAIGN_CHECK_QUEUE, INTERACTION_SYNC_QUEUE } from './scheduler.js';
 
 export const appName = 'worker';
 export const getWorkerHealth = () => createHealthSnapshot(appName);
@@ -50,6 +51,7 @@ const realHandlers: Record<string, (job: any) => Promise<void>> = {
   [QUEUE_NAMES.RESEARCH_RUN]: handleResearchRun,
   [QUEUE_NAMES.CAMPAIGN_EXECUTE]: handleCampaignExecute,
   [QUEUE_NAMES.INTERACTION_AUTO_REPLY]: handleInteractionAutoReply,
+  [QUEUE_NAMES.SCHEDULED_INTERACTION_SYNC]: handleScheduledInteractionSync,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
   [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule,
 };

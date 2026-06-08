@@ -113,5 +113,23 @@ export function createResearchTools(auth: AuthContext) {
     sync_lead_to_feishu: syncLeadToFeishu,
     sync_lead_to_wecom: syncLeadToWecom,
     get_analytics: getAnalytics,
+    get_engagement_metrics: tool({
+      description: '查看互动参与度分析。包括各平台互动量、回复率、线索转化率、分类置信度等。',
+      parameters: z.object({
+        days: z.number().optional().default(7).describe('统计天数，默认7天'),
+      }),
+      execute: async ({ days }) => {
+        return apiCall(`/api/analytics/engagement?days=${days}`);
+      },
+    }),
+    get_content_performance: tool({
+      description: '查看各内容的运营表现排名。按互动量、线索数、回复数综合评分。',
+      parameters: z.object({
+        days: z.number().optional().default(30).describe('统计天数，默认30天'),
+      }),
+      execute: async ({ days }) => {
+        return apiCall(`/api/analytics/content-performance?days=${days}`);
+      },
+    }),
   };
 }

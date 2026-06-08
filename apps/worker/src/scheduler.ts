@@ -12,6 +12,7 @@ const logger = createLogger('scheduler');
 
 export const SCHEDULED_QUEUE = 'scheduled.checker';
 export const CAMPAIGN_CHECK_QUEUE = QUEUE_NAMES.CAMPAIGN_CHECK_SCHEDULE;
+export const INTERACTION_SYNC_QUEUE = QUEUE_NAMES.SCHEDULED_INTERACTION_SYNC;
 
 export async function startScheduler(): Promise<void> {
   // Scheduled publish checker — every 60 seconds
@@ -37,4 +38,16 @@ export async function startScheduler(): Promise<void> {
     },
   );
   logger.info('Campaign scheduler started — campaign checker runs every 5min');
+
+  // Periodic interaction sync — every 30 minutes
+  const interactionSyncQueue = getQueue(INTERACTION_SYNC_QUEUE);
+  await interactionSyncQueue.add(
+    INTERACTION_SYNC_QUEUE,
+    { task: 'sync-all-interactions', triggeredAt: new Date().toISOString() },
+    {
+      repeat: { every: 1_800_000 }, // 30 minutes
+      jobId: 'interaction-sync-repeat',
+    },
+  );
+  logger.info('Interaction sync scheduler started — sync runs every 30min');
 }
