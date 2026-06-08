@@ -16,8 +16,8 @@ import { authRoutes } from './routes-auth.js';
 import { orgRoutes } from './routes-org.js';
 import { getCustomerDashboard } from './mvp-service';
 import { applyPublishProgress, isPublishProgressAuthorized } from './publish-progress.js';
-import { getBrowserRunnerUrl } from './browser-login-config';
-import { setSession, getSessionId, clearSession } from './browser-login-session';
+import { getBrowserRunnerUrl, fetchWithTimeout } from './browser-login-config';
+import { setSession, getSessionId, clearSession, markPending, clearPending } from './browser-login-session';
 import { hashPassword, verifyPassword, createToken, getAuthenticatedUser, getOrganizationContext } from './auth.js';
 import { isLoginRateLimited } from './server.js';
 import { parsePagination, paginate } from './middleware/pagination.js';
@@ -96,6 +96,18 @@ const routes: Route[] = [
         redis.disconnect();
       } catch (err) {
         checks.redis = { status: 'error', error: err instanceof Error ? err.message : String(err) };
+        overall = overall === 'unhealthy' ? 'unhealthy' : 'degraded';
+      }
+
+      // Check browser-runner
+      try {
+        const runnerUrl = getBrowserRunnerUrl();
+        const start = Date.now();
+        const resp = await fetchWithTimeout(`${runnerUrl}/health`, { method: 'GET' }, 3_000);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        checks.browserRunner = { status: 'ok', latencyMs: Date.now() - start };
+      } catch (err) {
+        checks.browserRunner = { status: 'error', error: err instanceof Error ? err.message : String(err) };
         overall = overall === 'unhealthy' ? 'unhealthy' : 'degraded';
       }
 
@@ -1100,6 +1112,12 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      // Verify the publish job belongs to this org
+      const job = await ctx.db.publishJob.findFirst({
+        where: { id: ctx.params.jobId, organizationId: orgCtx.organization.id, deletedAt: null },
+        select: { id: true },
+      });
+      if (!job) return sendJson(res, 404, { error: 'Not found' });
       const items = await ctx.db.publishAttempt.findMany({
         where: { publishJobId: ctx.params.jobId },
         orderBy: { attemptNo: 'desc' }
@@ -1218,7 +1236,7 @@ const routes: Route[] = [
         where: { id: ctx.params.id },
         data: {
           status: 'RUNNING',
-          retryCount: existing.retryCount + 1,
+          retryCount: { increment: 1 },
           lastError: null,
           startedAt: new Date()
         }
@@ -1496,12 +1514,16 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = ctx.body as Record<string, unknown>;
-      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const interaction = await ctx.db.interaction.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
+        include: { classification: true },
+      });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
 
-      let intentLevel = body.intentLevel ?? 'C';
-      let intent = body.intent ?? 'unknown';
+      // Preserve existing classification as defaults (pipeline may have already classified)
+      let intentLevel = body.intentLevel ?? interaction.classification?.leadLevel ?? 'C';
+      let intent = body.intent ?? interaction.classification?.intent ?? 'unknown';
       let skillUsed = false;
 
       // Try AI skill-based classification
@@ -1518,17 +1540,27 @@ const routes: Route[] = [
         skillUsed = true;
       }
 
-      // Create InteractionClassification record
-      await ctx.db.interactionClassification.create({
-        data: {
+      // Create or update InteractionClassification record
+      // (pipeline may have already created one during sync)
+      await ctx.db.interactionClassification.upsert({
+        where: { interactionId: interaction.id },
+        create: {
           interactionId: interaction.id,
           intent: String(intent),
           leadLevel: String(intentLevel),
-          confidence: skillResult?.output?.confidence ?? 0.5,
-          riskLevel: skillResult?.output?.riskLevel ?? 'low',
-          summary: skillResult?.output?.summary ?? String(intent),
-          tags: (skillResult?.output?.tags ?? []) as never,
-        }
+          confidence: skillResult?.output?.confidence ?? interaction.classification?.confidence ?? 0.5,
+          riskLevel: skillResult?.output?.riskLevel ?? interaction.classification?.riskLevel ?? 'low',
+          summary: skillResult?.output?.summary ?? interaction.classification?.summary ?? String(intent),
+          tags: (skillResult?.output?.tags ?? interaction.classification?.tags ?? []) as never,
+        },
+        update: {
+          intent: skillUsed ? String(intent) : undefined,
+          leadLevel: skillUsed ? String(intentLevel) : undefined,
+          confidence: skillResult?.output?.confidence ?? undefined,
+          riskLevel: skillResult?.output?.riskLevel ?? undefined,
+          summary: skillResult?.output?.summary ?? undefined,
+          tags: skillResult?.output?.tags ? (skillResult.output.tags as never) : undefined,
+        },
       }).catch(() => { /* table may not exist yet */ });
 
       const item = await ctx.db.interaction.update({
@@ -1595,12 +1627,15 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const interaction = await ctx.db.interaction.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
+      const interaction = await ctx.db.interaction.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
+        include: { classification: true },
+      });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
-      const metadata = interaction.metadata as Record<string, unknown> | null;
-      const level = (metadata?.intentLevel as string) ?? 'C';
+      const level = interaction.classification?.leadLevel ?? 'C';
       const lead = await ctx.db.lead.create({
         data: {
+          organizationId: orgCtx.organization.id,
           userId: interaction.userId,
           sourcePlatform: interaction.platform,
           sourceAccountId: interaction.platformAccountId,
@@ -1608,7 +1643,7 @@ const routes: Route[] = [
           externalUserId: interaction.externalUserId,
           externalUserName: interaction.externalUserName,
           level: level as 'A',
-          intent: (metadata?.intent as string) ?? null,
+          intent: interaction.classification?.intent ?? null,
           summary: interaction.content.slice(0, 200),
         }
       });
@@ -1635,6 +1670,11 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      // Verify the interaction belongs to this org
+      const interaction = await ctx.db.interaction.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id },
+      });
+      if (!interaction) return sendJson(res, 404, { error: 'Not found' });
       const suggestions = await ctx.db.replySuggestion.findMany({
         where: { interactionId: ctx.params.id },
         include: { replyAttempts: true }
@@ -1650,8 +1690,13 @@ const routes: Route[] = [
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
-      const suggestion = await ctx.db.replySuggestion.findUnique({ where: { id: ctx.params.id } });
-      if (!suggestion) return sendJson(res, 404, { error: 'Not found' });
+      const suggestion = await ctx.db.replySuggestion.findUnique({
+        where: { id: ctx.params.id },
+        include: { interaction: { select: { organizationId: true } } },
+      });
+      if (!suggestion || (suggestion as any).interaction?.organizationId !== orgCtx.organization.id) {
+        return sendJson(res, 404, { error: 'Not found' });
+      }
       const action = String(body.action || '');
       if (action === 'approve') {
         await ctx.db.replySuggestion.update({
@@ -1752,6 +1797,14 @@ const routes: Route[] = [
       const job = await ctx.db.interactionSyncJob.findFirst({
         where: { id: ctx.params.id },
       });
+      // Verify the sync job belongs to this org via its platform account
+      if (job) {
+        const account = await ctx.db.platformAccount.findFirst({
+          where: { id: job.platformAccountId, organizationId: orgCtx.organization.id },
+          select: { id: true },
+        });
+        if (!account) return sendJson(res, 404, { error: 'Sync job not found' });
+      }
       if (!job) return sendJson(res, 404, { error: 'Sync job not found' });
       sendJson(res, 200, job);
     }
@@ -1908,6 +1961,12 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      // Verify the lead belongs to this org
+      const lead = await ctx.db.lead.findFirst({
+        where: { id: ctx.params.leadId, organizationId: orgCtx.organization.id, deletedAt: null },
+        select: { id: true },
+      });
+      if (!lead) return sendJson(res, 404, { error: 'Not found' });
       const items = await ctx.db.leadActivity.findMany({
         where: { leadId: ctx.params.leadId },
         orderBy: { createdAt: 'desc' }
@@ -2369,16 +2428,20 @@ const routes: Route[] = [
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
 
+      if (!markPending(account.id)) {
+        return sendJson(res, 409, { status: 'error', error: '登录会话正在创建中，请稍候' });
+      }
+
+      const runnerUrl = getBrowserRunnerUrl();
       try {
-        const runnerUrl = getBrowserRunnerUrl();
         const existingSessionId = getSessionId(account.id);
         if (existingSessionId) {
           try {
-            await fetch(`${runnerUrl}/session/${existingSessionId}/cancel`, { method: 'POST' });
-          } catch {}
+            await fetchWithTimeout(`${runnerUrl}/session/${existingSessionId}/cancel`, { method: 'POST' }, 5_000);
+          } catch { /* cancel old session best-effort */ }
           clearSession(account.id);
         }
-        const startRes = await fetch(`${runnerUrl}/session/start`, {
+        const startRes = await fetchWithTimeout(`${runnerUrl}/session/start`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ platform: account.platform }),
@@ -2389,9 +2452,20 @@ const routes: Route[] = [
         }
         const data = await startRes.json() as { sessionId: string };
         setSession(account.id, data.sessionId);
+        clearPending(account.id);
         sendJson(res, 200, { sessionId: data.sessionId, status: 'waiting_scan' });
       } catch (err) {
-        sendJson(res, 502, { status: 'error', error: `浏览器辅助服务不可用: ${(err as Error).message}` });
+        const msg = (err as Error).message || '';
+        const cause = (err as Error).cause as { message?: string; code?: string } | undefined;
+        const causeMsg = cause?.message || cause?.code || '';
+        const detail = causeMsg || msg || 'unknown error';
+        const hint = msg.includes('abort') ? '连接超时，请确认浏览器辅助服务是否已启动' : '服务未启动或不可达';
+        sendJson(res, 502, {
+          status: 'error',
+          error: `浏览器辅助服务不可用: ${hint} (${runnerUrl} — ${detail})`,
+        });
+      } finally {
+        clearPending(account.id);
       }
     }
   },
@@ -2409,7 +2483,7 @@ const routes: Route[] = [
 
       try {
         const runnerUrl = getBrowserRunnerUrl();
-        const statusRes = await fetch(`${runnerUrl}/session/${sessionId}/status`);
+        const statusRes = await fetchWithTimeout(`${runnerUrl}/session/${sessionId}/status`, { method: 'GET' }, 10_000);
         if (!statusRes.ok) {
           return sendJson(res, 200, { status: 'error', error: 'browser-runner 返回错误' });
         }
@@ -2443,7 +2517,9 @@ const routes: Route[] = [
           clearSession(accountId);
         }
 
-        sendJson(res, 200, data);
+        // Strip plaintext cookies before sending to frontend
+        const { cookies: _rawCookies, ...safeData } = data;
+        sendJson(res, 200, safeData);
       } catch (err) {
         sendJson(res, 200, { status: 'error', error: (err as Error).message });
       }
@@ -2460,8 +2536,8 @@ const routes: Route[] = [
       if (sessionId) {
         try {
           const runnerUrl = getBrowserRunnerUrl();
-          await fetch(`${runnerUrl}/session/${sessionId}/cancel`, { method: 'POST' });
-        } catch {}
+          await fetchWithTimeout(`${runnerUrl}/session/${sessionId}/cancel`, { method: 'POST' }, 5_000);
+        } catch { /* cancel best-effort */ }
         clearSession(accountId);
       }
       sendJson(res, 200, { ok: true });
@@ -3139,6 +3215,106 @@ const routes: Route[] = [
         'content-disposition': 'attachment; filename="interactions.csv"',
       });
       res.end(csv);
+    },
+  },
+
+  // ── Chat Threads ──────────────────────────────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/chat/threads',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as { title?: string } | null;
+      const thread = await ctx.db.chatThread.create({
+        data: {
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
+          title: body?.title || null,
+        },
+      });
+      sendJson(res, 201, thread);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/chat/threads',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const threads = await ctx.db.chatThread.findMany({
+        where: { organizationId: orgCtx.organization.id, userId: orgCtx.user.id, status: 'active' },
+        orderBy: { updatedAt: 'desc' },
+        take: 50,
+      });
+      sendJson(res, 200, threads);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/chat/threads/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const thread = await ctx.db.chatThread.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id },
+        include: { messages: { orderBy: { createdAt: 'asc' } } },
+      });
+      if (!thread) return sendJson(res, 404, { error: '对话不存在' });
+      sendJson(res, 200, thread);
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/chat/threads/:id/messages',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as { role: string; content: string; toolCalls?: unknown; toolResult?: unknown; tokensUsed?: number } | null;
+      if (!body?.role || !body?.content) return sendJson(res, 400, { error: 'Missing role or content' });
+      const thread = await ctx.db.chatThread.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id },
+      });
+      if (!thread) return sendJson(res, 404, { error: '对话不存在' });
+      const message = await ctx.db.chatMessage.create({
+        data: {
+          threadId: ctx.params.id,
+          role: body.role,
+          content: body.content,
+          toolCalls: body.toolCalls ?? undefined,
+          toolResult: body.toolResult ?? undefined,
+          tokensUsed: body.tokensUsed,
+        },
+      });
+      // Update thread title from first user message
+      if (body.role === 'user' && !thread.title) {
+        await ctx.db.chatThread.update({
+          where: { id: ctx.params.id },
+          data: { title: body.content.slice(0, 50) },
+        });
+      }
+      sendJson(res, 201, message);
+    },
+  },
+  {
+    method: 'PATCH',
+    pattern: '/api/chat/threads/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as { title?: string; status?: string } | null;
+      const thread = await ctx.db.chatThread.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id },
+      });
+      if (!thread) return sendJson(res, 404, { error: '对话不存在' });
+      const updated = await ctx.db.chatThread.update({
+        where: { id: ctx.params.id },
+        data: {
+          ...(body?.title != null && { title: body.title }),
+          ...(body?.status != null && { status: body.status }),
+        },
+      });
+      sendJson(res, 200, updated);
     },
   },
 ];
