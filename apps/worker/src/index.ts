@@ -32,7 +32,9 @@ import { handleLeadSyncFeishuBitable } from './job-handlers/lead.sync.feishu-bit
 import { handleLeadSyncWeComContact } from './job-handlers/lead.sync.wecom-contact.js';
 import { handleResearchRun } from './job-handlers/research.run.js';
 import { handleScheduledChecker } from './job-handlers/scheduled-checker.js';
-import { startScheduler, SCHEDULED_QUEUE } from './scheduler.js';
+import { handleCampaignExecute } from './job-handlers/campaign.execute.js';
+import { handleCampaignCheckSchedule } from './job-handlers/campaign.check-schedule.js';
+import { startScheduler, SCHEDULED_QUEUE, CAMPAIGN_CHECK_QUEUE } from './scheduler.js';
 
 export const appName = 'worker';
 export const getWorkerHealth = () => createHealthSnapshot(appName);
@@ -45,7 +47,9 @@ const realHandlers: Record<string, (job: any) => Promise<void>> = {
   [QUEUE_NAMES.LEAD_SYNC_FEISHU]: handleLeadSyncFeishuBitable,
   [QUEUE_NAMES.LEAD_SYNC_WECOM]: handleLeadSyncWeComContact,
   [QUEUE_NAMES.RESEARCH_RUN]: handleResearchRun,
+  [QUEUE_NAMES.CAMPAIGN_EXECUTE]: handleCampaignExecute,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
+  [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule,
 };
 
 export async function startWorker(): Promise<void> {

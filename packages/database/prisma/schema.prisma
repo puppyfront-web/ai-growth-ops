@@ -257,6 +257,7 @@ model User {
   organizationMemberships OrganizationMember[]
   organizationInvitations OrganizationInvitation[]
   chatThreads              ChatThread[]
+  campaigns                Campaign[]
 }
 
 model TokenBlacklist {
@@ -334,6 +335,7 @@ model Organization {
   skillRuns            SkillRun[]
   agentRuns            AgentRun[]
   chatThreads          ChatThread[]
+  campaigns            Campaign[]
 
   @@map("organizations")
 }
@@ -455,6 +457,59 @@ model ContentProject {
   @@map("content_projects")
 }
 
+model Campaign {
+  id               String          @id @default(uuid())
+  organizationId   String
+  userId           String
+  name             String
+  description      String?
+  status           String          @default("draft")
+  platforms        Json
+  contentType      String          @default("text_image")
+  scheduleConfig   Json?
+  topicConfig      Json?
+  autoPublish      Boolean         @default(true)
+  autoCompliance   Boolean         @default(true)
+  maxPostsTotal    Int?
+  publishedCount   Int             @default(0)
+  nextRunAt        DateTime?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+  metadata         Json?
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  runs         CampaignRun[]
+
+  @@index([organizationId])
+  @@index([status, nextRunAt])
+  @@map("campaigns")
+}
+
+model CampaignRun {
+  id                String    @id @default(uuid())
+  campaignId        String
+  contentItemId     String?
+  status            String    @default("pending")
+  scheduledAt       DateTime
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  errorMessage      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  metadata          Json?
+
+  campaign    Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contentItem ContentItem? @relation(fields: [contentItemId], references: [id])
+
+  @@index([campaignId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@map("campaign_runs")
+}
+
 model ContentItem {
   id                   String        @id @default(uuid())
   organizationId       String?
@@ -475,6 +530,7 @@ model ContentItem {
   organization    Organization?    @relation(fields: [organizationId], references: [id])
   project         ContentProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   contentVariants ContentVariant[]
+  campaignRuns    CampaignRun[]
 
   @@index([organizationId])
   @@map("content_items")

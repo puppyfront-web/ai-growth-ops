@@ -27,6 +27,7 @@ import { createResearchTaskSchema } from './schemas/research.js';
 import { createContentItemSchema, updateContentItemSchema, createContentVariantSchema, updateContentVariantSchema, batchGenerateVariantsSchema } from './schemas/content.js';
 import { createPublishJobSchema, batchPublishSchema } from './schemas/publish.js';
 import { updateLeadSchema } from './schemas/leads.js';
+import { createCampaignSchema, updateCampaignSchema } from './schemas/campaign.js';
 import { executeResearchTaskSync, ResearchExecutionError } from './research-executor.js';
 
 // ── AI Skill Runner (lazy singleton) ────────────────────────────────
@@ -389,6 +390,170 @@ const routes: Route[] = [
     }
   },
 
+  // ── Campaigns ──────────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/campaigns',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const status = ctx.url.searchParams.get('status') || undefined;
+      const where: any = { organizationId: orgCtx.organization.id, deletedAt: null };
+      if (status) where.status = status;
+      const result = await paginate(ctx.db.campaign, where, parsePagination(ctx.url), { createdAt: 'desc' }, { _count: { select: { runs: true } } });
+      sendJson(res, 200, result);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/campaigns/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { id } = ctx.params;
+      const campaign = await ctx.db.campaign.findFirst({
+        where: { id, organizationId: orgCtx.organization.id, deletedAt: null },
+        include: { runs: { orderBy: { createdAt: 'desc' }, take: 20 } },
+      });
+      if (!campaign) return sendJson(res, 404, { error: '活动不存在' });
+      sendJson(res, 200, campaign);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/campaigns',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'content:create')) return sendJson(res, 403, { error: '权限不足' });
+      const bodyResult = validateBody(createCampaignSchema as any, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as Record<string, unknown>;
+      const campaign = await ctx.db.campaign.create({
+        data: {
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
+          name: String(body.name),
+          description: body.description as string | undefined,
+          status: 'draft',
+          platforms: body.platforms as any,
+          contentType: String(body.contentType ?? 'text_image'),
+          scheduleConfig: body.scheduleConfig as any,
+          topicConfig: body.topicConfig as any,
+          autoPublish: body.autoPublish as boolean,
+          autoCompliance: body.autoCompliance as boolean,
+          maxPostsTotal: body.maxPostsTotal as number | undefined,
+        },
+      });
+      sendJson(res, 201, campaign);
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/campaigns/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'content:edit')) return sendJson(res, 403, { error: '权限不足' });
+      const { id } = ctx.params;
+      const bodyResult = validateBody(updateCampaignSchema as any, ctx.body);
+      if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
+      const body = bodyResult.data as Record<string, unknown>;
+      const data: any = {};
+      if (body.name != null) data.name = String(body.name);
+      if (body.description != null) data.description = String(body.description);
+      if (body.platforms != null) data.platforms = body.platforms;
+      if (body.contentType != null) data.contentType = String(body.contentType);
+      if (body.scheduleConfig != null) data.scheduleConfig = body.scheduleConfig;
+      if (body.topicConfig != null) data.topicConfig = body.topicConfig;
+      if (body.autoPublish != null) data.autoPublish = body.autoPublish;
+      if (body.autoCompliance != null) data.autoCompliance = body.autoCompliance;
+      if (body.maxPostsTotal != null) data.maxPostsTotal = body.maxPostsTotal;
+      if (body.status != null) data.status = String(body.status);
+      const campaign = await ctx.db.campaign.update({
+        where: { id, organizationId: orgCtx.organization.id },
+        data,
+      });
+      sendJson(res, 200, campaign);
+    }
+  },
+  {
+    method: 'PATCH',
+    pattern: '/api/campaigns/:id/start',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { id } = ctx.params;
+      const campaign = await ctx.db.campaign.findFirst({ where: { id, organizationId: orgCtx.organization.id, deletedAt: null } });
+      if (!campaign) return sendJson(res, 404, { error: '活动不存在' });
+      // Compute first nextRunAt
+      const scheduleConfig = campaign.scheduleConfig as Record<string, unknown> | null;
+      let nextRunAt = new Date();
+      if (scheduleConfig?.time) {
+        const [h, m] = (scheduleConfig.time as string).split(':').map(Number);
+        nextRunAt.setHours(h, m, 0, 0);
+        if (nextRunAt <= new Date()) nextRunAt.setDate(nextRunAt.getDate() + 1);
+      } else {
+        nextRunAt.setDate(nextRunAt.getDate() + 1);
+        nextRunAt.setHours(9, 0, 0, 0);
+      }
+      const updated = await ctx.db.campaign.update({
+        where: { id },
+        data: { status: 'active', startedAt: new Date(), nextRunAt },
+      });
+      sendJson(res, 200, updated);
+    }
+  },
+  {
+    method: 'PATCH',
+    pattern: '/api/campaigns/:id/pause',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { id } = ctx.params;
+      const updated = await ctx.db.campaign.update({
+        where: { id, organizationId: orgCtx.organization.id },
+        data: { status: 'paused' },
+      });
+      sendJson(res, 200, updated);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/campaigns/:id/run-now',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { id } = ctx.params;
+      const campaign = await ctx.db.campaign.findFirst({ where: { id, organizationId: orgCtx.organization.id, deletedAt: null } });
+      if (!campaign) return sendJson(res, 404, { error: '活动不存在' });
+      const run = await ctx.db.campaignRun.create({
+        data: { campaignId: id, status: 'pending', scheduledAt: new Date() },
+      });
+      const { Queue } = await import('bullmq');
+      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+      const connection = { url: redisUrl };
+      const queue = new Queue('campaign.execute', { connection });
+      await queue.add('campaign.execute', { campaignRunId: run.id }, { attempts: 2, backoff: { type: 'exponential', delay: 10000 } });
+      sendJson(res, 200, { ok: true, runId: run.id });
+    }
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/campaigns/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'content:delete')) return sendJson(res, 403, { error: '权限不足' });
+      const { id } = ctx.params;
+      await ctx.db.campaign.update({
+        where: { id, organizationId: orgCtx.organization.id },
+        data: { status: 'archived', deletedAt: new Date() },
+      });
+      sendJson(res, 200, { ok: true });
+    }
+  },
+
   // ── Content Items ──────────────────────────────────────────────
   {
     method: 'GET',
@@ -465,6 +630,34 @@ const routes: Route[] = [
         }
       });
       sendJson(res, 201, item);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/content-items/generate-with-media',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown> | null;
+      if (!body?.topic) return sendJson(res, 400, { error: '缺少 topic 参数' });
+
+      try {
+        const { generateContentWithMedia } = await import('./services/content-media-generation.js');
+        const result = await generateContentWithMedia(ctx.db, {
+          topic: body.topic as string,
+          contentType: (body.contentType as string) || 'text_image',
+          keywords: body.keywords as string[] | undefined,
+          brandTone: body.brandTone as string | undefined,
+          imageStyle: body.imageStyle as string | undefined,
+          imageCount: (body.imageCount as number) || 1,
+          orgId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
+        });
+        sendJson(res, 201, result);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        sendJson(res, 500, { error: '内容生成失败', detail: msg });
+      }
     }
   },
   {

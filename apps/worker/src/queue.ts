@@ -26,6 +26,8 @@ export const QUEUE_NAMES = {
   RESEARCH_RUN: 'research.run',
   LEAD_SYNC_FEISHU: 'lead.sync.feishu_bitable',
   LEAD_SYNC_WECOM: 'lead.sync.wecom_contact',
+  CAMPAIGN_EXECUTE: 'campaign.execute',
+  CAMPAIGN_CHECK_SCHEDULE: 'campaign.check-schedule',
 } as const;
 
 export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];
