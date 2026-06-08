@@ -2,9 +2,13 @@
 
 const ACTIONS = [
   { label: '📝 写一篇内容', prompt: '帮我写一篇关于' },
-  { label: '📤 发布最新内容', prompt: '帮我发布最新内容到' },
-  { label: '💬 查看今日互动', prompt: '查看今天有哪些新评论和私信' },
-  { label: '🔍 研究热门话题', prompt: '帮我研究一下最近' },
+  { label: '📤 发布内容', prompt: '帮我发布最新内容到' },
+  { label: '💬 查看互动', prompt: '查看今天有哪些新评论和私信' },
+  { label: '🔍 研究热点', prompt: '帮我研究一下最近' },
+  { label: '🔗 账号状态', prompt: '检查所有账号的连接状态' },
+  { label: '🎯 查看线索', prompt: '显示最新的线索列表' },
+  { label: '📊 数据概览', prompt: '显示本周数据分析' },
+  { label: '💬 回复评论', prompt: '拉取最新评论帮我回复' },
 ];
 
 interface QuickActionsProps {
@@ -20,7 +24,7 @@ export function QuickActions({ onSelect }: QuickActionsProps) {
           通过自然语言执行内容发布、互动管理、话题研究等任务
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {ACTIONS.map((action) => (
           <button
             key={action.label}
