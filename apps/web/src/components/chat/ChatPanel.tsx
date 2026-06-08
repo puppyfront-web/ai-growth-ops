@@ -1,34 +1,35 @@
 'use client';
 
 import { useChat } from 'ai/react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatSidebar } from './ChatSidebar';
 import { ChatInput } from './ChatInput';
 import { MessageList } from './MessageList';
 import { QuickActions } from './QuickActions';
 import { getThread } from '@/lib/api/chat';
+import { authToken, currentOrg } from '@/lib/api/client';
 
 interface ChatPanelProps {
   threadId?: string;
-  onThreadIdChange?: (threadId: string) => void;
+  onThreadIdChange?: (threadId: string | undefined) => void;
 }
 
 export function ChatPanel({ threadId: initialThreadId, onThreadIdChange }: ChatPanelProps) {
-  const currentThreadId = useRef(initialThreadId);
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
-  const orgId = typeof window !== 'undefined' ? localStorage.getItem('current_org_id') || '' : '';
+  const [activeThreadId, setActiveThreadId] = useState(initialThreadId);
+  const token = authToken.get() || '';
+  const orgId = currentOrg.get() || '';
 
   const { messages, isLoading, append, setMessages } = useChat({
     api: '/api/chat',
     body: {
-      threadId: currentThreadId.current,
+      threadId: activeThreadId,
       token,
       organizationId: orgId,
     },
     onResponse: (response) => {
       const newThreadId = response.headers.get('X-Thread-Id');
-      if (newThreadId && !currentThreadId.current) {
-        currentThreadId.current = newThreadId;
+      if (newThreadId && !activeThreadId) {
+        setActiveThreadId(newThreadId);
         onThreadIdChange?.(newThreadId);
       }
     },
@@ -61,9 +62,9 @@ export function ChatPanel({ threadId: initialThreadId, onThreadIdChange }: ChatP
   );
 
   const handleNewThread = useCallback(() => {
-    currentThreadId.current = undefined;
+    setActiveThreadId(undefined);
     setMessages([]);
-    onThreadIdChange?.(undefined as any);
+    onThreadIdChange?.(undefined);
   }, [setMessages, onThreadIdChange]);
 
   const handleSelectThread = useCallback(
@@ -76,7 +77,7 @@ export function ChatPanel({ threadId: initialThreadId, onThreadIdChange }: ChatP
   return (
     <div className="flex h-full">
       <ChatSidebar
-        activeThreadId={currentThreadId.current}
+        activeThreadId={activeThreadId}
         onSelectThread={handleSelectThread}
         onNewThread={handleNewThread}
       />

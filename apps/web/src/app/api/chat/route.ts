@@ -59,26 +59,14 @@ export async function POST(req: Request) {
   const { user, accounts } = await fetchUserContext(token, organizationId);
   const systemPrompt = buildSystemPrompt({
     userName: user.name || user.email,
-    orgName: organizationId,
+    orgName: user.organization?.name || organizationId,
     platforms: accounts,
     today: new Date().toISOString(),
   });
 
-  // Load history from backend
-  let history: Array<{ role: string; content: string }> = [];
-  if (existingThreadId) {
-    try {
-      const thread = await apiCall(`/api/chat/threads/${threadId}`, { headers: authHeaders }) as {
-        messages?: Array<{ role: string; content: string }>;
-      };
-      history = (thread.messages || []).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-    } catch {
-      // Thread not found, start fresh
-    }
-  }
+  // useChat sends the full conversation as newMessages — use it directly.
+  // Backend history is only used for persistence (onFinish), not for LLM context,
+  // to avoid doubling messages in the LLM prompt.
 
   // Create tools with auth context
   const tools = createTools({ token, orgId: organizationId });
@@ -89,7 +77,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model,
     system: systemPrompt,
-    messages: [...history, ...newMessages],
+    messages: newMessages,
     tools,
     maxSteps: 5,
     onFinish: async ({ response }) => {
