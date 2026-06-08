@@ -9,6 +9,7 @@ import {
   BarChart3,
   Plug,
   Settings,
+  MessageCircle,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -22,6 +23,7 @@ export type NavItem = {
 export const hiddenSectionPrefixes = ['/research', '/media'] as const;
 
 export const navItems: NavItem[] = [
+  { label: 'AI 助手', href: '/', icon: MessageCircle },
   { label: '工作台', href: '/dashboard', icon: LayoutDashboard },
   { label: '市场调研', href: '/research', icon: Search, hidden: true },
   { label: '内容运营', href: '/content', icon: FileText },
