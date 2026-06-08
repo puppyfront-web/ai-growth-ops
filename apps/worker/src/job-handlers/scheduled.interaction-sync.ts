@@ -38,8 +38,10 @@ export async function handleScheduledInteractionSync(_job: Job): Promise<void> {
 
     try {
       await commentsQueue.add(QUEUE_NAMES.INTERACTION_SYNC_COMMENTS, {
+        userId: account.userId,
         platform: account.platform,
         platformAccountId: account.id,
+        mode: 'browser_assist',
       }, {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },
@@ -47,8 +49,10 @@ export async function handleScheduledInteractionSync(_job: Job): Promise<void> {
       });
 
       await messagesQueue.add(QUEUE_NAMES.INTERACTION_SYNC_MESSAGES, {
+        userId: account.userId,
         platform: account.platform,
         platformAccountId: account.id,
+        mode: 'browser_assist',
       }, {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },
