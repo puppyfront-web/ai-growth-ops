@@ -36,7 +36,7 @@ export function createTools(auth: AuthContext) {
 
   const listAccounts = tool({
     description: '列出用户已连接的所有平台账号及其状态',
-    inputSchema: z.object({}),
+    parameters: z.object({}),
     execute: async () => {
       const accounts = await apiCall('/api/accounts');
       return { accounts };
@@ -45,7 +45,7 @@ export function createTools(auth: AuthContext) {
 
   const checkCookieStatus = tool({
     description: '检查指定平台账号的 cookie 是否有效',
-    inputSchema: z.object({
+    parameters: z.object({
       accountId: z.string().optional().describe('账号 ID，不传则检查所有账号'),
     }),
     execute: async ({ accountId }) => {
@@ -68,7 +68,7 @@ export function createTools(auth: AuthContext) {
 
   const publishContent = tool({
     description: '将内容发布到指定平台。需要 contentId 和目标平台列表。',
-    inputSchema: z.object({
+    parameters: z.object({
       contentId: z.string().describe('要发布的内容 ID'),
       platforms: z.array(z.string()).describe('目标平台列表，如 ["douyin", "xiaohongshu"]'),
       scheduledAt: z.string().optional().describe('定时发布时间，ISO 格式'),
@@ -91,7 +91,7 @@ export function createTools(auth: AuthContext) {
 
   const syncComments = tool({
     description: '从指定平台拉取最新评论',
-    inputSchema: z.object({
+    parameters: z.object({
       platform: z.string().describe('平台名称，如 douyin'),
       platformAccountId: z.string().describe('平台账号 ID'),
       limit: z.number().optional().describe('拉取数量，默认 50'),
@@ -107,7 +107,7 @@ export function createTools(auth: AuthContext) {
 
   const createContent = tool({
     description: '使用 AI 创建新内容。返回创建的内容 ID 供后续发布。',
-    inputSchema: z.object({
+    parameters: z.object({
       title: z.string().describe('内容标题'),
       body: z.string().describe('内容正文'),
       type: z.string().optional().describe('内容类型：text_image | video | article，默认 text_image'),

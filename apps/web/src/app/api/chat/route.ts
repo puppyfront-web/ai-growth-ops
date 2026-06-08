@@ -1,4 +1,4 @@
-import { streamText, stepCountIs } from 'ai';
+import { streamText } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createTools } from './tools';
 import { buildSystemPrompt } from './system-prompt';
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     system: systemPrompt,
     messages: [...history, ...newMessages],
     tools,
-    stopWhen: stepCountIs(5),
+    maxSteps: 5,
     onFinish: async ({ response }) => {
       // Persist user message + assistant response to backend
       try {
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
   });
 
   // Return SSE stream with threadId in header
-  const response = result.toUIMessageStreamResponse();
+  const response = result.toDataStreamResponse();
   response.headers.set('X-Thread-Id', threadId);
   return response;
 }

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { MessageBubble } from './MessageBubble';
-import type { Message } from 'ai';
+import type { Message } from 'ai/react';
 
 interface MessageListProps {
   messages: Message[];
