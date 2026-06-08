@@ -40,8 +40,8 @@ export async function generateProactiveSuggestions(
   // 2. Pending reply reviews
   const pendingReviews = await db.replySuggestion.count({
     where: {
-      organizationId: orgId,
-      status: 'pending_review',
+      status: 'waiting_review',
+      interaction: { organizationId: orgId },
     },
   });
   if (pendingReviews > 0) {
@@ -99,7 +99,7 @@ export async function generateProactiveSuggestions(
   const hotLeadsStale = await db.lead.count({
     where: {
       organizationId: orgId,
-      leadLevel: { in: ['A', 'B'] },
+      level: { in: ['A', 'B'] },
       status: { notIn: ['WON', 'LOST'] },
       updatedAt: { lte: twoDaysAgo },
     },

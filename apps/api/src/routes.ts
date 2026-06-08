@@ -29,6 +29,7 @@ import { createPublishJobSchema, batchPublishSchema } from './schemas/publish.js
 import { updateLeadSchema } from './schemas/leads.js';
 import { createCampaignSchema, updateCampaignSchema } from './schemas/campaign.js';
 import { executeResearchTaskSync, ResearchExecutionError } from './research-executor.js';
+import { classifyByRules, generateRuleBasedReply } from './rule-classifier.js';
 
 // ── AI Skill Runner (lazy singleton) ────────────────────────────────
 let _skillRunner: DefaultSkillRunner | null = null;
@@ -1869,8 +1870,12 @@ const routes: Route[] = [
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
 
       // Preserve existing classification as defaults (pipeline may have already classified)
-      let intentLevel = body.intentLevel ?? interaction.classification?.leadLevel ?? 'C';
-      let intent = body.intent ?? interaction.classification?.intent ?? 'unknown';
+      let intentLevel = body.intentLevel as string ?? interaction.classification?.leadLevel ?? 'C';
+      let intent = body.intent as string ?? interaction.classification?.intent ?? 'unknown';
+      let confidence = interaction.classification?.confidence ?? 0.5;
+      let riskLevel: string = interaction.classification?.riskLevel ?? 'low';
+      let summary: string = interaction.classification?.summary ?? '';
+      let tags: string[] = (interaction.classification?.tags as string[]) ?? [];
       let skillUsed = false;
 
       // Try AI skill-based classification
@@ -1884,29 +1889,41 @@ const routes: Route[] = [
       if (skillResult?.status === 'success' && skillResult.output) {
         intentLevel = skillResult.output.intentLevel ?? intentLevel;
         intent = skillResult.output.intent ?? intent;
+        confidence = skillResult.output.confidence ?? confidence;
+        riskLevel = skillResult.output.riskLevel ?? riskLevel;
+        summary = skillResult.output.summary ?? summary;
+        tags = skillResult.output.tags ?? tags;
         skillUsed = true;
+      } else {
+        // Fallback to rule-based classification when AI skill unavailable
+        const ruleResult = classifyByRules(interaction.content);
+        intentLevel = ruleResult.leadLevel;
+        intent = ruleResult.intent;
+        confidence = ruleResult.confidence;
+        riskLevel = ruleResult.riskLevel;
+        summary = ruleResult.summary;
+        tags = ruleResult.tags;
       }
 
       // Create or update InteractionClassification record
-      // (pipeline may have already created one during sync)
       await ctx.db.interactionClassification.upsert({
         where: { interactionId: interaction.id },
         create: {
           interactionId: interaction.id,
           intent: String(intent),
           leadLevel: String(intentLevel),
-          confidence: skillResult?.output?.confidence ?? interaction.classification?.confidence ?? 0.5,
-          riskLevel: skillResult?.output?.riskLevel ?? interaction.classification?.riskLevel ?? 'low',
-          summary: skillResult?.output?.summary ?? interaction.classification?.summary ?? String(intent),
-          tags: (skillResult?.output?.tags ?? interaction.classification?.tags ?? []) as never,
+          confidence,
+          riskLevel: String(riskLevel),
+          summary: summary || String(intent),
+          tags: tags as never,
         },
         update: {
-          intent: skillUsed ? String(intent) : undefined,
-          leadLevel: skillUsed ? String(intentLevel) : undefined,
-          confidence: skillResult?.output?.confidence ?? undefined,
-          riskLevel: skillResult?.output?.riskLevel ?? undefined,
-          summary: skillResult?.output?.summary ?? undefined,
-          tags: skillResult?.output?.tags ? (skillResult.output.tags as never) : undefined,
+          intent: String(intent),
+          leadLevel: String(intentLevel),
+          confidence,
+          riskLevel: String(riskLevel),
+          summary: summary || undefined,
+          tags: tags.length > 0 ? (tags as never) : undefined,
         },
       }).catch(() => { /* table may not exist yet */ });
 
@@ -1914,7 +1931,7 @@ const routes: Route[] = [
         where: { id: ctx.params.id },
         data: {
           status: 'CLASSIFIED',
-          metadata: { ...(interaction.metadata as Record<string, unknown> | null), intentLevel: String(intentLevel), intent: String(intent), skillUsed }
+          metadata: { ...(interaction.metadata as Record<string, unknown> | null), intentLevel: String(intentLevel), intent: String(intent), confidence, riskLevel, skillUsed }
         }
       });
       sendJson(res, 200, { ...item, classification: { intentLevel: String(intentLevel), intent: String(intent), skillUsed } });
@@ -1932,19 +1949,33 @@ const routes: Route[] = [
       let suggestedText = `感谢您的关注！关于您提到的"${interaction.content.slice(0, 20)}..."，我们会尽快为您处理。`;
       let tone = 'professional';
       let skillUsed = false;
+      let replyRiskLevel: 'low' | 'medium' | 'high' = 'low';
+      let needReview = false;
 
-      // Try AI skill-based reply suggestion
-      const skillResult = await runSkillSafely<{ suggestedText: string; tone: string; confidence: number }>('reply-suggestion', {
-        interactionId: interaction.id,
-        content: interaction.content,
-        platform: interaction.platform,
-        externalUserName: interaction.externalUserName,
-      });
+      // Step 1: Generate rule-based reply as baseline (always runs)
+      const classification = await ctx.db.interactionClassification.findUnique({ where: { interactionId: interaction.id } });
+      const classResult: import('./rule-classifier.js').ClassificationResult = classification
+        ? { intent: classification.intent, leadLevel: classification.leadLevel as 'A' | 'B' | 'C' | 'D', confidence: classification.confidence, riskLevel: (classification.riskLevel as 'low' | 'medium' | 'high') ?? 'low', summary: classification.summary || '', tags: (classification.tags as string[]) || [], nextAction: '' }
+        : classifyByRules(interaction.content);
+      const ruleReply = generateRuleBasedReply(interaction.content, classResult, interaction.platform);
+      suggestedText = ruleReply.suggestedText;
+      replyRiskLevel = ruleReply.riskLevel;
+      needReview = ruleReply.needReview;
 
-      if (skillResult?.status === 'success' && skillResult.output) {
-        suggestedText = skillResult.output.suggestedText ?? suggestedText;
-        tone = skillResult.output.tone ?? tone;
-        skillUsed = true;
+      // Step 2: Try AI skill to enhance (only for low-risk, non-review replies)
+      if (!needReview && replyRiskLevel !== 'high') {
+        const skillResult = await runSkillSafely<{ suggestedText: string; tone: string; confidence: number }>('reply-suggestion', {
+          interactionId: interaction.id,
+          content: interaction.content,
+          platform: interaction.platform,
+          externalUserName: interaction.externalUserName,
+        });
+
+        if (skillResult?.status === 'success' && skillResult.output?.suggestedText) {
+          suggestedText = skillResult.output.suggestedText;
+          tone = skillResult.output.tone ?? tone;
+          skillUsed = true;
+        }
       }
 
       // Create ReplySuggestion record in DB
@@ -1952,8 +1983,10 @@ const routes: Route[] = [
         data: {
           interactionId: interaction.id,
           suggestedText,
-          status: 'draft',
-          decision: skillUsed ? 'ai_skill' : 'template',
+          status: needReview ? 'waiting_review' : 'draft',
+          decision: needReview ? 'require_human_review' : (skillUsed ? 'ai_skill' : 'auto_send_allowed'),
+          riskLevel: replyRiskLevel,
+          needReview,
         }
       }).catch(() => null);
 
@@ -1964,6 +1997,8 @@ const routes: Route[] = [
         content: suggestedText,
         tone,
         skillUsed,
+        riskLevel: replyRiskLevel,
+        needReview,
         suggestionId: suggestion?.id ?? null,
       }]);
     }
