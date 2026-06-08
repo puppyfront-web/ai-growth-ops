@@ -6,7 +6,18 @@
     "script": { "type": "string" },
     "hashtags": { "type": "array", "items": { "type": "string" } },
     "summary": { "type": "string" },
-    "ctaText": { "type": "string" }
+    "ctaText": { "type": "string" },
+    "imagePrompts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "prompt": { "type": "string", "description": "English prompt for DALL-E image generation" },
+          "purpose": { "type": "string", "description": "Purpose of this image: main, thumbnail, banner" }
+        },
+        "required": ["prompt"]
+      }
+    }
   },
   "required": ["title", "body"]
 }

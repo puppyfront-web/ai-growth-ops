@@ -67,6 +67,55 @@ const PUBLISH_SELECTORS: Record<string, PublishSelectors> = {
   },
 };
 
+// ── Media Upload Helper ──────────────────────────────────────────
+
+async function uploadMediaFiles(
+  page: import('playwright').Page,
+  selectors: PublishSelectors,
+  mediaFilePaths: string[],
+  publishJobId: string | undefined,
+  platform: string,
+) {
+  await reportPublishProgress(publishJobId, 'browser_fill', '正在上传媒体文件…');
+
+  try {
+    // Check if there's a hidden file input
+    const fileInput = page.locator('input[type="file"]').first();
+    const hasFileInput = await fileInput.count() > 0;
+
+    if (hasFileInput) {
+      // Direct file input — set files directly
+      await fileInput.setInputFiles(mediaFilePaths);
+      await page.waitForTimeout(3000); // Wait for upload to process
+    } else {
+      // Click upload button to trigger file chooser
+      const uploadSelector = selectors.uploadButton;
+      const uploadElement = page.locator(uploadSelector).first();
+
+      const [fileChooser] = await Promise.all([
+        page.waitForEvent('filechooser', { timeout: 10000 }),
+        uploadElement.click(),
+      ]);
+      await fileChooser.setFiles(mediaFilePaths);
+      await page.waitForTimeout(3000);
+    }
+
+    // Wait for upload completion indicators
+    try {
+      await page.waitForFunction(() => {
+        // Check if upload progress indicators have disappeared
+        const progressBars = document.querySelectorAll('[class*="progress"], [class*="uploading"]');
+        return progressBars.length === 0;
+      }, { timeout: 30000 }).catch(() => {});
+    } catch {
+      // Timeout is OK — upload may have completed already
+    }
+  } catch (uploadErr) {
+    console.error(`[publish] Media upload failed for ${platform}:`, uploadErr);
+    // Don't fail the entire publish — continue without media
+  }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 function sendJson(res: ServerResponse, status: number, data: unknown) {
@@ -150,22 +199,56 @@ const handlePublishContent: RouteHandler = async (_req, res, ctx) => {
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
 
-    await reportPublishProgress(body.publishJobId, 'browser_fill', '正在填写标题与正文…');
-    // Fill title if provided and selector exists
-    if (body.title) {
-      const titleInput = page.locator(selectors.titleInput).first();
-      try {
-        await titleInput.click({ timeout: 5000 });
-        await titleInput.fill(body.title);
-      } catch {
-        // Title input may not be available for all content types
+    // ── Platform-specific ordering ──────────────────────────────────
+    // Xiaohongshu requires images to be uploaded BEFORE filling text.
+    // All other platforms: fill text first, then upload media.
+
+    const hasMedia = body.mediaFilePaths?.length && body.mediaFilePaths.length > 0;
+
+    if (body.platform === 'xiaohongshu' && hasMedia) {
+      // XHS: Upload media FIRST, then fill text
+      await uploadMediaFiles(page, selectors, body.mediaFilePaths!, body.publishJobId, body.platform);
+
+      await reportPublishProgress(body.publishJobId, 'browser_fill', '正在填写标题与正文…');
+      // Fill title
+      if (body.title) {
+        const titleInput = page.locator(selectors.titleInput).first();
+        try {
+          await titleInput.click({ timeout: 5000 });
+          await titleInput.fill(body.title);
+        } catch {
+          // Title input may not be available for all content types
+        }
+      }
+
+      // Fill content
+      const contentInput = page.locator(selectors.contentInput).first();
+      await contentInput.click({ timeout: 5000 });
+      await contentInput.fill(body.content);
+    } else {
+      // All other platforms: Fill text first, then upload media
+      await reportPublishProgress(body.publishJobId, 'browser_fill', '正在填写标题与正文…');
+      // Fill title if provided and selector exists
+      if (body.title) {
+        const titleInput = page.locator(selectors.titleInput).first();
+        try {
+          await titleInput.click({ timeout: 5000 });
+          await titleInput.fill(body.title);
+        } catch {
+          // Title input may not be available for all content types
+        }
+      }
+
+      // Fill content
+      const contentInput = page.locator(selectors.contentInput).first();
+      await contentInput.click({ timeout: 5000 });
+      await contentInput.fill(body.content);
+
+      // Upload media files if provided (non-Douyin platforms)
+      if (hasMedia) {
+        await uploadMediaFiles(page, selectors, body.mediaFilePaths!, body.publishJobId, body.platform);
       }
     }
-
-    // Fill content
-    const contentInput = page.locator(selectors.contentInput).first();
-    await contentInput.click({ timeout: 5000 });
-    await contentInput.fill(body.content);
 
     // Add tags if supported
     if (body.tags?.length && selectors.tagInput) {
