@@ -2078,7 +2078,7 @@ const routes: Route[] = [
       const platform = String(body.platform ?? '');
       const platformAccountId = String(body.platformAccountId ?? '');
       const syncType = String(body.syncType ?? 'all');
-      const mode = String(body.mode ?? 'sandbox');
+      const mode = String(body.mode ?? 'browser_assist');
       const headed = typeof body.headed === 'boolean' ? body.headed : undefined;
       const sourceContentId = body.sourceContentId as string | undefined;
 

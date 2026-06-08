@@ -29,8 +29,8 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
   });
   if (!execution || !execution.workflow) throw new Error(`WorkflowExecution ${executionId} not found`);
 
-  const steps = (execution.workflow.steps as StepDefinition[]) || [];
-  const stepResults: StepResult[] = (execution.stepResults as StepResult[]) || [];
+  const steps = (execution.workflow.steps as unknown as StepDefinition[]) || [];
+  const stepResults: StepResult[] = (execution.stepResults as unknown as StepResult[]) || [];
 
   try {
     for (let i = execution.currentStepIndex; i < steps.length; i++) {
@@ -77,7 +77,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
             where: { id: executionId },
             data: {
               currentStepIndex: i + 1,
-              stepResults: [...stepResults, { stepId: step.id, status: 'completed', output: { delayed: true } }],
+              stepResults: [...stepResults, { stepId: step.id, status: 'completed', output: { delayed: true } }] as unknown as any[],
             },
           });
           // Schedule continuation after delay
@@ -98,7 +98,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
       // Persist progress after each step
       await db.workflowExecution.update({
         where: { id: executionId },
-        data: { currentStepIndex: i + 1, stepResults },
+        data: { currentStepIndex: i + 1, stepResults: stepResults as unknown as any[] },
       });
     }
 
@@ -112,7 +112,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
     const errorMessage = err instanceof Error ? err.message : String(err);
     await db.workflowExecution.update({
       where: { id: executionId },
-      data: { status: 'failed', errorMessage, finishedAt: new Date(), stepResults },
+      data: { status: 'failed', errorMessage, finishedAt: new Date(), stepResults: stepResults as unknown as any[] },
     });
     console.error(`[workflow] Execution ${executionId} failed:`, errorMessage);
     throw err;
@@ -137,16 +137,23 @@ async function executeGenerateMediaStep(
   userId: string,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  // Import the media generation service
   try {
-    const { generateMediaAsset } = await import('../../../apps/api/src/services/media-generation.js');
-    const asset = await generateMediaAsset(db, {
-      prompt: String(input.prompt || ''),
-      style: input.style as string | undefined,
-      orgId,
-      userId,
+    // Call the media generation API endpoint instead of importing cross-package
+    const apiUrl = process.env.API_URL || 'http://localhost:3100';
+    const resp = await fetch(`${apiUrl}/api/media-assets/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: input.prompt,
+        style: input.style,
+        size: input.size,
+        organizationId: orgId,
+        userId,
+      }),
     });
-    return { mediaAssetId: asset.id, fileName: asset.fileName };
+    if (!resp.ok) throw new Error(`Media generation API returned ${resp.status}`);
+    const data = await resp.json() as Record<string, unknown>;
+    return { mediaAssetId: (data as any).id || (data as any).asset?.id, fileName: (data as any).fileName };
   } catch (err) {
     console.error('[workflow] Media generation failed:', err);
     return { error: String(err), mediaAssetId: null };

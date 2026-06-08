@@ -21,7 +21,7 @@ export async function handleResearchRun(job: Job<ResearchRunInput>): Promise<voi
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         researchTaskId,
-        provider: 'sandbox',
+        provider: 'browser_assist',
         platform,
         taskType,
         keywords,

@@ -338,7 +338,6 @@ model Organization {
   chatThreads          ChatThread[]
   campaigns            Campaign[]
   workflows            Workflow[]
-  campaigns            Campaign[]
 
   @@map("organizations")
 }

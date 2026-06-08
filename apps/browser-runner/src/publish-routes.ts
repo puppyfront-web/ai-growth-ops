@@ -269,13 +269,16 @@ const handlePublishContent: RouteHandler = async (_req, res, ctx) => {
     // Wait for navigation or confirmation
     await page.waitForTimeout(3000);
 
-    const postId = `pub-${Date.now()}-${randomUUID().slice(0, 6)}`;
+    // Extract real post ID from the resulting page URL
+    const finalUrl = page.url();
+    const extractedId = extractRealPostId(body.platform, finalUrl);
+    const postId = extractedId || `pub-${Date.now()}-${randomUUID().slice(0, 6)}`;
 
     sendJson(res, 200, {
       success: true,
       externalPostId: postId,
       status: 'published',
-      externalUrl: page.url(),
+      externalUrl: finalUrl,
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error during publish';
@@ -357,6 +360,62 @@ const handleCheckPublishStatus: RouteHandler = async (_req, res, ctx) => {
     await session?.close();
   }
 };
+
+// ── Extract real post ID from platform-specific URLs ─────────────
+
+function extractRealPostId(platform: string, url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname;
+    const hash = parsed.hash;
+
+    switch (platform) {
+      case 'douyin': {
+        // https://www.douyin.com/video/7123456789... or /note/7123456789...
+        const videoMatch = path.match(/\/(video|note)\/(\d+)/);
+        if (videoMatch) return videoMatch[2];
+        // Creator dashboard redirect: /creator-micro/content/manage?...
+        // Try to get modalId or nav parameter
+        const modalId = parsed.searchParams.get('modal_id');
+        if (modalId) return modalId;
+        break;
+      }
+      case 'xiaohongshu': {
+        // https://www.xiaohongshu.com/explore/64abc123... or /discovery/item/64abc123...
+        const xhsMatch = path.match(/\/(explore|discovery\/item)\/([a-f0-9]+)/i);
+        if (xhsMatch) return xhsMatch[2];
+        break;
+      }
+      case 'wechat_official': {
+        // https://mp.weixin.qq.com/... appmsgid parameter
+        const appMsgId = parsed.searchParams.get('appmsgid');
+        if (appMsgId) return appMsgId;
+        break;
+      }
+      case 'wechat_channels': {
+        // https://channels.weixin.qq.com/platform/post/detail/xxx
+        const channelsMatch = path.match(/\/post\/detail\/([a-zA-Z0-9_-]+)/);
+        if (channelsMatch) return channelsMatch[1];
+        break;
+      }
+      case 'baijiahao': {
+        // https://baijiahao.baidu.com/s?id=123...
+        const bjhId = parsed.searchParams.get('id');
+        if (bjhId) return bjhId;
+        break;
+      }
+      case 'zhihu': {
+        // https://zhuanlan.zhihu.com/p/123... or answers/123...
+        const zhihuMatch = path.match(/\/(p|answers?|pin)\/(\d+)/);
+        if (zhihuMatch) return zhihuMatch[2];
+        break;
+      }
+    }
+  } catch {
+    // URL parse failed, fall back to synthetic ID
+  }
+  return null;
+}
 
 // ── Exported route array ────────────────────────────────────────
 

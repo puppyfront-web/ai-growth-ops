@@ -33,7 +33,7 @@ const routes: Route[] = [
     pattern: '/capabilities/:platform',
     handler: async (_req, res, ctx) => {
       const { platform } = ctx.params;
-      const mode = ctx.url.searchParams.get('mode') || 'sandbox';
+      const mode = ctx.url.searchParams.get('mode') || 'browser_assist';
       try {
         const connector = getOrCreatePublishConnector(
           platform as PlatformCode,
@@ -56,7 +56,7 @@ const routes: Route[] = [
         return;
       }
 
-      const mode = String(body.mode || 'sandbox');
+      const mode = String(body.mode || 'browser_assist');
       const connector = getOrCreatePublishConnector(
         body.platform as PlatformCode,
         mode as InteractionMode,
@@ -83,7 +83,7 @@ const routes: Route[] = [
         return;
       }
 
-      const mode = String(body.mode || 'sandbox');
+      const mode = String(body.mode || 'browser_assist');
       const connector = getOrCreatePublishConnector(
         body.platform as PlatformCode,
         mode as InteractionMode,
@@ -107,7 +107,7 @@ const routes: Route[] = [
     pattern: '/interaction-capabilities/:platform',
     handler: async (_req, res, ctx) => {
       const { platform } = ctx.params;
-      const mode = ctx.url.searchParams.get('mode') || 'sandbox';
+      const mode = ctx.url.searchParams.get('mode') || 'browser_assist';
       try {
         const connector = getOrCreateConnector(
           platform as PlatformCode,

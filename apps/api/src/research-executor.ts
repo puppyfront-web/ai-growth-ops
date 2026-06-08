@@ -1,5 +1,4 @@
 import type { DatabaseClient, ContentOpportunity, ResearchInsight, ResearchTask } from '@ai-growth-ops/database';
-import { SandboxResearchProvider } from '../../research-runner/src/sandbox-provider.js';
 
 type TaskSnapshot = ResearchTask & {
   collectedPosts: any[];
@@ -31,8 +30,6 @@ export async function executeResearchTaskSync(
     throw new ResearchExecutionError(400, 'INVALID_STATE', `Cannot run from ${task.status} state`);
   }
 
-  const provider = new SandboxResearchProvider();
-
   try {
     await db.researchTask.update({
       where: { id: task.id },
@@ -48,31 +45,45 @@ export async function executeResearchTaskSync(
 
     const platform = Array.isArray(task.platforms) ? String(task.platforms[0] ?? 'xiaohongshu') : 'xiaohongshu';
     const keywords = Array.isArray(task.keywords) ? task.keywords.map((item) => String(item)) : [];
-    const posts = await provider.collectPosts({
-      platform,
-      keywords,
-      maxPosts: 8,
+
+    // Call research-runner service (browser-assist mode) for real data collection
+    const runnerUrl = process.env.RESEARCH_RUNNER_URL || 'http://localhost:3300';
+    const resp = await fetch(`${runnerUrl}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        researchTaskId: task.id,
+        provider: 'browser_assist',
+        platform,
+        taskType: task.type,
+        keywords,
+        maxPosts: 8,
+        maxComments: 3,
+      }),
     });
-    const comments = await provider.collectComments({
-      platform,
-      postIds: posts.map((post) => post.externalPostId),
-      maxCommentsPerPost: 3,
-    });
+
+    if (!resp.ok) {
+      throw new Error(`Research runner returned ${resp.status}: ${await resp.text()}`);
+    }
+
+    const runnerResult = await resp.json() as Record<string, unknown>;
+    const posts = (runnerResult.posts || []) as Array<Record<string, unknown>>;
+    const comments = (runnerResult.comments || []) as Array<Record<string, unknown>>;
 
     for (const post of posts) {
       await db.collectedPost.create({
         data: {
           researchTaskId: task.id,
           platform: platform as any,
-          externalPostId: post.externalPostId,
-          title: post.title,
-          content: post.content,
-          authorId: post.authorId,
-          authorName: post.authorName,
-          likeCount: post.likeCount,
-          commentCount: post.commentCount,
-          shareCount: post.shareCount,
-          publishedAt: post.publishedAt ? new Date(post.publishedAt) : undefined,
+          externalPostId: String(post.externalPostId),
+          title: post.title as string | undefined,
+          content: post.content as string | undefined,
+          authorId: post.authorId as string | undefined,
+          authorName: post.authorName as string | undefined,
+          likeCount: post.likeCount as number | undefined,
+          commentCount: post.commentCount as number | undefined,
+          shareCount: post.shareCount as number | undefined,
+          publishedAt: post.publishedAt ? new Date(post.publishedAt as string) : undefined,
           metadata: post.metadata as any,
         },
       });
@@ -83,12 +94,12 @@ export async function executeResearchTaskSync(
         data: {
           researchTaskId: task.id,
           platform: platform as any,
-          externalCommentId: comment.externalCommentId,
-          externalPostId: comment.externalPostId,
-          externalUserId: comment.externalUserId,
-          externalUserName: comment.externalUserName,
-          content: comment.content,
-          likeCount: comment.likeCount,
+          externalCommentId: String(comment.externalCommentId),
+          externalPostId: comment.externalPostId as string | undefined,
+          externalUserId: comment.externalUserId as string | undefined,
+          externalUserName: comment.externalUserName as string | undefined,
+          content: String(comment.content),
+          likeCount: comment.likeCount as number | undefined,
           metadata: comment.metadata as any,
         },
       });
@@ -98,8 +109,17 @@ export async function executeResearchTaskSync(
       researchTaskId: task.id,
       platform,
       keywords,
-      posts,
-      comments,
+      posts: posts.map(p => ({
+        title: p.title as string | undefined,
+        content: p.content as string | undefined,
+        likeCount: p.likeCount as number | undefined,
+        commentCount: p.commentCount as number | undefined,
+      })),
+      comments: comments.map(c => ({
+        content: String(c.content),
+        externalUserName: c.externalUserName as string | undefined,
+        likeCount: c.likeCount as number | undefined,
+      })),
     });
 
     await db.researchTask.update({
