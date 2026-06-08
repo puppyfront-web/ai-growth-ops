@@ -110,6 +110,7 @@ const TOOL_LABELS: Record<string, string> = {
   remember_preference: '记住偏好',
   list_plan_templates: '计划模板',
   execute_plan: '执行计划',
+  search_video_comments: '视频评论挖掘',
 };
 
 /** Structured tool result renderer */
@@ -394,6 +395,48 @@ function ToolResult({ name, result }: { name: string; result: any }) {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  // Prospecting search result
+  if (name === 'search_video_comments' && r) {
+    const prospects = (r.prospects || []) as Array<{ userName?: string; content?: string; leadLevel?: string; intent?: string; videoTitle?: unknown; videoAuthor?: unknown }>;
+    const levelCounts = r.levelCounts as Record<string, number> | undefined;
+    const totalVideos = r.totalVideos as number || 0;
+    const totalComments = r.totalComments as number || 0;
+    return (
+      <div className="mt-1 space-y-2">
+        <div className="font-medium text-foreground">🔍 挖掘报告：{String(r.keyword || '')}</div>
+        <div className="flex gap-3 text-xs text-muted-foreground">
+          <span>📹 {totalVideos} 个视频</span>
+          <span>💬 {totalComments} 条评论</span>
+          {levelCounts && <>
+            <span className="text-green-600">A级 {levelCounts.A || 0}</span>
+            <span className="text-blue-600">B级 {levelCounts.B || 0}</span>
+            <span>C级 {levelCounts.C || 0}</span>
+            <span className="text-gray-400">D级 {levelCounts.D || 0}</span>
+          </>}
+        </div>
+        {prospects.length > 0 ? (
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-foreground">🎯 意向客户 ({prospects.length}):</div>
+            {prospects.slice(0, 10).map((p, i) => (
+              <div key={i} className="text-xs bg-accent/50 rounded px-2 py-1">
+                <span className={p.leadLevel === 'A' ? 'text-green-600 font-medium' : 'text-blue-600 font-medium'}>
+                  {p.leadLevel}级
+                </span>
+                <span className="ml-1 font-medium">{p.userName || '用户'}</span>
+                <span className="ml-1 text-muted-foreground">({p.intent})</span>
+                <div className="text-muted-foreground mt-0.5 truncate">{p.content}</div>
+                {p.videoTitle ? <div className="text-muted-foreground opacity-60 truncate">来自: {String(p.videoTitle)}</div> : null}
+              </div>
+            ))}
+            {prospects.length > 10 && <div className="text-xs text-muted-foreground">...还有 {prospects.length - 10} 个意向客户</div>}
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">本次搜索未发现A/B级意向客户</div>
+        )}
       </div>
     );
   }

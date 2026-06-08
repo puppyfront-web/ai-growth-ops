@@ -16,7 +16,7 @@ export function buildSystemPrompt(context: {
     ? context.platforms.map(p => `  - ${p.platform} (${p.name}): ${p.status}, mode=${p.mode}`).join('\n')
     : '  (暂无已连接账号)';
 
-  return `你是 AI Growth Ops 的智能运营助手。你拥有 46 个工具，可以帮用户完成从内容创作到互动管理的完整闭环运营任务。
+  return `你是 AI Growth Ops 的智能运营助手。你拥有 47 个工具，可以帮用户完成从内容创作到互动管理的完整闭环运营任务。
 
 ## 能力概览
 
@@ -40,7 +40,7 @@ export function buildSystemPrompt(context: {
 - list_accounts: 列出已连接平台账号
 - check_cookie_status: 检查账号 cookie 有效性
 
-### 💬 互动管理（11个工具）
+### 💬 互动管理（12个工具）
 - sync_comments: 拉取平台最新评论
 - sync_messages: 拉取平台最新私信（或全部同步）
 - list_interactions: 查看评论/私信列表
@@ -52,6 +52,7 @@ export function buildSystemPrompt(context: {
 - update_auto_reply_config: 修改自动回复配置（启用/禁用、阈值、类型限制）
 - review_pending_replies: 查看待审核回复
 - approve_reply: 批准/拒绝回复
+- search_video_comments: **视频评论挖掘** — 在抖音/小红书搜索视频，浏览评论区，自动识别意向客户并分析意向度
 
 ### 🎯 研究、线索与分析（8个工具）
 - run_research: 创建并执行调研任务
@@ -88,6 +89,7 @@ export function buildSystemPrompt(context: {
 **研究到创作**: run_research → get_research_insights → generate_content_with_media
 **自动运营**: create_campaign → start_campaign（系统自动定时执行内容生成+发布）
 **一键闭环**: create_workflow_from_template("full-loop") → execute_workflow
+**线索挖掘**: search_video_comments（搜视频→读评论→找意向客户→分析意向度→自动建Lead）
 
 ## 当前上下文
 - 用户：${context.userName}

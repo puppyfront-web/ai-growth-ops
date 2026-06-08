@@ -189,6 +189,8 @@ interface SearchAndFetchCommentsBody {
   keyword: string;
   topN?: number;
   headed?: boolean;
+  commentScrollRounds?: number;
+  maxCommentsPerVideo?: number;
 }
 
 const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
@@ -237,8 +239,8 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     page.on('response', searchListener);
 
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await scrollForLazyLoad(page);
-    await page.waitForTimeout(2000);
+    await humanLikeScroll(page, 5);
+    await page.waitForTimeout(1500);
 
     page.off('response', searchListener);
     await Promise.allSettled(searchTasks);
@@ -285,8 +287,9 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
 
       try {
         await page.goto(contentUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await scrollForLazyLoad(page);
-        await page.waitForTimeout(2000);
+        // Human-like scroll to load comment section (more rounds = deeper comments)
+        const scrollRounds = body.commentScrollRounds ?? 8;
+        await humanLikeScroll(page, scrollRounds);
       } catch {
         // Navigation failed for this content — skip
       }
@@ -294,11 +297,12 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
       page.off('response', commentListener);
       await Promise.allSettled(commentTasks);
 
+      const maxPerVideo = body.maxCommentsPerVideo ?? 50;
       allResults.push({
         contentId: result.contentId,
         title: result.title,
         author: result.author,
-        comments: dedupeByKey(captured, (c) => String(c.externalCommentId ?? '')).slice(0, 20),
+        comments: dedupeByKey(captured, (c) => String(c.externalCommentId ?? '')).slice(0, maxPerVideo),
       });
     }
 
@@ -584,6 +588,31 @@ async function scrollForLazyLoad(page: import('playwright').Page): Promise<void>
   await page.waitForTimeout(1500);
 }
 
+/**
+ * Human-like scroll: varies speed, distance, direction, and pauses.
+ * @param rounds How many scroll cycles (default 8)
+ */
+async function humanLikeScroll(page: import('playwright').Page, rounds = 8): Promise<void> {
+  for (let i = 0; i < rounds; i++) {
+    // Main scroll: 300-1200px downward
+    const distance = 300 + Math.floor(Math.random() * 900);
+    await page.mouse.wheel(0, distance);
+
+    // Random pause: 600-2000ms (mimics reading)
+    const pause = 600 + Math.floor(Math.random() * 1400);
+    await page.waitForTimeout(pause);
+
+    // 20% chance to scroll UP a bit (human re-reads)
+    if (Math.random() < 0.2) {
+      const upDist = 100 + Math.floor(Math.random() * 300);
+      await page.mouse.wheel(0, -upDist);
+      await page.waitForTimeout(400 + Math.floor(Math.random() * 600));
+    }
+  }
+  // Final settle: wait for any lazy-loaded content
+  await page.waitForTimeout(2000);
+}
+
 /** XHS note management page — used to discover the latest note ID when none is supplied. */
 const XHS_NOTE_MANAGE_URL = 'https://creator.xiaohongshu.com/creator/notemanage';
 
@@ -822,32 +851,47 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
     const responseListener = (response: import('playwright').Response) => {
       const task = (async () => {
       const url = response.url();
-      if (body.platform === 'douyin' && DOUYIN_ITEM_LIST_PATTERNS.some((pattern) => url.includes(pattern))) {
+      // Determine whether this URL carries metadata we need to parse
+      const isDouyinItemList = body.platform === 'douyin' && DOUYIN_ITEM_LIST_PATTERNS.some((pattern) => url.includes(pattern));
+      const isDouyinNoticeComment = body.platform === 'douyin' && url.includes('/aweme/v1/creator/notice/comment');
+      const isXhsNoteList = body.platform === 'xiaohongshu' && !xhsNoteRef.value?.xsecToken && XHS_NOTE_LIST_PATTERNS.some((p) => url.includes(p));
+      const isCommentApi = xhrPatterns.some((p) => url.includes(p));
+
+      // Skip URLs that carry no useful data
+      if (!isDouyinItemList && !isDouyinNoticeComment && !isXhsNoteList && !isCommentApi) return;
+
+      // Read the response body ONCE — Response.json() can only be called once
+      let json: Record<string, unknown>;
+      try {
+        json = await response.json() as Record<string, unknown>;
+      } catch { return; /* non-JSON, skip */ }
+
+      // Extract Douyin item ID from item-list or notice-comment APIs
+      if (isDouyinItemList || isDouyinNoticeComment) {
         try {
-          rememberDouyinItemId(await response.json() as Record<string, unknown>);
+          rememberDouyinItemId(json);
         } catch { /* skip */ }
       }
-      if (body.platform === 'douyin' && url.includes('/aweme/v1/creator/notice/comment')) {
+
+      // Extract XHS note ref for xsec_token
+      if (isXhsNoteList) {
         try {
-          rememberDouyinItemId(await response.json() as Record<string, unknown>);
-        } catch { /* skip */ }
-      }
-      if (body.platform === 'xiaohongshu' && !xhsNoteRef.value?.xsecToken && XHS_NOTE_LIST_PATTERNS.some((p) => url.includes(p))) {
-        try {
-          const note = pickXhsNoteRef(await response.json() as Record<string, unknown>);
+          const note = pickXhsNoteRef(json);
           if (note && (!xhsNoteRef.value || note.id === xhsNoteRef.value.id)) xhsNoteRef.value = note;
         } catch { /* skip */ }
       }
-      if (!xhrPatterns.some((p) => url.includes(p))) return;
-      try {
-        const json = await response.json() as Record<string, unknown>;
-        const items = extractCommentList(
-          body.platform,
-          json,
-          body.platform === 'xiaohongshu' ? xhsNoteRef.value?.id : resolveDouyinItemId(),
-        );
-        captured.push(...items);
-      } catch { /* non-JSON, skip */ }
+
+      // Extract comment data from comment API responses
+      if (isCommentApi) {
+        try {
+          const items = extractCommentList(
+            body.platform,
+            json,
+            body.platform === 'xiaohongshu' ? xhsNoteRef.value?.id : resolveDouyinItemId(),
+          );
+          captured.push(...items);
+        } catch { /* skip */ }
+      }
       })();
       responseTasks.push(task);
     };
@@ -1032,15 +1076,19 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
 
     // ── XHR response interception ──────────────────────────────
     const captured: Array<Record<string, unknown>> = [];
+    const messageTasks: Array<Promise<void>> = [];
 
-    const messageListener = async (response: import('playwright').Response) => {
-      const url = response.url();
-      if (!xhrPatterns.some((p) => url.includes(p))) return;
-      try {
-        const json = await response.json() as Record<string, unknown>;
-        const items = extractMessageList(body.platform, json);
-        captured.push(...items);
-      } catch { /* non-JSON, skip */ }
+    const messageListener = (response: import('playwright').Response) => {
+      const task = (async () => {
+        const url = response.url();
+        if (!xhrPatterns.some((p) => url.includes(p))) return;
+        try {
+          const json = await response.json() as Record<string, unknown>;
+          const items = extractMessageList(body.platform, json);
+          captured.push(...items);
+        } catch { /* non-JSON, skip */ }
+      })();
+      messageTasks.push(task);
     };
     page.on('response', messageListener);
 
@@ -1049,6 +1097,7 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
     await scrollForLazyLoad(page);
 
     page.off('response', messageListener);
+    await Promise.allSettled(messageTasks.splice(0));
     sendJson(res, 200, dedupeAndFilterTodayMessages(captured, body.limit ?? 50));
   } catch (error) {
     sendAssistFetchError(res, 'messages', error);

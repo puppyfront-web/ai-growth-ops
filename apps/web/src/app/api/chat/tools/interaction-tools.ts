@@ -178,5 +178,20 @@ export function createInteractionTools(auth: AuthContext) {
         });
       },
     }),
+    search_video_comments: tool({
+      description: '在指定平台（默认抖音）搜索视频，浏览评论区，识别意向客户并分析意向度。会自动对每条评论进行AI分类，返回A/B级意向客户列表。',
+      parameters: z.object({
+        keyword: z.string().describe('搜索关键词，如"防晒霜推荐"、"护肤好物"'),
+        platform: z.string().optional().default('douyin').describe('平台名称，默认 douyin'),
+        topNVideos: z.number().optional().default(5).describe('搜索前几个视频的评论区，默认5'),
+        maxCommentsPerVideo: z.number().optional().default(30).describe('每个视频最多抓取评论数，默认30'),
+      }),
+      execute: async ({ keyword, platform, topNVideos, maxCommentsPerVideo }) => {
+        return apiCall('/api/prospecting/search', {
+          method: 'POST',
+          body: { keyword, platform: platform || 'douyin', topNVideos: topNVideos || 5, maxCommentsPerVideo: maxCommentsPerVideo || 30 },
+        });
+      },
+    }),
   };
 }

@@ -3776,6 +3776,266 @@ const routes: Route[] = [
     },
   },
 
+  // ── Prospecting: Video Comment Mining ────────────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/prospecting/search',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const keyword = String(body.keyword ?? '');
+      if (!keyword) return sendJson(res, 400, { error: 'keyword 不能为空' });
+
+      const platform = String(body.platform ?? 'douyin');
+      const topNVideos = Number(body.topNVideos ?? 5);
+      const maxCommentsPerVideo = Number(body.maxCommentsPerVideo ?? 30);
+      const commentScrollRounds = Number(body.commentScrollRounds ?? 8);
+
+      // Find a browser-assist account with cookie for this platform
+      const account = await ctx.db.platformAccount.findFirst({
+        where: {
+          organizationId: orgCtx.organization.id,
+          platform: platform as any,
+          mode: 'browser_assist',
+          status: 'active',
+          deletedAt: null,
+          cookieRef: { not: '' },
+        },
+      });
+
+      if (!account) {
+        return sendJson(res, 400, { error: `没有找到 ${platform} 平台的已登录账号，请先扫码登录` });
+      }
+
+      const cookie = decryptToken(account.cookieRef!);
+      const runnerUrl = getBrowserRunnerUrl();
+
+      // Call browser-runner search-and-fetch-comments synchronously
+      const taskId = randomUUID();
+      try {
+        const searchResp = await fetchWithTimeout(`${runnerUrl}/assist/search-and-fetch-comments`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            platform,
+            cookie,
+            keyword,
+            topN: topNVideos,
+            headed: true,
+            commentScrollRounds,
+            maxCommentsPerVideo,
+          }),
+        }, 180_000);
+
+        const searchResult = await searchResp.json() as Record<string, unknown>;
+
+        if (!searchResp.ok) {
+          return sendJson(res, 502, { error: '搜索失败', details: searchResult });
+        }
+
+        // Analyze comments with rule-based classifier
+        const results = (searchResult.results ?? []) as Array<Record<string, unknown>>;
+        const prospects: Array<Record<string, unknown>> = [];
+        let totalComments = 0;
+        const levelCounts = { A: 0, B: 0, C: 0, D: 0 };
+
+        for (const video of results) {
+          const comments = (video.comments ?? []) as Array<Record<string, unknown>>;
+          totalComments += comments.length;
+
+          for (const comment of comments) {
+            const content = String(comment.content ?? comment.userNickname ?? '');
+            if (!content || content.length < 3) continue;
+
+            const classification = classifyByRules(content);
+            levelCounts[classification.leadLevel as keyof typeof levelCounts]++;
+
+            // Store A/B level as Interaction + Lead
+            if (classification.leadLevel === 'A' || classification.leadLevel === 'B') {
+              const externalId = `prospecting-${taskId}-${String(comment.externalCommentId ?? Math.random().toString(36).slice(2, 10))}`;
+              try {
+                const interaction = await ctx.db.interaction.create({
+                  data: {
+                    organizationId: orgCtx.organization.id,
+                    userId: orgCtx.user.id,
+                    platform: platform as any,
+                    platformAccountId: account.id,
+                    externalInteractionId: externalId,
+                    externalUserId: String(comment.externalUserId ?? ''),
+                    externalUserName: String(comment.userNickname ?? ''),
+                    type: 'comment',
+                    content,
+                    status: 'CLASSIFIED',
+                    metadata: {
+                      source: 'prospecting',
+                      taskId,
+                      keyword,
+                      videoTitle: String(video.title ?? ''),
+                      videoAuthor: String(video.author ?? ''),
+                      videoContentId: String(video.contentId ?? ''),
+                      intentLevel: classification.leadLevel,
+                      intent: classification.intent,
+                      confidence: classification.confidence,
+                    },
+                  },
+                });
+
+                // Create classification record
+                await ctx.db.interactionClassification.upsert({
+                  where: { interactionId: interaction.id },
+                  create: {
+                    interactionId: interaction.id,
+                    intent: classification.intent,
+                    leadLevel: classification.leadLevel,
+                    confidence: classification.confidence,
+                    riskLevel: classification.riskLevel,
+                    summary: classification.summary,
+                    tags: classification.tags as never,
+                  },
+                  update: {},
+                }).catch(() => {});
+
+                // Create Lead
+                await ctx.db.lead.create({
+                  data: {
+                    organizationId: orgCtx.organization.id,
+                    userId: orgCtx.user.id,
+                    sourcePlatform: platform as any,
+                    sourceAccountId: account.id,
+                    sourceInteractionId: interaction.id,
+                    externalUserId: String(comment.externalUserId ?? ''),
+                    externalUserName: String(comment.userNickname ?? ''),
+                    level: classification.leadLevel as any,
+                    intent: classification.intent,
+                    confidence: classification.confidence,
+                    summary: content.slice(0, 200),
+                  },
+                }).catch(() => {});
+              } catch (e) {
+                // Skip duplicate interactions
+              }
+
+              prospects.push({
+                userName: comment.userNickname,
+                content: content.slice(0, 100),
+                leadLevel: classification.leadLevel,
+                intent: classification.intent,
+                confidence: classification.confidence,
+                videoTitle: video.title,
+                videoAuthor: video.author,
+              });
+            }
+          }
+        }
+
+        sendJson(res, 200, {
+          taskId,
+          keyword,
+          platform,
+          totalVideos: results.length,
+          totalComments,
+          levelCounts,
+          prospects,
+        });
+      } catch (error) {
+        sendJson(res, 502, {
+          error: '挖掘任务执行失败',
+          taskId,
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/prospecting/tasks',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+
+      // Find prospecting-sourced interactions
+      const interactions = await ctx.db.interaction.findMany({
+        where: {
+          organizationId: orgCtx.organization.id,
+          metadata: { path: ['source'], equals: 'prospecting' },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          content: true,
+          externalUserName: true,
+          platform: true,
+          createdAt: true,
+          metadata: true,
+          classification: { select: { leadLevel: true, intent: true, confidence: true } },
+        },
+      });
+
+      sendJson(res, 200, { items: interactions });
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/prospecting/tasks/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+
+      const taskId = ctx.params.id;
+
+      const interactions = await ctx.db.interaction.findMany({
+        where: {
+          organizationId: orgCtx.organization.id,
+          metadata: { path: ['taskId'], equals: taskId },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          content: true,
+          externalUserName: true,
+          platform: true,
+          createdAt: true,
+          metadata: true,
+          classification: { select: { leadLevel: true, intent: true, confidence: true, riskLevel: true } },
+          leads: { select: { id: true, level: true, status: true } },
+        },
+      });
+
+      if (interactions.length === 0) {
+        return sendJson(res, 404, { error: '挖掘任务未找到' });
+      }
+
+      // Aggregate summary
+      const meta = interactions[0].metadata as Record<string, unknown> | null;
+      const levelCounts = { A: 0, B: 0, C: 0, D: 0 };
+      for (const it of interactions) {
+        const level = it.classification?.leadLevel ?? 'C';
+        levelCounts[level as keyof typeof levelCounts] = (levelCounts[level as keyof typeof levelCounts] || 0) + 1;
+      }
+
+      sendJson(res, 200, {
+        taskId,
+        keyword: meta?.keyword ?? '',
+        platform: interactions[0].platform,
+        totalProspects: interactions.length,
+        levelCounts,
+        prospects: interactions.map(it => ({
+          id: it.id,
+          userName: it.externalUserName,
+          content: it.content,
+          classification: it.classification,
+          videoTitle: (it.metadata as Record<string, unknown>)?.videoTitle,
+          videoAuthor: (it.metadata as Record<string, unknown>)?.videoAuthor,
+          lead: it.leads?.[0],
+          createdAt: it.createdAt,
+        })),
+      });
+    },
+  },
+
   // ── Agent Intelligence ──────────────────────────────────────────
   {
     method: 'GET',
