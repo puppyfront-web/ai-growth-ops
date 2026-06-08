@@ -3740,6 +3740,68 @@ const routes: Route[] = [
       sendJson(res, 200, updated);
     },
   },
+
+  // ── Agent Intelligence ──────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/agent/suggestions',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const { generateProactiveSuggestions } = await import('./services/agent-suggestions.js');
+      const suggestions = await generateProactiveSuggestions(ctx.db, orgCtx.organization.id);
+      sendJson(res, 200, { suggestions });
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/settings/agent-preferences',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const config = await ctx.db.appConfig.findFirst({
+        where: { organizationId: orgCtx.organization.id, key: 'agent_user_preferences' },
+      });
+      sendJson(res, 200, config?.value ?? {
+        preferredPlatforms: [],
+        defaultContentType: 'text_image',
+        preferredPublishTimes: [],
+        contentStylePreferences: '',
+        replyStylePreferences: '',
+        avoidTopics: [],
+        brandVoice: '',
+      });
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/settings/agent-preferences',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown>;
+      const existing = await ctx.db.appConfig.findFirst({
+        where: { organizationId: orgCtx.organization.id, key: 'agent_user_preferences' },
+      });
+      if (existing) {
+        const updated = await ctx.db.appConfig.update({
+          where: { id: existing.id },
+          data: { value: body as any },
+        });
+        sendJson(res, 200, updated.value);
+      } else {
+        const created = await ctx.db.appConfig.create({
+          data: {
+            organizationId: orgCtx.organization.id,
+            userId: orgCtx.user.id,
+            key: 'agent_user_preferences',
+            value: body as any,
+          },
+        });
+        sendJson(res, 201, created.value);
+      }
+    },
+  },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────

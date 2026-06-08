@@ -5,6 +5,7 @@ import { createResearchTools } from './research-tools';
 import { createCampaignTools } from './campaign-tools';
 import { createContentMediaTools } from './content-media-tools';
 import { createWorkflowTools } from './workflow-tools';
+import { createAgentTools } from './agent-tools';
 import type { AuthContext } from './_shared';
 
 export type { AuthContext } from './_shared';
@@ -18,5 +19,6 @@ export function createTools(auth: AuthContext) {
     ...createCampaignTools(auth),
     ...createContentMediaTools(auth),
     ...createWorkflowTools(auth),
+    ...createAgentTools(auth),
   };
 }

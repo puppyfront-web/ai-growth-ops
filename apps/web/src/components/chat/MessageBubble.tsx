@@ -105,6 +105,11 @@ const TOOL_LABELS: Record<string, string> = {
   execute_workflow: '执行工作流',
   get_workflow_status: '工作流状态',
   pause_workflow: '暂停工作流',
+  get_proactive_suggestions: '运营建议',
+  get_my_preferences: '我的偏好',
+  remember_preference: '记住偏好',
+  list_plan_templates: '计划模板',
+  execute_plan: '执行计划',
 };
 
 /** Structured tool result renderer */
@@ -320,6 +325,75 @@ function ToolResult({ name, result }: { name: string; result: any }) {
     return (
       <div className="mt-1 text-green-600 font-medium">
         ✅ 已触发执行 {r.executionId ? `(ID: ${r.executionId?.slice(0, 8)}…)` : r.runId ? `(Run: ${r.runId?.slice(0, 8)}…)` : ''}
+      </div>
+    );
+  }
+
+  // Proactive suggestions
+  if (name === 'get_proactive_suggestions' && r?.suggestions) {
+    const suggestions = r.suggestions as Array<{ priority: string; title: string; description: string }>;
+    return (
+      <div className="mt-1 space-y-1">
+        {(suggestions as any[]).map((s, i) => (
+          <div key={i} className="flex items-start gap-2 text-muted-foreground">
+            <span>{s.priority === 'high' ? '⚠️' : s.priority === 'medium' ? '📋' : '💡'}</span>
+            <div>
+              <span className="text-foreground font-medium">{s.title}</span>
+              <span className="ml-1 text-xs">{s.description}</span>
+            </div>
+          </div>
+        ))}
+        {(suggestions as any[]).length === 0 && <div className="text-green-600">✅ 一切正常，暂无待办事项</div>}
+      </div>
+    );
+  }
+
+  // User preferences
+  if ((name === 'get_my_preferences' || name === 'remember_preference') && r) {
+    if (r.message) {
+      return <div className="mt-1 text-green-600 font-medium">✅ {r.message}</div>;
+    }
+    const prefs = r;
+    const prefLines = [];
+    if (prefs.preferredPlatforms?.length) prefLines.push(`平台: ${(prefs.preferredPlatforms as string[]).join(', ')}`);
+    if (prefs.contentStylePreferences) prefLines.push(`内容风格: ${prefs.contentStylePreferences}`);
+    if (prefs.replyStylePreferences) prefLines.push(`回复风格: ${prefs.replyStylePreferences}`);
+    if (prefs.brandVoice) prefLines.push(`品牌调性: ${prefs.brandVoice}`);
+    if (prefs.preferredPublishTimes?.length) prefLines.push(`发布时间: ${(prefs.preferredPublishTimes as string[]).join(', ')}`);
+    return (
+      <div className="mt-1 space-y-0.5 text-muted-foreground">
+        {prefLines.length > 0 ? prefLines.map((l, i) => <div key={i}>{l}</div>) : <div>暂无偏好设置</div>}
+      </div>
+    );
+  }
+
+  // Plan templates list
+  if (name === 'list_plan_templates' && r?.templates) {
+    return (
+      <div className="mt-1 space-y-1">
+        {(r.templates as any[]).map((t, i) => (
+          <div key={i} className="text-muted-foreground">
+            <span className="text-foreground font-medium">{t.name}</span>
+            <span className="ml-2 text-xs">({t.stepCount}步) {t.description}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Execute plan
+  if (name === 'execute_plan' && r?.planStarted) {
+    return (
+      <div className="mt-1">
+        <div className="font-medium text-foreground">📋 {r.planName}</div>
+        <div className="text-muted-foreground text-xs">共 {r.totalSteps} 步</div>
+        <div className="mt-1 space-y-0.5">
+          {(r.steps as any[]).map((s, i) => (
+            <div key={i} className="text-muted-foreground text-xs">
+              {i + 1}. {s.description} <span className="text-xs opacity-60">({s.toolName})</span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

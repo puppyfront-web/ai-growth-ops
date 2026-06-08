@@ -2,6 +2,7 @@ import { streamText } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createTools } from './tools/index';
 import { buildSystemPrompt } from './system-prompt';
+import { buildOperationalContext } from './context-builder';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
   }
 
   const authHeaders = {
+    'content-type': 'application/json',
     authorization: `Bearer ${token}`,
     'x-organization-id': organizationId,
   };
@@ -57,12 +59,16 @@ export async function POST(req: Request) {
 
   // Fetch user context for system prompt
   const { user, accounts } = await fetchUserContext(token, organizationId);
-  const systemPrompt = buildSystemPrompt({
+  const basePrompt = buildSystemPrompt({
     userName: user.name || user.email,
     orgName: user.organization?.name || organizationId,
     platforms: accounts,
     today: new Date().toISOString(),
   });
+
+  // Build dynamic operational context (suggestions, preferences, campaigns)
+  const operationalContext = await buildOperationalContext(API_BASE, authHeaders);
+  const systemPrompt = basePrompt + operationalContext;
 
   // useChat sends the full conversation as newMessages — use it directly.
   // Backend history is only used for persistence (onFinish), not for LLM context,
