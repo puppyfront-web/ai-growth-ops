@@ -256,6 +256,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   organizationMemberships OrganizationMember[]
   organizationInvitations OrganizationInvitation[]
+  chatThreads              ChatThread[]
 }
 
 model TokenBlacklist {
@@ -332,6 +333,7 @@ model Organization {
   auditLogs            AuditLog[]
   skillRuns            SkillRun[]
   agentRuns            AgentRun[]
+  chatThreads          ChatThread[]
 
   @@map("organizations")
 }
@@ -1153,4 +1155,37 @@ model ManualPublishChecklist {
   createdAt     DateTime @default(now())
 
   @@map("manual_publish_checklists")
+}
+
+model ChatThread {
+  id             String        @id @default(uuid())
+  organizationId String
+  userId         String
+  title          String?
+  status         String        @default("active")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  user           User          @relation(fields: [userId], references: [id])
+  messages       ChatMessage[]
+
+  @@index([organizationId, userId, updatedAt])
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id          String     @id @default(uuid())
+  threadId    String
+  role        String
+  content     String
+  toolCalls   Json?
+  toolResult  Json?
+  tokensUsed  Int?
+  createdAt   DateTime   @default(now())
+
+  thread      ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("chat_messages")
 }
