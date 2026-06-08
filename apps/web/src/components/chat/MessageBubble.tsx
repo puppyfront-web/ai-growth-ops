@@ -64,6 +64,7 @@ const TOOL_LABELS: Record<string, string> = {
   check_compliance: '合规检查',
   rewrite_for_platform: '平台改写',
   approve_variant: '批准变体',
+  generate_content_with_media: '内容+配图',
   list_accounts: '账号列表',
   check_cookie_status: 'Cookie 检查',
   login_account: '扫码登录',
@@ -80,12 +81,30 @@ const TOOL_LABELS: Record<string, string> = {
   suggest_reply: '回复建议',
   reply_to_interaction: '回复互动',
   convert_to_lead: '转化为线索',
+  get_auto_reply_config: '自动回复配置',
+  update_auto_reply_config: '修改自动回复',
+  review_pending_replies: '待审核回复',
+  approve_reply: '审核回复',
   run_research: '执行调研',
   get_research_insights: '调研洞察',
   list_leads: '线索列表',
   sync_lead_to_feishu: '同步飞书',
   sync_lead_to_wecom: '同步企微',
   get_analytics: '数据分析',
+  get_engagement_metrics: '互动分析',
+  get_content_performance: '内容表现',
+  create_campaign: '创建活动',
+  list_campaigns: '活动列表',
+  get_campaign_detail: '活动详情',
+  start_campaign: '启动活动',
+  pause_campaign: '暂停活动',
+  trigger_campaign_run: '立即执行',
+  create_workflow: '创建工作流',
+  create_workflow_from_template: '模板创建工作流',
+  list_workflows: '工作流列表',
+  execute_workflow: '执行工作流',
+  get_workflow_status: '工作流状态',
+  pause_workflow: '暂停工作流',
 };
 
 /** Structured tool result renderer */
@@ -207,6 +226,100 @@ function ToolResult({ name, result }: { name: string; result: any }) {
         {r.totalLeads != null && <div>线索: {r.totalLeads}</div>}
         {r.totalContentItems != null && <div>内容: {r.totalContentItems}</div>}
         {r.totalPublishJobs != null && <div>发布: {r.totalPublishJobs}</div>}
+      </div>
+    );
+  }
+
+  // Engagement metrics
+  if (name === 'get_engagement_metrics' && r) {
+    return (
+      <div className="mt-1 space-y-1 text-muted-foreground">
+        <div>总互动: {r.totalInteractions}</div>
+        <div>回复率: {Math.round((r.replyRate || 0) * 100)}%</div>
+        <div>自动回复率: {Math.round((r.autoReplyRate || 0) * 100)}%</div>
+        <div>线索转化率: {Math.round((r.leadConversionRate || 0) * 100)}%</div>
+        {r.leadsByLevel && (
+          <div>线索等级: {Object.entries(r.leadsByLevel).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>
+        )}
+      </div>
+    );
+  }
+
+  // Content performance
+  if (name === 'get_content_performance' && r?.items) {
+    return (
+      <div className="mt-1 space-y-0.5">
+        {(r.items as any[]).slice(0, 5).map((c: any, i: number) => (
+          <div key={i} className="text-muted-foreground">
+            <span className="text-foreground">{c.title}</span>
+            <span className="ml-2">互动:{c.interactionCount} 线索:{c.leadCount} 评分:{c.engagementScore}</span>
+          </div>
+        ))}
+        {r.items.length > 5 && <div>...还有 {r.items.length - 5} 个</div>}
+      </div>
+    );
+  }
+
+  // Campaign / workflow created
+  if ((name === 'create_campaign' || name === 'create_workflow' || name === 'create_workflow_from_template') && r?.id) {
+    return (
+      <div className="mt-1">
+        <span className="font-medium text-foreground">{r.name}</span>
+        <span className="ml-2 text-muted-foreground">ID: {r.id?.slice(0, 8)}…</span>
+        <span className="ml-2">状态: {r.status}</span>
+      </div>
+    );
+  }
+
+  // Campaign detail
+  if (name === 'get_campaign_detail' && r?.id) {
+    return (
+      <div className="mt-1 space-y-1">
+        <div><span className="font-medium text-foreground">{r.name}</span> <span className="text-muted-foreground">{r.status}</span></div>
+        {r.platforms && <div>平台: {(r.platforms as string[]).join(', ')}</div>}
+        <div>已发布: {r.publishedCount} {r.maxPostsTotal ? `/ ${r.maxPostsTotal}` : ''}</div>
+        {r.runs && (r.runs as any[]).slice(0, 3).map((run: any, i: number) => (
+          <div key={i} className="text-muted-foreground text-xs">
+            {run.status === 'completed' ? '✅' : run.status === 'failed' ? '❌' : '⏳'} {run.status} {run.createdAt?.slice(0, 10)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Workflow status
+  if (name === 'get_workflow_status' && r?.id) {
+    return (
+      <div className="mt-1 space-y-1">
+        <div><span className="font-medium text-foreground">{r.name}</span> <span className="text-muted-foreground">{r.status}</span></div>
+        {(r.steps as any[])?.length && <div className="text-muted-foreground">步骤: {(r.steps as any[]).length} 个</div>}
+        {r.executions && (r.executions as any[]).slice(0, 3).map((exec: any, i: number) => (
+          <div key={i} className="text-muted-foreground text-xs">
+            {exec.status === 'completed' ? '✅' : exec.status === 'failed' ? '❌' : '⏳'} {exec.status} 步骤 {exec.currentStepIndex || 0}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Auto-reply config
+  if ((name === 'get_auto_reply_config' || name === 'update_auto_reply_config') && r) {
+    return (
+      <div className="mt-1 space-y-0.5 text-muted-foreground">
+        <div>启用: {r.enabled ? '✅ 是' : '❌ 否'}</div>
+        <div>每日上限: {r.maxDailyAutoReplies}</div>
+        <div>置信度阈值: {r.confidenceThreshold}</div>
+        <div>允许类型: {(r.allowedReplyTypes as string[])?.join(', ')}</div>
+        <div>静默期: {r.quietHoursStart} - {r.quietHoursEnd}</div>
+      </div>
+    );
+  }
+
+  // Execute workflow / campaign run
+  if ((name === 'execute_workflow' || name === 'trigger_campaign_run') && r?.ok) {
+    return (
+      <div className="mt-1 text-green-600 font-medium">
+        ✅ 已触发执行 {r.executionId ? `(ID: ${r.executionId?.slice(0, 8)}…)` : r.runId ? `(Run: ${r.runId?.slice(0, 8)}…)` : ''}
       </div>
     );
   }
