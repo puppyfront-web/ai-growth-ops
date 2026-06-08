@@ -1,6 +1,6 @@
 import { streamText } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { createTools } from './tools';
+import { createTools } from './tools/index';
 import { buildSystemPrompt } from './system-prompt';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     system: systemPrompt,
     messages: newMessages,
     tools,
-    maxSteps: 5,
+    maxSteps: 10,
     onFinish: async ({ response }) => {
       // Persist user message + assistant response to backend
       try {
