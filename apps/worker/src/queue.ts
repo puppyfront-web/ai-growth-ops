@@ -28,6 +28,7 @@ export const QUEUE_NAMES = {
   LEAD_SYNC_WECOM: 'lead.sync.wecom_contact',
   CAMPAIGN_EXECUTE: 'campaign.execute',
   CAMPAIGN_CHECK_SCHEDULE: 'campaign.check-schedule',
+  INTERACTION_AUTO_REPLY: 'interaction.auto-reply',
 } as const;
 
 export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];

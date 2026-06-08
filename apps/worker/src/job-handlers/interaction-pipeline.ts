@@ -12,6 +12,12 @@ import { DefaultSkillRunner } from '@ai-growth-ops/skills';
 import type { ClassificationResult, ReplySuggestionResult } from './rule-classifier.js';
 import { classifyByRules, generateRuleBasedReply, containsSensitiveContent } from './rule-classifier.js';
 
+/** Valid ReplyType enum values per Prisma schema */
+const VALID_REPLY_TYPES = [
+  'faq_answer', 'guide_to_private', 'guide_to_wecom',
+  'ask_more_info', 'thanks', 'complaint_response', 'manual_only',
+] as const;
+
 let _skillRunner: DefaultSkillRunner | null = null;
 function getSkillRunner(): DefaultSkillRunner {
   if (!_skillRunner) _skillRunner = new DefaultSkillRunner();
@@ -56,34 +62,39 @@ export async function classifyAndSuggestReply(
     classification = classifyByRules(content);
   }
 
-  // Write classification to DB
-  await db.interactionClassification.upsert({
-    where: { interactionId },
-    create: {
-      interactionId,
-      intent: classification.intent || 'unknown',
-      leadLevel: classification.leadLevel || 'C',
-      confidence: classification.confidence ?? 0.5,
-      riskLevel: classification.riskLevel || 'low',
-      summary: classification.summary || '',
-      tags: (classification.tags as any) || [],
-      nextAction: classification.nextAction || '',
-    },
-    update: {
-      intent: classification.intent || 'unknown',
-      leadLevel: classification.leadLevel || 'C',
-      confidence: classification.confidence ?? 0.5,
-      riskLevel: classification.riskLevel || 'low',
-      summary: classification.summary || '',
-      tags: (classification.tags as any) || [],
-      nextAction: classification.nextAction || '',
-    },
-  });
+  // Write classification to DB (protected — failure should not abort the batch)
+  try {
+    await db.interactionClassification.upsert({
+      where: { interactionId },
+      create: {
+        interactionId,
+        intent: classification.intent || 'unknown',
+        leadLevel: classification.leadLevel || 'C',
+        confidence: classification.confidence ?? 0.5,
+        riskLevel: classification.riskLevel || 'low',
+        summary: classification.summary || '',
+        tags: (classification.tags as any) || [],
+        nextAction: classification.nextAction || '',
+      },
+      update: {
+        intent: classification.intent || 'unknown',
+        leadLevel: classification.leadLevel || 'C',
+        confidence: classification.confidence ?? 0.5,
+        riskLevel: classification.riskLevel || 'low',
+        summary: classification.summary || '',
+        tags: (classification.tags as any) || [],
+        nextAction: classification.nextAction || '',
+      },
+    });
 
-  await db.interaction.update({
-    where: { id: interactionId },
-    data: { status: 'CLASSIFIED' },
-  });
+    await db.interaction.update({
+      where: { id: interactionId },
+      data: { status: 'CLASSIFIED' },
+    });
+  } catch (error) {
+    console.error('[pipeline] Classification DB write failed:', error);
+    return;
+  }
 
   // ── Step 2: Suggest reply (skip for D-level / spam) ───────────────
   if (classification.leadLevel === 'D') {
@@ -138,11 +149,14 @@ export async function classifyAndSuggestReply(
       classification.leadLevel === 'A';
 
     // Write reply suggestion to DB
+    const replyType = (VALID_REPLY_TYPES as readonly string[]).includes(reply.replyType)
+      ? reply.replyType
+      : 'faq_answer';
     await db.replySuggestion.create({
       data: {
         interactionId,
         suggestedText: reply.suggestedText,
-        replyType: reply.replyType as any,
+        replyType: replyType as any,
         riskLevel: classification.riskLevel,
         needReview,
         decision: needReview ? 'require_human_review' : 'auto_send_allowed',
@@ -157,8 +171,100 @@ export async function classifyAndSuggestReply(
       where: { id: interactionId },
       data: { status: 'REPLY_SUGGESTED' },
     });
+
+    // Step 3: Check auto-reply eligibility and enqueue if eligible
+    if (!needReview) {
+      await enqueueAutoReplyIfEligible(db, interactionId, platform);
+    }
   } catch (error) {
     // Reply suggestion failure should not block classification
     console.error('[pipeline] Reply suggestion failed:', error);
+  }
+}
+
+/**
+ * Check if this interaction is eligible for auto-reply and enqueue if so.
+ * Loads auto-reply config from AppConfig, checks all safety guardrails.
+ */
+async function enqueueAutoReplyIfEligible(
+  db: import('@ai-growth-ops/database').DatabaseClient,
+  interactionId: string,
+  platform: string,
+): Promise<void> {
+  try {
+    // Load auto-reply config — find the user's org setting
+    const interaction = await db.interaction.findUnique({
+      where: { id: interactionId },
+      select: { userId: true, organizationId: true },
+    });
+    if (!interaction) return;
+
+    const configRecord = await db.appConfig.findFirst({
+      where: { organizationId: interaction.organizationId, key: 'auto_reply_config' },
+    });
+
+    // Default config: disabled
+    const config = (configRecord?.value as Record<string, unknown>) || { enabled: false };
+
+    if (!config.enabled) return;
+
+    // Check daily limit
+    const maxDaily = (config.maxDailyAutoReplies as number) || 50;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todaySent = await db.replySuggestion.count({
+      where: { status: 'sent', sentAt: { gte: todayStart } },
+    });
+    if (todaySent >= maxDaily) return;
+
+    // Check quiet hours
+    const now = new Date();
+    const hour = now.getHours();
+    const quietStart = parseInt(String(config.quietHoursStart || '22:00').split(':')[0]);
+    const quietEnd = parseInt(String(config.quietHoursEnd || '08:00').split(':')[0]);
+    if (quietStart > quietEnd ? (hour >= quietStart || hour < quietEnd) : (hour >= quietStart && hour < quietEnd)) {
+      return;
+    }
+
+    // Load the latest suggestion for this interaction
+    const suggestion = await db.replySuggestion.findFirst({
+      where: { interactionId, decision: 'auto_send_allowed', status: 'draft' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!suggestion) return;
+
+    // Check allowed reply types
+    const allowedTypes = (config.allowedReplyTypes as string[]) || ['thanks', 'faq_answer', 'ask_more_info'];
+    if (!allowedTypes.includes(suggestion.replyType as string)) return;
+
+    // Check lead level review requirement
+    const classification = await db.interactionClassification.findUnique({
+      where: { interactionId },
+    });
+    if (classification) {
+      const reviewLevels = (config.requireReviewForLevel as string[]) || ['A'];
+      if (reviewLevels.includes(classification.leadLevel)) return;
+    }
+
+    // All checks passed — enqueue auto-reply
+    const { getQueue, QUEUE_NAMES } = await import('../queue.js');
+    const queue = getQueue(QUEUE_NAMES.INTERACTION_AUTO_REPLY);
+    await queue.add(QUEUE_NAMES.INTERACTION_AUTO_REPLY, {
+      interactionId,
+      replySuggestionId: suggestion.id,
+    }, {
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 5000 },
+    });
+
+    // Mark suggestion as approved (about to be sent)
+    await db.replySuggestion.update({
+      where: { id: suggestion.id },
+      data: { status: 'waiting_review' }, // Will be set to 'sent' by auto-reply handler
+    });
+
+    console.log(`[pipeline] Auto-reply enqueued for interaction ${interactionId}`);
+  } catch (err) {
+    console.error('[pipeline] Auto-reply eligibility check failed:', err);
   }
 }

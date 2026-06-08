@@ -3034,6 +3034,56 @@ const routes: Route[] = [
     }
   },
 
+  // ── Settings: Auto-Reply ──────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/settings/auto-reply',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+
+      const savedConfig = await ctx.db.appConfig.findUnique({
+        where: { userId_key: { userId: orgCtx.user.id, key: 'auto_reply_config' } }
+      });
+
+      if (savedConfig?.value) {
+        sendJson(res, 200, savedConfig.value);
+      } else {
+        sendJson(res, 200, {
+          enabled: false,
+          maxDailyAutoReplies: 50,
+          confidenceThreshold: 0.85,
+          allowedReplyTypes: ['thanks', 'faq_answer', 'ask_more_info'],
+          requireReviewForLevel: ['A'],
+          maxRepliesPerUser: 3,
+          quietHoursStart: '22:00',
+          quietHoursEnd: '08:00',
+        });
+      }
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/settings/auto-reply',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const body = ctx.body as Record<string, unknown> | null;
+      if (!body) return sendJson(res, 400, { error: '请求体为空' });
+
+      await ctx.db.appConfig.upsert({
+        where: { userId_key: { userId: orgCtx.user.id, key: 'auto_reply_config' } },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'auto_reply_config', value: body as any },
+        update: { value: body as any },
+      });
+
+      sendJson(res, 200, { ok: true, updated: true });
+    }
+  },
+
   // ── Settings: Storage ─────────────────────────────────────────
   {
     method: 'GET',

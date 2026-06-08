@@ -126,5 +126,57 @@ export function createInteractionTools(auth: AuthContext) {
     suggest_reply: suggestReply,
     reply_to_interaction: replyToInteraction,
     convert_to_lead: convertToLead,
+    get_auto_reply_config: tool({
+      description: '查看自动回复配置。包括是否启用、每日上限、置信度阈值、允许的回复类型等。',
+      parameters: z.object({}),
+      execute: async () => {
+        return apiCall('/api/settings/auto-reply');
+      },
+    }),
+    update_auto_reply_config: tool({
+      description: '更新自动回复配置。可修改启用状态、每日上限、置信度阈值、允许的回复类型等。',
+      parameters: z.object({
+        enabled: z.boolean().optional().describe('是否启用自动回复'),
+        maxDailyAutoReplies: z.number().optional().describe('每日自动回复上限'),
+        confidenceThreshold: z.number().optional().describe('置信度阈值（0-1）'),
+        allowedReplyTypes: z.array(z.string()).optional().describe('允许自动发送的回复类型'),
+        requireReviewForLevel: z.array(z.string()).optional().describe('需要人工审核的线索等级'),
+        maxRepliesPerUser: z.number().optional().describe('每用户每日最大回复数'),
+        quietHoursStart: z.string().optional().describe('静默期开始时间，如 "22:00"'),
+        quietHoursEnd: z.string().optional().describe('静默期结束时间，如 "08:00"'),
+      }),
+      execute: async (params) => {
+        return apiCall('/api/settings/auto-reply', { method: 'PUT', body: params });
+      },
+    }),
+    review_pending_replies: tool({
+      description: '查看待审核的回复建议列表。这些是AI生成但需要人工确认的回复。',
+      parameters: z.object({
+        page: z.number().optional().default(1),
+        limit: z.number().optional().default(10),
+      }),
+      execute: async ({ page, limit }) => {
+        const query = new URLSearchParams({
+          status: 'waiting_review',
+          needReview: 'true',
+          page: String(page),
+          pageSize: String(limit),
+        });
+        return apiCall(`/api/interactions?${query}`);
+      },
+    }),
+    approve_reply: tool({
+      description: '批准一条待审核的回复建议，发送给用户。',
+      parameters: z.object({
+        suggestionId: z.string().describe('回复建议 ID'),
+        action: z.enum(['approve', 'reject']).optional().default('approve'),
+      }),
+      execute: async ({ suggestionId, action }) => {
+        return apiCall(`/api/reply-suggestions/${suggestionId}/review`, {
+          method: 'POST',
+          body: { action },
+        });
+      },
+    }),
   };
 }
