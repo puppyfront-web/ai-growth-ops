@@ -554,6 +554,160 @@ const routes: Route[] = [
     }
   },
 
+  // ── Workflows ──────────────────────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/workflows',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const result = await paginate(ctx.db.workflow, { organizationId: orgCtx.organization.id, deletedAt: null }, parsePagination(ctx.url), { createdAt: 'desc' }, { _count: { select: { executions: true } } });
+      sendJson(res, 200, result);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/workflows/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const workflow = await ctx.db.workflow.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
+        include: { executions: { orderBy: { createdAt: 'desc' }, take: 20 } },
+      });
+      if (!workflow) return sendJson(res, 404, { error: '工作流不存在' });
+      sendJson(res, 200, workflow);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflows',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown> | null;
+      if (!body?.name || !body?.steps) return sendJson(res, 400, { error: '缺少 name 或 steps' });
+      const workflow = await ctx.db.workflow.create({
+        data: {
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
+          name: String(body.name),
+          description: String(body.description || ''),
+          status: 'draft',
+          steps: body.steps as any,
+          triggerConfig: body.triggerConfig as any || {},
+        },
+      });
+      sendJson(res, 201, workflow);
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/workflows/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown> | null;
+      if (!body) return sendJson(res, 400, { error: '请求体为空' });
+      const data: any = {};
+      if (body.name != null) data.name = String(body.name);
+      if (body.description != null) data.description = String(body.description);
+      if (body.steps != null) data.steps = body.steps;
+      if (body.triggerConfig != null) data.triggerConfig = body.triggerConfig;
+      if (body.status != null) data.status = String(body.status);
+      const workflow = await ctx.db.workflow.update({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id },
+        data,
+      });
+      sendJson(res, 200, workflow);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflows/:id/execute',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const workflow = await ctx.db.workflow.findFirst({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null },
+      });
+      if (!workflow) return sendJson(res, 404, { error: '工作流不存在' });
+      const execution = await ctx.db.workflowExecution.create({
+        data: { workflowId: workflow.id, status: 'running', stepResults: [] },
+      });
+      const { Queue } = await import('bullmq');
+      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+      const queue = new Queue('workflow.execute', { connection: { url: redisUrl } });
+      await queue.add('workflow.execute', { executionId: execution.id }, { attempts: 2, backoff: { type: 'exponential', delay: 10000 } });
+      sendJson(res, 200, { ok: true, executionId: execution.id });
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/workflows/:id/executions',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const executions = await ctx.db.workflowExecution.findMany({
+        where: { workflow: { id: ctx.params.id, organizationId: orgCtx.organization.id } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+      sendJson(res, 200, { items: executions });
+    }
+  },
+  {
+    method: 'PATCH',
+    pattern: '/api/workflows/:id/pause',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const updated = await ctx.db.workflow.update({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id },
+        data: { status: 'paused' },
+      });
+      sendJson(res, 200, updated);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/workflows/from-template',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as Record<string, unknown> | null;
+      if (!body?.template) return sendJson(res, 400, { error: '缺少 template 参数' });
+      const { getWorkflowTemplate } = await import('./services/workflow-templates.js');
+      const template = getWorkflowTemplate(String(body.template));
+      if (!template) return sendJson(res, 400, { error: `模板 "${body.template}" 不存在` });
+      const workflow = await ctx.db.workflow.create({
+        data: {
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
+          name: String(body.name || template.name),
+          description: template.description,
+          status: 'draft',
+          steps: template.steps as any,
+          triggerConfig: body.triggerConfig as any || {},
+        },
+      });
+      sendJson(res, 201, workflow);
+    }
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/workflows/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      await ctx.db.workflow.update({
+        where: { id: ctx.params.id, organizationId: orgCtx.organization.id },
+        data: { status: 'archived', deletedAt: new Date() },
+      });
+      sendJson(res, 200, { ok: true });
+    }
+  },
+
   // ── Content Items ──────────────────────────────────────────────
   {
     method: 'GET',

@@ -30,6 +30,7 @@ export const QUEUE_NAMES = {
   CAMPAIGN_CHECK_SCHEDULE: 'campaign.check-schedule',
   INTERACTION_AUTO_REPLY: 'interaction.auto-reply',
   SCHEDULED_INTERACTION_SYNC: 'scheduled.interaction-sync',
+  WORKFLOW_EXECUTE: 'workflow.execute',
 } as const;
 
 export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];

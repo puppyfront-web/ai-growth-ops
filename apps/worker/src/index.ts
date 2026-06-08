@@ -36,6 +36,7 @@ import { handleCampaignExecute } from './job-handlers/campaign.execute.js';
 import { handleCampaignCheckSchedule } from './job-handlers/campaign.check-schedule.js';
 import { handleInteractionAutoReply } from './job-handlers/interaction.auto-reply.js';
 import { handleScheduledInteractionSync } from './job-handlers/scheduled.interaction-sync.js';
+import { handleWorkflowExecute } from './job-handlers/workflow.execute.js';
 import { startScheduler, SCHEDULED_QUEUE, CAMPAIGN_CHECK_QUEUE, INTERACTION_SYNC_QUEUE } from './scheduler.js';
 
 export const appName = 'worker';
@@ -52,6 +53,7 @@ const realHandlers: Record<string, (job: any) => Promise<void>> = {
   [QUEUE_NAMES.CAMPAIGN_EXECUTE]: handleCampaignExecute,
   [QUEUE_NAMES.INTERACTION_AUTO_REPLY]: handleInteractionAutoReply,
   [QUEUE_NAMES.SCHEDULED_INTERACTION_SYNC]: handleScheduledInteractionSync,
+  [QUEUE_NAMES.WORKFLOW_EXECUTE]: handleWorkflowExecute,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
   [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule,
 };

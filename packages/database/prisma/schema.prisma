@@ -258,6 +258,7 @@ model User {
   organizationInvitations OrganizationInvitation[]
   chatThreads              ChatThread[]
   campaigns                Campaign[]
+  workflows                Workflow[]
 }
 
 model TokenBlacklist {
@@ -335,6 +336,8 @@ model Organization {
   skillRuns            SkillRun[]
   agentRuns            AgentRun[]
   chatThreads          ChatThread[]
+  campaigns            Campaign[]
+  workflows            Workflow[]
   campaigns            Campaign[]
 
   @@map("organizations")
@@ -508,6 +511,46 @@ model CampaignRun {
   @@index([campaignId, scheduledAt])
   @@index([status, scheduledAt])
   @@map("campaign_runs")
+}
+
+model Workflow {
+  id               String    @id @default(uuid())
+  organizationId   String
+  userId           String
+  name             String
+  description      String?
+  status           String    @default("draft")
+  steps            Json
+  triggerConfig    Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+  metadata         Json?
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  executions   WorkflowExecution[]
+
+  @@index([organizationId])
+  @@map("workflows")
+}
+
+model WorkflowExecution {
+  id              String    @id @default(uuid())
+  workflowId      String
+  status          String    @default("running")
+  currentStepIndex Int     @default(0)
+  stepResults     Json?
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  metadata        Json?
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@map("workflow_executions")
 }
 
 model ContentItem {
