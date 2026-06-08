@@ -18,6 +18,7 @@ export async function handlePublishExecute(job: Job<PublishExecuteInput>): Promi
   } = job.data;
 
   const db: DatabaseClient = createDatabaseClient();
+  let attempt: { id: string } | null = null;
 
   try {
     // Fetch the publish job with variant and account info
@@ -48,7 +49,7 @@ export async function handlePublishExecute(job: Job<PublishExecuteInput>): Promi
     const attemptCount = await db.publishAttempt.count({
       where: { publishJobId },
     });
-    const attempt = await db.publishAttempt.create({
+    attempt = await db.publishAttempt.create({
       data: {
         publishJobId,
         attemptNo: attemptCount + 1,
@@ -174,14 +175,23 @@ export async function handlePublishExecute(job: Job<PublishExecuteInput>): Promi
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     await updatePublishProgress(db, publishJobId, 'failed', errorMessage).catch(() => {});
+    // Close the attempt record if one was created
+    if (attempt) {
+      await db.publishAttempt.update({
+        where: { id: attempt.id },
+        data: { status: 'failed', finishedAt: new Date(), error: errorMessage.slice(0, 500) },
+      }).catch(() => {});
+    }
     await db.publishJob.update({
       where: { id: publishJobId },
       data: { status: 'FAILED', lastError: errorMessage, finishedAt: new Date() },
     }).catch(() => {});
     throw err;
-  } finally {
-    
   }
+
+  // Disconnect AFTER all updates are confirmed, not in finally()
+  // (finally runs before catch's updates complete)
+  await db.$disconnect().catch(() => {});
 }
 
 async function handlePublishFailure(
@@ -207,7 +217,7 @@ async function handlePublishFailure(
   } else {
     await db.publishJob.update({
       where: { id: publishJobId },
-      data: { status: 'FAILED', lastError: errorMessage },
+      data: { status: 'FAILED', lastError: errorMessage, retryCount: { increment: 1 } },
     });
   }
 }
@@ -234,6 +244,7 @@ async function executeBrowserAssistPublish(
     const resp = await fetch(`${runnerUrl}/assist/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(5 * 60_000), // 5 min timeout for video uploads etc.
       body: JSON.stringify({
         publishJobId: params.publishJobId,
         platform: params.account.platform,
