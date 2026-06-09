@@ -8,7 +8,10 @@ export class CapabilityRegistry {
     return this.skills;
   }
 
-  resolve(capability: CapabilityName, context: SkillContext): SkillManifestRecord | null {
+  resolve(
+    capability: CapabilityName,
+    context: SkillContext
+  ): SkillManifestRecord | null {
     return (
       this.skills.find((skill) => {
         if (!skill.enabled || !skill.healthy) return false;
@@ -16,9 +19,11 @@ export class CapabilityRegistry {
         if (!skill.contexts?.length) return true;
 
         return skill.contexts.some((candidate) => {
-          const platformMatches = !candidate.platform || candidate.platform === context.platform;
+          const platformMatches =
+            !candidate.platform || candidate.platform === context.platform;
           const contentTypeMatches =
-            !candidate.contentType || candidate.contentType === context.contentType;
+            !candidate.contentType ||
+            candidate.contentType === context.contentType;
 
           return platformMatches && contentTypeMatches;
         });

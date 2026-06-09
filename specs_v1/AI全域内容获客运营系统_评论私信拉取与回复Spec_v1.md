@@ -56,46 +56,46 @@
 
 ### 2.1 本模块包含
 
-| 能力 | 是否包含 |
-|---|---|
-| 自有账号评论同步 | 包含 |
-| 自有账号私信/消息同步 | 包含，按平台能力分级 |
-| 公众号消息接收 | 包含 |
-| 评论回复 | 包含，按平台能力分级 |
-| 私信/消息回复 | 包含，按平台能力分级 |
-| AI 意向识别 | 包含 |
-| AI 回复建议 | 包含 |
-| 自动回复策略 | 包含 |
-| 人工确认回复 | 包含 |
-| 互动转线索 | 包含 |
-| 飞书/企微线索沉淀 | 包含 |
-| 回复日志/审计 | 包含 |
-| Provider Contract Test | 包含 |
+| 能力                   | 是否包含             |
+| ---------------------- | -------------------- |
+| 自有账号评论同步       | 包含                 |
+| 自有账号私信/消息同步  | 包含，按平台能力分级 |
+| 公众号消息接收         | 包含                 |
+| 评论回复               | 包含，按平台能力分级 |
+| 私信/消息回复          | 包含，按平台能力分级 |
+| AI 意向识别            | 包含                 |
+| AI 回复建议            | 包含                 |
+| 自动回复策略           | 包含                 |
+| 人工确认回复           | 包含                 |
+| 互动转线索             | 包含                 |
+| 飞书/企微线索沉淀      | 包含                 |
+| 回复日志/审计          | 包含                 |
+| Provider Contract Test | 包含                 |
 
 ### 2.2 本模块不包含
 
-| 能力 | 是否包含 |
-|---|---|
-| 大规模采集非自有账号私信 | 不包含 |
-| 绕过验证码/风控 | 不包含 |
-| 自动批量骚扰用户 | 不包含 |
-| MediaCrawler 拉取私信 | 不包含 |
-| 对用户主动批量私信营销 | 不包含 |
-| 所有平台全自动回复承诺 | 不包含 |
-| 生图/生视频 | 不包含，仅未来预留在其他模块 |
+| 能力                     | 是否包含                     |
+| ------------------------ | ---------------------------- |
+| 大规模采集非自有账号私信 | 不包含                       |
+| 绕过验证码/风控          | 不包含                       |
+| 自动批量骚扰用户         | 不包含                       |
+| MediaCrawler 拉取私信    | 不包含                       |
+| 对用户主动批量私信营销   | 不包含                       |
+| 所有平台全自动回复承诺   | 不包含                       |
+| 生图/生视频              | 不包含，仅未来预留在其他模块 |
 
 ---
 
 ## 3. 平台可行性矩阵
 
-| 平台 | 评论拉取 | 私信/消息拉取 | 评论回复 | 私信/消息回复 | 推荐实现 |
-|---|---:|---:|---:|---:|---|
-| 抖音 | 高 | 中，依赖权限 | 高 | 中，依赖权限 | Official API 优先 |
-| 小红书 | 中 | 中，依赖聚光/企业号/服务商 | 中 | 中，默认人工确认 | 聚光线索 + Browser Assist |
-| 微信公众号 | 高 | 高 | 不适用，主要消息回复 | 高，受规则限制 | 官方开发者模式 |
-| 微信视频号 | 中低 | 中低 | 中低 | 中低 | Browser Assist + Manual |
-| 百家号 | 中 | 中低 | 中低 | 中低 | 内容分发为主，互动弱化 |
-| 知乎 | 中 | 低 | 中低 | 低 | 调研 + 半自动处理 |
+| 平台       | 评论拉取 |              私信/消息拉取 |             评论回复 |    私信/消息回复 | 推荐实现                  |
+| ---------- | -------: | -------------------------: | -------------------: | ---------------: | ------------------------- |
+| 抖音       |       高 |               中，依赖权限 |                   高 |     中，依赖权限 | Official API 优先         |
+| 小红书     |       中 | 中，依赖聚光/企业号/服务商 |                   中 | 中，默认人工确认 | 聚光线索 + Browser Assist |
+| 微信公众号 |       高 |                         高 | 不适用，主要消息回复 |   高，受规则限制 | 官方开发者模式            |
+| 微信视频号 |     中低 |                       中低 |                 中低 |             中低 | Browser Assist + Manual   |
+| 百家号     |       中 |                       中低 |                 中低 |             中低 | 内容分发为主，互动弱化    |
+| 知乎       |       中 |                         低 |                 中低 |               低 | 调研 + 半自动处理         |
 
 ---
 
@@ -131,12 +131,12 @@
 
 #### 降级策略
 
-| 场景 | 降级 |
-|---|---|
-| 没有评论权限 | Manual Import |
-| 评论回复失败 | 进入人工确认队列 |
-| 私信权限不足 | 只支持手动录入线索 |
-| 接口限流 | 暂停同步，写入 SyncJob 失败原因 |
+| 场景         | 降级                            |
+| ------------ | ------------------------------- |
+| 没有评论权限 | Manual Import                   |
+| 评论回复失败 | 进入人工确认队列                |
+| 私信权限不足 | 只支持手动录入线索              |
+| 接口限流     | 暂停同步，写入 SyncJob 失败原因 |
 
 ---
 
@@ -291,19 +291,19 @@ Interaction Ops
 
 ### 5.3 模块职责
 
-| 模块 | 职责 |
-|---|---|
-| Interaction Connector | 从平台拉取或接收互动数据 |
-| Interaction Normalizer | 统一不同平台数据结构 |
-| Interaction Store | 存储 Interaction / Conversation |
-| Lead Scoring Agent | 评估客户意向 |
-| Reply Suggestion Agent | 生成回复建议 |
-| Reply Policy Engine | 判断是否可自动回复 |
-| Reply Executor | 执行发送回复 |
-| Human Review Queue | 人工确认队列 |
-| Lead Converter | 互动转线索 |
-| Lead Sink | 同步飞书/企微 |
-| Audit Logger | 记录审计日志 |
+| 模块                   | 职责                            |
+| ---------------------- | ------------------------------- |
+| Interaction Connector  | 从平台拉取或接收互动数据        |
+| Interaction Normalizer | 统一不同平台数据结构            |
+| Interaction Store      | 存储 Interaction / Conversation |
+| Lead Scoring Agent     | 评估客户意向                    |
+| Reply Suggestion Agent | 生成回复建议                    |
+| Reply Policy Engine    | 判断是否可自动回复              |
+| Reply Executor         | 执行发送回复                    |
+| Human Review Queue     | 人工确认队列                    |
+| Lead Converter         | 互动转线索                      |
+| Lead Sink              | 同步飞书/企微                   |
+| Audit Logger           | 记录审计日志                    |
 
 ---
 
@@ -333,17 +333,17 @@ export interface InteractionConnector {
 export type InteractionCapabilities = {
   platform: PlatformCode;
 
-  fetchComments: boolean | "limited";
-  fetchMessages: boolean | "limited";
-  replyComments: boolean | "limited";
-  replyMessages: boolean | "limited";
+  fetchComments: boolean | 'limited';
+  fetchMessages: boolean | 'limited';
+  replyComments: boolean | 'limited';
+  replyMessages: boolean | 'limited';
 
   webhookSupported: boolean;
   pollingSupported: boolean;
   browserAssistSupported: boolean;
   manualImportSupported: boolean;
 
-  autoReplyAllowed: boolean | "low_risk_only";
+  autoReplyAllowed: boolean | 'low_risk_only';
   requiresHumanReviewForMessageReply: boolean;
   requiresHumanReviewForLeadLevelA: boolean;
 
@@ -351,25 +351,28 @@ export type InteractionCapabilities = {
 };
 
 export type InteractionMode =
-  | "official_api"
-  | "webhook"
-  | "browser_assist"
-  | "manual_import"
-  | "recorded"
-  | "sandbox"
-  | "disabled";
+  | 'official_api'
+  | 'webhook'
+  | 'browser_assist'
+  | 'manual_import'
+  | 'recorded'
+  | 'sandbox'
+  | 'disabled';
 ```
 
 ### 6.3 Provider 选择规则
 
 ```ts
 function selectInteractionMode(platform, capability, accountConfig) {
-  if (accountConfig.officialApiEnabled && capability.supportsOfficialApi) return "official_api";
-  if (accountConfig.webhookEnabled && capability.webhookSupported) return "webhook";
-  if (accountConfig.browserAssistEnabled && capability.browserAssistSupported) return "browser_assist";
-  if (accountConfig.manualImportEnabled) return "manual_import";
-  if (process.env.NODE_ENV === "test") return "recorded";
-  return "disabled";
+  if (accountConfig.officialApiEnabled && capability.supportsOfficialApi)
+    return 'official_api';
+  if (accountConfig.webhookEnabled && capability.webhookSupported)
+    return 'webhook';
+  if (accountConfig.browserAssistEnabled && capability.browserAssistSupported)
+    return 'browser_assist';
+  if (accountConfig.manualImportEnabled) return 'manual_import';
+  if (process.env.NODE_ENV === 'test') return 'recorded';
+  return 'disabled';
 }
 ```
 
@@ -948,15 +951,15 @@ sync task
 
 ### 10.3 失败处理
 
-| 失败类型 | 处理 |
-|---|---|
-| 平台鉴权失败 | 标记账号异常 |
-| 接口限流 | 延迟重试 |
-| Provider 不支持 | 降级 manual |
-| AI 分类失败 | 状态 failed，可重试 |
-| 回复发送失败 | 写 ReplyAttempt failed |
-| 重复互动 | 忽略，更新 receivedAt |
-| 连续失败 | 熔断 Provider |
+| 失败类型        | 处理                   |
+| --------------- | ---------------------- |
+| 平台鉴权失败    | 标记账号异常           |
+| 接口限流        | 延迟重试               |
+| Provider 不支持 | 降级 manual            |
+| AI 分类失败     | 状态 failed，可重试    |
+| 回复发送失败    | 写 ReplyAttempt failed |
+| 重复互动        | 忽略，更新 receivedAt  |
+| 连续失败        | 熔断 Provider          |
 
 ---
 
@@ -1041,9 +1044,9 @@ sync task
 type ReplyPolicyInput = {
   platform: PlatformCode;
   interactionType: InteractionType;
-  leadLevel: "A" | "B" | "C" | "D";
+  leadLevel: 'A' | 'B' | 'C' | 'D';
   confidence: number;
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: 'low' | 'medium' | 'high';
   suggestedText: string;
   connectorCapabilities: InteractionCapabilities;
   autoReplyConfig: AutoReplyConfig;
@@ -1054,9 +1057,9 @@ type ReplyPolicyInput = {
 
 ```ts
 type ReplyDecision = {
-  action: "auto_send" | "require_human_review" | "blocked" | "manual_only";
+  action: 'auto_send' | 'require_human_review' | 'blocked' | 'manual_only';
   reason: string;
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: 'low' | 'medium' | 'high';
 };
 ```
 
@@ -1229,12 +1232,12 @@ A 级线索回复
 
 角色：
 
-| 角色 | 权限 |
-|---|---|
-| Admin | 所有配置、同步、回复、自动回复规则 |
+| 角色     | 权限                                 |
+| -------- | ------------------------------------ |
+| Admin    | 所有配置、同步、回复、自动回复规则   |
 | Operator | 查看互动、生成回复、人工审核、转线索 |
-| Sales | 查看线索、跟进、回复已分配线索 |
-| Viewer | 只读 |
+| Sales    | 查看线索、跟进、回复已分配线索       |
+| Viewer   | 只读                                 |
 
 权限规则：
 
@@ -1344,17 +1347,17 @@ replyMessage 可成功/失败/unsupported
 
 ### 16.5 必须验收场景
 
-| 场景 | 验收标准 |
-|---|---|
-| 抖音评论同步 | Interaction 入库，去重生效 |
-| 抖音评论回复 | ReplyAttempt success 或明确失败 |
-| 公众号消息接收 | Webhook 入库 |
-| 公众号消息回复 | 回复成功或超时窗口提示 |
-| 小红书线索导入 | 生成 Interaction/Lead |
-| 视频号人工处理 | Manual 流程可完成 |
-| 知乎评论导入 | 可识别意向并转线索 |
-| 高风险回复 | 必须进入人工确认 |
-| A 级线索 | 必须同步飞书/企微或生成待同步任务 |
+| 场景           | 验收标准                          |
+| -------------- | --------------------------------- |
+| 抖音评论同步   | Interaction 入库，去重生效        |
+| 抖音评论回复   | ReplyAttempt success 或明确失败   |
+| 公众号消息接收 | Webhook 入库                      |
+| 公众号消息回复 | 回复成功或超时窗口提示            |
+| 小红书线索导入 | 生成 Interaction/Lead             |
+| 视频号人工处理 | Manual 流程可完成                 |
+| 知乎评论导入   | 可识别意向并转线索                |
+| 高风险回复     | 必须进入人工确认                  |
+| A 级线索       | 必须同步飞书/企微或生成待同步任务 |
 
 ---
 

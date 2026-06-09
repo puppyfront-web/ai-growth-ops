@@ -1,6 +1,9 @@
 import { CAPABILITIES } from '@ai-growth-ops/capability-schema';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
-import { getDeliveryDoctorReport, listAvailableAccounts } from '../tools/delivery-tools.js';
+import {
+  getDeliveryDoctorReport,
+  listAvailableAccounts
+} from '../tools/delivery-tools.js';
 import { runInteractionOps } from '../workflows/run-interaction-ops.js';
 import { runLeadMining } from '../workflows/run-lead-mining.js';
 import { runRuntimeRequest } from '../workflows/run-runtime-request.js';
@@ -13,12 +16,17 @@ function readFlag(args: string[], name: string): string | undefined {
 
 function readPlatforms(args: string[]): string[] {
   const raw = readFlag(args, 'platforms');
-  return raw ? raw.split(',').map((item) => item.trim()).filter(Boolean) : [];
+  return raw
+    ? raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
 }
 
 export function resolveInteractionFetchType(
   platform: 'douyin' | 'xiaohongshu',
-  args: string[],
+  args: string[]
 ): 'comments' | 'messages' {
   const requestedType = readFlag(args, 'type');
   if (requestedType === 'comments' || requestedType === 'messages') {
@@ -76,11 +84,18 @@ Global options:
   --print-config        打印当前配置（JSON）
 `.trim();
 
-export async function runCli(argv: string[] = process.argv.slice(2)): Promise<void> {
+export async function runCli(
+  argv: string[] = process.argv.slice(2)
+): Promise<void> {
   const [command, ...args] = argv;
   const config = loadRuntimeConfig();
 
-  if (!command || command === 'help' || command === '--help' || command === '-h') {
+  if (
+    !command ||
+    command === 'help' ||
+    command === '--help' ||
+    command === '-h'
+  ) {
     console.log(USAGE);
     return;
   }
@@ -91,7 +106,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   }
 
   if (command === 'skills:list') {
-    const { discoverSkillManifests } = await import('../registry/skill-manifest.js');
+    const { discoverSkillManifests } =
+      await import('../registry/skill-manifest.js');
     const manifests = await discoverSkillManifests(config.manifestDir);
     console.log(
       JSON.stringify(
@@ -100,9 +116,9 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
           runtime: manifest.runtime,
           capability: manifest.capabilities[0] ?? CAPABILITIES.PUBLISH_VIDEO,
           enabled: manifest.enabled,
-          healthy: manifest.healthy,
-        })),
-      ),
+          healthy: manifest.healthy
+        }))
+      )
     );
     return;
   }
@@ -138,8 +154,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
           title,
           content,
           mediaFilePaths: file ? [file] : undefined,
-          source,
-        },
+          source
+        }
       });
       console.log(JSON.stringify(result));
       return;
@@ -152,29 +168,33 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         intent,
         payload: {
           platform,
-          account,
-        },
+          account
+        }
       });
       console.log(JSON.stringify(result));
       return;
     }
 
     if (intent === 'interaction.fetch') {
-      const platform = (platforms[0] ?? 'xiaohongshu') as 'douyin' | 'xiaohongshu';
+      const platform = (platforms[0] ?? 'xiaohongshu') as
+        | 'douyin'
+        | 'xiaohongshu';
       const interactionType = resolveInteractionFetchType(platform, args);
       const interaction = await runInteractionOps({
         platform,
         interactionType,
-        account,
+        account
       });
       const lead = await runLeadMining({
-        candidates: interaction.items.map((item): LeadCandidate => ({
-          platform: item.platform,
-          interactionType: item.interactionType as 'comment' | 'message',
-          content: item.content,
-          sourceContentTitle: item.sourceContentTitle,
-          userNickname: item.userNickname,
-        })),
+        candidates: interaction.items.map(
+          (item): LeadCandidate => ({
+            platform: item.platform,
+            interactionType: item.interactionType as 'comment' | 'message',
+            content: item.content,
+            sourceContentTitle: item.sourceContentTitle,
+            userNickname: item.userNickname
+          })
+        )
       });
 
       // Persist leads to data directory for leads:list/summary
@@ -186,19 +206,26 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         const ts = new Date().toISOString().replace(/[:.]/g, '-');
         await writeFile(
           join(leadsDir, `${ts}-${platform}-${interactionType}.json`),
-          JSON.stringify(lead, null, 2),
+          JSON.stringify(lead, null, 2)
         );
       } catch (writeError) {
-        console.error('[cli] Warning: could not persist leads to data dir:', writeError);
+        console.error(
+          '[cli] Warning: could not persist leads to data dir:',
+          writeError
+        );
       }
 
       // LLM degradation notice
       const llmSources = lead.leads.map((l) => l.classificationSource);
       const rulesCount = llmSources.filter((s) => s === 'rules').length;
       if (rulesCount > 0 && rulesCount === llmSources.length) {
-        console.error('[cli] ⚠️  All classifications used rule-based fallback. Set OPENAI_API_KEY or ANTHROPIC_API_KEY to enable AI-powered classification.');
+        console.error(
+          '[cli] ⚠️  All classifications used rule-based fallback. Set OPENAI_API_KEY or ANTHROPIC_API_KEY to enable AI-powered classification.'
+        );
       } else if (rulesCount > 0) {
-        console.error(`[cli] ⚠️  ${rulesCount}/${llmSources.length} classifications fell back to rules (LLM unavailable for some items).`);
+        console.error(
+          `[cli] ⚠️  ${rulesCount}/${llmSources.length} classifications fell back to rules (LLM unavailable for some items).`
+        );
       }
 
       console.log(JSON.stringify({ interaction, lead }));
@@ -209,11 +236,13 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
       const rawContent = content;
       const platform = platforms[0] ?? 'xiaohongshu';
       const lead = await runLeadMining({
-        candidates: [{
-          platform,
-          interactionType: 'comment',
-          content: rawContent,
-        }],
+        candidates: [
+          {
+            platform,
+            interactionType: 'comment',
+            content: rawContent
+          }
+        ]
       });
       console.log(JSON.stringify(lead));
       return;
@@ -222,7 +251,9 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     if (intent === 'interaction.search') {
       const keyword = content; // --content holds the search keyword
       if (!keyword || keyword === 'hello') {
-        console.error('[cli] Error: --content is required for interaction.search (the search keyword)');
+        console.error(
+          '[cli] Error: --content is required for interaction.search (the search keyword)'
+        );
         process.exitCode = 1;
         return;
       }
@@ -230,23 +261,33 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
       const topN = Number(readFlag(args, 'topN') ?? '3');
 
       const { BrowserAssistClient } = await import('@ai-growth-ops/connectors');
-      const { resolveAuthStateForPlatform, resolveSharedAccountForPlatform } = await import('../tools/credential-tools.js');
-      const resolvedAccount = resolveSharedAccountForPlatform(platform, account);
-      const cookie = await (await import('../tools/credential-tools.js')).resolveAuthStateForPlatform(platform, resolvedAccount);
+      const { resolveSharedAccountForPlatform } =
+        await import('../tools/credential-tools.js');
+      const resolvedAccount = resolveSharedAccountForPlatform(
+        platform,
+        account
+      );
+      const cookie = await (
+        await import('../tools/credential-tools.js')
+      ).resolveAuthStateForPlatform(platform, resolvedAccount);
       if (!cookie) {
-        console.error(`[cli] Error: No cookie found for ${platform}. Run auth.check first.`);
+        console.error(
+          `[cli] Error: No cookie found for ${platform}. Run auth.check first.`
+        );
         process.exitCode = 1;
         return;
       }
 
       const client = new BrowserAssistClient(config.browserRunnerUrl);
-      console.error(`[cli] Searching "${keyword}" on ${platform}, fetching top ${topN} results...`);
+      console.error(
+        `[cli] Searching "${keyword}" on ${platform}, fetching top ${topN} results...`
+      );
 
       const searchResult = await client.searchAndFetchComments(
         { platform, cookie },
         keyword,
         topN,
-        false,
+        false
       );
 
       // Collect all comments across results for lead mining
@@ -255,8 +296,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
           platform,
           interactionType: 'comment' as const,
           content: String(c.content ?? ''),
-          sourceContentTitle: r.title || undefined,
-        })),
+          sourceContentTitle: r.title || undefined
+        }))
       );
 
       let lead = null;
@@ -269,49 +310,74 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
           const leadsDir = join(config.dataDir, 'leads');
           await mkdir(leadsDir, { recursive: true });
           const ts = new Date().toISOString().replace(/[:.]/g, '-');
-          await writeFile(join(leadsDir, `${ts}-search-${platform}-${keyword}.json`), JSON.stringify(lead, null, 2));
-        } catch { /* ignore */ }
+          await writeFile(
+            join(leadsDir, `${ts}-search-${platform}-${keyword}.json`),
+            JSON.stringify(lead, null, 2)
+          );
+        } catch {
+          /* ignore */
+        }
       }
 
-      console.error(`[cli] Found ${searchResult.results.length} results, ${allComments.length} total comments`);
+      console.error(
+        `[cli] Found ${searchResult.results.length} results, ${allComments.length} total comments`
+      );
       console.log(JSON.stringify({ search: searchResult, lead }));
       return;
     }
 
     if (intent === 'interaction.fetch-schedule') {
-      const platform = (platforms[0] ?? 'xiaohongshu') as 'douyin' | 'xiaohongshu';
+      const platform = (platforms[0] ?? 'xiaohongshu') as
+        | 'douyin'
+        | 'xiaohongshu';
       const interactionType = resolveInteractionFetchType(platform, args);
       const intervalMinutes = Number(readFlag(args, 'interval') ?? '30');
       const intervalMs = intervalMinutes * 60 * 1000;
 
-      console.error(`[schedule] Starting periodic fetch: platform=${platform}, type=${interactionType}, interval=${intervalMinutes}min`);
+      console.error(
+        `[schedule] Starting periodic fetch: platform=${platform}, type=${interactionType}, interval=${intervalMinutes}min`
+      );
       console.error('[schedule] Press Ctrl+C to stop');
 
       const fetchOnce = async () => {
         try {
-          const interaction = await runInteractionOps({ platform, interactionType, account });
+          const interaction = await runInteractionOps({
+            platform,
+            interactionType,
+            account
+          });
           if (interaction.items.length === 0) {
             console.error(`[${new Date().toISOString()}] No new items`);
             return;
           }
           const lead = await runLeadMining({
-            candidates: interaction.items.map((item): LeadCandidate => ({
-              platform: item.platform,
-              interactionType: item.interactionType as 'comment' | 'message',
-              content: item.content,
-              sourceContentTitle: item.sourceContentTitle,
-              userNickname: item.userNickname,
-            })),
+            candidates: interaction.items.map(
+              (item): LeadCandidate => ({
+                platform: item.platform,
+                interactionType: item.interactionType as 'comment' | 'message',
+                content: item.content,
+                sourceContentTitle: item.sourceContentTitle,
+                userNickname: item.userNickname
+              })
+            )
           });
           const ts = new Date().toISOString();
-          console.error(`[${ts}] Fetched ${interaction.items.length} items, classified ${lead.classified} leads: A=${lead.levelBreakdown.A} B=${lead.levelBreakdown.B} C=${lead.levelBreakdown.C} D=${lead.levelBreakdown.D}`);
+          console.error(
+            `[${ts}] Fetched ${interaction.items.length} items, classified ${lead.classified} leads: A=${lead.levelBreakdown.A} B=${lead.levelBreakdown.B} C=${lead.levelBreakdown.C} D=${lead.levelBreakdown.D}`
+          );
           // Output only the actionable leads (A/B level) as JSON to stdout
-          const actionable = lead.leads.filter((l) => l.classification.leadLevel === 'A' || l.classification.leadLevel === 'B');
+          const actionable = lead.leads.filter(
+            (l) =>
+              l.classification.leadLevel === 'A' ||
+              l.classification.leadLevel === 'B'
+          );
           if (actionable.length > 0) {
             console.log(JSON.stringify({ ts, leads: actionable }));
           }
         } catch (error) {
-          console.error(`[${new Date().toISOString()}] Fetch failed: ${error instanceof Error ? error.message : error}`);
+          console.error(
+            `[${new Date().toISOString()}] Fetch failed: ${error instanceof Error ? error.message : error}`
+          );
         }
       };
 
@@ -324,7 +390,12 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 
   // ── leads:list ──────────────────────────────────────────────────
   if (command === 'leads:list') {
-    const levelFilter = readFlag(args, 'level') as 'A' | 'B' | 'C' | 'D' | undefined;
+    const levelFilter = readFlag(args, 'level') as
+      | 'A'
+      | 'B'
+      | 'C'
+      | 'D'
+      | undefined;
     const limit = Number(readFlag(args, 'limit') ?? '20');
 
     // Read leads from data directory (stored by previous fetch+classify runs)
@@ -335,7 +406,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 
     let files: string[] = [];
     try {
-      files = (await readdir(leadsDir)).filter((f) => f.endsWith('.json')).sort().reverse();
+      files = (await readdir(leadsDir))
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+        .reverse();
     } catch {
       // No leads directory yet
     }
@@ -348,11 +422,17 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         if (entry.leads) {
           leads.push(...entry.leads);
         }
-      } catch { /* skip corrupt files */ }
+      } catch {
+        /* skip corrupt files */
+      }
     }
 
     const filtered = levelFilter
-      ? leads.filter((l: any) => l.classification?.leadLevel === levelFilter)
+      ? leads.filter(
+          (l: Record<string, unknown>) =>
+            (l.classification as Record<string, unknown> | undefined)
+              ?.leadLevel === levelFilter
+        )
       : leads;
 
     console.log(JSON.stringify(filtered.slice(0, limit)));
@@ -370,12 +450,17 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     let totalErrors = 0;
 
     try {
-      const files = (await readdir(leadsDir)).filter((f) => f.endsWith('.json'));
+      const files = (await readdir(leadsDir)).filter((f) =>
+        f.endsWith('.json')
+      );
       totalRuns = files.length;
       for (const file of files) {
         try {
           const raw = await readFile(join(leadsDir, file), 'utf8');
-          const entry = JSON.parse(raw) as { leads?: any[]; errors?: unknown[] };
+          const entry = JSON.parse(raw) as {
+            leads?: Record<string, unknown>[];
+            errors?: unknown[];
+          };
           if (entry.leads) {
             for (const l of entry.leads) {
               const level = l.classification?.leadLevel as keyof typeof totals;
@@ -383,13 +468,22 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
             }
           }
           totalErrors += entry.errors?.length ?? 0;
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
     } catch {
       // No leads directory
     }
 
-    console.log(JSON.stringify({ totalRuns, totalLeads: totals.A + totals.B + totals.C + totals.D, breakdown: totals, totalErrors }));
+    console.log(
+      JSON.stringify({
+        totalRuns,
+        totalLeads: totals.A + totals.B + totals.C + totals.D,
+        breakdown: totals,
+        totalErrors
+      })
+    );
     return;
   }
 

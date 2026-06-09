@@ -8,7 +8,11 @@ describe('resolveInteractionFetchType', () => {
   });
 
   it('respects an explicit --type flag', () => {
-    expect(resolveInteractionFetchType('douyin', ['--type=messages'])).toBe('messages');
-    expect(resolveInteractionFetchType('xiaohongshu', ['--type=comments'])).toBe('comments');
+    expect(resolveInteractionFetchType('douyin', ['--type=messages'])).toBe(
+      'messages'
+    );
+    expect(
+      resolveInteractionFetchType('xiaohongshu', ['--type=comments'])
+    ).toBe('comments');
   });
 });

@@ -39,7 +39,9 @@ describe('getDaysGrid', () => {
   it('starts on Monday (June 2026 starts on Monday)', () => {
     const days = getDaysGrid(2026, 5);
     // June 1, 2026 is a Monday
-    const firstOfMonth = days.find((d) => d.getDate() === 1 && d.getMonth() === 5);
+    const firstOfMonth = days.find(
+      (d) => d.getDate() === 1 && d.getMonth() === 5
+    );
     expect(firstOfMonth).toBeDefined();
     expect(firstOfMonth!.getDay()).toBe(1); // Monday
   });
@@ -60,7 +62,7 @@ describe('CalendarDayCell', () => {
     updatedAt: '2026-06-01T00:00:00Z',
     deletedAt: null,
     metadata: null,
-    contentVariants: [],
+    contentVariants: []
   };
 
   const mockPublishJob = {
@@ -83,25 +85,59 @@ describe('CalendarDayCell', () => {
     updatedAt: '2026-06-01T00:00:00Z',
     deletedAt: null,
     metadata: null,
-    contentVariant: { id: 'v1', title: '发布变体', platform: 'douyin', contentType: 'text_image', userId: 'u1', contentItemId: '1', body: null, tags: [], cta: null, mediaAssetIds: [], complianceStatus: 'approved' as const, createdAt: '', updatedAt: '', deletedAt: null, metadata: null },
-    platformAccount: { id: 'a1', userId: 'u1', platform: 'douyin', accountName: 'test', status: 'active' as const, accessToken: null, refreshToken: null, expiresAt: null, cookie: null, metadata: null, createdAt: '', updatedAt: '', deletedAt: null },
-    publishAttempts: [],
+    contentVariant: {
+      id: 'v1',
+      title: '发布变体',
+      platform: 'douyin',
+      contentType: 'text_image',
+      userId: 'u1',
+      contentItemId: '1',
+      body: null,
+      tags: [],
+      cta: null,
+      mediaAssetIds: [],
+      complianceStatus: 'approved' as const,
+      createdAt: '',
+      updatedAt: '',
+      deletedAt: null,
+      metadata: null
+    },
+    platformAccount: {
+      id: 'a1',
+      userId: 'u1',
+      platform: 'douyin',
+      accountName: 'test',
+      status: 'active' as const,
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      cookie: null,
+      metadata: null,
+      createdAt: '',
+      updatedAt: '',
+      deletedAt: null
+    },
+    publishAttempts: []
   };
 
   it('renders content item label', () => {
-    render(<CalendarDayCell items={[{ kind: 'content', item: mockContentItem }]} />);
+    render(
+      <CalendarDayCell items={[{ kind: 'content', item: mockContentItem }]} />
+    );
     expect(screen.getByText('测试内容标题比较…')).toBeInTheDocument();
   });
 
   it('renders publish job label', () => {
-    render(<CalendarDayCell items={[{ kind: 'publish', job: mockPublishJob }]} />);
+    render(
+      <CalendarDayCell items={[{ kind: 'publish', job: mockPublishJob }]} />
+    );
     expect(screen.getByText('发布变体')).toBeInTheDocument();
   });
 
   it('renders overflow indicator', () => {
     const items = Array.from({ length: 5 }, (_, i) => ({
       kind: 'content' as const,
-      item: { ...mockContentItem, id: `c${i}`, title: `内容${i}` },
+      item: { ...mockContentItem, id: `c${i}`, title: `内容${i}` }
     }));
     render(<CalendarDayCell items={items} maxVisible={3} />);
     expect(screen.getByText('+2 更多')).toBeInTheDocument();
@@ -123,10 +159,10 @@ describe('CalendarGrid', () => {
         onViewModeChange={() => {}}
         legendItems={[
           { label: '已发布', dotClass: 'bg-emerald-500' },
-          { label: '失败', dotClass: 'bg-red-500' },
+          { label: '失败', dotClass: 'bg-red-500' }
         ]}
         renderDayContent={() => null}
-      />,
+      />
     );
     expect(screen.getByText('已发布')).toBeInTheDocument();
     expect(screen.getByText('失败')).toBeInTheDocument();
@@ -141,7 +177,7 @@ describe('CalendarGrid', () => {
         onViewModeChange={() => {}}
         legendItems={[]}
         renderDayContent={() => null}
-      />,
+      />
     );
     expect(screen.getByText('月视图')).toBeInTheDocument();
     expect(screen.getByText('周视图')).toBeInTheDocument();

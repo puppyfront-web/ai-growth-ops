@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractCommentList,
   pickXhsNoteRef,
-  xhsNotePublicUrl,
+  xhsNotePublicUrl
 } from '../../../apps/browser-runner/src/assist-routes';
 
 describe('extractCommentList(xiaohongshu)', () => {
@@ -18,10 +18,10 @@ describe('extractCommentList(xiaohongshu)', () => {
             create_time: 1780034744,
             user_info: { user_id: 'uid-1', nickname: '小红' },
             like_count: 3,
-            sub_comment_count: 1,
-          },
-        ],
-      },
+            sub_comment_count: 1
+          }
+        ]
+      }
     });
 
     expect(comments).toEqual([
@@ -33,8 +33,8 @@ describe('extractCommentList(xiaohongshu)', () => {
         likeCount: 3,
         replyCount: 1,
         sourceContentId: 'note-abc',
-        publishedAt: new Date(1780034744 * 1000).toISOString(),
-      }),
+        publishedAt: new Date(1780034744 * 1000).toISOString()
+      })
     ]);
   });
 
@@ -49,19 +49,19 @@ describe('extractCommentList(xiaohongshu)', () => {
             create_time: 1780040000,
             user_info: { user_id: 'uid-2', nickname: '阿华' },
             like_count: 0,
-            sub_comment_count: 0,
-          },
+            sub_comment_count: 0
+          }
         ],
         cursor: 'next-cursor',
-        has_more: false,
-      },
+        has_more: false
+      }
     });
 
     expect(comments).toHaveLength(1);
     expect(comments[0]).toMatchObject({
       externalCommentId: 'c-002',
       externalUserId: 'uid-2',
-      content: '太美了',
+      content: '太美了'
     });
   });
 
@@ -73,15 +73,15 @@ describe('extractCommentList(xiaohongshu)', () => {
             id: 'c-003',
             content: '路过',
             create_time: 1780050000,
-            author: { user_id: 'uid-3', nickname: '游客' },
-          },
-        ],
-      },
+            author: { user_id: 'uid-3', nickname: '游客' }
+          }
+        ]
+      }
     });
 
     expect(comments[0]).toMatchObject({
       externalUserId: 'uid-3',
-      userNickname: '游客',
+      userNickname: '游客'
     });
   });
 
@@ -91,11 +91,17 @@ describe('extractCommentList(xiaohongshu)', () => {
       {
         data: {
           comments: [
-            { id: 'c-004', content: 'hi', create_time: 1780060000, user_info: { user_id: 'u4', nickname: 'X' }, note_id: 'payload-note' },
-          ],
-        },
+            {
+              id: 'c-004',
+              content: 'hi',
+              create_time: 1780060000,
+              user_info: { user_id: 'u4', nickname: 'X' },
+              note_id: 'payload-note'
+            }
+          ]
+        }
       },
-      'caller-note',
+      'caller-note'
     );
 
     expect(comments[0].sourceContentId).toBe('caller-note');
@@ -105,9 +111,15 @@ describe('extractCommentList(xiaohongshu)', () => {
     const comments = extractCommentList('xiaohongshu', {
       data: {
         comments: [
-          { id: 'c-005', content: 'hi', create_time: 1780070000, user_info: { user_id: 'u5', nickname: 'Y' }, note_id: 'note-from-payload' },
-        ],
-      },
+          {
+            id: 'c-005',
+            content: 'hi',
+            create_time: 1780070000,
+            user_info: { user_id: 'u5', nickname: 'Y' },
+            note_id: 'note-from-payload'
+          }
+        ]
+      }
     });
 
     expect(comments[0].sourceContentId).toBe('note-from-payload');
@@ -117,10 +129,20 @@ describe('extractCommentList(xiaohongshu)', () => {
     const comments = extractCommentList('xiaohongshu', {
       data: {
         comments: [
-          { id: '', content: 'ghost', create_time: 1780080000, user_info: { user_id: 'u6', nickname: 'Z' } },
-          { id: 'c-006', content: 'valid', create_time: 1780080001, user_info: { user_id: 'u6', nickname: 'Z' } },
-        ],
-      },
+          {
+            id: '',
+            content: 'ghost',
+            create_time: 1780080000,
+            user_info: { user_id: 'u6', nickname: 'Z' }
+          },
+          {
+            id: 'c-006',
+            content: 'valid',
+            create_time: 1780080001,
+            user_info: { user_id: 'u6', nickname: 'Z' }
+          }
+        ]
+      }
     });
 
     expect(comments).toHaveLength(1);
@@ -134,14 +156,14 @@ describe('extractCommentList(xiaohongshu)', () => {
           id: 'c-007',
           content: '通知格式',
           create_time: 1780090000,
-          user_info: { user_id: 'u7', nickname: '通知用户' },
-        },
-      ],
+          user_info: { user_id: 'u7', nickname: '通知用户' }
+        }
+      ]
     });
 
     expect(comments[0]).toMatchObject({
       externalCommentId: 'c-007',
-      content: '通知格式',
+      content: '通知格式'
     });
   });
 
@@ -160,10 +182,10 @@ describe('extractCommentList(xiaohongshu)', () => {
             create_time: 1780100000,
             user_info: { user_id: 'u8', nickname: 'V' },
             liked_count: 10,
-            sub_comment_num: 5,
-          },
-        ],
-      },
+            sub_comment_num: 5
+          }
+        ]
+      }
     });
 
     expect(comments[0]).toMatchObject({ likeCount: 10, replyCount: 5 });
@@ -177,10 +199,10 @@ describe('extractCommentList(xiaohongshu)', () => {
             id: 'c-009',
             content: '毫秒时间戳',
             create_time: 1779982733000,
-            user_info: { user_id: 'u9', nickname: 'M' },
-          },
-        ],
-      },
+            user_info: { user_id: 'u9', nickname: 'M' }
+          }
+        ]
+      }
     });
 
     expect(comments[0].publishedAt).toBe(new Date(1779982733000).toISOString());
@@ -193,17 +215,17 @@ describe('pickXhsNoteRef', () => {
       data: {
         noteInfo: {
           id: '6a18618d0000000007013802',
-          xsec_token: 'token-from-creator-api',
-        },
-      },
+          xsec_token: 'token-from-creator-api'
+        }
+      }
     });
 
     expect(note).toEqual({
       id: '6a18618d0000000007013802',
-      xsecToken: 'token-from-creator-api',
+      xsecToken: 'token-from-creator-api'
     });
     expect(xhsNotePublicUrl(note.id, note.xsecToken)).toBe(
-      'https://www.xiaohongshu.com/explore/6a18618d0000000007013802?xsec_token=token-from-creator-api&xsec_source=pc_creator',
+      'https://www.xiaohongshu.com/explore/6a18618d0000000007013802?xsec_token=token-from-creator-api&xsec_source=pc_creator'
     );
   });
 });

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { StatusBadge, PlatformBadge, LeadLevelBadge, RiskBadge } from '@/components/shared/StatusBadge';
+import {
+  StatusBadge,
+  PlatformBadge,
+  LeadLevelBadge,
+  RiskBadge
+} from '@/components/shared/StatusBadge';
 
 describe('StatusBadge', () => {
   it('maps PUBLISHED to success variant', () => {
@@ -35,10 +40,24 @@ describe('StatusBadge', () => {
 });
 
 describe('PlatformBadge', () => {
-  const platforms = ['douyin', 'xiaohongshu', 'wechat_official', 'wechat_channels', 'baijiahao', 'zhihu'] as const;
+  const platforms = [
+    'douyin',
+    'xiaohongshu',
+    'wechat_official',
+    'wechat_channels',
+    'baijiahao',
+    'zhihu'
+  ] as const;
 
   it('renders Chinese labels for all 6 platforms', () => {
-    const expectedLabels = ['抖音', '小红书', '微信公众号', '微信视频号', '百家号', '知乎'];
+    const expectedLabels = [
+      '抖音',
+      '小红书',
+      '微信公众号',
+      '微信视频号',
+      '百家号',
+      '知乎'
+    ];
     platforms.forEach((platform, i) => {
       const { unmount } = render(<PlatformBadge platform={platform} />);
       expect(screen.getByText(expectedLabels[i])).toBeInTheDocument();

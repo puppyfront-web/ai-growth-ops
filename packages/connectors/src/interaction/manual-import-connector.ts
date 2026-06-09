@@ -1,19 +1,15 @@
 import type {
   InteractionConnector,
   InteractionCapabilities,
-  FetchCommentsInput,
-  FetchMessagesInput,
   PlatformComment,
   PlatformMessage,
-  ReplyCommentInput,
-  ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 
 export class ManualImportConnector implements InteractionConnector {
   readonly platform;
 
-  constructor(platform: any) {
+  constructor(platform: string) {
     this.platform = platform;
   }
 
@@ -31,7 +27,7 @@ export class ManualImportConnector implements InteractionConnector {
       autoReplyAllowed: false,
       requiresHumanReviewForMessageReply: true,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['manual_import'],
+      supportedModes: ['manual_import']
     };
   }
 
@@ -44,10 +40,18 @@ export class ManualImportConnector implements InteractionConnector {
   }
 
   async replyComment(): Promise<ReplyResult> {
-    return { success: false, errorCode: 'MANUAL_ONLY', errorMessage: 'This platform only supports manual import' };
+    return {
+      success: false,
+      errorCode: 'MANUAL_ONLY',
+      errorMessage: 'This platform only supports manual import'
+    };
   }
 
   async replyMessage(): Promise<ReplyResult> {
-    return { success: false, errorCode: 'MANUAL_ONLY', errorMessage: 'This platform only supports manual import' };
+    return {
+      success: false,
+      errorCode: 'MANUAL_ONLY',
+      errorMessage: 'This platform only supports manual import'
+    };
   }
 }

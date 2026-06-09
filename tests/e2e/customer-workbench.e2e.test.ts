@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { expect, test } from '@playwright/test';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 
 test.beforeEach(async () => {
   const db = createDatabaseClient();

@@ -3,13 +3,16 @@ import type {
   PublishCapabilities,
   PublishConnectorConfig,
   PublishContentInput,
-  PublishContentResult,
+  PublishContentResult
 } from './types.js';
 
 export class DisabledPublishConnector implements PublishConnector {
   readonly platform;
 
-  constructor(platform: any, private config: PublishConnectorConfig) {
+  constructor(
+    platform: string,
+    private config: PublishConnectorConfig
+  ) {
     this.platform = platform;
   }
 
@@ -21,15 +24,17 @@ export class DisabledPublishConnector implements PublishConnector {
       deleteContent: false,
       uploadMedia: false,
       supportedContentTypes: [],
-      supportedModes: ['disabled'],
+      supportedModes: ['disabled']
     };
   }
 
-  async publishContent(_input: PublishContentInput): Promise<PublishContentResult> {
+  async publishContent(
+    _input: PublishContentInput
+  ): Promise<PublishContentResult> {
     return {
       success: false,
       errorCode: 'PLATFORM_DISABLED',
-      errorMessage: `Publishing is disabled for platform: ${this.platform}`,
+      errorMessage: `Publishing is disabled for platform: ${this.platform}`
     };
   }
 }

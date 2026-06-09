@@ -23,7 +23,9 @@ class ConsoleProvider implements EmailProvider {
     console.log(`\n━━━ EMAIL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`  To: ${message.to}`);
     console.log(`  Subject: ${message.subject}`);
-    console.log(`  Text: ${message.text.substring(0, 200)}${message.text.length > 200 ? '...' : ''}`);
+    console.log(
+      `  Text: ${message.text.substring(0, 200)}${message.text.length > 200 ? '...' : ''}`
+    );
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
   }
 }
@@ -42,16 +44,17 @@ class ResendProvider implements EmailProvider {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: process.env.EMAIL_FROM || 'AI Growth Ops <noreply@aigrowthops.com>',
+        from:
+          process.env.EMAIL_FROM || 'AI Growth Ops <noreply@aigrowthops.com>',
         to: [message.to],
         subject: message.subject,
         html: message.html,
-        text: message.text,
-      }),
+        text: message.text
+      })
     });
 
     if (!response.ok) {
@@ -70,7 +73,10 @@ export function createEmailProvider(): EmailProvider {
   switch (provider) {
     case 'resend': {
       const apiKey = process.env.RESEND_API_KEY;
-      if (!apiKey) throw new Error('RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
+      if (!apiKey)
+        throw new Error(
+          'RESEND_API_KEY is required when EMAIL_PROVIDER=resend'
+        );
       return new ResendProvider(apiKey);
     }
     case 'console':

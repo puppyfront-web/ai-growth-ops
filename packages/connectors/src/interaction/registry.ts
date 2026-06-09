@@ -1,4 +1,9 @@
-import type { InteractionConnector, InteractionConnectorConfig, PlatformCode, InteractionMode } from './types.js';
+import type {
+  InteractionConnector,
+  InteractionConnectorConfig,
+  PlatformCode,
+  InteractionMode
+} from './types.js';
 import { SandboxInteractionConnector } from './sandbox-connector.js';
 import { DisabledInteractionConnector } from './disabled-connector.js';
 import { ManualImportConnector } from './manual-import-connector.js';
@@ -11,13 +16,16 @@ import { WechatChannelsConnector } from './wechat-channels-connector.js';
 import { BaijiahaoConnector } from './baijiahao-connector.js';
 import { ZhihuConnector } from './zhihu-connector.js';
 
-const platformConnectors: Record<string, new (config: InteractionConnectorConfig) => InteractionConnector> = {
+const platformConnectors: Record<
+  string,
+  new (config: InteractionConnectorConfig) => InteractionConnector
+> = {
   douyin: DouyinConnector,
   xiaohongshu: XiaohongshuConnector,
   wechat_official: WechatOfficialConnector,
   wechat_channels: WechatChannelsConnector,
   baijiahao: BaijiahaoConnector,
-  zhihu: ZhihuConnector,
+  zhihu: ZhihuConnector
 };
 
 const connectors = new Map<string, InteractionConnector>();
@@ -26,7 +34,9 @@ export function registerConnector(connector: InteractionConnector): void {
   connectors.set(connector.platform, connector);
 }
 
-export function getConnector(platform: PlatformCode): InteractionConnector | undefined {
+export function getConnector(
+  platform: PlatformCode
+): InteractionConnector | undefined {
   return connectors.get(platform);
 }
 
@@ -37,7 +47,11 @@ export function getConnector(platform: PlatformCode): InteractionConnector | und
  * - cookie only          → browser_assist connector
  * - neither              → respects the explicit `mode` param, or disabled
  */
-export function getOrCreateConnector(platform: PlatformCode, mode: InteractionMode, config?: InteractionConnectorConfig): InteractionConnector {
+export function getOrCreateConnector(
+  platform: PlatformCode,
+  mode: InteractionMode,
+  config?: InteractionConnectorConfig
+): InteractionConnector {
   if (!config) {
     const existing = connectors.get(platform);
     if (existing) return existing;
@@ -48,7 +62,14 @@ export function getOrCreateConnector(platform: PlatformCode, mode: InteractionMo
   const hasBrowserAssist = Boolean(cfg.cookie);
 
   // Auto-upgrade to hybrid when both credentials are present
-  if (hasOfficialApi && hasBrowserAssist && mode !== 'sandbox' && mode !== 'recorded' && mode !== 'manual_import' && mode !== 'disabled') {
+  if (
+    hasOfficialApi &&
+    hasBrowserAssist &&
+    mode !== 'sandbox' &&
+    mode !== 'recorded' &&
+    mode !== 'manual_import' &&
+    mode !== 'disabled'
+  ) {
     const ConnectorClass = platformConnectors[platform];
     if (ConnectorClass) {
       const primary = new ConnectorClass(cfg);

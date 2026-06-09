@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { hasPermission, hasAnyPermission, hasAllPermissions, getRolePermissions } from '../../apps/api/src/middleware/rbac.js';
+import {
+  hasPermission,
+  hasAnyPermission,
+  hasAllPermissions,
+  getRolePermissions
+} from '../../apps/api/src/middleware/rbac.js';
 
 describe('RBAC - hasPermission', () => {
   it('owner has all permissions', () => {
@@ -65,21 +70,41 @@ describe('RBAC - hasPermission', () => {
 
 describe('RBAC - hasAnyPermission', () => {
   it('returns true if any permission matches', () => {
-    expect(hasAnyPermission('viewer', ['content:delete', 'lead:view', 'settings:manage'])).toBe(true);
+    expect(
+      hasAnyPermission('viewer', [
+        'content:delete',
+        'lead:view',
+        'settings:manage'
+      ])
+    ).toBe(true);
   });
 
   it('returns false if none match', () => {
-    expect(hasAnyPermission('viewer', ['content:delete', 'team:manage', 'settings:manage'])).toBe(false);
+    expect(
+      hasAnyPermission('viewer', [
+        'content:delete',
+        'team:manage',
+        'settings:manage'
+      ])
+    ).toBe(false);
   });
 });
 
 describe('RBAC - hasAllPermissions', () => {
   it('returns true if all permissions match', () => {
-    expect(hasAllPermissions('member', ['content:create', 'content:edit', 'lead:view'])).toBe(true);
+    expect(
+      hasAllPermissions('member', [
+        'content:create',
+        'content:edit',
+        'lead:view'
+      ])
+    ).toBe(true);
   });
 
   it('returns false if any is missing', () => {
-    expect(hasAllPermissions('member', ['content:create', 'team:manage'])).toBe(false);
+    expect(hasAllPermissions('member', ['content:create', 'team:manage'])).toBe(
+      false
+    );
   });
 });
 

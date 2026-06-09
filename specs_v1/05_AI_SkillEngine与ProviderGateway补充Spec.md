@@ -202,11 +202,11 @@ GET /api/provider-run-logs
 
 ## 7. 前端页面
 
-| 页面 | 路径 |
-|---|---|
-| Skill 管理 | /settings/skills |
-| Skill 运行记录 | /settings/skills/runs |
-| Provider 管理 | /integrations/providers |
+| 页面              | 路径                           |
+| ----------------- | ------------------------------ |
+| Skill 管理        | /settings/skills               |
+| Skill 运行记录    | /settings/skills/runs          |
+| Provider 管理     | /integrations/providers        |
 | Provider 健康检查 | /integrations/providers/[name] |
 
 ---

@@ -13,7 +13,7 @@ type DropdownCtx = {
 const DropdownContext = React.createContext<DropdownCtx>({
   open: false,
   setOpen: () => {},
-  triggerRef: { current: null },
+  triggerRef: { current: null }
 });
 
 function DropdownMenu({ children }: { children: React.ReactNode }) {
@@ -49,10 +49,13 @@ function DropdownMenuTrigger({
   const { open, setOpen, triggerRef } = React.useContext(DropdownContext);
 
   if (asChild && React.isValidElement(children)) {
-    return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
-      ref: triggerRef,
-      onClick: () => setOpen(!open),
-    });
+    return React.cloneElement(
+      children as React.ReactElement<Record<string, unknown>>,
+      {
+        ref: triggerRef,
+        onClick: () => setOpen(!open)
+      }
+    );
   }
 
   return (
@@ -71,7 +74,11 @@ type DropdownMenuContentProps = React.HTMLAttributes<HTMLDivElement> & {
   align?: 'start' | 'end';
 };
 
-function DropdownMenuContent({ className, align = 'end', ...props }: DropdownMenuContentProps) {
+function DropdownMenuContent({
+  className,
+  align = 'end',
+  ...props
+}: DropdownMenuContentProps) {
   const { open } = React.useContext(DropdownContext);
 
   if (!open) return null;
@@ -82,12 +89,12 @@ function DropdownMenuContent({ className, align = 'end', ...props }: DropdownMen
       className={cn(
         'absolute right-0 z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',
         align === 'end' ? 'right-0' : 'left-0',
-        className,
+        className
       )}
       style={{ position: 'fixed' }}
       {...props}
     />,
-    document.body,
+    document.body
   );
 }
 
@@ -95,14 +102,18 @@ type DropdownMenuItemProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   destructive?: boolean;
 };
 
-function DropdownMenuItem({ className, destructive, ...props }: DropdownMenuItemProps) {
+function DropdownMenuItem({
+  className,
+  destructive,
+  ...props
+}: DropdownMenuItemProps) {
   const { setOpen } = React.useContext(DropdownContext);
   return (
     <button
       className={cn(
         'relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
         destructive && 'text-destructive hover:text-destructive',
-        className,
+        className
       )}
       onClick={(e) => {
         props.onClick?.(e);
@@ -113,8 +124,13 @@ function DropdownMenuItem({ className, destructive, ...props }: DropdownMenuItem
   );
 }
 
-function DropdownMenuSeparator({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('-mx-1 my-1 h-px bg-muted', className)} {...props} />;
+function DropdownMenuSeparator({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn('-mx-1 my-1 h-px bg-muted', className)} {...props} />
+  );
 }
 
 export {
@@ -122,5 +138,5 @@ export {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
+  DropdownMenuSeparator
 };

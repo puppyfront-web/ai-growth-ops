@@ -1,6 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHealthSnapshot } from '@ai-growth-ops/shared';
-import { getOrCreatePublishConnector, getOrCreateConnector } from '@ai-growth-ops/connectors';
+import {
+  getOrCreatePublishConnector,
+  getOrCreateConnector
+} from '@ai-growth-ops/connectors';
 import type { PlatformCode, InteractionMode } from '@ai-growth-ops/connectors';
 
 export type RouteHandler = (
@@ -26,7 +29,7 @@ const routes: Route[] = [
     pattern: '/health',
     handler: async (_req, res) => {
       sendJson(res, 200, createHealthSnapshot('provider-gateway'));
-    },
+    }
   },
   {
     method: 'GET',
@@ -37,14 +40,14 @@ const routes: Route[] = [
       try {
         const connector = getOrCreatePublishConnector(
           platform as PlatformCode,
-          mode as InteractionMode,
+          mode as InteractionMode
         );
         const capabilities = await connector.getCapabilities();
         sendJson(res, 200, capabilities);
-      } catch (err) {
+      } catch {
         sendJson(res, 400, { error: `Unknown platform: ${platform}` });
       }
-    },
+    }
   },
   {
     method: 'POST',
@@ -59,19 +62,23 @@ const routes: Route[] = [
       const mode = String(body.mode || 'browser_assist');
       const connector = getOrCreatePublishConnector(
         body.platform as PlatformCode,
-        mode as InteractionMode,
+        mode as InteractionMode
       );
 
       const result = await connector.publishContent({
         platformAccountId: String(body.platformAccountId || ''),
-        contentType: String(body.contentType || 'text_image') as any,
+        contentType: String(body.contentType || 'text_image') as
+          | 'text_image'
+          | 'video'
+          | 'article'
+          | 'answer',
         title: body.title as string | undefined,
         content: String(body.content),
-        tags: body.tags as string[] | undefined,
+        tags: body.tags as string[] | undefined
       });
 
       sendJson(res, 200, result);
-    },
+    }
   },
   {
     method: 'POST',
@@ -79,28 +86,32 @@ const routes: Route[] = [
     handler: async (_req, res, ctx) => {
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.platform || !body?.externalPostId) {
-        sendJson(res, 400, { error: 'platform and externalPostId are required' });
+        sendJson(res, 400, {
+          error: 'platform and externalPostId are required'
+        });
         return;
       }
 
       const mode = String(body.mode || 'browser_assist');
       const connector = getOrCreatePublishConnector(
         body.platform as PlatformCode,
-        mode as InteractionMode,
+        mode as InteractionMode
       );
 
       if (!connector.checkStatus) {
-        sendJson(res, 400, { error: 'Platform does not support status checking' });
+        sendJson(res, 400, {
+          error: 'Platform does not support status checking'
+        });
         return;
       }
 
       const result = await connector.checkStatus({
         platformAccountId: String(body.platformAccountId || ''),
-        externalPostId: String(body.externalPostId),
+        externalPostId: String(body.externalPostId)
       });
 
       sendJson(res, 200, result);
-    },
+    }
   },
   {
     method: 'GET',
@@ -111,15 +122,15 @@ const routes: Route[] = [
       try {
         const connector = getOrCreateConnector(
           platform as PlatformCode,
-          mode as InteractionMode,
+          mode as InteractionMode
         );
         const capabilities = await connector.getCapabilities();
         sendJson(res, 200, capabilities);
-      } catch (err) {
+      } catch {
         sendJson(res, 400, { error: `Unknown platform: ${platform}` });
       }
-    },
-  },
+    }
+  }
 ];
 
 interface MatchResult {
@@ -163,8 +174,14 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function routeRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = new URL(req.url ?? '/', `http://localhost:${process.env.PROVIDER_GATEWAY_PORT ?? 3400}`);
+export async function routeRequest(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  const url = new URL(
+    req.url ?? '/',
+    `http://localhost:${process.env.PROVIDER_GATEWAY_PORT ?? 3400}`
+  );
   const result = matchRoute(req.method ?? 'GET', url.pathname);
 
   if (!result) {

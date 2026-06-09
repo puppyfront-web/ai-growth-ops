@@ -169,24 +169,24 @@ POST /api/contents/:id/archive
 
 ## 6. AI Skill
 
-| Skill | 输入 | 输出 |
-|---|---|---|
-| content-writing | 选题、品牌资料 | 标题、正文、脚本 |
-| platform-rewrite | 内容原文、目标平台 | 平台版本 |
-| compliance-check | 平台版本 | 风险级别、问题、修改建议 |
-| comment-hook | 内容主题 | 评论引导语 |
+| Skill            | 输入               | 输出                     |
+| ---------------- | ------------------ | ------------------------ |
+| content-writing  | 选题、品牌资料     | 标题、正文、脚本         |
+| platform-rewrite | 内容原文、目标平台 | 平台版本                 |
+| compliance-check | 平台版本           | 风险级别、问题、修改建议 |
+| comment-hook     | 内容主题           | 评论引导语               |
 
 ---
 
 ## 7. 前端页面
 
-| 页面 | 路径 |
-|---|---|
-| 内容库 | /content |
-| 新建内容 | /content/new |
-| 内容详情 | /content/[id] |
-| 平台版本 | /content/variants |
-| 内容日历 | /content/calendar |
+| 页面     | 路径               |
+| -------- | ------------------ |
+| 内容库   | /content           |
+| 新建内容 | /content/new       |
+| 内容详情 | /content/[id]      |
+| 平台版本 | /content/variants  |
+| 内容日历 | /content/calendar  |
 | 内容模板 | /content/templates |
 
 ---

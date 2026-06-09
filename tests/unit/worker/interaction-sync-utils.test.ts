@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   prepareCommentsForSync,
-  prepareMessagesForSync,
+  prepareMessagesForSync
 } from '../../../apps/worker/src/job-handlers/interaction-sync-utils';
 
 describe('prepareCommentsForSync', () => {
@@ -15,38 +15,38 @@ describe('prepareCommentsForSync', () => {
           externalUserId: 'user-1',
           userNickname: 'A',
           content: 'today-1',
-          publishedAt: '2026-05-28T08:00:00+08:00',
+          publishedAt: '2026-05-28T08:00:00+08:00'
         },
         {
           externalCommentId: 'comment-1',
           externalUserId: 'user-1',
           userNickname: 'A',
           content: 'duplicate',
-          publishedAt: '2026-05-28T08:01:00+08:00',
+          publishedAt: '2026-05-28T08:01:00+08:00'
         },
         {
           externalCommentId: 'comment-2',
           externalUserId: 'user-2',
           userNickname: 'B',
           content: 'yesterday',
-          publishedAt: '2026-05-27T23:59:59+08:00',
+          publishedAt: '2026-05-27T23:59:59+08:00'
         },
         {
           externalCommentId: 'comment-3',
           externalUserId: 'user-3',
           userNickname: 'C',
           content: 'invalid-time',
-          publishedAt: 'not-a-date',
-        },
+          publishedAt: 'not-a-date'
+        }
       ],
-      now,
+      now
     );
 
     expect(comments).toEqual([
       expect.objectContaining({
         externalCommentId: 'comment-1',
-        content: 'today-1',
-      }),
+        content: 'today-1'
+      })
     ]);
   });
 
@@ -57,7 +57,7 @@ describe('prepareCommentsForSync', () => {
       externalUserId: `user-${index}`,
       userNickname: `User ${index}`,
       content: `older-${index}`,
-      publishedAt: `2026-05-${String(20 - index).padStart(2, '0')}T10:00:00+08:00`,
+      publishedAt: `2026-05-${String(20 - index).padStart(2, '0')}T10:00:00+08:00`
     }));
 
     const comments = prepareCommentsForSync(older, now);
@@ -66,14 +66,14 @@ describe('prepareCommentsForSync', () => {
     expect(comments[0]).toEqual(
       expect.objectContaining({
         externalCommentId: 'comment-0',
-        content: 'older-0',
-      }),
+        content: 'older-0'
+      })
     );
     expect(comments[9]).toEqual(
       expect.objectContaining({
         externalCommentId: 'comment-9',
-        content: 'older-9',
-      }),
+        content: 'older-9'
+      })
     );
   });
 });
@@ -90,7 +90,7 @@ describe('prepareMessagesForSync', () => {
           userNickname: 'A',
           content: 'today-1',
           type: 'text' as const,
-          publishedAt: '2026-05-28T09:00:00+08:00',
+          publishedAt: '2026-05-28T09:00:00+08:00'
         },
         {
           externalMessageId: 'message-1',
@@ -98,7 +98,7 @@ describe('prepareMessagesForSync', () => {
           userNickname: 'A',
           content: 'duplicate',
           type: 'text' as const,
-          publishedAt: '2026-05-28T09:01:00+08:00',
+          publishedAt: '2026-05-28T09:01:00+08:00'
         },
         {
           externalMessageId: 'message-2',
@@ -106,17 +106,17 @@ describe('prepareMessagesForSync', () => {
           userNickname: 'B',
           content: 'yesterday',
           type: 'text' as const,
-          publishedAt: '2026-05-27T10:00:00+08:00',
-        },
+          publishedAt: '2026-05-27T10:00:00+08:00'
+        }
       ],
-      now,
+      now
     );
 
     expect(messages).toEqual([
       expect.objectContaining({
         externalMessageId: 'message-1',
-        content: 'today-1',
-      }),
+        content: 'today-1'
+      })
     ]);
   });
 });

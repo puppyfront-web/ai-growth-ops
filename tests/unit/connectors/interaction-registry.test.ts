@@ -6,12 +6,12 @@ describe('getOrCreateConnector', () => {
     const first = getOrCreateConnector('douyin', 'browser_assist', {
       mode: 'browser_assist',
       cookie: 'sessionid=first',
-      headed: false,
+      headed: false
     });
     const second = getOrCreateConnector('douyin', 'browser_assist', {
       mode: 'browser_assist',
       cookie: 'sessionid=second',
-      headed: true,
+      headed: true
     });
 
     expect(first).not.toBe(second);

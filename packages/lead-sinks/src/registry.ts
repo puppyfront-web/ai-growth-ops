@@ -1,4 +1,9 @@
-import type { LeadSink, NotifySink, LeadSinkConfig, LeadData } from './types.js';
+import type {
+  LeadSink,
+  NotifySink,
+  LeadSinkConfig,
+  LeadData
+} from './types.js';
 import { FeishuBitableSink } from './feishu-bitable.js';
 import { FeishuBotSink } from './feishu-bot.js';
 import { WeComContactSink } from './wecom-contact.js';
@@ -37,26 +42,49 @@ export function getNotifySink(sinkType: string): NotifySink | undefined {
   return notifySinks.get(sinkType);
 }
 
-export async function syncLeadToSink(lead: LeadData, sinkType: string, config: LeadSinkConfig): Promise<import('./types.js').SinkResult> {
+export async function syncLeadToSink(
+  lead: LeadData,
+  sinkType: string,
+  config: LeadSinkConfig
+): Promise<import('./types.js').SinkResult> {
   const sink = sinks.get(sinkType);
   if (!sink) {
-    return { success: false, errorCode: 'SINK_NOT_FOUND', errorMessage: `No sink registered for type: ${sinkType}` };
+    return {
+      success: false,
+      errorCode: 'SINK_NOT_FOUND',
+      errorMessage: `No sink registered for type: ${sinkType}`
+    };
   }
   return sink.sync(lead, config);
 }
 
-export async function notifyViaSink(lead: LeadData, sinkType: string, config: LeadSinkConfig, message?: string): Promise<import('./types.js').SinkResult> {
+export async function notifyViaSink(
+  lead: LeadData,
+  sinkType: string,
+  config: LeadSinkConfig,
+  message?: string
+): Promise<import('./types.js').SinkResult> {
   const sink = notifySinks.get(sinkType);
   if (!sink) {
-    return { success: false, errorCode: 'SINK_NOT_FOUND', errorMessage: `No notify sink registered for type: ${sinkType}` };
+    return {
+      success: false,
+      errorCode: 'SINK_NOT_FOUND',
+      errorMessage: `No notify sink registered for type: ${sinkType}`
+    };
   }
   return sink.notify(lead, config, message);
 }
 
-export async function testSinkConnection(sinkType: string, config: LeadSinkConfig): Promise<{ success: boolean; message: string }> {
+export async function testSinkConnection(
+  sinkType: string,
+  config: LeadSinkConfig
+): Promise<{ success: boolean; message: string }> {
   const sink = sinks.get(sinkType);
   if (!sink || !('testConnection' in sink)) {
-    return { success: false, message: `No sink registered for type: ${sinkType}` };
+    return {
+      success: false,
+      message: `No sink registered for type: ${sinkType}`
+    };
   }
   return (sink as LeadSink).testConnection(config);
 }

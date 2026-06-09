@@ -11,14 +11,19 @@ interface ExportCSVButtonProps {
   className?: string;
 }
 
-export function ExportCSVButton({ url, filename, label = '导出 CSV', className }: ExportCSVButtonProps) {
+export function ExportCSVButton({
+  url,
+  filename,
+  label = '导出 CSV',
+  className
+}: ExportCSVButtonProps) {
   const handleExport = async () => {
     try {
       const token = authToken.get();
       const response = await fetch(url, {
         headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
       });
 
       if (!response.ok) {
@@ -27,7 +32,10 @@ export function ExportCSVButton({ url, filename, label = '导出 CSV', className
 
       const blob = await response.blob();
       const disposition = response.headers.get('content-disposition');
-      const name = filename || disposition?.match(/filename="?([^"]+)"?/)?.[1] || 'export.csv';
+      const name =
+        filename ||
+        disposition?.match(/filename="?([^"]+)"?/)?.[1] ||
+        'export.csv';
 
       const downloadUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -43,7 +51,12 @@ export function ExportCSVButton({ url, filename, label = '导出 CSV', className
   };
 
   return (
-    <Button variant="outline" size="sm" onClick={handleExport} className={className}>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleExport}
+      className={className}
+    >
       <Download className="mr-1.5 h-3.5 w-3.5" />
       {label}
     </Button>

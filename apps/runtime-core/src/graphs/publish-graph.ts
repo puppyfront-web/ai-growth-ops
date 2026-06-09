@@ -22,9 +22,9 @@ export interface PublishGraphResult {
 }
 
 export function createPublishGraph(
-  executor: (input: PublishGraphInput) => Promise<PublishGraphResult>,
+  executor: (input: PublishGraphInput) => Promise<PublishGraphResult>
 ): { run(input: PublishGraphInput): Promise<PublishGraphResult> } {
   return {
-    run: executor,
+    run: executor
   };
 }

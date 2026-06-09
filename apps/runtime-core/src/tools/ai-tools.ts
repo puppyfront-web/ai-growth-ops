@@ -12,7 +12,7 @@ import {
   generateRuleBasedReply,
   containsSensitiveContent,
   type ClassificationResult,
-  type ReplySuggestionResult,
+  type ReplySuggestionResult
 } from './rule-classifier.js';
 
 // ── Lazy singleton skill runner ────────────────────────────────────
@@ -42,25 +42,31 @@ export interface ClassificationInput {
 }
 
 export async function runClassification(
-  input: ClassificationInput,
+  input: ClassificationInput
 ): Promise<{ result: ClassificationResult; source: 'llm' | 'rules' }> {
   try {
     const runner = getSkillRunner();
-    const skillResult = await runner.run<ClassificationInput, ClassificationResult>({
+    const skillResult = await runner.run<
+      ClassificationInput,
+      ClassificationResult
+    >({
       skillName: 'lead-classification',
       input: {
         platform: input.platform,
         interactionType: input.interactionType,
         content: input.content,
-        sourceContentTitle: input.sourceContentTitle,
-      },
+        sourceContentTitle: input.sourceContentTitle
+      }
     });
 
     if (skillResult.status === 'success' && skillResult.output) {
       return { result: skillResult.output, source: 'llm' };
     }
 
-    console.error('[ai-tools] lead-classification skill returned failure:', skillResult.error);
+    console.error(
+      '[ai-tools] lead-classification skill returned failure:',
+      skillResult.error
+    );
   } catch (error) {
     console.error('[ai-tools] lead-classification skill error:', error);
   }
@@ -81,18 +87,21 @@ export interface ReplySuggestionInput {
 }
 
 export async function runReplySuggestion(
-  input: ReplySuggestionInput,
+  input: ReplySuggestionInput
 ): Promise<{ result: ReplySuggestionResult; source: 'llm' | 'rules' } | null> {
   try {
     const runner = getSkillRunner();
-    const skillResult = await runner.run<Record<string, unknown>, Record<string, unknown>>({
+    const skillResult = await runner.run<
+      Record<string, unknown>,
+      Record<string, unknown>
+    >({
       skillName: 'reply-suggestion',
       input: {
         interaction: input.interaction,
         classification: input.classification,
         platform: input.interaction.platform,
-        brandTone: input.brandTone || '专业、克制、不过度承诺',
-      },
+        brandTone: input.brandTone || '专业、克制、不过度承诺'
+      }
     });
 
     if (skillResult.status === 'success' && skillResult.output) {
@@ -104,12 +113,15 @@ export async function runReplySuggestion(
           ? output.riskLevel
           : 'low') as ReplySuggestionResult['riskLevel'],
         needReview: Boolean(output.needReview),
-        reason: output.reason ? String(output.reason) : undefined,
+        reason: output.reason ? String(output.reason) : undefined
       };
       return { result, source: 'llm' };
     }
 
-    console.error('[ai-tools] reply-suggestion skill returned failure:', skillResult.error);
+    console.error(
+      '[ai-tools] reply-suggestion skill returned failure:',
+      skillResult.error
+    );
   } catch (error) {
     console.error('[ai-tools] reply-suggestion skill error:', error);
   }
@@ -118,7 +130,7 @@ export async function runReplySuggestion(
   const result = generateRuleBasedReply(
     input.interaction.content,
     input.classification,
-    input.interaction.platform,
+    input.interaction.platform
   );
 
   // Apply sensitive content policy check

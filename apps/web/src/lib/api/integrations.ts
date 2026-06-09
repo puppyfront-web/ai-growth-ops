@@ -38,15 +38,22 @@ export function getPlatformAccounts(): Promise<PlatformAccount[]> {
   return apiGet<PlatformAccount[]>('/api/accounts');
 }
 
-export function updatePlatformAccount(id: string, data: Record<string, unknown>): Promise<PlatformAccount> {
+export function updatePlatformAccount(
+  id: string,
+  data: Record<string, unknown>
+): Promise<PlatformAccount> {
   return apiPut<PlatformAccount>(`/api/accounts/${id}`, data);
 }
 
-export function createPlatformAccount(data: Record<string, unknown>): Promise<PlatformAccount> {
+export function createPlatformAccount(
+  data: Record<string, unknown>
+): Promise<PlatformAccount> {
   return apiPost<PlatformAccount>('/api/accounts', data);
 }
 
-export function validatePlatformAccount(id: string): Promise<Record<string, unknown>> {
+export function validatePlatformAccount(
+  id: string
+): Promise<Record<string, unknown>> {
   return apiPost<Record<string, unknown>>(`/api/accounts/${id}/validate`, {});
 }
 
@@ -65,16 +72,30 @@ export interface BrowserLoginStatusResponse {
   error?: string;
 }
 
-export function startBrowserLogin(accountId: string): Promise<BrowserLoginStartResponse> {
-  return apiPost<BrowserLoginStartResponse>(`/api/accounts/${accountId}/browser-login/start`, {});
+export function startBrowserLogin(
+  accountId: string
+): Promise<BrowserLoginStartResponse> {
+  return apiPost<BrowserLoginStartResponse>(
+    `/api/accounts/${accountId}/browser-login/start`,
+    {}
+  );
 }
 
-export function getBrowserLoginStatus(accountId: string): Promise<BrowserLoginStatusResponse> {
-  return apiGet<BrowserLoginStatusResponse>(`/api/accounts/${accountId}/browser-login/status`);
+export function getBrowserLoginStatus(
+  accountId: string
+): Promise<BrowserLoginStatusResponse> {
+  return apiGet<BrowserLoginStatusResponse>(
+    `/api/accounts/${accountId}/browser-login/status`
+  );
 }
 
-export function cancelBrowserLogin(accountId: string): Promise<{ ok: boolean }> {
-  return apiPost<{ ok: boolean }>(`/api/accounts/${accountId}/browser-login/cancel`, {});
+export function cancelBrowserLogin(
+  accountId: string
+): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(
+    `/api/accounts/${accountId}/browser-login/cancel`,
+    {}
+  );
 }
 
 export function getProviders(): Promise<ProviderInfo[]> {
@@ -85,7 +106,9 @@ export function getFeishuConfig(): Promise<Record<string, unknown>> {
   return apiGet<Record<string, unknown>>('/api/lead-sinks/feishu');
 }
 
-export function updateFeishuConfig(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+export function updateFeishuConfig(
+  data: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   return apiPut<Record<string, unknown>>('/api/lead-sinks/feishu', data);
 }
 
@@ -93,6 +116,8 @@ export function getWecomConfig(): Promise<Record<string, unknown>> {
   return apiGet<Record<string, unknown>>('/api/lead-sinks/wecom');
 }
 
-export function updateWecomConfig(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+export function updateWecomConfig(
+  data: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   return apiPut<Record<string, unknown>>('/api/lead-sinks/wecom', data);
 }

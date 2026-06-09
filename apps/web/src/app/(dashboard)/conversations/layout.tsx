@@ -10,10 +10,14 @@ const tabs = [
   { label: '评论管理', href: '/conversations/comments' },
   { label: '私信管理', href: '/conversations/messages' },
   { label: '回复管理', href: '/conversations/replies' },
-  { label: '人工审核', href: '/conversations/review' },
+  { label: '人工审核', href: '/conversations/review' }
 ];
 
-export default function ConversationsLayout({ children }: { children: React.ReactNode }) {
+export default function ConversationsLayout({
+  children
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
 
   return (
@@ -21,9 +25,10 @@ export default function ConversationsLayout({ children }: { children: React.Reac
       <Breadcrumb />
       <div className="flex gap-1 border-b mb-6">
         {tabs.map((tab) => {
-          const isActive = tab.href === '/conversations'
-            ? pathname === '/conversations'
-            : pathname.startsWith(tab.href);
+          const isActive =
+            tab.href === '/conversations'
+              ? pathname === '/conversations'
+              : pathname.startsWith(tab.href);
           return (
             <Link
               key={tab.href}
@@ -32,7 +37,7 @@ export default function ConversationsLayout({ children }: { children: React.Reac
                 'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
                 isActive
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
               {tab.label}

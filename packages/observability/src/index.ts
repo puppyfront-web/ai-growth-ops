@@ -9,6 +9,6 @@ export {
   getMetrics,
   getCounter,
   getMetricsSummary,
-  clearMetrics,
+  clearMetrics
 } from './metrics.js';
 export type { MetricEntry } from './metrics.js';

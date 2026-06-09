@@ -13,7 +13,10 @@ import { existsSync, readFileSync } from 'node:fs';
     const eqIdx = trimmed.indexOf('=');
     if (eqIdx < 1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+    const val = trimmed
+      .slice(eqIdx + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
     if (!(key in process.env)) process.env[key] = val;
   }
 })();
@@ -38,13 +41,20 @@ import { handleInteractionAutoReply } from './job-handlers/interaction.auto-repl
 import { handleInteractionManualReply } from './job-handlers/interaction.manual-reply.js';
 import { handleScheduledInteractionSync } from './job-handlers/scheduled.interaction-sync.js';
 import { handleWorkflowExecute } from './job-handlers/workflow.execute.js';
-import { startScheduler, SCHEDULED_QUEUE, CAMPAIGN_CHECK_QUEUE, INTERACTION_SYNC_QUEUE } from './scheduler.js';
+import {
+  startScheduler,
+  SCHEDULED_QUEUE,
+  CAMPAIGN_CHECK_QUEUE
+} from './scheduler.js';
 
 export const appName = 'worker';
 export const getWorkerHealth = () => createHealthSnapshot(appName);
 
 // All real handlers — one per active queue
-const realHandlers: Record<string, (job: any) => Promise<void>> = {
+const realHandlers: Record<
+  string,
+  (job: import('bullmq').Job) => Promise<void>
+> = {
   [QUEUE_NAMES.INTERACTION_SYNC_COMMENTS]: handleInteractionSyncComments,
   [QUEUE_NAMES.INTERACTION_SYNC_MESSAGES]: handleInteractionSyncMessages,
   [QUEUE_NAMES.PUBLISH_EXECUTE]: handlePublishExecute,
@@ -57,7 +67,7 @@ const realHandlers: Record<string, (job: any) => Promise<void>> = {
   [QUEUE_NAMES.SCHEDULED_INTERACTION_SYNC]: handleScheduledInteractionSync,
   [QUEUE_NAMES.WORKFLOW_EXECUTE]: handleWorkflowExecute,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
-  [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule,
+  [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule
 };
 
 export async function startWorker(): Promise<void> {
@@ -65,7 +75,7 @@ export async function startWorker(): Promise<void> {
   logger.info('Starting worker...');
 
   // Register only real handlers — no placeholders, no stub queues
-  for (const [key, queueName] of Object.entries(QUEUE_NAMES)) {
+  for (const [, queueName] of Object.entries(QUEUE_NAMES)) {
     const handler = realHandlers[queueName];
     if (!handler) {
       logger.error(`No handler for queue ${queueName} — skipping`);
@@ -93,8 +103,10 @@ export async function startWorker(): Promise<void> {
 
 // Auto-start when run directly
 if (process.argv[1]?.includes('worker') && !process.env.VITEST) {
-  startWorker().catch(err => {
-    logger.error('Failed to start worker', { error: err instanceof Error ? err.message : String(err) });
+  startWorker().catch((err) => {
+    logger.error('Failed to start worker', {
+      error: err instanceof Error ? err.message : String(err)
+    });
     process.exit(1);
   });
 }

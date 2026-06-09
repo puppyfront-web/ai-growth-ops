@@ -25,6 +25,7 @@
 **Model:** Reuse existing `AppConfig` with key `agent_user_preferences` per organization.
 
 **Schema:**
+
 ```json
 {
   "preferredPlatforms": ["douyin", "xiaohongshu"],
@@ -38,10 +39,12 @@
 ```
 
 **New API endpoints:**
+
 - `GET /api/settings/agent-preferences` — load preferences
 - `PUT /api/settings/agent-preferences` — save preferences
 
 **New chat tools:**
+
 - `remember_preference` — save a user preference (key-value)
 - `get_my_preferences` — retrieve stored preferences
 
@@ -73,11 +76,13 @@ On each conversation turn, build a dynamic context block containing:
 ### 1.3 Conversation Summarization
 
 **On thread close/inactivity** (via scheduler or on new thread creation):
+
 - Use AI to generate a 2-3 sentence summary of the conversation
 - Store in `ChatThread.metadata.summary`
 - When user starts a new thread, inject summaries of last 3 threads into context
 
 **New API endpoint:**
+
 - `GET /api/chat/threads/recent-summaries` — returns last N thread summaries
 
 ---
@@ -90,21 +95,24 @@ On each conversation turn, build a dynamic context block containing:
 
 ```typescript
 tool({
-  description: 'Execute a multi-step operations plan autonomously. Use this when the user asks for a complete workflow like "help me create and publish content" or "run the full engagement loop".',
+  description:
+    'Execute a multi-step operations plan autonomously. Use this when the user asks for a complete workflow like "help me create and publish content" or "run the full engagement loop".',
   parameters: z.object({
     planName: z.string().describe('Human-readable plan name'),
-    steps: z.array(z.object({
-      toolName: z.string(),
-      description: z.string(),
-      params: z.record(z.unknown()).optional(),
-    })),
+    steps: z.array(
+      z.object({
+        toolName: z.string(),
+        description: z.string(),
+        params: z.record(z.unknown()).optional()
+      })
+    )
   }),
   execute: async ({ planName, steps }) => {
     // Create an AgentRun record to track progress
     // Execute steps sequentially, collecting results
     // Return structured progress report
   }
-})
+});
 ```
 
 **New model:** `AgentRun` (already exists in schema)
@@ -121,6 +129,7 @@ AgentRun:
 ```
 
 **Key behaviors:**
+
 - Each step result is stored, available for subsequent steps
 - If a step fails, AI can decide to retry, skip, or abort
 - Progress is reported back to user as structured tool result
@@ -132,18 +141,19 @@ AgentRun:
 
 ```typescript
 tool({
-  description: 'Check the result of a previous step and decide what to do next. Use after each autonomous step to verify before proceeding.',
+  description:
+    'Check the result of a previous step and decide what to do next. Use after each autonomous step to verify before proceeding.',
   parameters: z.object({
     agentRunId: z.string(),
     stepIndex: z.number(),
     decision: z.enum(['continue', 'retry', 'skip', 'abort']),
-    reason: z.string().optional(),
+    reason: z.string().optional()
   }),
   execute: async ({ agentRunId, stepIndex, decision, reason }) => {
     // Load AgentRun, get step result
     // Return step result + available next steps
   }
-})
+});
 ```
 
 ### 2.3 Pre-built Plan Templates
@@ -159,8 +169,8 @@ export const PLAN_TEMPLATES = {
       { toolName: 'check_compliance', description: '合规检查' },
       { toolName: 'rewrite_for_platform', description: '平台改写' },
       { toolName: 'approve_variant', description: '批准变体' },
-      { toolName: 'create_publish_job', description: '创建发布任务' },
-    ],
+      { toolName: 'create_publish_job', description: '创建发布任务' }
+    ]
   },
   'engagement-sprint': {
     name: '互动管理全流程',
@@ -169,8 +179,8 @@ export const PLAN_TEMPLATES = {
       { toolName: 'sync_messages', description: '同步私信' },
       { toolName: 'list_interactions', description: '查看互动' },
       { toolName: 'classify_interaction', description: '分类线索' },
-      { toolName: 'suggest_reply', description: '生成回复建议' },
-    ],
+      { toolName: 'suggest_reply', description: '生成回复建议' }
+    ]
   },
   'full-loop': {
     name: '完整运营闭环',
@@ -180,9 +190,9 @@ export const PLAN_TEMPLATES = {
       { toolName: 'check_compliance', description: '合规检查' },
       { toolName: 'rewrite_for_platform', description: '平台改写' },
       { toolName: 'approve_variant', description: '批准变体' },
-      { toolName: 'create_publish_job', description: '创建发布任务' },
-    ],
-  },
+      { toolName: 'create_publish_job', description: '创建发布任务' }
+    ]
+  }
 };
 ```
 
@@ -200,10 +210,11 @@ export const PLAN_TEMPLATES = {
 export async function generateProactiveSuggestions(
   db: DatabaseClient,
   orgId: string
-): Promise<Suggestion[]>
+): Promise<Suggestion[]>;
 ```
 
 Logic:
+
 1. Query operational data (last 24h):
    - Unread interactions count
    - Pending reply reviews
@@ -220,6 +231,7 @@ Logic:
 3. Generate natural language suggestions (max 5)
 
 **New API endpoint:**
+
 - `GET /api/agent/suggestions` — returns prioritized suggestions
 
 ### 3.2 Suggestions Chat Tool
@@ -228,12 +240,13 @@ Logic:
 
 ```typescript
 tool({
-  description: 'Get proactive operational suggestions based on current data. Call this at the start of conversations or when the user asks "what should I do?"',
+  description:
+    'Get proactive operational suggestions based on current data. Call this at the start of conversations or when the user asks "what should I do?"',
   parameters: z.object({}),
   execute: async () => {
     // Call GET /api/agent/suggestions
   }
-})
+});
 ```
 
 ### 3.3 Welcome Message Enhancement
@@ -249,6 +262,7 @@ When a new conversation starts, auto-call `get_proactive_suggestions` and displa
 **File:** `apps/web/src/app/api/chat/system-prompt.ts`
 
 Add sections:
+
 1. **Memory & Context** — Explain that preferences and recent activity are available
 2. **Autonomous Orchestration** — Rules for when to use `execute_plan` vs single tools
 3. **Proactive Behavior** — Rules for when to offer suggestions unprompted
@@ -267,6 +281,7 @@ Add sections:
 **File:** `apps/web/src/components/chat/MessageBubble.tsx`
 
 Add entries for new tools:
+
 - `execute_plan` → '执行计划'
 - `check_step_result` → '检查步骤结果'
 - `list_plan_templates` → '可用计划模板'
@@ -279,11 +294,13 @@ Add entries for new tools:
 ## File Index
 
 ### New files to create:
+
 - `apps/api/src/services/agent-suggestions.ts` — proactive suggestion engine
 - `apps/web/src/app/api/chat/context-builder.ts` — operational context injection
 - `apps/web/src/app/api/chat/plan-templates.ts` — pre-built plan definitions
 
 ### Files to modify:
+
 - `packages/database/prisma/schema.prisma` — no changes needed (AgentRun exists)
 - `apps/api/src/routes.ts` — 3 new routes (agent preferences CRUD, suggestions)
 - `apps/web/src/app/api/chat/route.ts` — inject dynamic context

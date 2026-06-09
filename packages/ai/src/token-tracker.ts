@@ -19,7 +19,11 @@ export function getTokenUsageRecords(): TokenUsageRecord[] {
   return [...records];
 }
 
-export function getTokenUsageSummary(): { totalTokens: number; totalCost: number; bySkill: Record<string, number> } {
+export function getTokenUsageSummary(): {
+  totalTokens: number;
+  totalCost: number;
+  bySkill: Record<string, number>;
+} {
   let totalTokens = 0;
   const bySkill: Record<string, number> = {};
   for (const r of records) {

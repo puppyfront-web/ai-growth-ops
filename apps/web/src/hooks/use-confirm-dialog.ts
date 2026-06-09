@@ -10,7 +10,9 @@ export interface ConfirmOptions {
 }
 
 export function useConfirmDialog() {
-  const [dialog, setDialog] = useState<(ConfirmOptions & { resolve: (v: boolean) => void }) | null>(null);
+  const [dialog, setDialog] = useState<
+    (ConfirmOptions & { resolve: (v: boolean) => void }) | null
+  >(null);
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise((resolve) => {

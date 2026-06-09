@@ -19,9 +19,17 @@ interface NotifyResult {
 
 interface LeadSinkProvider {
   readonly sinkType: string;
-  testConnection(config: Record<string, unknown>): Promise<TestConnectionResult>;
-  syncLead(input: { leadId: string; name: string; phone?: string; email?: string }, config: Record<string, unknown>): Promise<SyncLeadResult>;
-  notify(input: { leadId: string; message: string }, config: Record<string, unknown>): Promise<NotifyResult>;
+  testConnection(
+    config: Record<string, unknown>
+  ): Promise<TestConnectionResult>;
+  syncLead(
+    input: { leadId: string; name: string; phone?: string; email?: string },
+    config: Record<string, unknown>
+  ): Promise<SyncLeadResult>;
+  notify(
+    input: { leadId: string; message: string },
+    config: Record<string, unknown>
+  ): Promise<NotifyResult>;
 }
 
 class SandboxLeadSinkProvider implements LeadSinkProvider {
@@ -32,24 +40,36 @@ class SandboxLeadSinkProvider implements LeadSinkProvider {
     this.sinkType = sinkType;
   }
 
-  async testConnection(config: Record<string, unknown>): Promise<TestConnectionResult> {
+  async testConnection(
+    config: Record<string, unknown>
+  ): Promise<TestConnectionResult> {
     if (!config.webhookUrl && !config.corpId) {
       return { success: false, error: 'Missing required config' };
     }
     return { success: true };
   }
 
-  async syncLead(input: { leadId: string; name: string }, config: Record<string, unknown>): Promise<SyncLeadResult> {
+  async syncLead(
+    input: { leadId: string; name: string },
+    _config: Record<string, unknown>
+  ): Promise<SyncLeadResult> {
     const existing = this.syncedIds.get(input.leadId);
     if (existing) {
       return { success: true, externalId: existing };
     }
     const extId = `${this.sinkType}_ext_${Date.now()}`;
     this.syncedIds.set(input.leadId, extId);
-    return { success: true, externalId: extId, externalUrl: `https://${this.sinkType}.com/contact/${extId}` };
+    return {
+      success: true,
+      externalId: extId,
+      externalUrl: `https://${this.sinkType}.com/contact/${extId}`
+    };
   }
 
-  async notify(input: { leadId: string; message: string }, config: Record<string, unknown>): Promise<NotifyResult> {
+  async notify(
+    _input: { leadId: string; message: string },
+    _config: Record<string, unknown>
+  ): Promise<NotifyResult> {
     return { success: true };
   }
 }
@@ -72,19 +92,31 @@ describe('LeadSinkProvider Contract', () => {
   });
 
   it('syncLead returns externalId', async () => {
-    const result = await feishu.syncLead({ leadId: 'lead1', name: 'Test' }, config);
+    const result = await feishu.syncLead(
+      { leadId: 'lead1', name: 'Test' },
+      config
+    );
     expect(result.success).toBe(true);
     expect(result.externalId).toContain('feishu_ext');
   });
 
   it('duplicate sync returns same externalId (idempotent)', async () => {
-    const first = await feishu.syncLead({ leadId: 'lead2', name: 'Test' }, config);
-    const second = await feishu.syncLead({ leadId: 'lead2', name: 'Test' }, config);
+    const first = await feishu.syncLead(
+      { leadId: 'lead2', name: 'Test' },
+      config
+    );
+    const second = await feishu.syncLead(
+      { leadId: 'lead2', name: 'Test' },
+      config
+    );
     expect(first.externalId).toBe(second.externalId);
   });
 
   it('notify returns success', async () => {
-    const result = await feishu.notify({ leadId: 'lead1', message: 'New lead' }, config);
+    const result = await feishu.notify(
+      { leadId: 'lead1', message: 'New lead' },
+      config
+    );
     expect(result.success).toBe(true);
   });
 
@@ -92,7 +124,10 @@ describe('LeadSinkProvider Contract', () => {
     const conn = await wecom.testConnection(wecomConfig);
     expect(conn.success).toBe(true);
 
-    const result = await wecom.syncLead({ leadId: 'lead3', name: 'Wecom Test' }, wecomConfig);
+    const result = await wecom.syncLead(
+      { leadId: 'lead3', name: 'Wecom Test' },
+      wecomConfig
+    );
     expect(result.success).toBe(true);
     expect(result.externalId).toContain('wecom_ext');
   });

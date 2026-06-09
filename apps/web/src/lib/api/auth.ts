@@ -22,11 +22,18 @@ export interface LoginResponse {
   organizations?: Organization[];
 }
 
-export function login(data: { email: string; password: string }): Promise<LoginResponse> {
+export function login(data: {
+  email: string;
+  password: string;
+}): Promise<LoginResponse> {
   return apiPost<LoginResponse>('/api/auth/login', data);
 }
 
-export function register(data: { email: string; password: string; name: string }): Promise<LoginResponse> {
+export function register(data: {
+  email: string;
+  password: string;
+  name: string;
+}): Promise<LoginResponse> {
   return apiPost<LoginResponse>('/api/auth/register', data);
 }
 
@@ -42,22 +49,49 @@ export function logoutAll(): Promise<{ success: boolean; message: string }> {
   return apiPost<{ success: boolean; message: string }>('/api/auth/logout-all');
 }
 
-export function verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
-  return apiPost<{ success: boolean; message: string }>('/api/auth/verify-email', { token });
+export function verifyEmail(
+  token: string
+): Promise<{ success: boolean; message: string }> {
+  return apiPost<{ success: boolean; message: string }>(
+    '/api/auth/verify-email',
+    { token }
+  );
 }
 
-export function forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
-  return apiPost<{ success: boolean; message: string }>('/api/auth/forgot-password', { email });
+export function forgotPassword(
+  email: string
+): Promise<{ success: boolean; message: string }> {
+  return apiPost<{ success: boolean; message: string }>(
+    '/api/auth/forgot-password',
+    { email }
+  );
 }
 
-export function resetPassword(token: string, password: string): Promise<{ success: boolean; message: string }> {
-  return apiPost<{ success: boolean; message: string }>('/api/auth/reset-password', { token, password });
+export function resetPassword(
+  token: string,
+  password: string
+): Promise<{ success: boolean; message: string }> {
+  return apiPost<{ success: boolean; message: string }>(
+    '/api/auth/reset-password',
+    { token, password }
+  );
 }
 
-export function changePassword(oldPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
-  return apiPut<{ success: boolean; message: string }>('/api/auth/change-password', { oldPassword, newPassword });
+export function changePassword(
+  oldPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> {
+  return apiPut<{ success: boolean; message: string }>(
+    '/api/auth/change-password',
+    { oldPassword, newPassword }
+  );
 }
 
-export function resendVerification(): Promise<{ success: boolean; message: string }> {
-  return apiPost<{ success: boolean; message: string }>('/api/auth/resend-verification');
+export function resendVerification(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  return apiPost<{ success: boolean; message: string }>(
+    '/api/auth/resend-verification'
+  );
 }

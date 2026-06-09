@@ -613,6 +613,7 @@ apps/worker/src/
 ```
 
 接口约束：
+
 - 所有 job handler 必须实现 `JobHandler<TInput>` 接口
 - 所有 job 必须创建/更新 SystemTask 记录
 - 重试策略：指数退避, maxRetries=3
@@ -630,6 +631,7 @@ packages/ai/src/
 ```
 
 接口约束：
+
 - LLM 调用必须支持 Mock/Real Provider 切换
 - 所有 AI 输出必须通过 Schema 校验
 - 不允许无结构化输出
@@ -657,6 +659,7 @@ packages/skills/src/
 ```
 
 接口约束 (specs_v1 05 §4)：
+
 ```ts
 export interface SkillRunner {
   run<TInput, TOutput>(input: {
@@ -669,6 +672,7 @@ export interface SkillRunner {
 ```
 
 每个 Skill 必须有：input schema, output schema, prompt, mock fixture, 单元测试
+
 - lead-classification 输出必须包含 leadLevel/confidence/riskLevel
 - reply-suggestion 输出必须包含 suggestedText/needReview
 
@@ -685,17 +689,21 @@ packages/providers/src/publish/
 ```
 
 接口约束 (specs_v1 01 §6)：
+
 ```ts
 export interface PublishProvider {
   getCapabilities(): Promise<PublishCapabilities>;
   publishTextImage(input: PublishTextImageInput): Promise<PublishResult>;
   publishVideo(input: PublishVideoInput): Promise<PublishResult>;
   publishArticle(input: PublishArticleInput): Promise<PublishResult>;
-  fetchPublishStatus(input: FetchPublishStatusInput): Promise<PublishStatusResult>;
+  fetchPublishStatus(
+    input: FetchPublishStatusInput
+  ): Promise<PublishStatusResult>;
 }
 ```
 
 能力声明必须包含：
+
 ```ts
 export type PublishCapabilities = {
   platform: PlatformCode;
@@ -724,6 +732,7 @@ packages/lead-sinks/src/
 ```
 
 接口约束 (specs_v1 03)：
+
 - 同一个 leadId + sinkType 唯一 LeadExternalMapping
 - 已有 externalId 时为 update 而非 create
 - 同步失败不能删除本地 Lead
@@ -743,11 +752,14 @@ apps/research-runner/src/
 ```
 
 接口约束 (specs_v1 02)：
+
 ```ts
 export interface ResearchProvider {
   getCapabilities(): Promise<ResearchCapabilities>;
   searchPosts(input: SearchPostsInput): Promise<CollectedPostDTO[]>;
-  collectPostComments(input: CollectCommentsInput): Promise<CollectedCommentDTO[]>;
+  collectPostComments(
+    input: CollectCommentsInput
+  ): Promise<CollectedCommentDTO[]>;
   collectCreatorPosts(input: CollectCreatorInput): Promise<CollectedPostDTO[]>;
 }
 ```
@@ -768,6 +780,7 @@ apps/provider-gateway/src/
 ```
 
 接口约束 (specs_v1 05 §5)：
+
 ```ts
 export interface ExternalProvider {
   name: string;
@@ -800,6 +813,7 @@ packages/connectors/src/interaction/
 ```
 
 接口约束 (specs_v1 评论私信Spec §6)：
+
 ```ts
 export interface InteractionConnector {
   getCapabilities(): Promise<InteractionCapabilities>;
@@ -812,27 +826,32 @@ export interface InteractionConnector {
 ```
 
 新增数据模型：
+
 - InteractionClassification: intent, leadLevel, confidence, riskLevel, summary, tags, nextAction
 - ReplySuggestion: suggestedText, replyType, riskLevel, needReview, decision, status
 - ReplyAttempt: platform, providerMode, status, externalReplyId, errorCode
 - InteractionSyncJob: syncType, mode, status, cursor, fetchedCount
 
 状态机要求：
+
 - Interaction: new → classified → reply_suggested → waiting_human_review → replied
 - ReplySuggestion: draft → waiting_review → approved → sent
 - needReview=true 时不能 draft → sent
 - riskLevel=high 时必须 waiting_review
 
 队列任务：
+
 - interaction.sync.comments, interaction.sync.messages
 - interaction.classify, interaction.suggest_reply, interaction.send_reply
 
 AI Skill 要求：
+
 - lead-classification: 输出必须包含 intent, leadLevel, confidence, riskLevel
 - reply-suggestion: 输出必须包含 suggestedText, replyType, riskLevel, needReview
 - risk-check: 检测敏感词、导流、夸大承诺、手机号/微信号、平台禁用词
 
 Reply Policy Engine 规则：
+
 - riskLevel=high → require_human_review
 - leadLevel=A → require_human_review
 - confidence < 0.75 → require_human_review
@@ -850,6 +869,7 @@ packages/observability/src/
 ```
 
 接口约束 (specs_v1 07)：
+
 - 关键动作自动写 AuditLog
 - Secret 加密存储，前端永不返回明文
 - 日志不得记录明文 Secret

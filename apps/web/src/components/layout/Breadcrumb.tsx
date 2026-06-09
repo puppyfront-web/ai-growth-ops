@@ -35,7 +35,7 @@ const labelMap: Record<string, string> = {
   compliance: '合规规则',
   variants: '平台版本',
   calendar: '日历',
-  templates: '模板',
+  templates: '模板'
 };
 
 export function Breadcrumb() {
@@ -46,7 +46,10 @@ export function Breadcrumb() {
 
   return (
     <nav className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-      <Link href="/dashboard" className="flex items-center hover:text-foreground">
+      <Link
+        href="/dashboard"
+        className="flex items-center hover:text-foreground"
+      >
         <Home className="h-3.5 w-3.5" />
       </Link>
       {segments.map((segment, index) => {

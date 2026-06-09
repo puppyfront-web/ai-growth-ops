@@ -11,7 +11,7 @@ export function formatDate(date: string | Date): string {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit',
+    minute: '2-digit'
   });
 }
 
@@ -48,7 +48,9 @@ export function getDaysGrid(year: number, month: number): Date[] {
   // Next month padding to fill 42 cells
   while (days.length < 42) {
     const last = days[days.length - 1];
-    days.push(new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1));
+    days.push(
+      new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1)
+    );
   }
   return days;
 }

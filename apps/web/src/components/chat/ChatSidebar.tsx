@@ -12,11 +12,17 @@ interface ChatSidebarProps {
   onNewThread: () => void;
 }
 
-export function ChatSidebar({ activeThreadId, onSelectThread, onNewThread }: ChatSidebarProps) {
+export function ChatSidebar({
+  activeThreadId,
+  onSelectThread,
+  onNewThread
+}: ChatSidebarProps) {
   const [threads, setThreads] = useState<ChatThread[]>([]);
 
   useEffect(() => {
-    listThreads().then(setThreads).catch(() => {});
+    listThreads()
+      .then(setThreads)
+      .catch(() => {});
   }, [activeThreadId]);
 
   return (
@@ -40,7 +46,7 @@ export function ChatSidebar({ activeThreadId, onSelectThread, onNewThread }: Cha
               'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
               thread.id === activeThreadId
                 ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/50',
+                : 'text-muted-foreground hover:bg-accent/50'
             )}
           >
             <MessageSquare className="h-4 w-4 shrink-0" />
@@ -51,7 +57,10 @@ export function ChatSidebar({ activeThreadId, onSelectThread, onNewThread }: Cha
       <div className="border-t p-3">
         <a
           href="/chat"
-          onClick={(e) => { e.preventDefault(); onNewThread(); }}
+          onClick={(e) => {
+            e.preventDefault();
+            onNewThread();
+          }}
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent/50"
         >
           ✨ 新对话

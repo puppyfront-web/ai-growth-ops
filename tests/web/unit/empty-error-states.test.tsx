@@ -16,7 +16,9 @@ describe('EmptyState', () => {
   });
 
   it('renders action link when provided', () => {
-    render(<EmptyState title="空" action={{ label: '新建', href: '/content/new' }} />);
+    render(
+      <EmptyState title="空" action={{ label: '新建', href: '/content/new' }} />
+    );
     const link = screen.getByText('新建');
     expect(link).toBeInTheDocument();
     expect(link.closest('a')?.getAttribute('href')).toBe('/content/new');

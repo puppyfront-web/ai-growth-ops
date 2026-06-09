@@ -8,7 +8,7 @@ export interface ValidationError {
 export function formatZodErrors(error: ZodError): ValidationError[] {
   return error.errors.map((e) => ({
     field: e.path.join('.'),
-    message: e.message,
+    message: e.message
   }));
 }
 
@@ -16,13 +16,18 @@ export function formatZodErrors(error: ZodError): ValidationError[] {
  * Validate a request body against a Zod schema.
  * Returns parsed data on success, or null + error details on failure.
  */
-export function validateBody<T>(schema: ZodSchema<T>, body: unknown): {
-  success: true;
-  data: T;
-} | {
-  success: false;
-  errors: ValidationError[];
-} {
+export function validateBody<T>(
+  schema: ZodSchema<T>,
+  body: unknown
+):
+  | {
+      success: true;
+      data: T;
+    }
+  | {
+      success: false;
+      errors: ValidationError[];
+    } {
   const result = schema.safeParse(body);
   if (result.success) {
     return { success: true, data: result.data };
@@ -34,13 +39,18 @@ export function validateBody<T>(schema: ZodSchema<T>, body: unknown): {
  * Validate URL query parameters against a Zod schema.
  * Converts string values to appropriate types (numbers, booleans, etc.).
  */
-export function validateQuery<T>(schema: ZodSchema<T>, url: URL): {
-  success: true;
-  data: T;
-} | {
-  success: false;
-  errors: ValidationError[];
-} {
+export function validateQuery<T>(
+  schema: ZodSchema<T>,
+  url: URL
+):
+  | {
+      success: true;
+      data: T;
+    }
+  | {
+      success: false;
+      errors: ValidationError[];
+    } {
   const params: Record<string, string> = {};
   url.searchParams.forEach((value, key) => {
     params[key] = value;

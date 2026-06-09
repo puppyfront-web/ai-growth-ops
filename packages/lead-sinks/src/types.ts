@@ -38,10 +38,16 @@ export interface LeadSinkConfig {
 export interface LeadSink {
   readonly sinkType: string;
   sync(lead: LeadData, config: LeadSinkConfig): Promise<SinkResult>;
-  testConnection(config: LeadSinkConfig): Promise<{ success: boolean; message: string }>;
+  testConnection(
+    config: LeadSinkConfig
+  ): Promise<{ success: boolean; message: string }>;
 }
 
 export interface NotifySink {
   readonly sinkType: string;
-  notify(lead: LeadData, config: LeadSinkConfig, message?: string): Promise<SinkResult>;
+  notify(
+    lead: LeadData,
+    config: LeadSinkConfig,
+    message?: string
+  ): Promise<SinkResult>;
 }

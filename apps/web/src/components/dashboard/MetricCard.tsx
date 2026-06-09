@@ -14,7 +14,13 @@ export type MetricCardProps = {
   className?: string;
 };
 
-export function MetricCard({ icon: Icon, label, value, trendPercent, className }: MetricCardProps) {
+export function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  trendPercent,
+  className
+}: MetricCardProps) {
   const isUp = trendPercent !== undefined && trendPercent > 0;
   const isDown = trendPercent !== undefined && trendPercent < 0;
   const isNeutral = trendPercent === 0;
@@ -32,7 +38,7 @@ export function MetricCard({ icon: Icon, label, value, trendPercent, className }
             className={cn('flex items-center gap-0.5 text-xs font-medium', {
               'text-emerald-600': isUp,
               'text-red-500': isDown,
-              'text-muted-foreground': isNeutral,
+              'text-muted-foreground': isNeutral
             })}
           >
             {isUp && <ArrowUpRight className="h-3 w-3" />}

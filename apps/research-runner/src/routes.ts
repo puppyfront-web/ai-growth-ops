@@ -25,7 +25,7 @@ const routes: Route[] = [
     pattern: '/health',
     handler: async (_req, res) => {
       sendJson(res, 200, createHealthSnapshot('research-runner'));
-    },
+    }
   },
   {
     method: 'POST',
@@ -33,7 +33,9 @@ const routes: Route[] = [
     handler: async (_req, res, ctx) => {
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.researchTaskId || !body?.platform) {
-        sendJson(res, 400, { error: 'researchTaskId and platform are required' });
+        sendJson(res, 400, {
+          error: 'researchTaskId and platform are required'
+        });
         return;
       }
 
@@ -47,14 +49,16 @@ const routes: Route[] = [
           maxPosts: body.maxPosts as number | undefined,
           maxComments: body.maxComments as number | undefined,
           targetAccountIds: body.targetAccountIds as string[] | undefined,
-          cookie: body.cookie as string | undefined,
+          cookie: body.cookie as string | undefined
         });
         sendJson(res, 200, result);
       } catch (err) {
-        sendJson(res, 500, { error: err instanceof Error ? err.message : 'Execution failed' });
+        sendJson(res, 500, {
+          error: err instanceof Error ? err.message : 'Execution failed'
+        });
       }
-    },
-  },
+    }
+  }
 ];
 
 interface MatchResult {
@@ -98,8 +102,14 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function routeRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = new URL(req.url ?? '/', `http://localhost:${process.env.RESEARCH_RUNNER_PORT ?? 3300}`);
+export async function routeRequest(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  const url = new URL(
+    req.url ?? '/',
+    `http://localhost:${process.env.RESEARCH_RUNNER_PORT ?? 3300}`
+  );
   const result = matchRoute(req.method ?? 'GET', url.pathname);
 
   if (!result) {

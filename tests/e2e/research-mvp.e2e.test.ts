@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { expect, test } from '@playwright/test';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 
 test.beforeEach(async () => {
   const db = createDatabaseClient();
@@ -30,7 +34,9 @@ test('research mvp sync run creates results and content', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'AI 洞察' })).toBeVisible();
   await page.getByRole('button', { name: 'AI 洞察' }).click();
   await expect(page.getByText('热门内容主题分析')).toBeVisible();
-  await expect(page.getByRole('button', { name: '生成内容' }).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '生成内容' }).first()
+  ).toBeVisible();
   await page.getByRole('button', { name: '生成内容' }).first().click();
   await expect(page.getByText('已生成内容')).toBeVisible();
 });

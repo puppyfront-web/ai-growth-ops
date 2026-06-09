@@ -62,13 +62,13 @@
 
 ### 3.3 技术选型
 
-| 层级 | 技术 | 理由 |
-|------|------|------|
-| LLM SDK | **Vercel AI SDK** (`ai` package) | Next.js 生态最成熟的 streaming + tool calling 方案 |
-| LLM 模型 | Claude Sonnet / GPT-4o | 通过现有 `packages/ai` 的 provider 配置 |
-| 业务逻辑 | **Runtime-Core** (已存在) | 已有 5 个 workflow + 7 个 skill，直接复用 |
-| 对话 UI | Vercel AI SDK `useChat` + shadcn/ui | 统一组件风格 |
-| 消息存储 | PostgreSQL (Prisma) | 新增 `ChatThread` + `ChatMessage` 模型 |
+| 层级     | 技术                                | 理由                                               |
+| -------- | ----------------------------------- | -------------------------------------------------- |
+| LLM SDK  | **Vercel AI SDK** (`ai` package)    | Next.js 生态最成熟的 streaming + tool calling 方案 |
+| LLM 模型 | Claude Sonnet / GPT-4o              | 通过现有 `packages/ai` 的 provider 配置            |
+| 业务逻辑 | **Runtime-Core** (已存在)           | 已有 5 个 workflow + 7 个 skill，直接复用          |
+| 对话 UI  | Vercel AI SDK `useChat` + shadcn/ui | 统一组件风格                                       |
+| 消息存储 | PostgreSQL (Prisma)                 | 新增 `ChatThread` + `ChatMessage` 模型             |
 
 ## 4. 数据模型
 
@@ -120,21 +120,21 @@ model ChatMessage {
 
 每个 tool 是 Vercel AI SDK 标准格式：`description` + `parameters` (Zod) + `execute` 函数。
 
-| Tool | 用户示例 | 执行逻辑 |
-|------|---------|---------|
-| `list_accounts` | "我连接了哪些账号" | 查 DB `platformAccount` |
-| `login_account` | "登录我的抖音账号" | runtime-core `auth` workflow → browser-runner |
-| `check_cookie_status` | "哪些账号过期了" | 查 DB + cookie 解密检查 |
-| `create_content` | "帮我写一篇防晒种草文" | `content-writing` skill |
-| `adapt_content` | "改成小红书风格" | `platform-rewrite` skill |
-| `publish_content` | "发布到抖音和小红书" | runtime-core `publish` workflow |
-| `sync_comments` | "拉取抖音最新评论" | runtime-core `interaction` workflow → BullMQ |
-| `sync_messages` | "查看新私信" | runtime-core `interaction` workflow → BullMQ |
-| `reply_comment` | "回复这条评论" | runtime-core `interaction` workflow |
-| `list_leads` | "今天有哪些新线索" | 查 DB `lead` |
-| `research_topic` | "研究美妆行业热点" | BullMQ `research.run` queue |
-| `generate_insight` | "分析一下我的数据" | `growth-review` skill |
-| `sync_to_feishu` | "把线索同步到飞书" | runtime-core `lead` workflow |
+| Tool                  | 用户示例               | 执行逻辑                                      |
+| --------------------- | ---------------------- | --------------------------------------------- |
+| `list_accounts`       | "我连接了哪些账号"     | 查 DB `platformAccount`                       |
+| `login_account`       | "登录我的抖音账号"     | runtime-core `auth` workflow → browser-runner |
+| `check_cookie_status` | "哪些账号过期了"       | 查 DB + cookie 解密检查                       |
+| `create_content`      | "帮我写一篇防晒种草文" | `content-writing` skill                       |
+| `adapt_content`       | "改成小红书风格"       | `platform-rewrite` skill                      |
+| `publish_content`     | "发布到抖音和小红书"   | runtime-core `publish` workflow               |
+| `sync_comments`       | "拉取抖音最新评论"     | runtime-core `interaction` workflow → BullMQ  |
+| `sync_messages`       | "查看新私信"           | runtime-core `interaction` workflow → BullMQ  |
+| `reply_comment`       | "回复这条评论"         | runtime-core `interaction` workflow           |
+| `list_leads`          | "今天有哪些新线索"     | 查 DB `lead`                                  |
+| `research_topic`      | "研究美妆行业热点"     | BullMQ `research.run` queue                   |
+| `generate_insight`    | "分析一下我的数据"     | `growth-review` skill                         |
+| `sync_to_feishu`      | "把线索同步到飞书"     | runtime-core `lead` workflow                  |
 
 ### 5.2 Tool 实现模式
 
@@ -145,19 +145,22 @@ const publishContent = tool({
   parameters: z.object({
     contentId: z.string().describe('要发布的内容 ID'),
     platforms: z.array(z.string()).describe('目标平台列表'),
-    scheduledAt: z.string().optional().describe('定时发布时间 (ISO)'),
+    scheduledAt: z.string().optional().describe('定时发布时间 (ISO)')
   }),
-  execute: async ({ contentId, platforms, scheduledAt }, { userId, organizationId }) => {
+  execute: async (
+    { contentId, platforms, scheduledAt },
+    { userId, organizationId }
+  ) => {
     // 调用 runtime-core 的 publish workflow
     const result = await runPublishWorkflow({
       organizationId,
       userId,
       contentId,
       platforms,
-      scheduledAt,
+      scheduledAt
     });
     return result;
-  },
+  }
 });
 ```
 
@@ -174,11 +177,11 @@ export async function POST(req: Request) {
   const { user, organization } = await getAuthContext(req);
   const { messages, threadId } = await req.json();
   const history = threadId ? await loadThreadMessages(threadId) : [];
-  
+
   const systemPrompt = buildSystemPrompt({
     userName: user.name,
     orgName: organization.name,
-    platforms: await getConnectedPlatforms(organization.id),
+    platforms: await getConnectedPlatforms(organization.id)
   });
 
   const result = streamText({
@@ -189,7 +192,7 @@ export async function POST(req: Request) {
     maxSteps: 5,
     onFinish: async ({ response }) => {
       await saveMessages(threadId, messages, response);
-    },
+    }
   });
 
   return result.toDataStreamResponse();
@@ -246,9 +249,9 @@ apps/web/src/
 
 ### 7.2 模式切换
 
-| 模式 | 入口 | 布局 |
-|------|------|------|
-| 全屏 Chat | `/` (默认首页) | 左侧对话列表 + 右侧聊天窗口 |
+| 模式             | 入口            | 布局                            |
+| ---------------- | --------------- | ------------------------------- |
+| 全屏 Chat        | `/` (默认首页)  | 左侧对话列表 + 右侧聊天窗口     |
 | Dashboard + Chat | `/dashboard` 等 | 顶栏 `[💬]` 按钮展开 Chat Sheet |
 
 两种模式共享对话数据（同一组 `ChatThread`/`ChatMessage`）。
@@ -273,24 +276,24 @@ Tool 调用结果渲染为结构化卡片，而非纯文本：
 
 ## 8. 状态管理
 
-| 状态 | 存储 | 说明 |
-|------|------|------|
-| 对话列表 | DB `ChatThread` + React Query | 刷新后保留 |
-| 消息历史 | DB `ChatMessage` + `useChat` | 刷新后从 DB 恢复 |
-| 流式消息 | `useChat` 内部状态 | 实时，不持久化直到 `onFinish` |
-| Tool 执行状态 | `useChat.toolInvocations` | UI 展示 loading/完成 |
-| 模式切换 | URL 路由 | `/` = 全屏，其他 + Sheet = 侧栏 |
+| 状态          | 存储                          | 说明                            |
+| ------------- | ----------------------------- | ------------------------------- |
+| 对话列表      | DB `ChatThread` + React Query | 刷新后保留                      |
+| 消息历史      | DB `ChatMessage` + `useChat`  | 刷新后从 DB 恢复                |
+| 流式消息      | `useChat` 内部状态            | 实时，不持久化直到 `onFinish`   |
+| Tool 执行状态 | `useChat.toolInvocations`     | UI 展示 loading/完成            |
+| 模式切换      | URL 路由                      | `/` = 全屏，其他 + Sheet = 侧栏 |
 
 ## 9. 路由设计
 
-| 路由 | 页面 | 说明 |
-|------|------|------|
-| `/` | Chat 全屏 | 默认首页，显示最新对话或新对话 |
-| `/chat/[threadId]` | 某个对话 | 加载指定对话历史 |
-| `/dashboard` | Dashboard | 现有，不变 |
-| `/content/*` | 内容管理 | 现有，不变 |
-| `/publish/*` | 发布管理 | 现有，不变 |
-| `/api/chat` | API | SSE streaming endpoint |
+| 路由               | 页面      | 说明                           |
+| ------------------ | --------- | ------------------------------ |
+| `/`                | Chat 全屏 | 默认首页，显示最新对话或新对话 |
+| `/chat/[threadId]` | 某个对话  | 加载指定对话历史               |
+| `/dashboard`       | Dashboard | 现有，不变                     |
+| `/content/*`       | 内容管理  | 现有，不变                     |
+| `/publish/*`       | 发布管理  | 现有，不变                     |
+| `/api/chat`        | API       | SSE streaming endpoint         |
 
 ## 10. 实现优先级
 
@@ -329,10 +332,10 @@ pnpm add ai @ai-sdk/anthropic @ai-sdk/openai
 
 ## 12. 风险和缓解
 
-| 风险 | 缓解 |
-|------|------|
-| LLM tool calling 不稳定 | 设置 `maxSteps` 限制重试；tool 失败时返回结构化错误 |
-| Streaming 长时间连接断开 | `useChat` 自动重连 + 消息持久化 |
-| Tool 调用耗时过长 | 异步 tool 模式：立即返回 "正在处理..."，通过 polling/webhook 更新 |
-| 对话上下文过长 | 超过 token 限制前自动摘要历史消息 |
-| 多租户安全 | 每个 tool execute 都带 organizationId 校验 |
+| 风险                     | 缓解                                                              |
+| ------------------------ | ----------------------------------------------------------------- |
+| LLM tool calling 不稳定  | 设置 `maxSteps` 限制重试；tool 失败时返回结构化错误               |
+| Streaming 长时间连接断开 | `useChat` 自动重连 + 消息持久化                                   |
+| Tool 调用耗时过长        | 异步 tool 模式：立即返回 "正在处理..."，通过 polling/webhook 更新 |
+| 对话上下文过长           | 超过 token 限制前自动摘要历史消息                                 |
+| 多租户安全               | 每个 tool execute 都带 organizationId 校验                        |

@@ -13,6 +13,7 @@
 ### Task 1: Add a failing integration test for synchronous research execution
 
 **Files:**
+
 - Modify: `tests/integration/api/research.test.ts`
 - Test: `tests/integration/api/research.test.ts`
 
@@ -21,21 +22,21 @@
 Add assertions that `POST /api/research-tasks/:id/run` returns a payload with `task`, `posts`, `comments`, `insights`, and `opportunities`, and that the task status is `INSIGHT_GENERATED`.
 
 ```ts
-  it('POST /api/research-tasks/:id/run executes synchronously and returns results', async () => {
-    const { body: created } = await post('/api/research-tasks', {
-      type: 'keyword_search',
-      platforms: ['xiaohongshu'],
-      keywords: ['AI获客']
-    });
-
-    const { status, body } = await post(`/api/research-tasks/${created.id}/run`);
-    expect(status).toBe(200);
-    expect(body.task.status).toBe('INSIGHT_GENERATED');
-    expect(body.posts.length).toBeGreaterThan(0);
-    expect(body.comments.length).toBeGreaterThan(0);
-    expect(body.insights.length).toBeGreaterThan(0);
-    expect(body.opportunities.length).toBeGreaterThan(0);
+it('POST /api/research-tasks/:id/run executes synchronously and returns results', async () => {
+  const { body: created } = await post('/api/research-tasks', {
+    type: 'keyword_search',
+    platforms: ['xiaohongshu'],
+    keywords: ['AI获客']
   });
+
+  const { status, body } = await post(`/api/research-tasks/${created.id}/run`);
+  expect(status).toBe(200);
+  expect(body.task.status).toBe('INSIGHT_GENERATED');
+  expect(body.posts.length).toBeGreaterThan(0);
+  expect(body.comments.length).toBeGreaterThan(0);
+  expect(body.insights.length).toBeGreaterThan(0);
+  expect(body.opportunities.length).toBeGreaterThan(0);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -64,6 +65,7 @@ git commit -m "test: add synchronous research run contract"
 ### Task 2: Implement API-local synchronous research execution
 
 **Files:**
+
 - Create: `apps/api/src/research-executor.ts`
 - Modify: `apps/api/src/routes.ts`
 - Test: `tests/integration/api/research.test.ts`
@@ -73,17 +75,17 @@ git commit -m "test: add synchronous research run contract"
 Add a test proving a task already in `INSIGHT_GENERATED` cannot be rerun immediately through the route.
 
 ```ts
-  it('POST /api/research-tasks/:id/run rejects already completed task', async () => {
-    const { body: created } = await post('/api/research-tasks', {
-      type: 'keyword_search',
-      platforms: ['xiaohongshu'],
-      keywords: ['AI获客']
-    });
-
-    await post(`/api/research-tasks/${created.id}/run`);
-    const { status } = await post(`/api/research-tasks/${created.id}/run`);
-    expect(status).toBe(400);
+it('POST /api/research-tasks/:id/run rejects already completed task', async () => {
+  const { body: created } = await post('/api/research-tasks', {
+    type: 'keyword_search',
+    platforms: ['xiaohongshu'],
+    keywords: ['AI获客']
   });
+
+  await post(`/api/research-tasks/${created.id}/run`);
+  const { status } = await post(`/api/research-tasks/${created.id}/run`);
+  expect(status).toBe(400);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -97,7 +99,10 @@ Expected: FAIL because the route currently only transitions to `RUNNING` and nev
 Create `apps/api/src/research-executor.ts` with a single exported function that:
 
 ```ts
-export async function executeResearchTaskSync(db: DatabaseClient, researchTaskId: string) {
+export async function executeResearchTaskSync(
+  db: DatabaseClient,
+  researchTaskId: string
+) {
   // load task
   // validate state
   // set RUNNING
@@ -138,6 +143,7 @@ git commit -m "feat: add synchronous research execution in api"
 ### Task 3: Render insights and opportunities on the task detail page
 
 **Files:**
+
 - Modify: `apps/web/src/app/research/tasks/[id]/page.tsx`
 - Modify: `apps/web/src/lib/api/research.ts`
 - Modify: `apps/web/src/types/research.ts`
@@ -188,6 +194,7 @@ git commit -m "feat: show research insights and opportunities in detail view"
 ### Task 4: Tighten create-and-run flow from the web entry points
 
 **Files:**
+
 - Modify: `apps/web/src/app/research/new/page.tsx`
 - Modify: `apps/web/src/app/research/page.tsx`
 - Test: `tests/e2e/research-mvp.e2e.test.ts`
@@ -230,6 +237,7 @@ git commit -m "feat: streamline research create and run flow"
 ### Task 5: Wire opportunity content creation into the MVP flow
 
 **Files:**
+
 - Modify: `apps/web/src/app/research/tasks/[id]/page.tsx`
 - Modify: `apps/web/src/app/research/opportunities/page.tsx`
 - Test: `tests/integration/api/research.test.ts`
@@ -250,6 +258,7 @@ await expect(page.getByText('已生成内容')).toBeVisible();
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run:
+
 - `pnpm vitest run tests/integration/api/research.test.ts -t "create content"`
 - `pnpm playwright test tests/e2e/research-mvp.e2e.test.ts`
 
@@ -266,6 +275,7 @@ Use `createContentFromOpportunity(opportunityId)` in both the task detail page a
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run:
+
 - `pnpm vitest run tests/integration/api/research.test.ts`
 - `pnpm playwright test tests/e2e/research-mvp.e2e.test.ts`
 
@@ -281,6 +291,7 @@ git commit -m "feat: create content from research opportunities"
 ### Task 6: Final verification
 
 **Files:**
+
 - No file changes expected
 
 - [ ] **Step 1: Run the focused integration suite**
@@ -313,4 +324,3 @@ Expected: changes limited to API sync research execution, research UI pages, typ
 git add apps/api/src apps/web/src tests docs/superpowers/specs/2026-05-28-research-mvp-sync-run-design.md docs/superpowers/plans/2026-05-28-research-mvp-sync-run.md
 git commit -m "feat: deliver synchronous research mvp flow"
 ```
-

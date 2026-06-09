@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 
 export function UserMenu() {
@@ -30,7 +30,9 @@ export function UserMenu() {
       <DropdownMenuContent>
         <div className="px-2 py-1.5">
           <p className="text-sm font-medium">{user?.name ?? '用户'}</p>
-          <p className="text-xs text-muted-foreground truncate max-w-[200px]">{email}</p>
+          <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+            {email}
+          </p>
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>

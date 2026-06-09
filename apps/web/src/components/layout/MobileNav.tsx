@@ -11,7 +11,7 @@ const navItems = [
   { href: '/dashboard', label: '工作台', icon: LayoutDashboard },
   { href: '/content', label: '内容', icon: FileText },
   { href: '/publish/queue', label: '发布', icon: Send },
-  { href: '/notifications', label: '通知', icon: Bell },
+  { href: '/notifications', label: '通知', icon: Bell }
 ];
 
 /**
@@ -24,7 +24,7 @@ export function MobileNav() {
     queryKey: ['notifications', 'unread-count'],
     queryFn: getUnreadCount,
     refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime: 15_000
   });
 
   const unreadCount = unreadData?.count ?? 0;
@@ -40,7 +40,7 @@ export function MobileNav() {
               href={item.href}
               className={cn(
                 'flex flex-col items-center justify-center gap-0.5 px-3 py-1 text-xs transition-colors relative',
-                isActive ? 'text-primary' : 'text-muted-foreground',
+                isActive ? 'text-primary' : 'text-muted-foreground'
               )}
             >
               <div className="relative">

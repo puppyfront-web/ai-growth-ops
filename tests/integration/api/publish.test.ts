@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
 
 let server: Server;
@@ -12,7 +16,11 @@ async function get(path: string) {
   return { status: res.status, body: await res.json() };
 }
 async function post(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, { method: 'POST', headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: body ? { 'content-type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined
+  });
   return { status: res.status, body: await res.json() };
 }
 
@@ -26,7 +34,7 @@ beforeAll(async () => {
   server = createApiServer({ db }) as Server;
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const addr = server.address()!;
-  baseUrl = `http://${(addr as any).address}:${(addr as any).port}`;
+  baseUrl = `http://${(addr as Record<string, unknown>).address}:${(addr as Record<string, unknown>).port}`;
 
   // Get seed data IDs — find an unused variant/account combo
   const { body: accounts } = await get('/api/accounts');
@@ -35,12 +43,21 @@ beforeAll(async () => {
 
   // Find a variant that doesn't already have a job
   for (const item of items) {
-    for (const v of item.contentVariants ?? []) {
-      const hasJob = existingJobs.some((j: any) => j.contentVariantId === v.id);
+    for (const v of (item.contentVariants ?? []) as Array<
+      Record<string, unknown>
+    >) {
+      const hasJob = existingJobs.some(
+        (j: Record<string, unknown>) => j.contentVariantId === v.id
+      );
       if (!hasJob) {
-        variantId = v.id;
-        const acc = accounts.find((a: any) => a.platform === v.platform);
-        if (acc) { accountId = acc.id; break; }
+        variantId = v.id as string;
+        const acc = accounts.find(
+          (a: Record<string, unknown>) => a.platform === v.platform
+        ) as Record<string, unknown> | undefined;
+        if (acc) {
+          accountId = acc.id as string;
+          break;
+        }
       }
     }
     if (variantId && accountId) break;
@@ -55,8 +72,11 @@ beforeAll(async () => {
   // Create a DRAFT job for testing
   if (variantId && accountId) {
     const { body: job } = await post('/api/publish-jobs', {
-      contentVariantId: variantId, platformAccountId: accountId,
-      platform: 'douyin', contentType: 'text_image', mode: 'manual_confirm'
+      contentVariantId: variantId,
+      platformAccountId: accountId,
+      platform: 'douyin',
+      contentType: 'text_image',
+      mode: 'manual_confirm'
     });
     jobId = job.id;
   }
@@ -77,12 +97,17 @@ describe('Publish API', () => {
   it('POST /api/publish-jobs/batch creates multiple jobs', async () => {
     const { body: accounts } = await get('/api/accounts');
     const { body: items } = await get('/api/content-items');
-    const item = items.find((i: any) => i.contentVariants?.length > 0);
+    const item = items.find(
+      (i: Record<string, unknown>) =>
+        (i.contentVariants as unknown[])?.length > 0
+    );
     if (!item) return;
 
     const { status, body } = await post('/api/publish-jobs/batch', {
       contentItemId: item.id,
-      platformAccountIds: accounts.slice(0, 2).map((a: any) => a.id)
+      platformAccountIds: accounts
+        .slice(0, 2)
+        .map((a: Record<string, unknown>) => a.id)
     });
     expect(status).toBe(201);
     expect(Array.isArray(body)).toBe(true);
@@ -95,14 +120,20 @@ describe('Publish API', () => {
   });
 
   it('POST /api/publish-jobs/:id/execute from READY succeeds', async () => {
-    await db.publishJob.update({ where: { id: jobId }, data: { status: 'READY' } });
+    await db.publishJob.update({
+      where: { id: jobId },
+      data: { status: 'READY' }
+    });
     const { status, body } = await post(`/api/publish-jobs/${jobId}/execute`);
     expect(status).toBe(200);
     expect(body.status).toBe('RUNNING');
   });
 
   it('POST /api/publish-jobs/:id/retry from FAILED increments count', async () => {
-    await db.publishJob.update({ where: { id: jobId }, data: { status: 'FAILED', retryCount: 0 } });
+    await db.publishJob.update({
+      where: { id: jobId },
+      data: { status: 'FAILED', retryCount: 0 }
+    });
     const { status, body } = await post(`/api/publish-jobs/${jobId}/retry`);
     expect(status).toBe(200);
     expect(body.retryCount).toBe(1);
@@ -121,16 +152,23 @@ describe('Publish API', () => {
       const newJob = await db.publishJob.create({
         data: {
           userId: (await db.user.findFirstOrThrow()).id,
-          contentVariantId: v.id, platformAccountId: accounts[0].id,
-          platform: v.platform as any, contentType: 'text_image', mode: 'manual_confirm',
+          contentVariantId: v.id,
+          platformAccountId: accounts[0].id,
+          platform: v.platform as string,
+          contentType: 'text_image',
+          mode: 'manual_confirm',
           status: 'DRAFT'
         }
       });
-      const { status, body } = await post(`/api/publish-jobs/${newJob.id}/cancel`);
+      const { status, body } = await post(
+        `/api/publish-jobs/${newJob.id}/cancel`
+      );
       expect(status).toBe(200);
       expect(body.status).toBe('CANCELLED');
     } else {
-      const { status, body } = await post(`/api/publish-jobs/${draftJob.id}/cancel`);
+      const { status, body } = await post(
+        `/api/publish-jobs/${draftJob.id}/cancel`
+      );
       expect(status).toBe(200);
       expect(body.status).toBe('CANCELLED');
     }
@@ -138,15 +176,24 @@ describe('Publish API', () => {
 
   it('POST /api/publish-jobs/:id/manual-complete rejects non-WAITING_HUMAN_CONFIRM', async () => {
     // jobId is now FAILED from retry test
-    const { status } = await post(`/api/publish-jobs/${jobId}/manual-complete`, { externalUrl: 'https://example.com' });
+    const { status } = await post(
+      `/api/publish-jobs/${jobId}/manual-complete`,
+      { externalUrl: 'https://example.com' }
+    );
     expect(status).toBe(400);
   });
 
   it('POST /api/publish-jobs/:id/manual-complete from WAITING_HUMAN_CONFIRM', async () => {
-    await db.publishJob.update({ where: { id: jobId }, data: { status: 'WAITING_HUMAN_CONFIRM' } });
-    const { status, body } = await post(`/api/publish-jobs/${jobId}/manual-complete`, {
-      externalUrl: 'https://douyin.com/published/123'
+    await db.publishJob.update({
+      where: { id: jobId },
+      data: { status: 'WAITING_HUMAN_CONFIRM' }
     });
+    const { status, body } = await post(
+      `/api/publish-jobs/${jobId}/manual-complete`,
+      {
+        externalUrl: 'https://douyin.com/published/123'
+      }
+    );
     expect(status).toBe(200);
     expect(body.status).toBe('PUBLISHED');
     expect(body.externalUrl).toBe('https://douyin.com/published/123');

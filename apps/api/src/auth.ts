@@ -1,4 +1,10 @@
-import { createHmac, pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  createHmac,
+  pbkdf2Sync,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual
+} from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 
@@ -7,7 +13,9 @@ function getAuthSecret(): string {
   if (!_authSecret) {
     _authSecret = process.env.AUTH_SECRET || null;
     if (!_authSecret) {
-      throw new Error('AUTH_SECRET environment variable is not set. Refusing to operate with insecure defaults.');
+      throw new Error(
+        'AUTH_SECRET environment variable is not set. Refusing to operate with insecure defaults.'
+      );
     }
   }
   return _authSecret;
@@ -18,16 +26,23 @@ const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString('hex');
-  const hash = pbkdf2Sync(password, salt, 100_000, 64, 'sha512').toString('hex');
+  const hash = pbkdf2Sync(password, salt, 100_000, 64, 'sha512').toString(
+    'hex'
+  );
   return `${salt}:${hash}`;
 }
 
 export function verifyPassword(password: string, stored: string): boolean {
   const [salt, hash] = stored.split(':');
   if (!salt || !hash) return false;
-  const candidate = pbkdf2Sync(password, salt, 100_000, 64, 'sha512').toString('hex');
+  const candidate = pbkdf2Sync(password, salt, 100_000, 64, 'sha512').toString(
+    'hex'
+  );
   try {
-    return timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(candidate, 'hex'));
+    return timingSafeEqual(
+      Buffer.from(hash, 'hex'),
+      Buffer.from(candidate, 'hex')
+    );
   } catch {
     return false;
   }
@@ -42,9 +57,15 @@ interface TokenPayload {
 }
 
 export function createToken(userId: string): string {
-  const payload: TokenPayload = { userId, issuedAt: Date.now(), jti: randomUUID() };
+  const payload: TokenPayload = {
+    userId,
+    issuedAt: Date.now(),
+    jti: randomUUID()
+  };
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = createHmac('sha256', getAuthSecret()).update(data).digest('base64url');
+  const sig = createHmac('sha256', getAuthSecret())
+    .update(data)
+    .digest('base64url');
   return `${data}.${sig}`;
 }
 
@@ -52,7 +73,9 @@ export function verifyToken(token: string): TokenPayload | null {
   const [data, sig] = token.split('.');
   if (!data || !sig) return null;
 
-  const expected = createHmac('sha256', getAuthSecret()).update(data).digest('base64url');
+  const expected = createHmac('sha256', getAuthSecret())
+    .update(data)
+    .digest('base64url');
   try {
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   } catch {
@@ -60,7 +83,9 @@ export function verifyToken(token: string): TokenPayload | null {
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(data, 'base64url').toString()) as TokenPayload;
+    const payload = JSON.parse(
+      Buffer.from(data, 'base64url').toString()
+    ) as TokenPayload;
     if (Date.now() - payload.issuedAt > TOKEN_TTL_MS) return null;
     if (!payload.jti) return null; // legacy tokens without jti are rejected
     return payload;
@@ -71,26 +96,37 @@ export function verifyToken(token: string): TokenPayload | null {
 
 // ── Token Blacklist ───────────────────────────────────────────────────────────
 
-export async function isTokenRevoked(db: DatabaseClient, jti: string): Promise<boolean> {
+export async function isTokenRevoked(
+  db: DatabaseClient,
+  jti: string
+): Promise<boolean> {
   const entry = await db.tokenBlacklist.findUnique({ where: { jti } });
   return entry !== null;
 }
 
-export async function revokeToken(db: DatabaseClient, token: string): Promise<void> {
+export async function revokeToken(
+  db: DatabaseClient,
+  token: string
+): Promise<void> {
   const payload = verifyToken(token);
   if (!payload) return;
-  await db.tokenBlacklist.create({
-    data: {
-      jti: payload.jti,
-      userId: payload.userId,
-      expiresAt: new Date(payload.issuedAt + TOKEN_TTL_MS),
-    },
-  }).catch(() => {
-    // already revoked — ignore duplicate
-  });
+  await db.tokenBlacklist
+    .create({
+      data: {
+        jti: payload.jti,
+        userId: payload.userId,
+        expiresAt: new Date(payload.issuedAt + TOKEN_TTL_MS)
+      }
+    })
+    .catch(() => {
+      // already revoked — ignore duplicate
+    });
 }
 
-export async function revokeAllUserTokens(db: DatabaseClient, userId: string): Promise<number> {
+export async function revokeAllUserTokens(
+  db: DatabaseClient,
+  userId: string
+): Promise<number> {
   // Find all active tokens for a user — since tokens are stateless, we create
   // a "blanket revocation" entry with a special jti prefix
   const jti = `revoke-all:${userId}:${Date.now()}`;
@@ -98,8 +134,8 @@ export async function revokeAllUserTokens(db: DatabaseClient, userId: string): P
     data: {
       jti,
       userId,
-      expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-    },
+      expiresAt: new Date(Date.now() + TOKEN_TTL_MS)
+    }
   });
   return 1;
 }
@@ -110,19 +146,25 @@ export function generateResetToken(): string {
   return randomBytes(32).toString('hex');
 }
 
-export async function createPasswordResetToken(db: DatabaseClient, userId: string): Promise<string> {
+export async function createPasswordResetToken(
+  db: DatabaseClient,
+  userId: string
+): Promise<string> {
   const token = generateResetToken();
   await db.passwordResetToken.create({
     data: {
       userId,
       token,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-    },
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+    }
   });
   return token;
 }
 
-export async function verifyPasswordResetToken(db: DatabaseClient, token: string): Promise<string | null> {
+export async function verifyPasswordResetToken(
+  db: DatabaseClient,
+  token: string
+): Promise<string | null> {
   const entry = await db.passwordResetToken.findUnique({ where: { token } });
   if (!entry) return null;
   if (entry.usedAt) return null;
@@ -130,47 +172,63 @@ export async function verifyPasswordResetToken(db: DatabaseClient, token: string
   return entry.userId;
 }
 
-export async function markResetTokenUsed(db: DatabaseClient, token: string): Promise<void> {
+export async function markResetTokenUsed(
+  db: DatabaseClient,
+  token: string
+): Promise<void> {
   await db.passwordResetToken.update({
     where: { token },
-    data: { usedAt: new Date() },
+    data: { usedAt: new Date() }
   });
 }
 
 // ── Email Verification Token ──────────────────────────────────────────────────
 
-export async function createEmailVerificationToken(db: DatabaseClient, userId: string): Promise<string> {
+export async function createEmailVerificationToken(
+  db: DatabaseClient,
+  userId: string
+): Promise<string> {
   const token = randomBytes(32).toString('hex');
   await db.emailVerificationToken.create({
     data: {
       userId,
       token,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-    },
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    }
   });
   return token;
 }
 
-export async function verifyEmailVerificationToken(db: DatabaseClient, token: string): Promise<string | null> {
-  const entry = await db.emailVerificationToken.findUnique({ where: { token } });
+export async function verifyEmailVerificationToken(
+  db: DatabaseClient,
+  token: string
+): Promise<string | null> {
+  const entry = await db.emailVerificationToken.findUnique({
+    where: { token }
+  });
   if (!entry) return null;
   if (entry.verifiedAt) return null;
   if (entry.expiresAt < new Date()) return null;
   return entry.userId;
 }
 
-export async function markEmailVerified(db: DatabaseClient, token: string): Promise<void> {
-  const entry = await db.emailVerificationToken.findUnique({ where: { token } });
+export async function markEmailVerified(
+  db: DatabaseClient,
+  token: string
+): Promise<void> {
+  const entry = await db.emailVerificationToken.findUnique({
+    where: { token }
+  });
   if (!entry) return;
   await db.$transaction([
     db.emailVerificationToken.update({
       where: { token },
-      data: { verifiedAt: new Date() },
+      data: { verifiedAt: new Date() }
     }),
     db.user.update({
       where: { id: entry.userId },
-      data: { emailVerifiedAt: new Date() },
-    }),
+      data: { emailVerifiedAt: new Date() }
+    })
   ]);
 }
 
@@ -180,7 +238,9 @@ export async function cleanupExpiredTokens(db: DatabaseClient): Promise<void> {
   const now = new Date();
   await db.tokenBlacklist.deleteMany({ where: { expiresAt: { lt: now } } });
   await db.passwordResetToken.deleteMany({ where: { expiresAt: { lt: now } } });
-  await db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: now } } });
+  await db.emailVerificationToken.deleteMany({
+    where: { expiresAt: { lt: now } }
+  });
 }
 
 // ── Request auth ──────────────────────────────────────────────────────────────
@@ -191,7 +251,10 @@ function extractToken(req: IncomingMessage): string | null {
   return null;
 }
 
-export async function getAuthenticatedUser(req: IncomingMessage, db: DatabaseClient) {
+export async function getAuthenticatedUser(
+  req: IncomingMessage,
+  db: DatabaseClient
+) {
   const token = extractToken(req);
   if (!token) return null;
 
@@ -203,7 +266,7 @@ export async function getAuthenticatedUser(req: IncomingMessage, db: DatabaseCli
   if (revoked) return null;
 
   const user = await db.user.findFirst({
-    where: { id: payload.userId, deletedAt: null },
+    where: { id: payload.userId, deletedAt: null }
   });
   return user ?? null;
 }
@@ -233,14 +296,14 @@ export async function getOrganizationContext(
   if (!user) return null;
 
   const headerOrgId = req.headers['x-organization-id'] as string | undefined;
-  let orgId = headerOrgId?.trim();
+  const orgId = headerOrgId?.trim();
 
   // If no org header, find user's default org
   if (!orgId) {
     const firstMembership = await db.organizationMember.findFirst({
       where: { userId: user.id, status: 'active' },
       orderBy: { joinedAt: 'asc' },
-      include: { organization: true },
+      include: { organization: true }
     });
     if (!firstMembership) return null;
     return {
@@ -248,16 +311,16 @@ export async function getOrganizationContext(
       organization: {
         id: firstMembership.organization.id,
         name: firstMembership.organization.name,
-        slug: firstMembership.organization.slug,
+        slug: firstMembership.organization.slug
       },
-      memberRole: firstMembership.role,
+      memberRole: firstMembership.role
     };
   }
 
   // Verify membership
   const membership = await db.organizationMember.findFirst({
     where: { organizationId: orgId, userId: user.id, status: 'active' },
-    include: { organization: true },
+    include: { organization: true }
   });
   if (!membership) return null;
 
@@ -266,9 +329,9 @@ export async function getOrganizationContext(
     organization: {
       id: membership.organization.id,
       name: membership.organization.name,
-      slug: membership.organization.slug,
+      slug: membership.organization.slug
     },
-    memberRole: membership.role,
+    memberRole: membership.role
   };
 }
 
@@ -281,10 +344,11 @@ export async function createDefaultOrganization(
   userId: string,
   userName: string
 ): Promise<{ id: string; name: string; slug: string }> {
-  const slugBase = userName
-    .toLowerCase()
-    .replace(/[^a-z0-9一-龥]+/g, '-')
-    .replace(/^-|-$/g, '') || 'workspace';
+  const slugBase =
+    userName
+      .toLowerCase()
+      .replace(/[^a-z0-9一-龥]+/g, '-')
+      .replace(/^-|-$/g, '') || 'workspace';
   const slug = `${slugBase}-${randomBytes(4).toString('hex')}`;
 
   const org = await db.organization.create({
@@ -292,8 +356,8 @@ export async function createDefaultOrganization(
       name: `${userName}的工作空间`,
       slug,
       status: 'active',
-      metadata: { isDefault: true },
-    },
+      metadata: { isDefault: true }
+    }
   });
 
   await db.organizationMember.create({
@@ -301,8 +365,8 @@ export async function createDefaultOrganization(
       organizationId: org.id,
       userId,
       role: 'owner',
-      status: 'active',
-    },
+      status: 'active'
+    }
   });
 
   return { id: org.id, name: org.name, slug: org.slug };

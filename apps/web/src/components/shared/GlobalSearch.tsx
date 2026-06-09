@@ -7,7 +7,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { navItems } from '@/components/layout/navigation';
@@ -34,7 +34,7 @@ export function GlobalSearch() {
     ? visibleItems.filter(
         (item) =>
           item.label.includes(query) ||
-          item.href.toLowerCase().includes(query.toLowerCase()),
+          item.href.toLowerCase().includes(query.toLowerCase())
       )
     : visibleItems;
 
@@ -44,7 +44,7 @@ export function GlobalSearch() {
       setQuery('');
       router.push(href);
     },
-    [router],
+    [router]
   );
 
   return (
@@ -77,7 +77,9 @@ export function GlobalSearch() {
           </div>
           <div className="max-h-64 overflow-y-auto py-2">
             {filtered.length === 0 && (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">未找到匹配结果</p>
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                未找到匹配结果
+              </p>
             )}
             {filtered.map((item) => (
               <button
@@ -87,7 +89,9 @@ export function GlobalSearch() {
               >
                 <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
                 <span>{item.label}</span>
-                <span className="ml-auto text-xs text-muted-foreground">{item.href}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {item.href}
+                </span>
               </button>
             ))}
           </div>

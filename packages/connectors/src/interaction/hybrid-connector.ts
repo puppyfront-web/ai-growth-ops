@@ -10,7 +10,7 @@ import type {
   ReplyMessageInput,
   ReplyResult,
   MarkHandledInput,
-  MarkHandledResult,
+  MarkHandledResult
 } from './types.js';
 
 /**
@@ -23,7 +23,7 @@ export class HybridInteractionConnector implements InteractionConnector {
 
   constructor(
     private readonly primary: InteractionConnector,
-    private readonly fallback: InteractionConnector,
+    private readonly fallback: InteractionConnector
   ) {
     this.platform = primary.platform;
   }
@@ -31,7 +31,7 @@ export class HybridInteractionConnector implements InteractionConnector {
   async getCapabilities(): Promise<InteractionCapabilities> {
     const [primaryCaps, fallbackCaps] = await Promise.all([
       this.primary.getCapabilities(),
-      this.fallback.getCapabilities(),
+      this.fallback.getCapabilities()
     ]);
 
     return {
@@ -40,11 +40,15 @@ export class HybridInteractionConnector implements InteractionConnector {
       fetchMessages: primaryCaps.fetchMessages || fallbackCaps.fetchMessages,
       replyComments: primaryCaps.replyComments || fallbackCaps.replyComments,
       replyMessages: primaryCaps.replyMessages || fallbackCaps.replyMessages,
-      webhookSupported: primaryCaps.webhookSupported || fallbackCaps.webhookSupported,
-      pollingSupported: primaryCaps.pollingSupported || fallbackCaps.pollingSupported,
+      webhookSupported:
+        primaryCaps.webhookSupported || fallbackCaps.webhookSupported,
+      pollingSupported:
+        primaryCaps.pollingSupported || fallbackCaps.pollingSupported,
       browserAssistSupported: fallbackCaps.browserAssistSupported,
-      manualImportSupported: primaryCaps.manualImportSupported || fallbackCaps.manualImportSupported,
-      autoReplyAllowed: primaryCaps.autoReplyAllowed || fallbackCaps.autoReplyAllowed,
+      manualImportSupported:
+        primaryCaps.manualImportSupported || fallbackCaps.manualImportSupported,
+      autoReplyAllowed:
+        primaryCaps.autoReplyAllowed || fallbackCaps.autoReplyAllowed,
       requiresHumanReviewForMessageReply:
         primaryCaps.requiresHumanReviewForMessageReply &&
         fallbackCaps.requiresHumanReviewForMessageReply,
@@ -52,8 +56,11 @@ export class HybridInteractionConnector implements InteractionConnector {
         primaryCaps.requiresHumanReviewForLeadLevelA ||
         fallbackCaps.requiresHumanReviewForLeadLevelA,
       supportedModes: [
-        ...new Set([...primaryCaps.supportedModes, ...fallbackCaps.supportedModes]),
-      ],
+        ...new Set([
+          ...primaryCaps.supportedModes,
+          ...fallbackCaps.supportedModes
+        ])
+      ]
     };
   }
 
@@ -82,8 +89,8 @@ export class HybridInteractionConnector implements InteractionConnector {
       (err: unknown): ReplyResult => ({
         success: false,
         errorCode: 'PRIMARY_EXCEPTION',
-        errorMessage: err instanceof Error ? err.message : String(err),
-      }),
+        errorMessage: err instanceof Error ? err.message : String(err)
+      })
     );
     if (result.success) return result;
     return this.fallback.replyComment(input);
@@ -94,8 +101,8 @@ export class HybridInteractionConnector implements InteractionConnector {
       (err: unknown): ReplyResult => ({
         success: false,
         errorCode: 'PRIMARY_EXCEPTION',
-        errorMessage: err instanceof Error ? err.message : String(err),
-      }),
+        errorMessage: err instanceof Error ? err.message : String(err)
+      })
     );
     if (result.success) return result;
     return this.fallback.replyMessage(input);
@@ -103,7 +110,9 @@ export class HybridInteractionConnector implements InteractionConnector {
 
   async markHandled(input: MarkHandledInput): Promise<MarkHandledResult> {
     if (this.primary.markHandled) {
-      const result = await this.primary.markHandled(input).catch(() => ({ success: false }));
+      const result = await this.primary
+        .markHandled(input)
+        .catch(() => ({ success: false }));
       if (result.success) return result;
     }
     return this.fallback.markHandled?.(input) ?? { success: true };

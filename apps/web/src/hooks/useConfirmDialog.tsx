@@ -8,7 +8,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogCancel,
-  AlertDialogDestructiveAction,
+  AlertDialogDestructiveAction
 } from '@/components/ui/alert-dialog';
 
 interface ConfirmOptions {
@@ -41,19 +41,22 @@ export function useConfirmDialog(defaultOptions?: ConfirmOptions) {
         setState({
           open: true,
           options: { ...defaultOptions, ...opts },
-          resolver: resolve,
+          resolver: resolve
         });
       });
     },
-    [defaultOptions],
+    [defaultOptions]
   );
 
-  const handleOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      state.resolver?.(false);
-      setState((prev) => ({ ...prev, open: false, resolver: null }));
-    }
-  }, [state.resolver]);
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        state.resolver?.(false);
+        setState((prev) => ({ ...prev, open: false, resolver: null }));
+      }
+    },
+    [state.resolver]
+  );
 
   const handleConfirm = useCallback(() => {
     state.resolver?.(true);
@@ -72,7 +75,10 @@ export function useConfirmDialog(defaultOptions?: ConfirmOptions) {
         <AlertDialogCancel onOpenChange={handleOpenChange}>
           {state.options.cancelLabel ?? '取消'}
         </AlertDialogCancel>
-        <AlertDialogDestructiveAction onOpenChange={handleOpenChange} onClick={handleConfirm}>
+        <AlertDialogDestructiveAction
+          onOpenChange={handleOpenChange}
+          onClick={handleConfirm}
+        >
           {state.options.confirmLabel ?? '确认'}
         </AlertDialogDestructiveAction>
       </AlertDialogFooter>

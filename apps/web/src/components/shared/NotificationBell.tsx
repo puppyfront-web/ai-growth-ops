@@ -4,8 +4,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, CheckCheck, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { listNotifications, getUnreadCount, markNotificationRead, markAllNotificationsRead } from '@/lib/api/notifications';
-import { queryKeys } from '@/lib/query-keys';
+import {
+  listNotifications,
+  getUnreadCount,
+  markNotificationRead,
+  markAllNotificationsRead
+} from '@/lib/api/notifications';
 
 interface NotificationItem {
   id: string;
@@ -39,11 +43,16 @@ function timeAgo(dateStr: string): string {
 
 function levelColor(level: string): string {
   switch (level) {
-    case 'success': return 'bg-green-500 dark:bg-green-400';
-    case 'warning': return 'bg-amber-500 dark:bg-amber-400';
-    case 'error': return 'bg-red-500 dark:bg-red-400';
-    case 'critical': return 'bg-red-600 dark:bg-red-400';
-    default: return 'bg-blue-500 dark:bg-blue-400';
+    case 'success':
+      return 'bg-green-500 dark:bg-green-400';
+    case 'warning':
+      return 'bg-amber-500 dark:bg-amber-400';
+    case 'error':
+      return 'bg-red-500 dark:bg-red-400';
+    case 'critical':
+      return 'bg-red-600 dark:bg-red-400';
+    default:
+      return 'bg-blue-500 dark:bg-blue-400';
   }
 }
 
@@ -57,7 +66,7 @@ export function NotificationBell({ className }: { className?: string }) {
     queryKey: ['notifications', 'unread-count'],
     queryFn: getUnreadCount,
     refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime: 15_000
   });
 
   // Fetch notification list when dropdown opens
@@ -65,7 +74,7 @@ export function NotificationBell({ className }: { className?: string }) {
     queryKey: ['notifications', 'list'],
     queryFn: () => listNotifications(),
     enabled: open,
-    staleTime: 10_000,
+    staleTime: 10_000
   });
 
   const unreadCount = unreadData?.count ?? 0;
@@ -75,7 +84,7 @@ export function NotificationBell({ className }: { className?: string }) {
     mutationFn: markNotificationRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    },
+    }
   });
 
   // Mark all as read
@@ -83,13 +92,16 @@ export function NotificationBell({ className }: { className?: string }) {
     mutationFn: markAllNotificationsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    },
+    }
   });
 
   // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }
@@ -106,21 +118,27 @@ export function NotificationBell({ className }: { className?: string }) {
     return () => document.removeEventListener('keydown', handleKey);
   }, [open]);
 
-  const handleMarkRead = useCallback((id: string) => {
-    markReadMutation.mutate(id);
-  }, [markReadMutation]);
+  const handleMarkRead = useCallback(
+    (id: string) => {
+      markReadMutation.mutate(id);
+    },
+    [markReadMutation]
+  );
 
   const handleMarkAllRead = useCallback(() => {
     markAllReadMutation.mutate(undefined as never);
   }, [markAllReadMutation]);
 
-  const handleNotificationClick = useCallback((n: NotificationItem) => {
-    if (!n.readAt) handleMarkRead(n.id);
-    if (n.actionUrl) {
-      setOpen(false);
-      window.location.href = n.actionUrl;
-    }
-  }, [handleMarkRead]);
+  const handleNotificationClick = useCallback(
+    (n: NotificationItem) => {
+      if (!n.readAt) handleMarkRead(n.id);
+      if (n.actionUrl) {
+        setOpen(false);
+        window.location.href = n.actionUrl;
+      }
+    },
+    [handleMarkRead]
+  );
 
   return (
     <div className={cn('relative', className)} ref={dropdownRef}>
@@ -168,22 +186,36 @@ export function NotificationBell({ className }: { className?: string }) {
                   onClick={() => handleNotificationClick(n)}
                   className={cn(
                     'flex cursor-pointer gap-3 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/50',
-                    !n.readAt && 'bg-muted/30',
+                    !n.readAt && 'bg-muted/30'
                   )}
                 >
                   <div className="mt-1">
-                    <span className={cn('inline-block h-2 w-2 rounded-full', levelColor(n.level))} />
+                    <span
+                      className={cn(
+                        'inline-block h-2 w-2 rounded-full',
+                        levelColor(n.level)
+                      )}
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className={cn('text-sm', !n.readAt && 'font-medium')}>{n.title}</p>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+                      <p className={cn('text-sm', !n.readAt && 'font-medium')}>
+                        {n.title}
+                      </p>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {timeAgo(n.createdAt)}
+                      </span>
                     </div>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.content}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                      {n.content}
+                    </p>
                     <div className="mt-1 flex items-center gap-2">
                       {!n.readAt && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleMarkRead(n.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkRead(n.id);
+                          }}
                           className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground"
                         >
                           <Check className="h-3 w-3" /> 已读

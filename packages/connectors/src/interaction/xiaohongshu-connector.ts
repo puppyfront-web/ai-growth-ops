@@ -9,7 +9,7 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 
 export class XiaohongshuConnector implements InteractionConnector {
@@ -34,7 +34,7 @@ export class XiaohongshuConnector implements InteractionConnector {
       autoReplyAllowed: false,
       requiresHumanReviewForMessageReply: true,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['browser_assist', 'manual_import', 'sandbox'],
+      supportedModes: ['browser_assist', 'manual_import', 'sandbox']
     };
   }
 
@@ -52,11 +52,15 @@ export class XiaohongshuConnector implements InteractionConnector {
     return {
       success: false,
       errorCode: 'NO_OFFICIAL_API',
-      errorMessage: 'Xiaohongshu comment reply requires browser_assist mode',
+      errorMessage: 'Xiaohongshu comment reply requires browser_assist mode'
     };
   }
 
-  async replyMessage(input: ReplyMessageInput): Promise<ReplyResult> {
-    return { success: false, errorCode: 'UNSUPPORTED', errorMessage: 'Xiaohongshu does not support messaging' };
+  async replyMessage(_input: ReplyMessageInput): Promise<ReplyResult> {
+    return {
+      success: false,
+      errorCode: 'UNSUPPORTED',
+      errorMessage: 'Xiaohongshu does not support messaging'
+    };
   }
 }

@@ -23,14 +23,14 @@
 
 ## 2. 总体阶段
 
-| 阶段 | 名称 | 目标 | 预计周期 |
-|------|------|------|----------|
-| Phase 0 | 基础设施 | Worker 队列、Auth/RBAC、审计日志、通知、任务中心 | Week 1-2 |
-| Phase 1 | 主内容流程闭环 | 选题→内容→发布→互动→线索→复盘 核心链路 | Week 3-4 |
-| Phase 2 | 调研与外部集成 | Research Runner、Lead Sinks、Provider Gateway | Week 5-6 |
-| Phase 3 | 前端全面实现 | 50+ 页面从 stub 到可交互 | Week 5-8 (并行) |
-| Phase 4 | 安全与数据管理 | RBAC 完善、Secret 安全、导入导出、备份 | Week 7-8 |
-| Phase 5 | 测试完善 | 状态机测试、Provider Contract Tests、集成/E2E | Week 7-8 |
+| 阶段    | 名称           | 目标                                             | 预计周期        |
+| ------- | -------------- | ------------------------------------------------ | --------------- |
+| Phase 0 | 基础设施       | Worker 队列、Auth/RBAC、审计日志、通知、任务中心 | Week 1-2        |
+| Phase 1 | 主内容流程闭环 | 选题→内容→发布→互动→线索→复盘 核心链路           | Week 3-4        |
+| Phase 2 | 调研与外部集成 | Research Runner、Lead Sinks、Provider Gateway    | Week 5-6        |
+| Phase 3 | 前端全面实现   | 50+ 页面从 stub 到可交互                         | Week 5-8 (并行) |
+| Phase 4 | 安全与数据管理 | RBAC 完善、Secret 安全、导入导出、备份           | Week 7-8        |
+| Phase 5 | 测试完善       | 状态机测试、Provider Contract Tests、集成/E2E    | Week 7-8        |
 
 ---
 
@@ -75,6 +75,7 @@ apps/worker/src/
 **技术**: BullMQ + Redis (docker-compose 已有 Redis 7)
 
 **验收**:
+
 - Worker 可消费 Redis 队列
 - Job 成功/失败都有 SystemTask 记录
 - 重试策略生效
@@ -110,6 +111,7 @@ settings.manage, audit.view
 **数据库变更**: Prisma schema 增加 Role 枚举, User 关联 Role
 
 **验收**:
+
 - API 路由受 Auth 保护
 - Viewer 不能发送回复
 - Sales 只能处理分配给自己的线索
@@ -257,6 +259,7 @@ export interface SkillRunner {
 ```
 
 规则:
+
 1. 运行前校验 input schema
 2. 运行后校验 output schema
 3. 失败必须写 SkillRun
@@ -269,14 +272,14 @@ export interface SkillRunner {
 
 **API 增强** (`apps/api/src/routes.ts` 已有端点):
 
-| 端点 | 增强内容 |
-|------|----------|
-| `POST /api/contents` | 创建 ContentItem, status=draft |
-| `POST /api/contents/:id/generate-variants` | 调用 SkillRunner 生成 6 平台版本 |
-| `POST /api/content-variants/:id/compliance-check` | 调用 compliance-check skill |
-| `PATCH /api/content-variants/:id/approve` | 状态流转 + AuditLog |
-| `POST /api/content-variants/:id/create-publish-job` | 发布前检查 + 创建 PublishJob |
-| `POST /api/contents/:id/archive` | 归档，不可再创建发布任务 |
+| 端点                                                | 增强内容                         |
+| --------------------------------------------------- | -------------------------------- |
+| `POST /api/contents`                                | 创建 ContentItem, status=draft   |
+| `POST /api/contents/:id/generate-variants`          | 调用 SkillRunner 生成 6 平台版本 |
+| `POST /api/content-variants/:id/compliance-check`   | 调用 compliance-check skill      |
+| `PATCH /api/content-variants/:id/approve`           | 状态流转 + AuditLog              |
+| `POST /api/content-variants/:id/create-publish-job` | 发布前检查 + 创建 PublishJob     |
+| `POST /api/contents/:id/archive`                    | 归档，不可再创建发布任务         |
 
 **状态机** (来自 specs_v1 06):
 
@@ -286,6 +289,7 @@ approved -> archived
 ```
 
 规则:
+
 1. 只有 approved 的 ContentVariant 可以创建 PublishJob
 2. 每个平台版本必须独立合规检测
 3. 内容归档后不能创建新发布任务
@@ -296,13 +300,13 @@ approved -> archived
 
 **API 增强**:
 
-| 端点 | 增强内容 |
-|------|----------|
-| `POST /api/media/upload` | 上传到 MinIO (当前是本地磁盘) |
-| `POST /api/media/import-url` | 外部 URL 导入 |
-| `PATCH /api/media/:id/review` | 审核状态机 |
-| `GET /api/media/:id/usages` | 素材使用记录 |
-| `POST /api/media/:id/attach-to-content` | 关联内容 |
+| 端点                                    | 增强内容                      |
+| --------------------------------------- | ----------------------------- |
+| `POST /api/media/upload`                | 上传到 MinIO (当前是本地磁盘) |
+| `POST /api/media/import-url`            | 外部 URL 导入                 |
+| `PATCH /api/media/:id/review`           | 审核状态机                    |
+| `GET /api/media/:id/usages`             | 素材使用记录                  |
+| `POST /api/media/:id/attach-to-content` | 关联内容                      |
 
 **新增实现**: `packages/connectors/src/storage/minio.ts` — MinIO 对象存储客户端
 
@@ -316,6 +320,7 @@ rejected -> pending_review (可重新提交)
 ```
 
 规则:
+
 1. 新上传素材默认 pending_review
 2. pending_review/rejected/archived 不能用于发布
 3. 只有 approved 可用于 PublishJob
@@ -355,20 +360,22 @@ export interface PublishProvider {
   publishTextImage(input: PublishTextImageInput): Promise<PublishResult>;
   publishVideo(input: PublishVideoInput): Promise<PublishResult>;
   publishArticle(input: PublishArticleInput): Promise<PublishResult>;
-  fetchPublishStatus(input: FetchPublishStatusInput): Promise<PublishStatusResult>;
+  fetchPublishStatus(
+    input: FetchPublishStatusInput
+  ): Promise<PublishStatusResult>;
 }
 ```
 
 **平台发布能力矩阵** (来自 specs_v1 01 §3):
 
-| 平台 | 图文 | 视频 | 文章 | P0 模式 |
-|------|------|------|------|---------|
-| 抖音 | 部分 | 支持 | - | official_api + browser_assist |
-| 小红书 | 支持 | 支持 | - | browser_assist + skill |
-| 公众号 | 图文文章 | 视频素材 | 文章 | official_api |
-| 视频号 | 弱 | 视频为主 | - | browser_assist + manual |
-| 百家号 | 图文 | 视频 | 文章 | official/browser_assist |
-| 知乎 | 图文回答 | 弱 | 回答/文章 | browser_assist + manual |
+| 平台   | 图文     | 视频     | 文章      | P0 模式                       |
+| ------ | -------- | -------- | --------- | ----------------------------- |
+| 抖音   | 部分     | 支持     | -         | official_api + browser_assist |
+| 小红书 | 支持     | 支持     | -         | browser_assist + skill        |
+| 公众号 | 图文文章 | 视频素材 | 文章      | official_api                  |
+| 视频号 | 弱       | 视频为主 | -         | browser_assist + manual       |
+| 百家号 | 图文     | 视频     | 文章      | official/browser_assist       |
+| 知乎   | 图文回答 | 弱       | 回答/文章 | browser_assist + manual       |
 
 **发布模式** (来自 specs_v1 01 §2):
 
@@ -400,14 +407,15 @@ scheduled/queued -> cancelled
 
 **需增强**:
 
-| 端点 | 增强内容 |
-|------|----------|
-| `POST /api/interactions/:id/classify` | 调用 lead-classification skill |
-| `POST /api/interactions/:id/suggest-reply` | 调用 reply-suggestion skill |
-| `POST /api/interactions/:id/convert-to-lead` | 意向识别后转 Lead |
-| `POST /api/interactions/:id/reply` | 自动回复需 AuditLog + 人工审核流程 |
+| 端点                                         | 增强内容                           |
+| -------------------------------------------- | ---------------------------------- |
+| `POST /api/interactions/:id/classify`        | 调用 lead-classification skill     |
+| `POST /api/interactions/:id/suggest-reply`   | 调用 reply-suggestion skill        |
+| `POST /api/interactions/:id/convert-to-lead` | 意向识别后转 Lead                  |
+| `POST /api/interactions/:id/reply`           | 自动回复需 AuditLog + 人工审核流程 |
 
 **规则**:
+
 - 高风险消息不能自动回复，必须人工确认
 - A/B 级线索触发通知
 
@@ -440,14 +448,14 @@ research_task_completed
 
 **指标口径** (来自 specs_v1 07 §6):
 
-| 指标 | 口径 |
-|------|------|
-| 内容发布数 | PublishJob.status=published |
-| 互动数 | Interaction 总数 |
-| 咨询数 | leadLevel=A/B/C 的互动数 |
-| A 级线索数 | Lead.leadLevel=A |
-| 内容获客率 | Lead 数 / Published Content 数 |
-| 平台获客贡献 | 平台 Lead 数 / 总 Lead 数 |
+| 指标         | 口径                           |
+| ------------ | ------------------------------ |
+| 内容发布数   | PublishJob.status=published    |
+| 互动数       | Interaction 总数               |
+| 咨询数       | leadLevel=A/B/C 的互动数       |
+| A 级线索数   | Lead.leadLevel=A               |
+| 内容获客率   | Lead 数 / Published Content 数 |
+| 平台获客贡献 | 平台 Lead 数 / 总 Lead 数      |
 
 **聚合 Worker**: `analytics.aggregate.daily`, `analytics.aggregate.weekly`
 
@@ -480,7 +488,9 @@ apps/research-runner/src/
 export interface ResearchProvider {
   getCapabilities(): Promise<ResearchCapabilities>;
   searchPosts(input: SearchPostsInput): Promise<CollectedPostDTO[]>;
-  collectPostComments(input: CollectCommentsInput): Promise<CollectedCommentDTO[]>;
+  collectPostComments(
+    input: CollectCommentsInput
+  ): Promise<CollectedCommentDTO[]>;
   collectCreatorPosts(input: CollectCreatorInput): Promise<CollectedPostDTO[]>;
 }
 ```
@@ -494,6 +504,7 @@ running -> paused (手动暂停)
 ```
 
 **限频规则**:
+
 - real_crawler 必须启用 rateLimitPolicy
 - 所有任务受 maxPosts/maxComments 限制
 - 连续失败超阈值进入 suspended
@@ -524,15 +535,16 @@ packages/lead-sinks/src/
 
 **Lead Sink 类型** (来自 specs_v1 03):
 
-| Sink | 用途 |
-|------|------|
-| feishu_bitable | 线索写入飞书多维表格 |
-| feishu_bot | A/B 级线索群提醒 |
-| wecom_contact | 企微客户承接 |
-| wecom_app_message | 企微应用消息提醒 |
-| crm_webhook | 第三方 CRM |
+| Sink              | 用途                 |
+| ----------------- | -------------------- |
+| feishu_bitable    | 线索写入飞书多维表格 |
+| feishu_bot        | A/B 级线索群提醒     |
+| wecom_contact     | 企微客户承接         |
+| wecom_app_message | 企微应用消息提醒     |
+| crm_webhook       | 第三方 CRM           |
 
 **幂等规则**:
+
 1. 同一个 leadId + sinkType 只能创建一个 LeadExternalMapping
 2. 已有 externalId 时同步动作为 update 而非 create
 3. 同步失败不能删除本地 Lead
@@ -558,6 +570,7 @@ apps/provider-gateway/src/
 ```
 
 **Gateway 规则**:
+
 1. 业务模块不能直接调用开源工具，必须通过 Gateway
 2. Provider 必须记录 ProviderRunLog
 3. Provider 失败不能污染主数据
@@ -592,86 +605,86 @@ packages/connectors/src/
 
 ### 6.1 内容管理页面
 
-| 页面 | 路径 | 优先级 |
-|------|------|--------|
-| 内容库 | `/content` | P0 |
-| 新建内容 | `/content/new` | P0 |
-| 内容详情 | `/content/[id]` | P0 |
-| 平台版本 | `/content/variants` | P1 |
-| 内容日历 | `/content/calendar` | P1 |
-| 内容模板 | `/content/templates` | P2 |
+| 页面     | 路径                 | 优先级 |
+| -------- | -------------------- | ------ |
+| 内容库   | `/content`           | P0     |
+| 新建内容 | `/content/new`       | P0     |
+| 内容详情 | `/content/[id]`      | P0     |
+| 平台版本 | `/content/variants`  | P1     |
+| 内容日历 | `/content/calendar`  | P1     |
+| 内容模板 | `/content/templates` | P2     |
 
 ### 6.2 发布管理页面
 
-| 页面 | 路径 | 优先级 |
-|------|------|--------|
-| 发布任务列表 | `/publish` | P0 |
-| 发布任务详情 | `/publish/jobs/[id]` | P0 |
-| 人工发布待办 | `/publish/manual` | P1 |
-| 发布日历 | `/publish/calendar` | P1 |
-| 发布队列 | `/publish/queue` | P1 |
-| 发布记录 | `/publish/attempts` | P2 |
+| 页面         | 路径                 | 优先级 |
+| ------------ | -------------------- | ------ |
+| 发布任务列表 | `/publish`           | P0     |
+| 发布任务详情 | `/publish/jobs/[id]` | P0     |
+| 人工发布待办 | `/publish/manual`    | P1     |
+| 发布日历     | `/publish/calendar`  | P1     |
+| 发布队列     | `/publish/queue`     | P1     |
+| 发布记录     | `/publish/attempts`  | P2     |
 
 ### 6.3 调研页面
 
-| 页面 | 路径 | 优先级 |
-|------|------|--------|
-| 调研任务列表 | `/research` | P1 |
-| 新建调研 | `/research/new` | P1 |
-| 任务详情 | `/research/tasks/[id]` | P1 |
-| AI 洞察 | `/research/insights` | P1 |
-| 选题机会 | `/research/opportunities` | P1 |
-| 手动导入 | `/research/import` | P2 |
+| 页面         | 路径                      | 优先级 |
+| ------------ | ------------------------- | ------ |
+| 调研任务列表 | `/research`               | P1     |
+| 新建调研     | `/research/new`           | P1     |
+| 任务详情     | `/research/tasks/[id]`    | P1     |
+| AI 洞察      | `/research/insights`      | P1     |
+| 选题机会     | `/research/opportunities` | P1     |
+| 手动导入     | `/research/import`        | P2     |
 
 ### 6.4 素材库页面
 
-| 页面 | 路径 | 优先级 |
-|------|------|--------|
-| 素材库 | `/media` | P0 |
-| 上传素材 | `/media/upload` | P0 |
-| 素材审核 | `/media/review` | P1 |
-| 素材详情 | `/media/[id]` | P1 |
+| 页面     | 路径                | 优先级      |
+| -------- | ------------------- | ----------- |
+| 素材库   | `/media`            | P0          |
+| 上传素材 | `/media/upload`     | P0          |
+| 素材审核 | `/media/review`     | P1          |
+| 素材详情 | `/media/[id]`       | P1          |
 | 未来生成 | `/media/generation` | P2 (禁用态) |
 
 ### 6.5 互动与线索页面
 
-| 页面 | 路径 | 优先级 |
-|------|------|--------|
-| 会话列表 | `/conversations` | P0 |
-| 会话详情 | `/conversations/[id]` | P0 |
-| 线索列表 | `/leads` | P0 |
-| 线索详情 | `/leads/[id]` | P0 |
-| 线索漏斗 | `/leads/pipeline` | P1 |
-| 同步日志 | `/leads/sync` | P1 |
+| 页面     | 路径                  | 优先级 |
+| -------- | --------------------- | ------ |
+| 会话列表 | `/conversations`      | P0     |
+| 会话详情 | `/conversations/[id]` | P0     |
+| 线索列表 | `/leads`              | P0     |
+| 线索详情 | `/leads/[id]`         | P0     |
+| 线索漏斗 | `/leads/pipeline`     | P1     |
+| 同步日志 | `/leads/sync`         | P1     |
 
 ### 6.6 集成与设置页面
 
-| 页面 | 路径 | 优先级 |
-|------|------|--------|
-| 飞书配置 | `/integrations/feishu` | P1 |
-| 企微配置 | `/integrations/wecom` | P1 |
-| Provider 管理 | `/integrations/providers` | P1 |
-| Skill 管理 | `/settings/skills` | P1 |
-| Skill 运行记录 | `/settings/skills/runs` | P2 |
-| 团队管理 | `/settings/team` | P2 |
-| 审计日志 | `/settings/audit-logs` | P2 |
-| 导入导出 | `/settings/data` | P2 |
+| 页面           | 路径                      | 优先级 |
+| -------------- | ------------------------- | ------ |
+| 飞书配置       | `/integrations/feishu`    | P1     |
+| 企微配置       | `/integrations/wecom`     | P1     |
+| Provider 管理  | `/integrations/providers` | P1     |
+| Skill 管理     | `/settings/skills`        | P1     |
+| Skill 运行记录 | `/settings/skills/runs`   | P2     |
+| 团队管理       | `/settings/team`          | P2     |
+| 审计日志       | `/settings/audit-logs`    | P2     |
+| 导入导出       | `/settings/data`          | P2     |
 
 ### 6.7 分析复盘页面
 
-| 页面 | 路径 | 优先级 |
-|------|------|--------|
-| 总览 | `/analytics` | P1 |
-| 内容 ROI | `/analytics/content` | P1 |
-| 线索趋势 | `/analytics/lead` | P1 |
-| 平台贡献 | `/analytics/platform` | P1 |
+| 页面     | 路径                  | 优先级 |
+| -------- | --------------------- | ------ |
+| 总览     | `/analytics`          | P1     |
+| 内容 ROI | `/analytics/content`  | P1     |
+| 线索趋势 | `/analytics/lead`     | P1     |
+| 平台贡献 | `/analytics/platform` | P1     |
 
 ### 6.8 任务中心 & 通知
 
-| 页面/组件 | 路径 | 优先级 |
-|-----------|------|--------|
-| 任务中心 | `/tasks` | P1 |
-| 通知铃铛 | Topbar 集成 | P1 |
+| 页面/组件 | 路径        | 优先级 |
+| --------- | ----------- | ------ |
+| 任务中心  | `/tasks`    | P1     |
+| 通知铃铛  | Topbar 集成 | P1     |
 
 ---
 
@@ -681,15 +694,15 @@ packages/connectors/src/
 
 **角色权限矩阵** (来自 specs_v1 07 §3):
 
-| 权限 | Admin | Operator | Sales | Viewer |
-|------|-------|----------|-------|--------|
-| content.create | ✅ | ✅ | ❌ | ❌ |
-| content.approve | ✅ | ✅ | ❌ | ❌ |
-| publish.execute | ✅ | ✅ | ❌ | ❌ |
-| interaction.reply | ✅ | ✅ | ✅ (已分配) | ❌ |
-| lead.assign | ✅ | ❌ | ❌ | ❌ |
-| integration.manage | ✅ | ❌ | ❌ | ❌ |
-| audit.view | ✅ | ❌ | ❌ | ❌ |
+| 权限               | Admin | Operator | Sales       | Viewer |
+| ------------------ | ----- | -------- | ----------- | ------ |
+| content.create     | ✅    | ✅       | ❌          | ❌     |
+| content.approve    | ✅    | ✅       | ❌          | ❌     |
+| publish.execute    | ✅    | ✅       | ❌          | ❌     |
+| interaction.reply  | ✅    | ✅       | ✅ (已分配) | ❌     |
+| lead.assign        | ✅    | ❌       | ❌          | ❌     |
+| integration.manage | ✅    | ❌       | ❌          | ❌     |
+| audit.view         | ✅    | ❌       | ❌          | ❌     |
 
 ### 7.2 Secret 安全
 
@@ -707,6 +720,7 @@ model SecretRef {
 ```
 
 **规则**:
+
 1. API Key、App Secret、Access Token 必须加密存储
 2. 前端永不返回明文 Secret
 3. 日志不得记录明文 Secret
@@ -715,6 +729,7 @@ model SecretRef {
 ### 7.3 数据导入导出
 
 **导入支持**:
+
 - CSV 导入评论
 - CSV 导入线索
 - Excel 导入历史客户
@@ -722,6 +737,7 @@ model SecretRef {
 - 素材批量上传
 
 **导出支持**:
+
 - 线索导出 CSV/Excel
 - 发布任务导出
 - 互动数据导出
@@ -743,14 +759,14 @@ Skill 包导出
 
 ### 8.1 状态机测试
 
-| 状态机 | 当前状态 | 需新增 |
-|--------|----------|--------|
-| PublishJob | ✅ 已有测试 | 增强 waiting_browser_login 分支 |
-| Interaction | ✅ 已有测试 | 增强 waiting_human_review 分支 |
-| Lead | ✅ 已有测试 | 增强 syncing 分支 |
-| MediaAsset | ✅ 已有测试 | - |
-| ContentItem | ❌ | 新增 |
-| ResearchTask | ❌ | 新增 |
+| 状态机       | 当前状态    | 需新增                          |
+| ------------ | ----------- | ------------------------------- |
+| PublishJob   | ✅ 已有测试 | 增强 waiting_browser_login 分支 |
+| Interaction  | ✅ 已有测试 | 增强 waiting_human_review 分支  |
+| Lead         | ✅ 已有测试 | 增强 syncing 分支               |
+| MediaAsset   | ✅ 已有测试 | -                               |
+| ContentItem  | ❌          | 新增                            |
+| ResearchTask | ❌          | 新增                            |
 
 ### 8.2 Provider Contract Tests
 
@@ -765,12 +781,12 @@ MediaGenerationProvider (disabled, mock)
 
 ### 8.3 集成测试
 
-| 测试流程 | 覆盖范围 |
-|----------|----------|
-| 内容→发布全流程 | ContentItem → ContentVariant → ComplianceCheck → PublishJob → PublishAttempt |
+| 测试流程            | 覆盖范围                                                                          |
+| ------------------- | --------------------------------------------------------------------------------- |
+| 内容→发布全流程     | ContentItem → ContentVariant → ComplianceCheck → PublishJob → PublishAttempt      |
 | 调研→洞察→选题→内容 | ResearchTask → CollectedPost → ResearchInsight → ContentOpportunity → ContentItem |
-| 互动→线索→飞书/企微 | Interaction → Lead → LeadExternalMapping → LeadSinkSyncLog |
-| 素材→发布约束 | MediaAsset (pending_review) → 阻止创建 PublishJob → approved → 允许发布 |
+| 互动→线索→飞书/企微 | Interaction → Lead → LeadExternalMapping → LeadSinkSyncLog                        |
+| 素材→发布约束       | MediaAsset (pending_review) → 阻止创建 PublishJob → approved → 允许发布           |
 
 ### 8.4 E2E 测试
 

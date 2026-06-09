@@ -35,12 +35,12 @@ Research Ops 只用于单品牌自用场景下的低频公开数据调研。
 
 ## 2. 运行模式
 
-| 模式 | 说明 |
-|---|---|
-| real_crawler | 调用 MediaCrawler 真实低频采集 |
-| recorded | 使用录制真实结果回放 |
-| manual_import | 手动上传 CSV/Excel/JSON |
-| disabled | 禁用采集 |
+| 模式          | 说明                           |
+| ------------- | ------------------------------ |
+| real_crawler  | 调用 MediaCrawler 真实低频采集 |
+| recorded      | 使用录制真实结果回放           |
+| manual_import | 手动上传 CSV/Excel/JSON        |
+| disabled      | 禁用采集                       |
 
 ---
 
@@ -195,7 +195,9 @@ cancelled
 export interface ResearchProvider {
   getCapabilities(): Promise<ResearchCapabilities>;
   searchPosts(input: SearchPostsInput): Promise<CollectedPostDTO[]>;
-  collectPostComments(input: CollectCommentsInput): Promise<CollectedCommentDTO[]>;
+  collectPostComments(
+    input: CollectCommentsInput
+  ): Promise<CollectedCommentDTO[]>;
   collectCreatorPosts(input: CollectCreatorInput): Promise<CollectedPostDTO[]>;
 }
 ```
@@ -258,15 +260,15 @@ research.import.manual
 
 ## 9. 前端页面
 
-| 页面 | 路径 |
-|---|---|
-| 调研任务列表 | /research |
-| 新建任务 | /research/new |
-| 任务详情 | /research/tasks/[id] |
-| 调研洞察 | /research/insights |
-| 选题机会 | /research/opportunities |
-| 竞品账号 | /research/competitors |
-| 手动导入 | /research/import |
+| 页面         | 路径                    |
+| ------------ | ----------------------- |
+| 调研任务列表 | /research               |
+| 新建任务     | /research/new           |
+| 任务详情     | /research/tasks/[id]    |
+| 调研洞察     | /research/insights      |
+| 选题机会     | /research/opportunities |
+| 竞品账号     | /research/competitors   |
+| 手动导入     | /research/import        |
 
 ---
 

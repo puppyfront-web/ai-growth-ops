@@ -25,13 +25,13 @@ export async function runRuntimeRequest(request: RuntimeRequest) {
     return runAuthWorkflow({
       action: request.intent === 'auth.login' ? 'login' : 'check',
       platform: payload.platform,
-      account: payload.account,
+      account: payload.account
     });
   }
 
   return {
     workflow: supervisor.workflow,
     status: 'success' as const,
-    results: [],
+    results: []
   };
 }

@@ -25,22 +25,47 @@ function getItemLabel(item: CalendarItem): string {
   return title.length > 8 ? title.slice(0, 8) + '…' : title;
 }
 
-export function CalendarDayCell({ items, maxVisible = 3, onClick }: CalendarDayCellProps) {
+export function CalendarDayCell({
+  items,
+  maxVisible = 3,
+  onClick
+}: CalendarDayCellProps) {
   if (items.length === 0) return null;
 
   const visible = items.slice(0, maxVisible);
   const overflow = items.length - maxVisible;
 
   return (
-    <div className="space-y-0.5" onClick={(e) => { e.stopPropagation(); onClick?.(); }}>
+    <div
+      className="space-y-0.5"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+    >
       {visible.map((item, i) => (
-        <div key={i} className={cn('flex items-center gap-1 rounded px-1 py-0.5', getItemColor(item) + '/15')}>
-          <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', getItemColor(item))} />
-          <span className="text-[10px] leading-tight truncate">{getItemLabel(item)}</span>
+        <div
+          key={i}
+          className={cn(
+            'flex items-center gap-1 rounded px-1 py-0.5',
+            getItemColor(item) + '/15'
+          )}
+        >
+          <span
+            className={cn(
+              'h-1.5 w-1.5 rounded-full flex-shrink-0',
+              getItemColor(item)
+            )}
+          />
+          <span className="text-[10px] leading-tight truncate">
+            {getItemLabel(item)}
+          </span>
         </div>
       ))}
       {overflow > 0 && (
-        <span className="text-[10px] text-muted-foreground pl-1">+{overflow} 更多</span>
+        <span className="text-[10px] text-muted-foreground pl-1">
+          +{overflow} 更多
+        </span>
       )}
     </div>
   );

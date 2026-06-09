@@ -1,7 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { publishStatusLabels, contentTypeLabels } from '@/lib/constants';
@@ -17,8 +23,19 @@ export type DayDetailDialogProps = {
   publishJobs: PublishJob[];
 };
 
-export function DayDetailDialog({ open, onOpenChange, date, contentItems, publishJobs }: DayDetailDialogProps) {
-  const dateStr = date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+export function DayDetailDialog({
+  open,
+  onOpenChange,
+  date,
+  contentItems,
+  publishJobs
+}: DayDetailDialogProps) {
+  const dateStr = date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long'
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -30,18 +47,28 @@ export function DayDetailDialog({ open, onOpenChange, date, contentItems, publis
         <div className="space-y-4">
           {/* Content Items */}
           <div>
-            <h4 className="text-sm font-medium mb-2">内容项 ({contentItems.length})</h4>
+            <h4 className="text-sm font-medium mb-2">
+              内容项 ({contentItems.length})
+            </h4>
             {contentItems.length === 0 ? (
               <p className="text-xs text-muted-foreground py-2">当日无内容</p>
             ) : (
               <div className="space-y-1.5">
                 {contentItems.map((item) => (
-                  <Link key={item.id} href={`/content/${item.id}`} className="block rounded-lg border p-2.5 hover:bg-accent/50">
+                  <Link
+                    key={item.id}
+                    href={`/content/${item.id}`}
+                    className="block rounded-lg border p-2.5 hover:bg-accent/50"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{item.title}</span>
-                      <span className="text-xs text-muted-foreground">{contentTypeLabels[item.type] ?? item.type}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {contentTypeLabels[item.type] ?? item.type}
+                      </span>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{formatDate(item.createdAt)}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {formatDate(item.createdAt)}
+                    </div>
                   </Link>
                 ))}
               </div>
@@ -50,18 +77,35 @@ export function DayDetailDialog({ open, onOpenChange, date, contentItems, publis
 
           {/* Publish Jobs */}
           <div>
-            <h4 className="text-sm font-medium mb-2">发布任务 ({publishJobs.length})</h4>
+            <h4 className="text-sm font-medium mb-2">
+              发布任务 ({publishJobs.length})
+            </h4>
             {publishJobs.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-2">当日无发布任务</p>
+              <p className="text-xs text-muted-foreground py-2">
+                当日无发布任务
+              </p>
             ) : (
               <div className="space-y-1.5">
                 {publishJobs.map((job) => (
-                  <Link key={job.id} href={`/publish/jobs/${job.id}`} className="flex items-center justify-between rounded-lg border p-2.5 hover:bg-accent/50">
+                  <Link
+                    key={job.id}
+                    href={`/publish/jobs/${job.id}`}
+                    className="flex items-center justify-between rounded-lg border p-2.5 hover:bg-accent/50"
+                  >
                     <div className="flex items-center gap-2">
                       <PlatformBadge platform={job.platform} showIcon={false} />
-                      <span className="text-xs text-muted-foreground">{contentTypeLabels[job.contentType] ?? job.contentType}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {contentTypeLabels[job.contentType] ?? job.contentType}
+                      </span>
                     </div>
-                    <StatusBadge status={job.status} label={publishStatusLabels[job.status as keyof typeof publishStatusLabels]} />
+                    <StatusBadge
+                      status={job.status}
+                      label={
+                        publishStatusLabels[
+                          job.status as keyof typeof publishStatusLabels
+                        ]
+                      }
+                    />
                   </Link>
                 ))}
               </div>

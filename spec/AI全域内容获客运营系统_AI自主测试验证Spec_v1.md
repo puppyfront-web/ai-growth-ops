@@ -690,77 +690,77 @@ E2E 用例文件
 
 ### 11.1 Dashboard
 
-| 按钮/操作 | 预期 |
-|---|---|
-| 查看今日发布任务 | 跳转 `/publish` 并带筛选 |
-| 查看高意向线索 | 跳转 `/leads?level=A` |
-| 查看待处理消息 | 跳转 `/conversations?status=waiting_human_review` |
-| 查看平台异常 | 跳转 `/integrations/platforms` |
+| 按钮/操作        | 预期                                              |
+| ---------------- | ------------------------------------------------- |
+| 查看今日发布任务 | 跳转 `/publish` 并带筛选                          |
+| 查看高意向线索   | 跳转 `/leads?level=A`                             |
+| 查看待处理消息   | 跳转 `/conversations?status=waiting_human_review` |
+| 查看平台异常     | 跳转 `/integrations/platforms`                    |
 
 ### 11.2 Research
 
-| 按钮/操作 | API | 预期 |
-|---|---|---|
-| 新建调研任务 | `POST /api/research/tasks` | DB 新增 ResearchTask |
-| 运行任务 | `POST /api/research/tasks/:id/run` | 队列新增 research.run |
-| 暂停任务 | `POST /api/research/tasks/:id/pause` | 状态变为 paused |
-| 生成内容计划 | `POST /api/research/opportunities/:id/create-content` | 新增 ContentItem |
+| 按钮/操作    | API                                                   | 预期                  |
+| ------------ | ----------------------------------------------------- | --------------------- |
+| 新建调研任务 | `POST /api/research/tasks`                            | DB 新增 ResearchTask  |
+| 运行任务     | `POST /api/research/tasks/:id/run`                    | 队列新增 research.run |
+| 暂停任务     | `POST /api/research/tasks/:id/pause`                  | 状态变为 paused       |
+| 生成内容计划 | `POST /api/research/opportunities/:id/create-content` | 新增 ContentItem      |
 
 ### 11.3 Content
 
-| 按钮/操作 | API | 预期 |
-|---|---|---|
-| 新建内容 | `POST /api/contents` | 新增 ContentItem |
-| 保存草稿 | `PATCH /api/contents/:id` | 内容更新 |
+| 按钮/操作    | API                                        | 预期                     |
+| ------------ | ------------------------------------------ | ------------------------ |
+| 新建内容     | `POST /api/contents`                       | 新增 ContentItem         |
+| 保存草稿     | `PATCH /api/contents/:id`                  | 内容更新                 |
 | 生成平台版本 | `POST /api/contents/:id/generate-variants` | 新增 6 条 ContentVariant |
-| 合规检测 | `POST /api/contents/:id/compliance-check` | 写入 SkillRun |
-| 创建发布任务 | `POST /api/publish-jobs` | 新增 PublishJob |
+| 合规检测     | `POST /api/contents/:id/compliance-check`  | 写入 SkillRun            |
+| 创建发布任务 | `POST /api/publish-jobs`                   | 新增 PublishJob          |
 
 ### 11.4 Media
 
-| 按钮/操作 | API | 预期 |
-|---|---|---|
-| 上传素材 | `POST /api/media/upload` | MinIO 保存文件，DB 新增 MediaAsset |
-| 审核通过 | `PATCH /api/media/:id/review` | status=approved |
-| 审核拒绝 | `PATCH /api/media/:id/review` | status=rejected |
-| 删除素材 | `DELETE /api/media/:id` | status=archived 或删除 |
+| 按钮/操作 | API                           | 预期                               |
+| --------- | ----------------------------- | ---------------------------------- |
+| 上传素材  | `POST /api/media/upload`      | MinIO 保存文件，DB 新增 MediaAsset |
+| 审核通过  | `PATCH /api/media/:id/review` | status=approved                    |
+| 审核拒绝  | `PATCH /api/media/:id/review` | status=rejected                    |
+| 删除素材  | `DELETE /api/media/:id`       | status=archived 或删除             |
 
 ### 11.5 Publish
 
-| 按钮/操作 | API | 预期 |
-|---|---|---|
-| 立即发布 | `POST /api/publish-jobs/:id/execute` | status=queued |
-| 重试发布 | `POST /api/publish-jobs/:id/retry` | 新增 PublishAttempt |
-| 取消发布 | `POST /api/publish-jobs/:id/cancel` | status=cancelled |
-| 人工完成 | `POST /api/publish-jobs/:id/manual-complete` | status=published |
-| 查看日志 | `GET /api/publish-jobs/:id/logs` | 展示日志 |
+| 按钮/操作 | API                                          | 预期                |
+| --------- | -------------------------------------------- | ------------------- |
+| 立即发布  | `POST /api/publish-jobs/:id/execute`         | status=queued       |
+| 重试发布  | `POST /api/publish-jobs/:id/retry`           | 新增 PublishAttempt |
+| 取消发布  | `POST /api/publish-jobs/:id/cancel`          | status=cancelled    |
+| 人工完成  | `POST /api/publish-jobs/:id/manual-complete` | status=published    |
+| 查看日志  | `GET /api/publish-jobs/:id/logs`             | 展示日志            |
 
 ### 11.6 Conversations
 
-| 按钮/操作 | API | 预期 |
-|---|---|---|
-| 同步互动 | `POST /api/interactions/sync` | 新增 Interaction |
-| AI 识别 | `POST /api/interactions/:id/classify` | 写入意向等级 |
-| 生成回复 | `POST /api/interactions/:id/suggest-reply` | 写入回复建议 |
-| 发送回复 | `POST /api/interactions/:id/reply` | status=replied |
-| 转线索 | `POST /api/interactions/:id/convert-to-lead` | 新增 Lead |
+| 按钮/操作 | API                                          | 预期             |
+| --------- | -------------------------------------------- | ---------------- |
+| 同步互动  | `POST /api/interactions/sync`                | 新增 Interaction |
+| AI 识别   | `POST /api/interactions/:id/classify`        | 写入意向等级     |
+| 生成回复  | `POST /api/interactions/:id/suggest-reply`   | 写入回复建议     |
+| 发送回复  | `POST /api/interactions/:id/reply`           | status=replied   |
+| 转线索    | `POST /api/interactions/:id/convert-to-lead` | 新增 Lead        |
 
 ### 11.7 Leads
 
-| 按钮/操作 | API | 预期 |
-|---|---|---|
-| 分配负责人 | `PATCH /api/leads/:id/assign` | ownerId 更新 |
-| 更新状态 | `PATCH /api/leads/:id/status` | LeadActivity 新增 |
-| 同步飞书 | `POST /api/leads/:id/sync-feishu` | LeadExternalMapping 新增 |
-| 同步企微 | `POST /api/leads/:id/sync-wecom` | LeadExternalMapping 新增 |
+| 按钮/操作  | API                               | 预期                     |
+| ---------- | --------------------------------- | ------------------------ |
+| 分配负责人 | `PATCH /api/leads/:id/assign`     | ownerId 更新             |
+| 更新状态   | `PATCH /api/leads/:id/status`     | LeadActivity 新增        |
+| 同步飞书   | `POST /api/leads/:id/sync-feishu` | LeadExternalMapping 新增 |
+| 同步企微   | `POST /api/leads/:id/sync-wecom`  | LeadExternalMapping 新增 |
 
 ### 11.8 Integrations
 
-| 按钮/操作 | API | 预期 |
-|---|---|---|
-| 测试飞书连接 | `POST /api/integrations/feishu/test` | 展示成功/失败 |
-| 保存飞书配置 | `PATCH /api/integrations/feishu` | 配置加密保存 |
-| 测试企微连接 | `POST /api/integrations/wecom/test` | 展示成功/失败 |
+| 按钮/操作     | API                                     | 预期              |
+| ------------- | --------------------------------------- | ----------------- |
+| 测试飞书连接  | `POST /api/integrations/feishu/test`    | 展示成功/失败     |
+| 保存飞书配置  | `PATCH /api/integrations/feishu`        | 配置加密保存      |
+| 测试企微连接  | `POST /api/integrations/wecom/test`     | 展示成功/失败     |
 | 启用 Provider | `PATCH /api/integrations/providers/:id` | Provider 状态更新 |
 
 ---
@@ -975,10 +975,11 @@ E2E 主流程不通
 
 每完成一个阶段，AI 必须输出：
 
-```markdown
+````markdown
 # 测试验证报告
 
 ## 本次实现模块
+
 - 模块名称：
 - 涉及页面：
 - 涉及 API：
@@ -986,6 +987,7 @@ E2E 主流程不通
 - 涉及队列任务：
 
 ## 新增测试
+
 - Unit：
 - Integration：
 - E2E：
@@ -993,6 +995,7 @@ E2E 主流程不通
 - Button Acceptance：
 
 ## 测试命令
+
 ```bash
 pnpm lint
 pnpm typecheck
@@ -1000,8 +1003,10 @@ pnpm test:unit
 pnpm test:integration
 pnpm test:e2e
 ```
+````
 
 ## 测试结果
+
 - Lint：
 - Typecheck：
 - Unit：
@@ -1010,18 +1015,22 @@ pnpm test:e2e
 - Coverage：
 
 ## 失败与修复
+
 - 失败用例：
 - 原因：
 - 修复方式：
 - 重新验证结果：
 
 ## 未覆盖风险
+
 - 风险 1：
 - 风险 2：
 
 ## 是否满足验收
+
 - 是 / 否
-```
+
+````
 
 ---
 
@@ -1059,7 +1068,7 @@ pnpm test:e2e
 - 运行测试
 - 修复失败
 - 输出测试报告
-```
+````
 
 ---
 

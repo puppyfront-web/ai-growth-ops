@@ -36,14 +36,23 @@ export async function getThread(threadId: string): Promise<ChatThread> {
 
 export async function saveMessage(
   threadId: string,
-  message: { role: string; content: string; toolCalls?: unknown; toolResult?: unknown; tokensUsed?: number },
+  message: {
+    role: string;
+    content: string;
+    toolCalls?: unknown;
+    toolResult?: unknown;
+    tokensUsed?: number;
+  }
 ): Promise<ChatMessage> {
-  return apiPost<ChatMessage>(`/api/chat/threads/${threadId}/messages`, message);
+  return apiPost<ChatMessage>(
+    `/api/chat/threads/${threadId}/messages`,
+    message
+  );
 }
 
 export async function updateThread(
   threadId: string,
-  data: { title?: string; status?: string },
+  data: { title?: string; status?: string }
 ): Promise<ChatThread> {
   return apiPatch<ChatThread>(`/api/chat/threads/${threadId}`, data);
 }

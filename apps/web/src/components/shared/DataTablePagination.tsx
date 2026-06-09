@@ -1,6 +1,11 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/select';
 
@@ -17,7 +22,7 @@ export function DataTablePagination({
   pageSize,
   total,
   onPageChange,
-  onPageSizeChange,
+  onPageSizeChange
 }: DataTablePaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -31,7 +36,10 @@ export function DataTablePagination({
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">每页</span>
-          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(v) => onPageSizeChange(Number(v))}
+          >
             <SelectOption value="10">10</SelectOption>
             <SelectOption value="20">20</SelectOption>
             <SelectOption value="50">50</SelectOption>

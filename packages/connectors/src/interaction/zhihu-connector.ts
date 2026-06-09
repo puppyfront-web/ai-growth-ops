@@ -9,7 +9,7 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 import { platformGet, platformPost } from './http-client.js';
 
@@ -68,7 +68,12 @@ export class ZhihuConnector implements InteractionConnector {
       autoReplyAllowed: 'low_risk_only',
       requiresHumanReviewForMessageReply: false,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['official_api', 'browser_assist', 'manual_import', 'sandbox'],
+      supportedModes: [
+        'official_api',
+        'browser_assist',
+        'manual_import',
+        'sandbox'
+      ]
     };
   }
 
@@ -83,7 +88,7 @@ export class ZhihuConnector implements InteractionConnector {
     }
 
     const params = new URLSearchParams({
-      limit: String(limit),
+      limit: String(limit)
     });
     if (cursor) {
       params.set('offset', cursor);
@@ -92,7 +97,7 @@ export class ZhihuConnector implements InteractionConnector {
     const url = `https://www.zhihu.com/api/v4/comment_v5/comments/${sourceContentId}?${params.toString()}`;
     const headers: Record<string, string> = {
       Cookie: this.config.cookie,
-      'User-Agent': ZHIHU_UA,
+      'User-Agent': ZHIHU_UA
     };
 
     const resp = await platformGet<ZhihuCommentResponse>(url, headers);
@@ -100,17 +105,21 @@ export class ZhihuConnector implements InteractionConnector {
       return [];
     }
 
-    return resp.data.data.map((item): PlatformComment => ({
-      externalCommentId: String(item.id ?? ''),
-      externalUserId: String(item.author?.id ?? ''),
-      userNickname: item.author?.name ?? '',
-      content: item.content ?? '',
-      likeCount: item.vote_count,
-      replyCount: item.child_comment_count,
-      publishedAt: item.created_time ? new Date(item.created_time * 1000).toISOString() : '',
-      sourceContentId,
-      rawPayload: item as unknown as Record<string, unknown>,
-    }));
+    return resp.data.data.map(
+      (item): PlatformComment => ({
+        externalCommentId: String(item.id ?? ''),
+        externalUserId: String(item.author?.id ?? ''),
+        userNickname: item.author?.name ?? '',
+        content: item.content ?? '',
+        likeCount: item.vote_count,
+        replyCount: item.child_comment_count,
+        publishedAt: item.created_time
+          ? new Date(item.created_time * 1000).toISOString()
+          : '',
+        sourceContentId,
+        rawPayload: item as unknown as Record<string, unknown>
+      })
+    );
   }
 
   async fetchMessages(input: FetchMessagesInput): Promise<PlatformMessage[]> {
@@ -120,7 +129,7 @@ export class ZhihuConnector implements InteractionConnector {
 
     const { cursor, limit = 20 } = input;
     const params = new URLSearchParams({
-      limit: String(limit),
+      limit: String(limit)
     });
     if (cursor) {
       params.set('offset', cursor);
@@ -129,7 +138,7 @@ export class ZhihuConnector implements InteractionConnector {
     const url = `https://www.zhihu.com/api/v4/messages?${params.toString()}`;
     const headers: Record<string, string> = {
       Cookie: this.config.cookie,
-      'User-Agent': ZHIHU_UA,
+      'User-Agent': ZHIHU_UA
     };
 
     const resp = await platformGet<ZhihuMessageResponse>(url, headers);
@@ -137,86 +146,106 @@ export class ZhihuConnector implements InteractionConnector {
       return [];
     }
 
-    return resp.data.data.map((item): PlatformMessage => ({
-      externalMessageId: String(item.id ?? ''),
-      externalUserId: String(item.sender?.id ?? ''),
-      userNickname: item.sender?.name ?? '',
-      content: item.content ?? '',
-      type: mapZhihuMessageType(item.type),
-      publishedAt: item.created_time ? new Date(item.created_time * 1000).toISOString() : '',
-      rawPayload: item as unknown as Record<string, unknown>,
-    }));
+    return resp.data.data.map(
+      (item): PlatformMessage => ({
+        externalMessageId: String(item.id ?? ''),
+        externalUserId: String(item.sender?.id ?? ''),
+        userNickname: item.sender?.name ?? '',
+        content: item.content ?? '',
+        type: mapZhihuMessageType(item.type),
+        publishedAt: item.created_time
+          ? new Date(item.created_time * 1000).toISOString()
+          : '',
+        rawPayload: item as unknown as Record<string, unknown>
+      })
+    );
   }
 
   async replyComment(input: ReplyCommentInput): Promise<ReplyResult> {
     if (!this.config.cookie) {
-      return { success: false, errorCode: 'NO_COOKIE', errorMessage: 'Missing cookie' };
+      return {
+        success: false,
+        errorCode: 'NO_COOKIE',
+        errorMessage: 'Missing cookie'
+      };
     }
 
     const { externalCommentId, replyText } = input;
     const url = 'https://www.zhihu.com/api/v4/comments';
     const headers: Record<string, string> = {
       Cookie: this.config.cookie,
-      'User-Agent': ZHIHU_UA,
+      'User-Agent': ZHIHU_UA
     };
     const body = {
       content: replyText,
       comment_type: 'reply',
-      reply_comment_id: externalCommentId,
+      reply_comment_id: externalCommentId
     };
 
     const resp = await platformPost<ZhihuReplyResponse>(url, body, headers);
     if (!resp.success) {
-      return { success: false, errorCode: 'API_ERROR', errorMessage: resp.errorMessage };
+      return {
+        success: false,
+        errorCode: 'API_ERROR',
+        errorMessage: resp.errorMessage
+      };
     }
 
     if (resp.data?.error) {
       return {
         success: false,
         errorCode: String(resp.data.error.code ?? 'UNKNOWN'),
-        errorMessage: resp.data.error.message ?? 'Unknown Zhihu API error',
+        errorMessage: resp.data.error.message ?? 'Unknown Zhihu API error'
       };
     }
 
     return {
       success: true,
-      externalReplyId: resp.data?.id ? String(resp.data.id) : undefined,
+      externalReplyId: resp.data?.id ? String(resp.data.id) : undefined
     };
   }
 
   async replyMessage(input: ReplyMessageInput): Promise<ReplyResult> {
     if (!this.config.cookie) {
-      return { success: false, errorCode: 'NO_COOKIE', errorMessage: 'Missing cookie' };
+      return {
+        success: false,
+        errorCode: 'NO_COOKIE',
+        errorMessage: 'Missing cookie'
+      };
     }
 
     const { externalUserId, messageText } = input;
     const url = 'https://www.zhihu.com/api/v4/messages';
     const headers: Record<string, string> = {
       Cookie: this.config.cookie,
-      'User-Agent': ZHIHU_UA,
+      'User-Agent': ZHIHU_UA
     };
     const body = {
       receiver_id: externalUserId,
       content: messageText,
-      type: 'common',
+      type: 'common'
     };
 
     const resp = await platformPost<ZhihuReplyResponse>(url, body, headers);
     if (!resp.success) {
-      return { success: false, errorCode: 'API_ERROR', errorMessage: resp.errorMessage };
+      return {
+        success: false,
+        errorCode: 'API_ERROR',
+        errorMessage: resp.errorMessage
+      };
     }
 
     if (resp.data?.error) {
       return {
         success: false,
         errorCode: String(resp.data.error.code ?? 'UNKNOWN'),
-        errorMessage: resp.data.error.message ?? 'Unknown Zhihu API error',
+        errorMessage: resp.data.error.message ?? 'Unknown Zhihu API error'
       };
     }
 
     return {
       success: true,
-      externalReplyId: resp.data?.id ? String(resp.data.id) : undefined,
+      externalReplyId: resp.data?.id ? String(resp.data.id) : undefined
     };
   }
 }

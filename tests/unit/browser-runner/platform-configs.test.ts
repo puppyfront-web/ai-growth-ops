@@ -5,14 +5,14 @@ import {
   getPlatformLoginConfig,
   hasCookieNamed,
   snapshotCookieKeys,
-  type DetectionRule,
+  type DetectionRule
 } from '../../../apps/browser-runner/src/platform-configs';
 
 describe('snapshotCookieKeys', () => {
   it('keys cookies by domain and name', () => {
     const keys = snapshotCookieKeys([
       { domain: '.douyin.com', name: 'sessionid' },
-      { domain: '.douyin.com', name: '_ga' },
+      { domain: '.douyin.com', name: '_ga' }
     ]);
     expect(keys.has('.douyin.com|sessionid')).toBe(true);
     expect(keys.has('.douyin.com|_ga')).toBe(true);
@@ -39,7 +39,9 @@ describe('cookieHeaderHasNamedCookie', () => {
   it('does not false-positive on prefix names', () => {
     const header = 'not_sessionid=1; sessionid=abc';
     expect(cookieHeaderHasNamedCookie(header, 'sessionid')).toBe(true);
-    expect(cookieHeaderHasNamedCookie('not_sessionid=1', 'sessionid')).toBe(false);
+    expect(cookieHeaderHasNamedCookie('not_sessionid=1', 'sessionid')).toBe(
+      false
+    );
   });
 });
 
@@ -49,7 +51,7 @@ describe('douyin login config', () => {
       'sessionid',
       'sid_tt',
       'sid_guard',
-      'sessionid_ss',
+      'sessionid_ss'
     ]);
     expect(DOUYIN_AUTH_COOKIE_NAMES).not.toContain('ttwid');
     expect(DOUYIN_AUTH_COOKIE_NAMES).not.toContain('odin_tt');
@@ -60,7 +62,9 @@ describe('douyin login config', () => {
     const config = getPlatformLoginConfig('douyin');
     expect(config.loginUrl).toBe('https://creator.douyin.com/');
     expect(config.loginMode).toBe('qr');
-    expect(config.baselineAuthCookieNames).toEqual([...DOUYIN_AUTH_COOKIE_NAMES]);
+    expect(config.baselineAuthCookieNames).toEqual([
+      ...DOUYIN_AUTH_COOKIE_NAMES
+    ]);
   });
 });
 
@@ -68,7 +72,7 @@ describe('DetectionRule shape', () => {
   it('supports combined cookie and url rules', () => {
     const rule: DetectionRule = {
       cookieNames: ['sessionid'],
-      urlIncludes: ['/creator/'],
+      urlIncludes: ['/creator/']
     };
     expect(rule.cookieNames).toContain('sessionid');
     expect(rule.urlIncludes).toContain('/creator/');

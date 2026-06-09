@@ -9,7 +9,7 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 import { platformGet, platformPost } from './http-client.js';
 
@@ -61,7 +61,12 @@ export class BaijiahaoConnector implements InteractionConnector {
       autoReplyAllowed: false,
       requiresHumanReviewForMessageReply: true,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['official_api', 'browser_assist', 'manual_import', 'sandbox'],
+      supportedModes: [
+        'official_api',
+        'browser_assist',
+        'manual_import',
+        'sandbox'
+      ]
     };
   }
 
@@ -81,7 +86,7 @@ export class BaijiahaoConnector implements InteractionConnector {
       app_id: appId,
       item_id: sourceContentId,
       pn: String(page),
-      rn: String(limit),
+      rn: String(limit)
     });
 
     const url = `https://baijiahao.baidu.com/builderinner/api/content/comment/list?${params.toString()}`;
@@ -92,17 +97,19 @@ export class BaijiahaoConnector implements InteractionConnector {
       return [];
     }
 
-    return resp.data.data.list.map((item): PlatformComment => ({
-      externalCommentId: item.comment_id ?? '',
-      externalUserId: item.user_id ?? '',
-      userNickname: item.user_name ?? '',
-      content: item.content ?? '',
-      likeCount: item.like_num,
-      replyCount: item.reply_num,
-      publishedAt: item.create_time ?? '',
-      sourceContentId,
-      rawPayload: item as unknown as Record<string, unknown>,
-    }));
+    return resp.data.data.list.map(
+      (item): PlatformComment => ({
+        externalCommentId: item.comment_id ?? '',
+        externalUserId: item.user_id ?? '',
+        userNickname: item.user_name ?? '',
+        content: item.content ?? '',
+        likeCount: item.like_num,
+        replyCount: item.reply_num,
+        publishedAt: item.create_time ?? '',
+        sourceContentId,
+        rawPayload: item as unknown as Record<string, unknown>
+      })
+    );
   }
 
   async fetchMessages(_input: FetchMessagesInput): Promise<PlatformMessage[]> {
@@ -111,23 +118,32 @@ export class BaijiahaoConnector implements InteractionConnector {
 
   async replyComment(input: ReplyCommentInput): Promise<ReplyResult> {
     if (!this.config.cookie) {
-      return { success: false, errorCode: 'NO_COOKIE', errorMessage: 'Missing cookie' };
+      return {
+        success: false,
+        errorCode: 'NO_COOKIE',
+        errorMessage: 'Missing cookie'
+      };
     }
 
     const { externalCommentId, replyText } = input;
     const appId = this.config.appId ?? '';
 
-    const url = 'https://baijiahao.baidu.com/builderinner/api/content/comment/reply';
+    const url =
+      'https://baijiahao.baidu.com/builderinner/api/content/comment/reply';
     const headers = { Cookie: this.config.cookie };
     const body = {
       comment_id: externalCommentId,
       content: replyText,
-      app_id: appId,
+      app_id: appId
     };
 
     const resp = await platformPost<BaijiahaoReplyResponse>(url, body, headers);
     if (!resp.success) {
-      return { success: false, errorCode: 'API_ERROR', errorMessage: resp.errorMessage };
+      return {
+        success: false,
+        errorCode: 'API_ERROR',
+        errorMessage: resp.errorMessage
+      };
     }
 
     const errno = resp.data?.errno;
@@ -135,17 +151,21 @@ export class BaijiahaoConnector implements InteractionConnector {
       return {
         success: false,
         errorCode: String(errno),
-        errorMessage: resp.data?.errmsg ?? 'Unknown Baijiahao API error',
+        errorMessage: resp.data?.errmsg ?? 'Unknown Baijiahao API error'
       };
     }
 
     return {
       success: true,
-      externalReplyId: resp.data?.data?.reply_id,
+      externalReplyId: resp.data?.data?.reply_id
     };
   }
 
   async replyMessage(_input: ReplyMessageInput): Promise<ReplyResult> {
-    return { success: false, errorCode: 'UNSUPPORTED', errorMessage: 'Baijiahao does not support messaging' };
+    return {
+      success: false,
+      errorCode: 'UNSUPPORTED',
+      errorMessage: 'Baijiahao does not support messaging'
+    };
   }
 }

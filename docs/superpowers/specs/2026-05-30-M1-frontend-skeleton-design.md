@@ -11,23 +11,26 @@
 ## 1. 目标与范围
 
 ### 1.1 目标
+
 建立前端项目的**全部基础设施**，确保后续 M2-M8 只需关注业务组件，不需要关心底层。
 
 ### 1.2 交付物清单
-| # | 交付物 | 说明 |
-|---|--------|------|
-| 1 | shadcn/ui 组件库 | 30+ 组件安装到 `src/components/ui/` |
-| 2 | 布局系统 | AppShell + Sidebar + Topbar + Breadcrumb + PageHeader |
-| 3 | 认证系统 | AuthProvider + Login 页面 + useAuth hook |
-| 4 | API Client 层 | 增强 client.ts + 12 个域 API 模块 + query-keys 工厂 |
-| 5 | 共享组件库 | DataTable + StatusBadge + EmptyState + ConfirmDialog + FileUpload 等 |
-| 6 | Provider 层 | QueryProvider + ThemeProvider + AuthProvider |
-| 7 | 类型定义 | 12 个类型文件对齐 Prisma schema |
-| 8 | 常量/工具 | 中文标签映射 + cn() + formatDate() + formatNumber() |
-| 9 | Vitest 单元测试 | 16 个测试用例 |
-| 10 | Playwright E2E 测试 | 6 个测试用例 |
+
+| #   | 交付物              | 说明                                                                 |
+| --- | ------------------- | -------------------------------------------------------------------- |
+| 1   | shadcn/ui 组件库    | 30+ 组件安装到 `src/components/ui/`                                  |
+| 2   | 布局系统            | AppShell + Sidebar + Topbar + Breadcrumb + PageHeader                |
+| 3   | 认证系统            | AuthProvider + Login 页面 + useAuth hook                             |
+| 4   | API Client 层       | 增强 client.ts + 12 个域 API 模块 + query-keys 工厂                  |
+| 5   | 共享组件库          | DataTable + StatusBadge + EmptyState + ConfirmDialog + FileUpload 等 |
+| 6   | Provider 层         | QueryProvider + ThemeProvider + AuthProvider                         |
+| 7   | 类型定义            | 12 个类型文件对齐 Prisma schema                                      |
+| 8   | 常量/工具           | 中文标签映射 + cn() + formatDate() + formatNumber()                  |
+| 9   | Vitest 单元测试     | 16 个测试用例                                                        |
+| 10  | Playwright E2E 测试 | 6 个测试用例                                                         |
 
 ### 1.3 不包含
+
 - Dashboard 业务组件（M2）
 - Research/Content/Publish 等业务页面（M3-M7）
 - 暗色模式（M8）
@@ -298,7 +301,7 @@ const breadcrumbLabels: Record<string, string> = {
   platforms: '平台账号',
   ai: 'AI 配置',
   skills: '技能',
-  compliance: '合规',
+  compliance: '合规'
 };
 ```
 
@@ -309,9 +312,9 @@ const breadcrumbLabels: Record<string, string> = {
 // 用途: 页面标题 + 描述 + 操作按钮区域
 
 interface PageHeaderProps {
-  title: string;                    // 页面标题
-  description?: string;             // 可选描述
-  actions?: React.ReactNode;        // 右侧操作区（按钮等）
+  title: string; // 页面标题
+  description?: string; // 可选描述
+  actions?: React.ReactNode; // 右侧操作区（按钮等）
 }
 
 // 渲染:
@@ -343,7 +346,7 @@ interface User {
 interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
-  isLoading: boolean;              // 首次加载时 true
+  isLoading: boolean; // 首次加载时 true
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -365,7 +368,7 @@ interface AuthContextValue {
 // 使用 React Hook Form + Zod:
 const loginSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(8, '密码至少 8 个字符'),
+  password: z.string().min(8, '密码至少 8 个字符')
 });
 
 // 行为:
@@ -399,12 +402,12 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   isLoading?: boolean;
   error?: Error | null;
-  emptyMessage?: string;            // 默认 "暂无数据"
+  emptyMessage?: string; // 默认 "暂无数据"
   emptyDescription?: string;
   emptyAction?: { label: string; href: string };
-  searchable?: boolean;             // 是否显示搜索框
+  searchable?: boolean; // 是否显示搜索框
   searchPlaceholder?: string;
-  toolbar?: React.ReactNode;        // 额外工具栏内容（筛选器等）
+  toolbar?: React.ReactNode; // 额外工具栏内容（筛选器等）
   pagination?: {
     page: number;
     pageSize: number;
@@ -438,9 +441,9 @@ interface DataTableProps<TData, TValue> {
 // components/shared/StatusBadge.tsx
 
 interface StatusBadgeProps {
-  status: string;                   // 任意状态字符串
-  labels?: Record<string, string>;  // 可选自定义标签映射
-  size?: 'sm' | 'default';         // 默认 default
+  status: string; // 任意状态字符串
+  labels?: Record<string, string>; // 可选自定义标签映射
+  size?: 'sm' | 'default'; // 默认 default
 }
 
 // 行为:
@@ -461,7 +464,7 @@ interface StatusBadgeProps {
 
 interface PlatformBadgeProps {
   platform: Platform;
-  showIcon?: boolean;               // 是否显示 emoji 图标，默认 true
+  showIcon?: boolean; // 是否显示 emoji 图标，默认 true
 }
 
 // 从 constants.ts 的 platformLabels + platformIcons 获取显示文本
@@ -473,7 +476,7 @@ interface PlatformBadgeProps {
 // components/shared/LeadLevelBadge.tsx
 
 interface LeadLevelBadgeProps {
-  level: LeadLevel;                 // 'A' | 'B' | 'C' | 'D'
+  level: LeadLevel; // 'A' | 'B' | 'C' | 'D'
 }
 
 // 颜色映射:
@@ -489,7 +492,7 @@ interface LeadLevelBadgeProps {
 // components/shared/RiskBadge.tsx
 
 interface RiskBadgeProps {
-  risk: RiskLevel;                  // 'low' | 'medium' | 'high'
+  risk: RiskLevel; // 'low' | 'medium' | 'high'
 }
 
 // 从 riskLevelLabels 获取标签
@@ -502,14 +505,14 @@ interface RiskBadgeProps {
 // components/shared/EmptyState.tsx
 
 interface EmptyStateProps {
-  title?: string;                   // 默认 "暂无数据"
+  title?: string; // 默认 "暂无数据"
   description?: string;
   action?: {
     label: string;
     href?: string;
     onClick?: () => void;
   };
-  icon?: React.ReactNode;           // 可选图标
+  icon?: React.ReactNode; // 可选图标
 }
 
 // 渲染: 居中卡片，图标 + 标题 + 描述 + 操作按钮
@@ -537,9 +540,9 @@ interface ErrorStateProps {
 interface ConfirmOptions {
   title: string;
   description: string;
-  confirmLabel?: string;            // 默认 "确认"
-  cancelLabel?: string;             // 默认 "取消"
-  variant?: 'default' | 'destructive';  // 默认 default
+  confirmLabel?: string; // 默认 "确认"
+  cancelLabel?: string; // 默认 "取消"
+  variant?: 'default' | 'destructive'; // 默认 default
 }
 
 // 命令式 hook 用法:
@@ -556,12 +559,12 @@ interface ConfirmOptions {
 // components/shared/FileUpload.tsx
 
 interface FileUploadProps {
-  accept?: string;                  // 默认 "image/*,video/*"
-  multiple?: boolean;               // 默认 true
-  maxSize?: number;                 // 单文件最大字节，默认 100MB
+  accept?: string; // 默认 "image/*,video/*"
+  multiple?: boolean; // 默认 true
+  maxSize?: number; // 单文件最大字节，默认 100MB
   onFiles: (files: File[]) => void;
   uploading?: boolean;
-  progress?: number;                // 0-100
+  progress?: number; // 0-100
 }
 
 // 行为:
@@ -594,7 +597,7 @@ const searchCommands = [
   { label: '线索看板', href: '/leads/pipeline', icon: UserCheck },
   { label: '新建内容', href: '/content/new', icon: Plus },
   { label: '新建调研', href: '/research/new', icon: Search },
-  { label: '数据复盘', href: '/analytics', icon: BarChart3 },
+  { label: '数据复盘', href: '/analytics', icon: BarChart3 }
 ];
 ```
 
@@ -609,11 +612,13 @@ const searchCommands = [
 // 从现有复用 + 增加:
 
 // 新增: requestId header
-function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
+function buildHeaders(
+  extra: Record<string, string> = {}
+): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Request-ID': crypto.randomUUID(),
-    ...extra,
+    ...extra
   };
   // ...原有 token 逻辑不变
 }
@@ -627,15 +632,21 @@ export async function apiGet<T>(path: string, opts?: RequestInit): Promise<T> {
 }
 
 // 新增: 分页请求封装
-export async function apiGetPage<T>(path: string, params: PageParams): Promise<PageResult<T>> {
+export async function apiGetPage<T>(
+  path: string,
+  params: PageParams
+): Promise<PageResult<T>> {
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
   if (params.pageSize) qs.set('pageSize', String(params.pageSize));
   // 其他参数
   Object.entries(params).forEach(([k, v]) => {
-    if (k !== 'page' && k !== 'pageSize' && v !== undefined) qs.set(k, String(v));
+    if (k !== 'page' && k !== 'pageSize' && v !== undefined)
+      qs.set(k, String(v));
   });
-  const result = await apiGet<ApiResponse<PageResult<T>>>(`${path}?${qs.toString()}`);
+  const result = await apiGet<ApiResponse<PageResult<T>>>(
+    `${path}?${qs.toString()}`
+  );
   return result.data;
 }
 ```
@@ -648,65 +659,67 @@ export async function apiGetPage<T>(path: string, params: PageParams): Promise<P
 
 export const queryKeys = {
   auth: {
-    me: ['auth', 'me'] as const,
+    me: ['auth', 'me'] as const
   },
   dashboard: {
-    all: ['dashboard'] as const,
+    all: ['dashboard'] as const
   },
   research: {
     tasks: ['research', 'tasks'] as const,
     task: (id: string) => ['research', 'task', id] as const,
     posts: (taskId: string) => ['research', 'task', taskId, 'posts'] as const,
-    comments: (taskId: string) => ['research', 'task', taskId, 'comments'] as const,
+    comments: (taskId: string) =>
+      ['research', 'task', taskId, 'comments'] as const,
     insights: ['research', 'insights'] as const,
-    opportunities: ['research', 'opportunities'] as const,
+    opportunities: ['research', 'opportunities'] as const
   },
   content: {
     items: ['content', 'items'] as const,
     item: (id: string) => ['content', 'item', id] as const,
-    variants: (itemId: string) => ['content', 'item', itemId, 'variants'] as const,
+    variants: (itemId: string) =>
+      ['content', 'item', itemId, 'variants'] as const
   },
   media: {
-    assets: ['media', 'assets'] as const,
+    assets: ['media', 'assets'] as const
   },
   publish: {
     jobs: ['publish', 'jobs'] as const,
     job: (id: string) => ['publish', 'job', id] as const,
-    attempts: (jobId: string) => ['publish', 'job', jobId, 'attempts'] as const,
+    attempts: (jobId: string) => ['publish', 'job', jobId, 'attempts'] as const
   },
   interactions: {
     all: ['interactions'] as const,
-    conversation: (id: string) => ['conversations', id] as const,
+    conversation: (id: string) => ['conversations', id] as const
   },
   leads: {
     all: ['leads'] as const,
     lead: (id: string) => ['leads', id] as const,
-    activities: (leadId: string) => ['leads', leadId, 'activities'] as const,
+    activities: (leadId: string) => ['leads', leadId, 'activities'] as const
   },
   analytics: {
     overview: ['analytics', 'overview'] as const,
     platforms: ['analytics', 'platforms'] as const,
     contentRoi: ['analytics', 'content-roi'] as const,
     leadTrend: ['analytics', 'lead-trend'] as const,
-    platformTrend: ['analytics', 'platform-trend'] as const,
+    platformTrend: ['analytics', 'platform-trend'] as const
   },
   integrations: {
     accounts: ['integrations', 'accounts'] as const,
     providers: ['integrations', 'providers'] as const,
     feishu: ['integrations', 'feishu'] as const,
-    wecom: ['integrations', 'wecom'] as const,
+    wecom: ['integrations', 'wecom'] as const
   },
   settings: {
     ai: ['settings', 'ai'] as const,
     skills: ['settings', 'skills'] as const,
-    compliance: ['settings', 'compliance'] as const,
+    compliance: ['settings', 'compliance'] as const
   },
   notifications: {
-    all: ['notifications'] as const,
+    all: ['notifications'] as const
   },
   audit: {
-    logs: ['audit', 'logs'] as const,
-  },
+    logs: ['audit', 'logs'] as const
+  }
 } as const;
 ```
 
@@ -717,12 +730,26 @@ export const queryKeys = {
 import { apiGet, apiPost } from './client';
 import type { ApiResponse } from '@/types/api';
 
-interface LoginRequest { email: string; password: string; }
-interface LoginResponse { token: string; user: { id: string; email: string; name: string; role: string }; }
-interface MeResponse { id: string; email: string; name: string; role: string; }
+interface LoginRequest {
+  email: string;
+  password: string;
+}
+interface LoginResponse {
+  token: string;
+  user: { id: string; email: string; name: string; role: string };
+}
+interface MeResponse {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}
 
 export async function login(data: LoginRequest) {
-  const res = await apiPost<ApiResponse<LoginResponse>>('/api/auth/login', data);
+  const res = await apiPost<ApiResponse<LoginResponse>>(
+    '/api/auth/login',
+    data
+  );
   return res.data;
 }
 
@@ -832,12 +859,13 @@ function useToastAction<TData, TVariables>(
   options?: {
     successMessage?: string;
     errorMessage?: string;
-  },
+  }
 ) {
   return useMutation({
     mutationFn,
     onSuccess: () => toast.success(options?.successMessage ?? '操作成功'),
-    onError: (err) => toast.error(options?.errorMessage ?? `操作失败: ${err.message}`),
+    onError: (err) =>
+      toast.error(options?.errorMessage ?? `操作失败: ${err.message}`)
   });
 }
 ```
@@ -887,14 +915,14 @@ function useToastAction<TData, TVariables>(
 
 ## 5. 状态管理矩阵
 
-| 数据 | 存储位置 | 原因 |
-|------|---------|------|
-| JWT Token | localStorage | 跨 tab 持久化 |
-| 当前用户 | AuthProvider context | 全局共享，mount 时从 API 获取 |
-| Sidebar 折叠 | Zustand + localStorage | UI 偏好 |
-| 主题 | Zustand + localStorage | UI 偏好 |
-| 面包屑 | URL pathname | 派生状态，无独立存储 |
-| 搜索面板开关 | Component state | 临时 UI 状态 |
+| 数据         | 存储位置               | 原因                          |
+| ------------ | ---------------------- | ----------------------------- |
+| JWT Token    | localStorage           | 跨 tab 持久化                 |
+| 当前用户     | AuthProvider context   | 全局共享，mount 时从 API 获取 |
+| Sidebar 折叠 | Zustand + localStorage | UI 偏好                       |
+| 主题         | Zustand + localStorage | UI 偏好                       |
+| 面包屑       | URL pathname           | 派生状态，无独立存储          |
+| 搜索面板开关 | Component state        | 临时 UI 状态                  |
 
 ---
 
@@ -903,6 +931,7 @@ function useToastAction<TData, TVariables>(
 ### 6.1 Vitest 单元测试（16 个）
 
 #### 文件: `tests/unit/m1/button.test.tsx`
+
 ```typescript
 // TC-M1-001: Button 各 variant 渲染正确 class
 // 输入: <Button variant="destructive">删除</Button>
@@ -911,6 +940,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/input.test.tsx`
+
 ```typescript
 // TC-M1-002: Input 带 error 样式渲染
 // 输入: <Input className="border-destructive" />
@@ -918,6 +948,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/dialog.test.tsx`
+
 ```typescript
 // TC-M1-003: Dialog 打开/关闭、焦点管理
 // 输入: 设置 open={true}
@@ -927,6 +958,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/status-badge.test.tsx`
+
 ```typescript
 // TC-M1-004: StatusBadge 映射状态字符串到正确 variant
 // 测试用例:
@@ -937,12 +969,14 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/platform-badge.test.tsx`
+
 ```typescript
 // TC-M1-005: PlatformBadge 6 个平台中文标签
 // 测试: 遍历 6 个平台，验证渲染文本匹配 platformLabels
 ```
 
 #### 文件: `tests/unit/m1/data-table.test.tsx`
+
 ```typescript
 // TC-M1-006: DataTable 表头+数据行渲染，空数据显示 EmptyState
 // 测试1: 传入 columns + data(3行) → 渲染 3 行
@@ -950,6 +984,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/data-table-skeleton.test.tsx`
+
 ```typescript
 // TC-M1-007: DataTable skeleton loading 态
 // 输入: isLoading={true}
@@ -957,6 +992,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/data-table-pagination.test.tsx`
+
 ```typescript
 // TC-M1-008: DataTablePagination 分页计算
 // 输入: total=47, pageSize=10, page=1
@@ -966,6 +1002,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/confirm-dialog.test.tsx`
+
 ```typescript
 // TC-M1-009: ConfirmDialog 渲染标题描述，触发 onConfirm
 // 测试: 渲染 ConfirmDialog，点击确认按钮 → onConfirm 被调用
@@ -973,6 +1010,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/file-upload.test.tsx`
+
 ```typescript
 // TC-M1-010: FileUpload 拖拽上传
 // 测试1: drop 事件触发 onFiles 回调
@@ -981,12 +1019,14 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/use-app-store.test.ts`
+
 ```typescript
 // TC-M1-011: useAppStore toggle sidebar
 // 测试: 初始 sidebarCollapsed=false → toggleSidebar() → sidebarCollapsed=true
 ```
 
 #### 文件: `tests/unit/m1/api-client.test.ts`
+
 ```typescript
 // TC-M1-012: apiGet 附带 Authorization header
 // mock localStorage token → 调用 apiGet → 验证 fetch header 包含 Bearer
@@ -1000,6 +1040,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/schemas.test.ts`
+
 ```typescript
 // TC-M1-015: Zod schema 校验
 // loginSchema:
@@ -1009,6 +1050,7 @@ function useToastAction<TData, TVariables>(
 ```
 
 #### 文件: `tests/unit/m1/query-keys.test.ts`
+
 ```typescript
 // TC-M1-016: queryKeys 生成一致的 key 字符串
 // queryKeys.research.tasks → ['research', 'tasks']
@@ -1098,26 +1140,26 @@ Step 13: pnpm typecheck + pnpm lint + 全部测试通过
 
 ## 8. 验证标准
 
-| # | 验证项 | 通过标准 |
-|---|--------|---------|
-| 1 | TypeScript 编译 | `pnpm typecheck` 零错误 |
-| 2 | ESLint | `pnpm lint` 零错误 |
-| 3 | 单元测试 | 16/16 通过 |
-| 4 | E2E 测试 | 6/6 通过 |
-| 5 | 登录流程 | 手动验证 email/password → dashboard |
-| 6 | Sidebar 折叠 | 手动验证折叠/展开 + 导航高亮 |
-| 7 | 全局搜索 | ⌘K 打开 → 搜索"线索" → 跳转 /leads |
-| 8 | 面包屑 | 多级路由显示正确路径 |
-| 9 | shadcn 组件 | Button/Input/Dialog/Badge 渲染正确样式 |
-| 10 | 响应式 | 窗口缩小时 Sidebar 自动折叠 |
+| #   | 验证项          | 通过标准                               |
+| --- | --------------- | -------------------------------------- |
+| 1   | TypeScript 编译 | `pnpm typecheck` 零错误                |
+| 2   | ESLint          | `pnpm lint` 零错误                     |
+| 3   | 单元测试        | 16/16 通过                             |
+| 4   | E2E 测试        | 6/6 通过                               |
+| 5   | 登录流程        | 手动验证 email/password → dashboard    |
+| 6   | Sidebar 折叠    | 手动验证折叠/展开 + 导航高亮           |
+| 7   | 全局搜索        | ⌘K 打开 → 搜索"线索" → 跳转 /leads     |
+| 8   | 面包屑          | 多级路由显示正确路径                   |
+| 9   | shadcn 组件     | Button/Input/Dialog/Badge 渲染正确样式 |
+| 10  | 响应式          | 窗口缩小时 Sidebar 自动折叠            |
 
 ---
 
 ## 9. 风险项
 
-| 风险 | 缓解措施 |
-|------|---------|
-| shadcn init 覆盖 globals.css | 先备份，init 后 diff merge；现有 CSS 变量已符合 shadcn 规范，兼容性高 |
-| shadcn 某些组件需要额外 peer deps | init 时自动安装，检查 package.json 变化 |
+| 风险                                  | 缓解措施                                                              |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| shadcn init 覆盖 globals.css          | 先备份，init 后 diff merge；现有 CSS 变量已符合 shadcn 规范，兼容性高 |
+| shadcn 某些组件需要额外 peer deps     | init 时自动安装，检查 package.json 变化                               |
 | Vitest 配置与 Next.js App Router 冲突 | 使用 `@vitejs/plugin-react` + `jsdom` 环境，paths alias 对齐 tsconfig |
-| Playwright 测试需要后端运行 | 测试中使用 MSW mock API 或要求 `docker compose up` 前置 |
+| Playwright 测试需要后端运行           | 测试中使用 MSW mock API 或要求 `docker compose up` 前置               |

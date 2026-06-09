@@ -9,7 +9,7 @@ export type {
   DeleteContentInput,
   DeleteContentResult,
   UploadMediaInput,
-  UploadMediaResult,
+  UploadMediaResult
 } from './types.js';
 export { SandboxPublishConnector } from './sandbox-connector.js';
 export { DisabledPublishConnector } from './disabled-connector.js';
@@ -24,5 +24,5 @@ export {
   registerPublishConnector,
   getPublishConnector,
   getOrCreatePublishConnector,
-  listPublishConnectors,
+  listPublishConnectors
 } from './registry.js';

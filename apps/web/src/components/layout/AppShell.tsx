@@ -7,7 +7,13 @@ import { Topbar } from './Topbar';
 import { MobileNav } from './MobileNav';
 import { hiddenSectionPrefixes } from './navigation';
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email'
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -15,7 +21,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   const isPublic = PUBLIC_PATHS.includes(pathname);
-  const isHiddenSection = hiddenSectionPrefixes.some((prefix) => pathname.startsWith(prefix));
+  const isHiddenSection = hiddenSectionPrefixes.some((prefix) =>
+    pathname.startsWith(prefix)
+  );
 
   // Show nothing while auth state is loading
   if (isLoading) {
@@ -53,7 +61,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar />
-        <main className="flex-1 overflow-y-auto bg-muted/30 p-6 pb-20 md:pb-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-muted/30 p-6 pb-20 md:pb-6">
+          {children}
+        </main>
       </div>
       <MobileNav />
     </div>

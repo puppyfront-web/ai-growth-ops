@@ -1,7 +1,10 @@
 import { apiGet, apiPost, apiPut, apiUpload } from './client';
 import type { MediaAsset } from '@/types/media';
 
-export function listMediaAssets(filters?: { reviewStatus?: string; sourceType?: string }): Promise<MediaAsset[]> {
+export function listMediaAssets(filters?: {
+  reviewStatus?: string;
+  sourceType?: string;
+}): Promise<MediaAsset[]> {
   const params = new URLSearchParams();
   if (filters?.reviewStatus) params.set('reviewStatus', filters.reviewStatus);
   if (filters?.sourceType) params.set('sourceType', filters.sourceType);
@@ -18,7 +21,11 @@ export function uploadMedia(formData: FormData): Promise<MediaAsset> {
   return apiUpload<MediaAsset>('/api/media-assets', formData);
 }
 
-export function reviewMedia(id: string, status: 'approved' | 'rejected', note?: string): Promise<MediaAsset> {
+export function reviewMedia(
+  id: string,
+  status: 'approved' | 'rejected',
+  note?: string
+): Promise<MediaAsset> {
   return apiPut<MediaAsset>(`/api/media-assets/${id}/review`, { status, note });
 }
 

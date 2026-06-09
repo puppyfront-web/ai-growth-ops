@@ -10,11 +10,15 @@ export const SOCIAL_PUBLISH_DIR_MAP: Record<string, string> = {
   kuaishou: 'kuaishou',
   wechat_channels: 'tencent',
   zhihu: 'zhihu',
-  baijiahao: 'baijiahao',
+  baijiahao: 'baijiahao'
 };
 
-export async function listAvailableAccounts(): Promise<Record<string, string[]>> {
-  const root = process.env.SOCIAL_PUBLISH_DATA_DIR ?? join(process.env.HOME ?? '', '.social-publish-skills');
+export async function listAvailableAccounts(): Promise<
+  Record<string, string[]>
+> {
+  const root =
+    process.env.SOCIAL_PUBLISH_DATA_DIR ??
+    join(process.env.HOME ?? '', '.social-publish-skills');
   const result: Record<string, string[]> = {};
 
   for (const [platform, dirName] of Object.entries(SOCIAL_PUBLISH_DIR_MAP)) {
@@ -33,7 +37,9 @@ export async function listAvailableAccounts(): Promise<Record<string, string[]>>
   return result;
 }
 
-export async function getDeliveryDoctorReport(): Promise<Record<string, unknown>> {
+export async function getDeliveryDoctorReport(): Promise<
+  Record<string, unknown>
+> {
   const config = loadRuntimeConfig();
   const accounts = await listAvailableAccounts();
 
@@ -41,7 +47,10 @@ export async function getDeliveryDoctorReport(): Promise<Record<string, unknown>
     nodeVersion: process.version,
     socialPublishSkillsRoot: {
       path: config.socialPublishSkillsRoot ?? null,
-      exists: Boolean(config.socialPublishSkillsRoot && existsSync(config.socialPublishSkillsRoot)),
+      exists: Boolean(
+        config.socialPublishSkillsRoot &&
+        existsSync(config.socialPublishSkillsRoot)
+      )
     },
     browserRunnerUrl: config.browserRunnerUrl,
     manifestsDir: config.manifestDir,
@@ -54,12 +63,21 @@ export async function getDeliveryDoctorReport(): Promise<Record<string, unknown>
       wechat_channels: accounts.wechat_channels ?? [],
       zhihu: accounts.zhihu ?? [],
       baijiahao: accounts.baijiahao ?? [],
-      xiaohongshu_env_cookie: Boolean(process.env.AI_GROWTH_OPS_XIAOHONGSHU_COOKIE),
-      wechat_official_env_cookie: Boolean(process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE),
+      xiaohongshu_env_cookie: Boolean(
+        process.env.AI_GROWTH_OPS_XIAOHONGSHU_COOKIE
+      ),
+      wechat_official_env_cookie: Boolean(
+        process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_COOKIE
+      ),
       zhihu_env_cookie: Boolean(process.env.AI_GROWTH_OPS_ZHIHU_COOKIE),
-      baijiahao_env_cookie: Boolean(process.env.AI_GROWTH_OPS_BAIJIAHAO_COOKIE),
+      baijiahao_env_cookie: Boolean(process.env.AI_GROWTH_OPS_BAIJIAHAO_COOKIE)
     },
     livePublishPlatforms: ['douyin', 'wechat_channels', 'kuaishou'],
-    browserRunnerFallbackPlatforms: ['xiaohongshu', 'wechat_official', 'zhihu', 'baijiahao'],
+    browserRunnerFallbackPlatforms: [
+      'xiaohongshu',
+      'wechat_official',
+      'zhihu',
+      'baijiahao'
+    ]
   };
 }

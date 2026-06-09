@@ -10,13 +10,19 @@ import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ApiError } from '@/lib/api/client';
 
 const loginSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(1, '请输入密码'),
+  password: z.string().min(1, '请输入密码')
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -29,9 +35,9 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }
   } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
+    resolver: zodResolver(loginSchema)
   });
 
   // If already authenticated, redirect to dashboard
@@ -88,7 +94,10 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">密码</Label>
-                <Link href="/forgot-password" className="text-xs text-teal-700 hover:underline">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-teal-700 hover:underline"
+                >
                   忘记密码？
                 </Link>
               </div>

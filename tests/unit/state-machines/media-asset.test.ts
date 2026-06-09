@@ -32,7 +32,7 @@ describe('MediaAsset Review State Machine', () => {
     const validNext: Record<MediaReviewStatus, MediaReviewStatus[]> = {
       pending_review: ['approved', 'rejected'],
       approved: [],
-      rejected: [],
+      rejected: []
     };
     expect(validNext['pending_review']).toContain('approved');
   });
@@ -41,7 +41,7 @@ describe('MediaAsset Review State Machine', () => {
     const validNext: Record<MediaReviewStatus, MediaReviewStatus[]> = {
       pending_review: ['approved', 'rejected'],
       approved: [],
-      rejected: [],
+      rejected: []
     };
     expect(validNext['pending_review']).toContain('rejected');
   });

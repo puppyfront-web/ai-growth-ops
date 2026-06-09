@@ -8,7 +8,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-  AlertDialogDestructiveAction,
+  AlertDialogDestructiveAction
 } from '@/components/ui/alert-dialog';
 import { useConfirmDialog as useConfirmDialogHook } from '@/hooks/use-confirm-dialog';
 
@@ -16,16 +16,24 @@ import { useConfirmDialog as useConfirmDialogHook } from '@/hooks/use-confirm-di
 
 type ConfirmDialogHookProps = ReturnType<typeof useConfirmDialogHook>;
 
-export function ConfirmDialog(props: ConfirmDialogHookProps | ConfirmDialogLegacyProps) {
+export function ConfirmDialog(
+  props: ConfirmDialogHookProps | ConfirmDialogLegacyProps
+) {
   // Hook-based usage: { confirm, dialog, handleConfirm, handleCancel }
   if ('dialog' in props && 'handleConfirm' in props) {
-    const { dialog, handleConfirm, handleCancel } = props as ConfirmDialogHookProps;
+    const { dialog, handleConfirm, handleCancel } =
+      props as ConfirmDialogHookProps;
     if (!dialog) return null;
 
     const isDestructive = dialog.variant === 'destructive';
 
     return (
-      <AlertDialog open={!!dialog} onOpenChange={(open) => { if (!open) handleCancel(); }}>
+      <AlertDialog
+        open={!!dialog}
+        onOpenChange={(open) => {
+          if (!open) handleCancel();
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
           <AlertDialogDescription>{dialog.description}</AlertDialogDescription>
@@ -35,11 +43,17 @@ export function ConfirmDialog(props: ConfirmDialogHookProps | ConfirmDialogLegac
             {dialog.cancelLabel ?? '取消'}
           </AlertDialogCancel>
           {isDestructive ? (
-            <AlertDialogDestructiveAction onOpenChange={handleConfirm} onClick={handleConfirm}>
+            <AlertDialogDestructiveAction
+              onOpenChange={handleConfirm}
+              onClick={handleConfirm}
+            >
               {dialog.confirmLabel ?? '确认删除'}
             </AlertDialogDestructiveAction>
           ) : (
-            <AlertDialogAction onOpenChange={handleConfirm} onClick={handleConfirm}>
+            <AlertDialogAction
+              onOpenChange={handleConfirm}
+              onClick={handleConfirm}
+            >
               {dialog.confirmLabel ?? '确认'}
             </AlertDialogAction>
           )}
@@ -52,7 +66,8 @@ export function ConfirmDialog(props: ConfirmDialogHookProps | ConfirmDialogLegac
   const legacy = props as ConfirmDialogLegacyProps;
   if (!legacy.open) return null;
 
-  const isDestructive = legacy.variant === 'destructive' || legacy.variant === 'danger';
+  const isDestructive =
+    legacy.variant === 'destructive' || legacy.variant === 'danger';
 
   return (
     <AlertDialog open={legacy.open} onOpenChange={legacy.onOpenChange}>
@@ -67,14 +82,20 @@ export function ConfirmDialog(props: ConfirmDialogHookProps | ConfirmDialogLegac
         {isDestructive ? (
           <AlertDialogDestructiveAction
             onOpenChange={() => legacy.onOpenChange(false)}
-            onClick={() => { legacy.onConfirm?.(); legacy.onOpenChange(false); }}
+            onClick={() => {
+              legacy.onConfirm?.();
+              legacy.onOpenChange(false);
+            }}
           >
             {legacy.confirmLabel ?? '确认删除'}
           </AlertDialogDestructiveAction>
         ) : (
           <AlertDialogAction
             onOpenChange={() => legacy.onOpenChange(false)}
-            onClick={() => { legacy.onConfirm?.(); legacy.onOpenChange(false); }}
+            onClick={() => {
+              legacy.onConfirm?.();
+              legacy.onOpenChange(false);
+            }}
           >
             {legacy.confirmLabel ?? '确认'}
           </AlertDialogAction>

@@ -9,18 +9,39 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog';
 import { FileText, Calendar, TrendingUp, Users, Send } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
 import { formatDate } from '@/lib/utils';
 
 const reportTypes = [
   { key: 'daily', label: '日报', icon: Calendar, desc: '每日运营数据汇总' },
-  { key: 'weekly', label: '周报', icon: TrendingUp, desc: '每周趋势分析与复盘' },
+  {
+    key: 'weekly',
+    label: '周报',
+    icon: TrendingUp,
+    desc: '每周趋势分析与复盘'
+  },
   { key: 'monthly', label: '月报', icon: FileText, desc: '月度综合运营报告' },
-  { key: 'content', label: '内容复盘报告', icon: FileText, desc: '内容表现与 ROI 分析' },
+  {
+    key: 'content',
+    label: '内容复盘报告',
+    icon: FileText,
+    desc: '内容表现与 ROI 分析'
+  },
   { key: 'lead', label: '线索复盘报告', icon: Users, desc: '线索转化漏斗分析' },
-  { key: 'platform', label: '平台复盘报告', icon: Send, desc: '各平台表现对比分析' },
+  {
+    key: 'platform',
+    label: '平台复盘报告',
+    icon: Send,
+    desc: '各平台表现对比分析'
+  }
 ];
 
 export default function ReportsPage() {
@@ -28,9 +49,14 @@ export default function ReportsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
 
-  const { data: reports = [], isLoading, error, refetch } = useQuery({
+  const {
+    data: reports = [],
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
     queryKey: ['reports'],
-    queryFn: getReports,
+    queryFn: getReports
   });
 
   const generateMutation = useMutation({
@@ -41,7 +67,7 @@ export default function ReportsPage() {
       setDialogOpen(false);
       setSelectedType(null);
     },
-    onError: (err: Error) => toast.error(`生成失败: ${err.message}`),
+    onError: (err: Error) => toast.error(`生成失败: ${err.message}`)
   });
 
   const handleGenerate = (key: string) => {
@@ -50,7 +76,8 @@ export default function ReportsPage() {
   };
 
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState message="加载报告失败" onRetry={() => refetch()} />;
+  if (error)
+    return <ErrorState message="加载报告失败" onRetry={() => refetch()} />;
 
   return (
     <div>
@@ -64,12 +91,20 @@ export default function ReportsPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <rt.icon className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-base font-semibold">{rt.label}</CardTitle>
+                <CardTitle className="text-base font-semibold">
+                  {rt.label}
+                </CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-3">{rt.desc}</p>
-              <Button variant="outline" size="sm" onClick={() => handleGenerate(rt.key)}>生成{rt.label}</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleGenerate(rt.key)}
+              >
+                生成{rt.label}
+              </Button>
             </CardContent>
           </Card>
         ))}
@@ -84,9 +119,13 @@ export default function ReportsPage() {
               <div key={report.id} className="rounded-lg border bg-card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">{report.label}</span>
-                  <span className="text-xs text-muted-foreground">{formatDate(report.createdAt)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(report.createdAt)}
+                  </span>
                 </div>
-                <p className="text-sm text-muted-foreground">{report.summary}</p>
+                <p className="text-sm text-muted-foreground">
+                  {report.summary}
+                </p>
               </div>
             ))}
           </div>
@@ -96,12 +135,21 @@ export default function ReportsPage() {
       {/* Confirm dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>确认生成报告？</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>确认生成报告？</DialogTitle>
+          </DialogHeader>
           <p className="py-2 text-sm text-muted-foreground">
-            系统将汇总当前数据生成 {reportTypes.find((r) => r.key === selectedType)?.label ?? '报告'}。
+            系统将汇总当前数据生成{' '}
+            {reportTypes.find((r) => r.key === selectedType)?.label ?? '报告'}。
           </p>
           <DialogFooter>
-            <Button size="sm" onClick={() => selectedType && generateMutation.mutate(selectedType)} disabled={generateMutation.isPending}>
+            <Button
+              size="sm"
+              onClick={() =>
+                selectedType && generateMutation.mutate(selectedType)
+              }
+              disabled={generateMutation.isPending}
+            >
               {generateMutation.isPending ? '生成中...' : '确认生成'}
             </Button>
           </DialogFooter>

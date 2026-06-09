@@ -2,7 +2,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
-    message: string,
+    message: string
   ) {
     super(message);
     this.name = 'ApiError';
@@ -22,7 +22,7 @@ export const authToken = {
   },
   clear(): void {
     localStorage.removeItem(TOKEN_KEY);
-  },
+  }
 };
 
 export const currentOrg = {
@@ -35,14 +35,16 @@ export const currentOrg = {
   },
   clear(): void {
     localStorage.removeItem(ORG_KEY);
-  },
+  }
 };
 
-function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
+function buildHeaders(
+  extra: Record<string, string> = {}
+): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Request-ID': typeof crypto !== 'undefined' ? crypto.randomUUID() : '',
-    ...extra,
+    ...extra
   };
   const token = authToken.get();
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -57,7 +59,10 @@ function handleUnauthorized(): never {
   throw new ApiError(401, 'UNAUTHORIZED', '未登录或登录已过期');
 }
 
-function extractErrorMessage(body: Record<string, unknown>, fallback: string): string {
+function extractErrorMessage(
+  body: Record<string, unknown>,
+  fallback: string
+): string {
   const err = body.error;
   if (typeof err === 'string') return err;
   if (err && typeof err === 'object' && 'message' in err) {
@@ -92,7 +97,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: 'POST',
     headers: buildHeaders(),
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw await parseError(res);
@@ -103,7 +108,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: 'PUT',
     headers: buildHeaders(),
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   });
   if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw await parseError(res);
@@ -114,7 +119,7 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: 'PATCH',
     headers: buildHeaders(),
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw await parseError(res);
@@ -128,7 +133,10 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return res.json();
 }
 
-export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData
+): Promise<T> {
   const headers: Record<string, string> = {};
   const token = authToken.get();
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -141,13 +149,25 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
   return res.json();
 }
 
-export async function apiGetPage<T>(path: string, params: Record<string, unknown> = {}): Promise<{ items: T[]; total: number; page: number; pageSize: number }> {
+export async function apiGetPage<T>(
+  path: string,
+  params: Record<string, unknown> = {}
+): Promise<{ items: T[]; total: number; page: number; pageSize: number }> {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
   });
   const separator = path.includes('?') ? '&' : '?';
-  const result = await apiGet<{ success: boolean; data: { items: T[]; total: number; page: number; pageSize: number } }>(`${path}${separator}${qs.toString()}`);
-  if (result && typeof result === 'object' && 'data' in result) return result.data;
-  return result as unknown as { items: T[]; total: number; page: number; pageSize: number };
+  const result = await apiGet<{
+    success: boolean;
+    data: { items: T[]; total: number; page: number; pageSize: number };
+  }>(`${path}${separator}${qs.toString()}`);
+  if (result && typeof result === 'object' && 'data' in result)
+    return result.data;
+  return result as unknown as {
+    items: T[];
+    total: number;
+    page: number;
+    pageSize: number;
+  };
 }

@@ -1,5 +1,5 @@
 import { Worker, WorkerOptions, Job } from 'bullmq';
-import { getQueue, QUEUE_NAMES, QueueName } from './queue.js';
+import type { QueueName } from './queue.js';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
@@ -11,29 +11,29 @@ const TRANSIENT_ERROR_MESSAGES = [
   'connect ETIMEDOUT',
   'Connection terminated',
   'Connection refused',
-  'Can\'t reach database server',
+  "Can't reach database server",
   'P1001', // Prisma: Can't reach database
   'P1002', // Prisma: Database timeout
   'P1008', // Prisma: Operations timed out
-  'P1017', // Prisma: Server closed connection
+  'P1017' // Prisma: Server closed connection
 ];
 
 export function isTransientError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return TRANSIENT_ERROR_MESSAGES.some(t => msg.includes(t));
+  return TRANSIENT_ERROR_MESSAGES.some((t) => msg.includes(t));
 }
 
 const workerOptions: WorkerOptions = {
   connection: { url: REDIS_URL },
   concurrency: 5,
-  lockDuration: 120_000, // 2 min — long enough for browser operations
+  lockDuration: 120_000 // 2 min — long enough for browser operations
 };
 
 const workers: Worker[] = [];
 
 export function registerWorker(
   queueName: QueueName,
-  handler: (job: Job) => Promise<void>,
+  handler: (job: Job) => Promise<void>
 ): Worker {
   const worker = new Worker(queueName, handler, workerOptions);
 
@@ -42,7 +42,9 @@ export function registerWorker(
   });
 
   worker.on('failed', (job, err) => {
-    console.error(`[worker] Job ${job?.id} failed on ${queueName}: ${err.message}`);
+    console.error(
+      `[worker] Job ${job?.id} failed on ${queueName}: ${err.message}`
+    );
   });
 
   worker.on('error', (err) => {
@@ -54,6 +56,6 @@ export function registerWorker(
 }
 
 export async function closeAllWorkers(): Promise<void> {
-  await Promise.all(workers.map(w => w.close()));
+  await Promise.all(workers.map((w) => w.close()));
   console.log(`[worker] All ${workers.length} workers closed`);
 }

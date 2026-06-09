@@ -9,7 +9,7 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 import { platformGet, platformPost } from './http-client.js';
 
@@ -62,7 +62,7 @@ export class WechatOfficialConnector implements InteractionConnector {
       autoReplyAllowed: 'low_risk_only',
       requiresHumanReviewForMessageReply: false,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['official_api', 'webhook', 'manual_import', 'sandbox'],
+      supportedModes: ['official_api', 'webhook', 'manual_import', 'sandbox']
     };
   }
 
@@ -86,7 +86,7 @@ export class WechatOfficialConnector implements InteractionConnector {
       index: 0,
       begin,
       count,
-      type: 0,
+      type: 0
     });
 
     if (!result.success || !result.data) {
@@ -106,7 +106,7 @@ export class WechatOfficialConnector implements InteractionConnector {
       content: c.content,
       publishedAt: new Date(c.create_time * 1000).toISOString(),
       sourceContentId,
-      rawPayload: c as unknown as Record<string, unknown>,
+      rawPayload: c as unknown as Record<string, unknown>
     }));
   }
 
@@ -121,12 +121,20 @@ export class WechatOfficialConnector implements InteractionConnector {
   async replyComment(input: ReplyCommentInput): Promise<ReplyResult> {
     const accessToken = this.config.accessToken;
     if (!accessToken) {
-      return { success: false, errorCode: 'NO_ACCESS_TOKEN', errorMessage: 'WeChat access_token is not configured' };
+      return {
+        success: false,
+        errorCode: 'NO_ACCESS_TOKEN',
+        errorMessage: 'WeChat access_token is not configured'
+      };
     }
 
     const { externalCommentId, replyText, sourceContentId } = input;
     if (!sourceContentId) {
-      return { success: false, errorCode: 'MISSING_SOURCE_CONTENT_ID', errorMessage: 'sourceContentId is required to reply to a WeChat comment' };
+      return {
+        success: false,
+        errorCode: 'MISSING_SOURCE_CONTENT_ID',
+        errorMessage: 'sourceContentId is required to reply to a WeChat comment'
+      };
     }
 
     const url = `https://api.weixin.qq.com/cgi-bin/comment/reply?access_token=${accessToken}`;
@@ -134,18 +142,22 @@ export class WechatOfficialConnector implements InteractionConnector {
       msg_data_id: sourceContentId,
       index: 0,
       comment_id: Number(externalCommentId),
-      content: replyText,
+      content: replyText
     });
 
     if (!result.success || !result.data) {
-      return { success: false, errorCode: 'HTTP_ERROR', errorMessage: result.errorMessage ?? 'HTTP request failed' };
+      return {
+        success: false,
+        errorCode: 'HTTP_ERROR',
+        errorMessage: result.errorMessage ?? 'HTTP request failed'
+      };
     }
 
     if (result.data.errcode !== 0) {
       return {
         success: false,
         errorCode: String(result.data.errcode),
-        errorMessage: result.data.errmsg ?? 'WeChat API returned an error',
+        errorMessage: result.data.errmsg ?? 'WeChat API returned an error'
       };
     }
 
@@ -155,7 +167,11 @@ export class WechatOfficialConnector implements InteractionConnector {
   async replyMessage(input: ReplyMessageInput): Promise<ReplyResult> {
     const accessToken = this.config.accessToken;
     if (!accessToken) {
-      return { success: false, errorCode: 'NO_ACCESS_TOKEN', errorMessage: 'WeChat access_token is not configured' };
+      return {
+        success: false,
+        errorCode: 'NO_ACCESS_TOKEN',
+        errorMessage: 'WeChat access_token is not configured'
+      };
     }
 
     const { externalUserId, messageText } = input;
@@ -164,18 +180,22 @@ export class WechatOfficialConnector implements InteractionConnector {
     const result = await platformPost<WechatCommonResponse>(url, {
       touser: externalUserId,
       msgtype: 'text',
-      text: { content: messageText },
+      text: { content: messageText }
     });
 
     if (!result.success || !result.data) {
-      return { success: false, errorCode: 'HTTP_ERROR', errorMessage: result.errorMessage ?? 'HTTP request failed' };
+      return {
+        success: false,
+        errorCode: 'HTTP_ERROR',
+        errorMessage: result.errorMessage ?? 'HTTP request failed'
+      };
     }
 
     if (result.data.errcode !== 0) {
       return {
         success: false,
         errorCode: String(result.data.errcode),
-        errorMessage: result.data.errmsg ?? 'WeChat API returned an error',
+        errorMessage: result.data.errmsg ?? 'WeChat API returned an error'
       };
     }
 
@@ -186,22 +206,36 @@ export class WechatOfficialConnector implements InteractionConnector {
    * Refresh the access_token using client_credential grant.
    * Call this when the current token is expired (errcode 42001).
    */
-  async refreshAccessToken(): Promise<{ success: boolean; accessToken?: string; errorMessage?: string }> {
+  async refreshAccessToken(): Promise<{
+    success: boolean;
+    accessToken?: string;
+    errorMessage?: string;
+  }> {
     const { appId, appSecret } = this.config;
     if (!appId || !appSecret) {
-      return { success: false, errorMessage: 'appId and appSecret are required to refresh the access_token' };
+      return {
+        success: false,
+        errorMessage:
+          'appId and appSecret are required to refresh the access_token'
+      };
     }
 
     const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
     const result = await platformGet<WechatTokenResponse>(url, {});
 
     if (!result.success || !result.data) {
-      return { success: false, errorMessage: result.errorMessage ?? 'HTTP request failed' };
+      return {
+        success: false,
+        errorMessage: result.errorMessage ?? 'HTTP request failed'
+      };
     }
 
     const data = result.data;
     if (data.errcode) {
-      return { success: false, errorMessage: `[${data.errcode}] ${data.errmsg ?? 'Token refresh failed'}` };
+      return {
+        success: false,
+        errorMessage: `[${data.errcode}] ${data.errmsg ?? 'Token refresh failed'}`
+      };
     }
 
     this.config.accessToken = data.access_token;

@@ -6,7 +6,7 @@ export {
   getNotifySink,
   syncLeadToSink,
   notifyViaSink,
-  testSinkConnection,
+  testSinkConnection
 } from './registry.js';
 export { FeishuBitableSink } from './feishu-bitable.js';
 export { FeishuBotSink } from './feishu-bot.js';

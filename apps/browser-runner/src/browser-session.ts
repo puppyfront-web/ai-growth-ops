@@ -5,20 +5,36 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 // Apply stealth evasion once at module load
 chromium.use(StealthPlugin());
 
-export function parseCookieHeader(cookie: string): Array<{ name: string; value: string; domain: string; path: string }> {
+export function parseCookieHeader(
+  cookie: string
+): Array<{ name: string; value: string; domain: string; path: string }> {
   return cookie
     .split(';')
     .map((pair) => {
       const [name, ...rest] = pair.trim().split('=');
-      return { name: name.trim(), value: rest.join('=').trim(), domain: '', path: '/' };
+      return {
+        name: name.trim(),
+        value: rest.join('=').trim(),
+        domain: '',
+        path: '/'
+      };
     })
     .filter((c) => c.name.length > 0);
 }
 
 /** Apply cookies on parent domain (e.g. `.douyin.com`) so all subdomains receive them. */
-export function cookiesForSite(cookie: string, siteDomain: string): Array<{ name: string; value: string; domain: string; path: string }> {
-  const parent = siteDomain.startsWith('.') ? siteDomain : `.${siteDomain.replace(/^\./, '')}`;
-  return parseCookieHeader(cookie).map((c) => ({ ...c, domain: parent, path: '/' }));
+export function cookiesForSite(
+  cookie: string,
+  siteDomain: string
+): Array<{ name: string; value: string; domain: string; path: string }> {
+  const parent = siteDomain.startsWith('.')
+    ? siteDomain
+    : `.${siteDomain.replace(/^\./, '')}`;
+  return parseCookieHeader(cookie).map((c) => ({
+    ...c,
+    domain: parent,
+    path: '/'
+  }));
 }
 
 interface StorageStateCookie {
@@ -31,7 +47,7 @@ interface StorageStateCookie {
 /** Accept Playwright storageState JSON or a `name=value; ...` header. */
 export function resolveContextCookies(
   cookie: string,
-  siteDomain: string,
+  siteDomain: string
 ): Array<{ name: string; value: string; domain: string; path: string }> {
   const trimmed = cookie.trim();
   if (trimmed.startsWith('{')) {
@@ -51,7 +67,7 @@ export function resolveContextCookies(
                 : siteDomain.startsWith('.')
                   ? siteDomain
                   : `.${siteDomain}`,
-            path: item.path || '/',
+            path: item.path || '/'
           }));
       }
       // Valid JSON but empty cookies — return empty array instead of
@@ -89,7 +105,11 @@ async function getSharedBrowser(headedOverride?: boolean): Promise<Browser> {
   }
 
   if (existing) {
-    try { await existing.close(); } catch { /* */ }
+    try {
+      await existing.close();
+    } catch {
+      /* */
+    }
     sharedBrowsers.delete(browserKey);
   }
 
@@ -99,9 +119,9 @@ async function getSharedBrowser(headedOverride?: boolean): Promise<Browser> {
       '--disable-blink-features=AutomationControlled',
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
+      '--disable-dev-shm-usage'
     ],
-    ignoreDefaultArgs: ['--enable-automation'],
+    ignoreDefaultArgs: ['--enable-automation']
   });
   sharedBrowsers.set(browserKey, browser);
   browserLastUsed.set(browserKey, now);
@@ -116,8 +136,12 @@ async function getSharedBrowser(headedOverride?: boolean): Promise<Browser> {
 export async function createStealthSession(
   cookie: string,
   siteDomain: string,
-  headedOverride?: boolean,
-): Promise<{ context: BrowserContext; page: Page; close: () => Promise<void> }> {
+  headedOverride?: boolean
+): Promise<{
+  context: BrowserContext;
+  page: Page;
+  close: () => Promise<void>;
+}> {
   const browser = await getSharedBrowser(headedOverride);
 
   const context = await browser.newContext({
@@ -125,7 +149,7 @@ export async function createStealthSession(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 900 },
     locale: 'zh-CN',
-    timezoneId: 'Asia/Shanghai',
+    timezoneId: 'Asia/Shanghai'
   });
 
   // Remove automation fingerprints before any page script runs
@@ -134,7 +158,9 @@ export async function createStealthSession(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).chrome = { runtime: {} };
     Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en'] });
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['zh-CN', 'zh', 'en']
+    });
   });
 
   const cookies = resolveContextCookies(cookie, siteDomain);
@@ -147,8 +173,12 @@ export async function createStealthSession(
     page,
     // Close the context only; browser stays alive for the next request
     close: async () => {
-      try { await context.close(); } catch { /* */ }
-    },
+      try {
+        await context.close();
+      } catch {
+        /* */
+      }
+    }
   };
 }
 
@@ -156,13 +186,18 @@ export async function createStealthSession(
 export async function createHeadlessSession(
   cookie: string,
   siteDomain: string,
-  headedOverride?: boolean,
-): Promise<{ browser: Browser; context: BrowserContext; page: Page; close: () => Promise<void> }> {
+  headedOverride?: boolean
+): Promise<{
+  browser: Browser;
+  context: BrowserContext;
+  page: Page;
+  close: () => Promise<void>;
+}> {
   const browser = await getSharedBrowser(headedOverride);
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 900 },
+    viewport: { width: 1280, height: 900 }
   });
 
   const cookies = resolveContextCookies(cookie, siteDomain);
@@ -174,7 +209,11 @@ export async function createHeadlessSession(
     context,
     page,
     close: async () => {
-      try { await context.close(); } catch { /* */ }
-    },
+      try {
+        await context.close();
+      } catch {
+        /* */
+      }
+    }
   };
 }

@@ -18,12 +18,25 @@ type EmptyStateProps = {
   className?: string;
 };
 
-export function EmptyState({ title = '暂无数据', description, action, icon, className }: EmptyStateProps) {
-  const actionNode = action && typeof action === 'object' && 'label' in action ? (
-    <Button asChild={!!action.href}>
-      {action.href ? <Link href={action.href}>{action.label}</Link> : <button onClick={action.onClick}>{action.label}</button>}
-    </Button>
-  ) : action;
+export function EmptyState({
+  title = '暂无数据',
+  description,
+  action,
+  icon,
+  className
+}: EmptyStateProps) {
+  const actionNode =
+    action && typeof action === 'object' && 'label' in action ? (
+      <Button asChild={!!action.href}>
+        {action.href ? (
+          <Link href={action.href}>{action.label}</Link>
+        ) : (
+          <button onClick={action.onClick}>{action.label}</button>
+        )}
+      </Button>
+    ) : (
+      action
+    );
 
   return (
     <Card className={cn('border-dashed', className)}>
@@ -32,7 +45,11 @@ export function EmptyState({ title = '暂无数据', description, action, icon, 
           {icon ?? <FileQuestion className="h-12 w-12" />}
         </div>
         <h3 className="text-lg font-semibold">{title}</h3>
-        {description && <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>}
+        {description && (
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+            {description}
+          </p>
+        )}
         {actionNode && <div className="mt-4">{actionNode}</div>}
       </CardContent>
     </Card>

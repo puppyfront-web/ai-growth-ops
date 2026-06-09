@@ -41,19 +41,21 @@ export async function fireWebhook(
   db: DatabaseClient,
   organizationId: string,
   eventType: string,
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown>
 ): Promise<void> {
   try {
     const webhookConfigs = await getActiveWebhooks(db, organizationId);
-    const matching = webhookConfigs.filter(wh =>
-      wh.events.includes('*') || wh.events.includes(eventType)
+    const matching = webhookConfigs.filter(
+      (wh) => wh.events.includes('*') || wh.events.includes(eventType)
     );
 
     if (matching.length === 0) return;
 
     // Fire all webhooks concurrently (don't block the caller)
     await Promise.allSettled(
-      matching.map(wh => deliverWebhook(wh, eventType, payload, organizationId))
+      matching.map((wh) =>
+        deliverWebhook(wh, eventType, payload, organizationId)
+      )
     );
   } catch (err) {
     // Webhook failures should never break the main flow
@@ -66,27 +68,27 @@ export async function fireWebhook(
  */
 async function getActiveWebhooks(
   db: DatabaseClient,
-  organizationId: string,
+  organizationId: string
 ): Promise<WebhookConfig[]> {
   const records = await db.appConfig.findMany({
     where: {
       organizationId,
-      key: { startsWith: 'webhook_' },
-    },
+      key: { startsWith: 'webhook_' }
+    }
   });
 
   return records
-    .map(r => {
+    .map((r) => {
       const value = r.value as Record<string, unknown>;
       return {
         id: r.id,
         url: value.url as string,
-        events: value.events as string[] || [],
-        secret: value.secret as string || '',
-        active: value.active !== false,
+        events: (value.events as string[]) || [],
+        secret: (value.secret as string) || '',
+        active: value.active !== false
       };
     })
-    .filter(wh => wh.active && wh.url);
+    .filter((wh) => wh.active && wh.url);
 }
 
 /**
@@ -97,13 +99,13 @@ async function deliverWebhook(
   eventType: string,
   payload: Record<string, unknown>,
   organizationId: string,
-  attempt = 0,
+  attempt = 0
 ): Promise<void> {
   const start = Date.now();
   const body = JSON.stringify({
     event: eventType,
     timestamp: new Date().toISOString(),
-    data: payload,
+    data: payload
   });
 
   const signature = config.secret
@@ -113,7 +115,7 @@ async function deliverWebhook(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Webhook-Event': eventType,
-    'X-Webhook-Delivery': `${config.id}-${Date.now()}`,
+    'X-Webhook-Delivery': `${config.id}-${Date.now()}`
   };
   if (signature) {
     headers['X-Webhook-Signature'] = `sha256=${signature}`;
@@ -127,7 +129,7 @@ async function deliverWebhook(
       method: 'POST',
       headers,
       body,
-      signal: controller.signal,
+      signal: controller.signal
     });
 
     clearTimeout(timeout);
@@ -137,12 +139,18 @@ async function deliverWebhook(
       eventType,
       statusCode: response.status,
       durationMs: Date.now() - start,
-      timestamp: new Date(),
+      timestamp: new Date()
     });
 
     if (!response.ok && attempt < MAX_RETRIES) {
       await sleep(RETRY_DELAYS_MS[attempt] || 15000);
-      return deliverWebhook(config, eventType, payload, organizationId, attempt + 1);
+      return deliverWebhook(
+        config,
+        eventType,
+        payload,
+        organizationId,
+        attempt + 1
+      );
     }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -152,15 +160,23 @@ async function deliverWebhook(
       eventType,
       error: errorMessage,
       durationMs: Date.now() - start,
-      timestamp: new Date(),
+      timestamp: new Date()
     });
 
     if (attempt < MAX_RETRIES) {
       await sleep(RETRY_DELAYS_MS[attempt] || 15000);
-      return deliverWebhook(config, eventType, payload, organizationId, attempt + 1);
+      return deliverWebhook(
+        config,
+        eventType,
+        payload,
+        organizationId,
+        attempt + 1
+      );
     }
 
-    console.error(`[WebhookService] Failed to deliver ${eventType} to ${config.url} after ${attempt + 1} attempts: ${errorMessage}`);
+    console.error(
+      `[WebhookService] Failed to deliver ${eventType} to ${config.url} after ${attempt + 1} attempts: ${errorMessage}`
+    );
   }
 }
 
@@ -184,5 +200,5 @@ function logDelivery(organizationId: string, log: WebhookDeliveryLog): void {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

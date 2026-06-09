@@ -1,25 +1,25 @@
 import {
   ComposerAddAttachment,
   ComposerAttachments,
-  UserMessageAttachments,
-} from "@/components/assistant-ui/attachment";
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+  UserMessageAttachments
+} from '@/components/assistant-ui/attachment';
+import { MarkdownText } from '@/components/assistant-ui/markdown-text';
 import {
   Reasoning,
   ReasoningContent,
   ReasoningRoot,
   ReasoningText,
-  ReasoningTrigger,
-} from "@/components/assistant-ui/reasoning";
+  ReasoningTrigger
+} from '@/components/assistant-ui/reasoning';
 import {
   ToolGroupContent,
   ToolGroupRoot,
-  ToolGroupTrigger,
-} from "@/components/assistant-ui/tool-group";
-import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
-import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+  ToolGroupTrigger
+} from '@/components/assistant-ui/tool-group';
+import { ToolFallback } from '@/components/assistant-ui/tool-fallback';
+import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -31,8 +31,8 @@ import {
   MessagePrimitive,
   SuggestionPrimitive,
   ThreadPrimitive,
-  useAuiState,
-} from "@assistant-ui/react";
+  useAuiState
+} from '@assistant-ui/react';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -44,18 +44,18 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   RefreshCwIcon,
-  SquareIcon,
-} from "lucide-react";
-import type { FC } from "react";
+  SquareIcon
+} from 'lucide-react';
+import type { FC } from 'react';
 
 export const Thread: FC = () => {
   return (
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
       style={{
-        ["--thread-max-width" as string]: "44rem",
-        ["--composer-radius" as string]: "24px",
-        ["--composer-padding" as string]: "10px",
+        ['--thread-max-width' as string]: '44rem',
+        ['--composer-radius' as string]: '24px',
+        ['--composer-padding' as string]: '10px'
       }}
     >
       <ThreadPrimitive.Viewport
@@ -92,7 +92,7 @@ const ThreadMessage: FC = () => {
   const isEditing = useAuiState((s) => s.message.composer.isEditing);
 
   if (isEditing) return <EditComposer />;
-  if (role === "user") return <UserMessage />;
+  if (role === 'user') return <UserMessage />;
   return <AssistantMessage />;
 };
 
@@ -224,7 +224,7 @@ const MessageError: FC = () => {
 };
 
 const AssistantMessage: FC = () => {
-  const ACTION_BAR_PT = "pt-1.5";
+  const ACTION_BAR_PT = 'pt-1.5';
   const ACTION_BAR_HEIGHT = `-mb-7.5 min-h-7.5 ${ACTION_BAR_PT}`;
 
   return (
@@ -239,17 +239,17 @@ const AssistantMessage: FC = () => {
       >
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
-            reasoning: ["group-chainOfThought", "group-reasoning"],
-            "tool-call": ["group-chainOfThought", "group-tool"],
-            "standalone-tool-call": [],
+            reasoning: ['group-chainOfThought', 'group-reasoning'],
+            'tool-call': ['group-chainOfThought', 'group-tool'],
+            'standalone-tool-call': []
           })}
         >
           {({ part, children }) => {
             switch (part.type) {
-              case "group-chainOfThought":
+              case 'group-chainOfThought':
                 return <div data-slot="aui_chain-of-thought">{children}</div>;
-              case "group-reasoning": {
-                const running = part.status.type === "running";
+              case 'group-reasoning': {
+                const running = part.status.type === 'running';
                 return (
                   <ReasoningRoot defaultOpen={running}>
                     <ReasoningTrigger active={running} />
@@ -259,30 +259,30 @@ const AssistantMessage: FC = () => {
                   </ReasoningRoot>
                 );
               }
-              case "group-tool":
+              case 'group-tool':
                 return (
                   <ToolGroupRoot>
                     <ToolGroupTrigger
                       count={part.indices.length}
-                      active={part.status.type === "running"}
+                      active={part.status.type === 'running'}
                     />
                     <ToolGroupContent>{children}</ToolGroupContent>
                   </ToolGroupRoot>
                 );
-              case "text":
+              case 'text':
                 return <MarkdownText />;
-              case "reasoning":
+              case 'reasoning':
                 return <Reasoning {...part} />;
-              case "tool-call":
+              case 'tool-call':
                 return part.toolUI ?? <ToolFallback {...part} />;
-              case "indicator":
+              case 'indicator':
                 return (
                   <span
                     data-slot="aui_assistant-message-indicator"
                     className="animate-pulse font-sans"
                     aria-label="Assistant is working"
                   >
-                    {"●"}
+                    {'●'}
                   </span>
                 );
               default:
@@ -295,7 +295,7 @@ const AssistantMessage: FC = () => {
 
       <div
         data-slot="aui_assistant-message-footer"
-        className={cn("ms-2 flex items-center", ACTION_BAR_HEIGHT)}
+        className={cn('ms-2 flex items-center', ACTION_BAR_HEIGHT)}
       >
         <BranchPicker />
         <AssistantActionBar />
@@ -428,8 +428,8 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
       className={cn(
-        "aui-branch-picker-root text-muted-foreground -ms-2 me-2 inline-flex items-center text-xs",
-        className,
+        'aui-branch-picker-root text-muted-foreground -ms-2 me-2 inline-flex items-center text-xs',
+        className
       )}
       {...rest}
     >

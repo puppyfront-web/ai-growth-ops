@@ -4,7 +4,7 @@ const loginUrls: Record<string, string> = {
   wechat_official: 'https://mp.weixin.qq.com/',
   wechat_channels: 'https://channels.weixin.qq.com/',
   baijiahao: 'https://baijiahao.baidu.com/',
-  zhihu: 'https://www.zhihu.com/signin',
+  zhihu: 'https://www.zhihu.com/signin'
 };
 
 export function getLoginUrl(platform: string): string {
@@ -23,9 +23,11 @@ export function getBrowserRunnerUrl(): string {
 export function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs = 10_000,
+  timeoutMs = 10_000
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
 }

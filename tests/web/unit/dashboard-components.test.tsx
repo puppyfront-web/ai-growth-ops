@@ -17,25 +17,35 @@ describe('MetricCard', () => {
   });
 
   it('renders upward trend arrow when positive', () => {
-    const { container } = render(<MetricCard icon={Send} label="发布任务" value={100} trendPercent={25} />);
+    const { container } = render(
+      <MetricCard icon={Send} label="发布任务" value={100} trendPercent={25} />
+    );
     expect(container.querySelector('.text-emerald-600')).toBeInTheDocument();
     expect(screen.getByText('25%')).toBeInTheDocument();
   });
 
   it('renders downward trend arrow when negative', () => {
-    const { container } = render(<MetricCard icon={Send} label="发布任务" value={80} trendPercent={-15} />);
+    const { container } = render(
+      <MetricCard icon={Send} label="发布任务" value={80} trendPercent={-15} />
+    );
     expect(container.querySelector('.text-red-500')).toBeInTheDocument();
     expect(screen.getByText('15%')).toBeInTheDocument();
   });
 
   it('renders neutral state when trend is zero', () => {
-    render(<MetricCard icon={Send} label="发布任务" value={100} trendPercent={0} />);
+    render(
+      <MetricCard icon={Send} label="发布任务" value={100} trendPercent={0} />
+    );
     expect(screen.getByText('发布任务')).toBeInTheDocument();
   });
 
   it('hides trend when trendPercent is undefined', () => {
-    const { container } = render(<MetricCard icon={Send} label="发布任务" value={100} />);
-    expect(container.querySelector('.text-emerald-600')).not.toBeInTheDocument();
+    const { container } = render(
+      <MetricCard icon={Send} label="发布任务" value={100} />
+    );
+    expect(
+      container.querySelector('.text-emerald-600')
+    ).not.toBeInTheDocument();
     expect(container.querySelector('.text-red-500')).not.toBeInTheDocument();
   });
 });
@@ -51,7 +61,7 @@ describe('MetricGrid', () => {
     qualifiedLeads: 8,
     researchInsights: 5,
     contentOpportunities: 10,
-    providerRuns: 25,
+    providerRuns: 25
   };
 
   it('renders 5 metric cards', () => {
@@ -68,7 +78,7 @@ describe('MetricGrid', () => {
       { date: '2026-05-01', total: 2 },
       { date: '2026-05-15', total: 4 },
       { date: '2026-05-20', total: 6 },
-      { date: '2026-05-25', total: 8 },
+      { date: '2026-05-25', total: 8 }
     ];
     render(<MetricGrid metrics={mockMetrics} leadTrend={trend} />);
     // Trend should be computed and displayed (positive growth)
@@ -89,8 +99,14 @@ describe('QuickActions', () => {
 
   it('renders links to correct pages', () => {
     render(<QuickActions />);
-    expect(screen.getByRole('link', { name: /创建内容/ })).toHaveAttribute('href', '/content/new');
-    expect(screen.getByRole('link', { name: /运行调研/ })).toHaveAttribute('href', '/research/new');
+    expect(screen.getByRole('link', { name: /创建内容/ })).toHaveAttribute(
+      'href',
+      '/content/new'
+    );
+    expect(screen.getByRole('link', { name: /运行调研/ })).toHaveAttribute(
+      'href',
+      '/research/new'
+    );
   });
 });
 
@@ -121,8 +137,18 @@ describe('LeadFunnelCard', () => {
 describe('PlatformBreakdownCard', () => {
   it('renders platform rows with publish and lead counts', () => {
     const data = [
-      { platform: 'douyin', platformLabel: '抖音', publishCount: 10, leadCount: 5 },
-      { platform: 'xiaohongshu', platformLabel: '小红书', publishCount: 8, leadCount: 3 },
+      {
+        platform: 'douyin',
+        platformLabel: '抖音',
+        publishCount: 10,
+        leadCount: 5
+      },
+      {
+        platform: 'xiaohongshu',
+        platformLabel: '小红书',
+        publishCount: 8,
+        leadCount: 3
+      }
     ];
     render(<PlatformBreakdownCard data={data} />);
     expect(screen.getByText('抖音')).toBeInTheDocument();
@@ -139,7 +165,11 @@ describe('PlatformBreakdownCard', () => {
 
 describe('ChartContainer', () => {
   it('renders title and children', () => {
-    render(<ChartContainer title="Test Chart"><div data-testid="child">Chart content</div></ChartContainer>);
+    render(
+      <ChartContainer title="Test Chart">
+        <div data-testid="child">Chart content</div>
+      </ChartContainer>
+    );
     expect(screen.getByText('Test Chart')).toBeInTheDocument();
     expect(screen.getByTestId('child')).toBeInTheDocument();
   });
@@ -148,7 +178,7 @@ describe('ChartContainer', () => {
     render(
       <ChartContainer title="Test" dateRange="30d" onDateRangeChange={() => {}}>
         <div>content</div>
-      </ChartContainer>,
+      </ChartContainer>
     );
     expect(screen.getByText('7天')).toBeInTheDocument();
     expect(screen.getByText('30天')).toBeInTheDocument();

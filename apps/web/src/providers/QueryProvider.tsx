@@ -10,10 +10,12 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 60_000,
             retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      }),
+            refetchOnWindowFocus: false
+          }
+        }
+      })
   );
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
 }

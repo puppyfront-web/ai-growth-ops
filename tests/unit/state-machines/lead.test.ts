@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest';
 
 type LeadStatus =
-  | 'NEW' | 'QUALIFIED' | 'SYNCING' | 'SYNCED'
-  | 'ASSIGNED' | 'CONTACTED' | 'ADDED_WECOM'
-  | 'WON' | 'LOST' | 'INVALID';
+  | 'NEW'
+  | 'QUALIFIED'
+  | 'SYNCING'
+  | 'SYNCED'
+  | 'ASSIGNED'
+  | 'CONTACTED'
+  | 'ADDED_WECOM'
+  | 'WON'
+  | 'LOST'
+  | 'INVALID';
 
 const VALID_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   NEW: ['QUALIFIED', 'INVALID'],
@@ -15,7 +22,7 @@ const VALID_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   ADDED_WECOM: ['WON', 'LOST', 'INVALID'],
   WON: [],
   LOST: [],
-  INVALID: [],
+  INVALID: []
 };
 
 const TERMINAL_STATES: LeadStatus[] = ['WON', 'LOST', 'INVALID'];
@@ -43,13 +50,10 @@ describe('Lead State Machine', () => {
       ['CONTACTED', 'ADDED_WECOM'],
       ['CONTACTED', 'LOST'],
       ['ADDED_WECOM', 'WON'],
-      ['ADDED_WECOM', 'LOST'],
-    ] as [LeadStatus, LeadStatus][])(
-      'allows %s → %s',
-      (from, to) => {
-        expect(canTransition(from, to)).toBe(true);
-      },
-    );
+      ['ADDED_WECOM', 'LOST']
+    ] as [LeadStatus, LeadStatus][])('allows %s → %s', (from, to) => {
+      expect(canTransition(from, to)).toBe(true);
+    });
   });
 
   describe('illegal transitions', () => {
@@ -61,13 +65,10 @@ describe('Lead State Machine', () => {
       ['INVALID', 'NEW'],
       ['INVALID', 'QUALIFIED'],
       ['NEW', 'WON'],
-      ['NEW', 'CONTACTED'],
-    ] as [LeadStatus, LeadStatus][])(
-      'blocks %s → %s',
-      (from, to) => {
-        expect(canTransition(from, to)).toBe(false);
-      },
-    );
+      ['NEW', 'CONTACTED']
+    ] as [LeadStatus, LeadStatus][])('blocks %s → %s', (from, to) => {
+      expect(canTransition(from, to)).toBe(false);
+    });
   });
 
   describe('terminal states', () => {

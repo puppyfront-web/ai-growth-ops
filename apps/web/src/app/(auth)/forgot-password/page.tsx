@@ -9,12 +9,18 @@ import { forgotPassword } from '@/lib/api/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ApiError } from '@/lib/api/client';
 
 const forgotSchema = z.object({
-  email: z.string().email('请输入有效的邮箱地址'),
+  email: z.string().email('请输入有效的邮箱地址')
 });
 
 type ForgotForm = z.infer<typeof forgotSchema>;
@@ -26,9 +32,9 @@ export default function ForgotPasswordPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }
   } = useForm<ForgotForm>({
-    resolver: zodResolver(forgotSchema),
+    resolver: zodResolver(forgotSchema)
   });
 
   const onSubmit = async (data: ForgotForm) => {
@@ -68,7 +74,9 @@ export default function ForgotPasswordPage() {
                 </AlertDescription>
               </Alert>
               <Link href="/login">
-                <Button variant="outline" className="w-full">返回登录</Button>
+                <Button variant="outline" className="w-full">
+                  返回登录
+                </Button>
               </Link>
             </div>
           ) : (

@@ -26,17 +26,17 @@ AI Growth Ops 是一个 AI 原生的全域内容营销运营平台，帮助 SMB 
 
 ### 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 前端 | Next.js 14 (App Router), React Query, TanStack Table, Recharts |
-| API | Node.js 20 (原生 http), Prisma ORM, Zod 验证 |
-| Worker | BullMQ + Redis |
-| 数据库 | PostgreSQL 16 |
-| 缓存 | Redis 7 |
-| 对象存储 | MinIO (S3 兼容) |
-| 浏览器自动化 | Playwright |
-| 邮件 | Resend (生产) / Console (开发) |
-| 包管理 | pnpm workspaces (monorepo) |
+| 层级         | 技术                                                           |
+| ------------ | -------------------------------------------------------------- |
+| 前端         | Next.js 14 (App Router), React Query, TanStack Table, Recharts |
+| API          | Node.js 20 (原生 http), Prisma ORM, Zod 验证                   |
+| Worker       | BullMQ + Redis                                                 |
+| 数据库       | PostgreSQL 16                                                  |
+| 缓存         | Redis 7                                                        |
+| 对象存储     | MinIO (S3 兼容)                                                |
+| 浏览器自动化 | Playwright                                                     |
+| 邮件         | Resend (生产) / Console (开发)                                 |
+| 包管理       | pnpm workspaces (monorepo)                                     |
 
 ### Monorepo 结构
 

@@ -19,45 +19,65 @@ interface GenerateContentWithMediaOptions {
 
 export async function generateContentWithMedia(
   db: DatabaseClient,
-  options: GenerateContentWithMediaOptions,
+  options: GenerateContentWithMediaOptions
 ) {
   const {
-    topic, contentType, keywords = [], brandTone = '专业、友好',
-    imageStyle, imageCount = 1, orgId, userId,
+    topic,
+    contentType,
+    keywords = [],
+    brandTone = '专业、友好',
+    imageStyle,
+    imageCount = 1,
+    orgId,
+    userId
   } = options;
 
   // Step 1: Generate content via content-writing skill
   const runner = new DefaultSkillRunner();
   const contentResult = await runner.run({
     skillName: 'content-writing',
-    input: { topic, contentType, keywords, brandTone },
+    input: { topic, contentType, keywords, brandTone }
   });
 
   if (contentResult.status !== 'success' || !contentResult.output) {
     throw new Error('Content generation failed');
   }
 
-  const output = contentResult.output as any;
-  const title = output.title || topic;
-  const body = output.body || '';
+  const output = contentResult.output as Record<string, unknown>;
+  const title = (output.title as string) || topic;
+  const body = (output.body as string) || '';
 
   // Step 2: Generate images if text_image content type
-  const mediaAssets: any[] = [];
+  const mediaAssets: Array<Record<string, unknown>> = [];
   if ((contentType === 'text_image' || !contentType) && imageStyle) {
     // Use imagePrompts from skill output if available, else derive from content
-    const prompts: Array<{ prompt: string; purpose: string }> = output.imagePrompts || [];
-    const fallbackPrompts = prompts.length === 0
-      ? [{ prompt: `${imageStyle} style illustration for: ${title}. ${body.slice(0, 100)}`, purpose: 'main' }]
-      : prompts;
+    const prompts: Array<{ prompt: string; purpose: string }> =
+      (output.imagePrompts as Array<{ prompt: string; purpose: string }>) || [];
+    const fallbackPrompts =
+      prompts.length === 0
+        ? [
+            {
+              prompt: `${imageStyle} style illustration for: ${title}. ${body.slice(0, 100)}`,
+              purpose: 'main'
+            }
+          ]
+        : prompts;
 
-    for (let i = 0; i < Math.min(imageCount, fallbackPrompts.length || 1); i++) {
+    for (
+      let i = 0;
+      i < Math.min(imageCount, fallbackPrompts.length || 1);
+      i++
+    ) {
       try {
-        const prompt = fallbackPrompts[i]?.prompt || fallbackPrompts[0]?.prompt || `${imageStyle} illustration for social media post about ${topic}`;
+        const prompt =
+          fallbackPrompts[i]?.prompt ||
+          fallbackPrompts[0]?.prompt ||
+          `${imageStyle} illustration for social media post about ${topic}`;
         const asset = await generateMediaAsset(db, {
           prompt,
           style: imageStyle,
           orgId,
-          userId,
+          userId
         });
         mediaAssets.push(asset);
       } catch (err) {
@@ -68,11 +88,16 @@ export async function generateContentWithMedia(
 
   // Step 3: Find or create default project
   let project = await db.contentProject.findFirst({
-    where: { organizationId: orgId, title: '默认项目' },
+    where: { organizationId: orgId, title: '默认项目' }
   });
   if (!project) {
     project = await db.contentProject.create({
-      data: { organizationId: orgId, userId, title: '默认项目', status: 'draft' },
+      data: {
+        organizationId: orgId,
+        userId,
+        title: '默认项目',
+        status: 'draft'
+      }
     });
   }
 
@@ -83,19 +108,19 @@ export async function generateContentWithMedia(
       organizationId: orgId,
       userId,
       projectId: project.id,
-      type: contentType as any || 'text_image',
+      type: (contentType || 'text_image') as never,
       title,
       body,
       sourceType: 'ai_generated',
       status: 'draft',
-      metadata: { mediaAssetIds },
+      metadata: { mediaAssetIds }
     },
-    include: { contentVariants: true },
+    include: { contentVariants: true }
   });
 
   return {
     contentItem,
     mediaAssets,
-    skillOutput: output,
+    skillOutput: output
   };
 }

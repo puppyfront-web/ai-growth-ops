@@ -19,13 +19,13 @@
 
 ## 2. Lead Sink 类型
 
-| Sink | 用途 |
-|---|---|
-| feishu_bitable | 线索写入飞书多维表格 |
-| feishu_bot | A/B 级线索群提醒 |
-| wecom_contact | 企微客户承接 |
-| wecom_app_message | 企微应用消息提醒 |
-| crm_webhook | 第三方 CRM |
+| Sink              | 用途                 |
+| ----------------- | -------------------- |
+| feishu_bitable    | 线索写入飞书多维表格 |
+| feishu_bot        | A/B 级线索群提醒     |
+| wecom_contact     | 企微客户承接         |
+| wecom_app_message | 企微应用消息提醒     |
+| crm_webhook       | 第三方 CRM           |
 
 ---
 
@@ -163,13 +163,13 @@ lead.sync.retry
 
 ## 8. 前端页面
 
-| 页面 | 路径 |
-|---|---|
-| Lead Sink 总览 | /integrations/lead-sinks |
-| 飞书配置 | /integrations/feishu |
-| 企微配置 | /integrations/wecom |
-| 同步日志 | /leads/sync |
-| 线索详情同步记录 | /leads/[id] |
+| 页面             | 路径                     |
+| ---------------- | ------------------------ |
+| Lead Sink 总览   | /integrations/lead-sinks |
+| 飞书配置         | /integrations/feishu     |
+| 企微配置         | /integrations/wecom      |
+| 同步日志         | /leads/sync              |
+| 线索详情同步记录 | /leads/[id]              |
 
 ---
 

@@ -8,7 +8,7 @@ vi.mock('../../../apps/runtime-core/src/tools/ai-tools.js', () => ({
   getSkillRunner: vi.fn(),
   resetSkillRunner: vi.fn(),
   runClassification: (...args: unknown[]) => mockRunClassification(...args),
-  runReplySuggestion: (...args: unknown[]) => mockRunReplySuggestion(...args),
+  runReplySuggestion: (...args: unknown[]) => mockRunReplySuggestion(...args)
 }));
 
 import { runLeadMining } from '../../../apps/runtime-core/src/workflows/run-lead-mining';
@@ -23,22 +23,28 @@ describe('lead mining workflow', () => {
         riskLevel: 'medium',
         summary: '用户咨询合作事宜',
         tags: ['合作', '商务'],
-        nextAction: 'notify_sales',
+        nextAction: 'notify_sales'
       },
-      source: 'rules',
+      source: 'rules'
     });
     mockRunReplySuggestion.mockResolvedValueOnce({
       result: {
         suggestedText: '您好，感谢关注！关于合作事宜...',
         replyType: 'guide_to_private',
         riskLevel: 'medium',
-        needReview: true,
+        needReview: true
       },
-      source: 'rules',
+      source: 'rules'
     });
 
     const result = await runLeadMining({
-      candidates: [{ platform: 'douyin', interactionType: 'comment', content: '怎么合作？' }],
+      candidates: [
+        {
+          platform: 'douyin',
+          interactionType: 'comment',
+          content: '怎么合作？'
+        }
+      ]
     });
 
     expect(result.status).toBe('success');

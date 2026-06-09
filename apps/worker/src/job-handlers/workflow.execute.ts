@@ -10,6 +10,7 @@
 
 import { Job } from 'bullmq';
 import { createDatabaseClient } from '@ai-growth-ops/database';
+import type { Platform } from '@ai-growth-ops/database';
 import { DefaultSkillRunner } from '@ai-growth-ops/skills';
 import { getQueue, QUEUE_NAMES } from '../queue.js';
 
@@ -25,17 +26,21 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
 
   const execution = await db.workflowExecution.findUnique({
     where: { id: executionId },
-    include: { workflow: true },
+    include: { workflow: true }
   });
-  if (!execution || !execution.workflow) throw new Error(`WorkflowExecution ${executionId} not found`);
+  if (!execution || !execution.workflow)
+    throw new Error(`WorkflowExecution ${executionId} not found`);
 
   const steps = (execution.workflow.steps as unknown as StepDefinition[]) || [];
-  const stepResults: StepResult[] = (execution.stepResults as unknown as StepResult[]) || [];
+  const stepResults: StepResult[] =
+    (execution.stepResults as unknown as StepResult[]) || [];
 
   try {
     for (let i = execution.currentStepIndex; i < steps.length; i++) {
       const step = steps[i];
-      console.log(`[workflow] Executing step ${i + 1}/${steps.length}: ${step.type} (${step.id})`);
+      console.log(
+        `[workflow] Executing step ${i + 1}/${steps.length}: ${step.type} (${step.id})`
+      );
 
       // Resolve variable references in step input
       const resolvedInput = resolveVariables(step.input || {}, stepResults);
@@ -48,15 +53,30 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
           break;
 
         case 'generate-media':
-          result = await executeGenerateMediaStep(db, execution.workflow.organizationId, execution.workflow.userId, resolvedInput);
+          result = await executeGenerateMediaStep(
+            db,
+            execution.workflow.organizationId,
+            execution.workflow.userId,
+            resolvedInput
+          );
           break;
 
         case 'platform-rewrite':
-          result = await executePlatformRewriteStep(db, execution.workflow.organizationId, execution.workflow.userId, resolvedInput);
+          result = await executePlatformRewriteStep(
+            db,
+            execution.workflow.organizationId,
+            execution.workflow.userId,
+            resolvedInput
+          );
           break;
 
         case 'publish':
-          result = await executePublishStep(db, execution.workflow.organizationId, execution.workflow.userId, resolvedInput);
+          result = await executePublishStep(
+            db,
+            execution.workflow.organizationId,
+            execution.workflow.userId,
+            resolvedInput
+          );
           break;
 
         case 'sync-interactions':
@@ -64,55 +84,86 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
           break;
 
         case 'auto-reply':
-          result = { message: 'Auto-reply enabled — interactions will be auto-replied based on config' };
+          result = {
+            message:
+              'Auto-reply enabled — interactions will be auto-replied based on config'
+          };
           break;
 
         case 'growth-review':
           result = await executeSkillStep('growth-review', resolvedInput);
           break;
 
-        case 'delay':
+        case 'delay': {
           // Update execution state, then re-schedule
           await db.workflowExecution.update({
             where: { id: executionId },
             data: {
               currentStepIndex: i + 1,
-              stepResults: [...stepResults, { stepId: step.id, status: 'completed', output: { delayed: true } }] as unknown as any[],
-            },
+              stepResults: [
+                ...stepResults,
+                {
+                  stepId: step.id,
+                  status: 'completed',
+                  output: { delayed: true }
+                }
+              ] as unknown as Record<string, unknown>[]
+            }
           });
           // Schedule continuation after delay
-          const durationMs = parseDuration(String(resolvedInput.duration || '1h'));
+          const durationMs = parseDuration(
+            String(resolvedInput.duration || '1h')
+          );
           const { Queue } = await import('bullmq');
           const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-          const queue = new Queue('workflow.execute', { connection: { url: redisUrl } });
-          await queue.add('workflow.execute', { executionId }, { delay: durationMs });
+          const queue = new Queue('workflow.execute', {
+            connection: { url: redisUrl }
+          });
+          await queue.add(
+            'workflow.execute',
+            { executionId },
+            { delay: durationMs }
+          );
           console.log(`[workflow] Delay step — will resume in ${durationMs}ms`);
           return; // Exit — will be resumed by the delayed job
+        }
 
         default:
           result = { skipped: true, reason: `Unknown step type: ${step.type}` };
       }
 
-      stepResults.push({ stepId: step.id, status: 'completed', output: result });
+      stepResults.push({
+        stepId: step.id,
+        status: 'completed',
+        output: result
+      });
 
       // Persist progress after each step
       await db.workflowExecution.update({
         where: { id: executionId },
-        data: { currentStepIndex: i + 1, stepResults: stepResults as unknown as any[] },
+        data: {
+          currentStepIndex: i + 1,
+          stepResults: stepResults as unknown as Record<string, unknown>[]
+        }
       });
     }
 
     // All steps completed
     await db.workflowExecution.update({
       where: { id: executionId },
-      data: { status: 'completed', finishedAt: new Date() },
+      data: { status: 'completed', finishedAt: new Date() }
     });
     console.log(`[workflow] Execution ${executionId} completed`);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     await db.workflowExecution.update({
       where: { id: executionId },
-      data: { status: 'failed', errorMessage, finishedAt: new Date(), stepResults: stepResults as unknown as any[] },
+      data: {
+        status: 'failed',
+        errorMessage,
+        finishedAt: new Date(),
+        stepResults: stepResults as unknown as Record<string, unknown>[]
+      }
     });
     console.error(`[workflow] Execution ${executionId} failed:`, errorMessage);
     throw err;
@@ -121,21 +172,26 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
 
 // ── Step Executors ──────────────────────────────────────────────
 
-async function executeSkillStep(skillName: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function executeSkillStep(
+  skillName: string,
+  input: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   if (!skillName) throw new Error('skillName is required for skill step');
   const runner = getSkillRunner();
   const result = await runner.run({ skillName, input });
   if (result.status === 'success' && result.output) {
     return result.output as Record<string, unknown>;
   }
-  throw new Error(`Skill ${skillName} failed: ${result.error || 'unknown error'}`);
+  throw new Error(
+    `Skill ${skillName} failed: ${result.error || 'unknown error'}`
+  );
 }
 
 async function executeGenerateMediaStep(
   db: ReturnType<typeof createDatabaseClient>,
   orgId: string,
   userId: string,
-  input: Record<string, unknown>,
+  input: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   try {
     // Call the media generation API endpoint instead of importing cross-package
@@ -148,12 +204,22 @@ async function executeGenerateMediaStep(
         style: input.style,
         size: input.size,
         organizationId: orgId,
-        userId,
-      }),
+        userId
+      })
     });
-    if (!resp.ok) throw new Error(`Media generation API returned ${resp.status}`);
-    const data = await resp.json() as Record<string, unknown>;
-    return { mediaAssetId: (data as any).id || (data as any).asset?.id, fileName: (data as any).fileName };
+    if (!resp.ok)
+      throw new Error(`Media generation API returned ${resp.status}`);
+    const data = (await resp.json()) as Record<string, unknown>;
+    return {
+      mediaAssetId:
+        (data as Record<string, unknown>).id ||
+        (
+          (data as Record<string, unknown>).asset as
+            | Record<string, unknown>
+            | undefined
+        )?.id,
+      fileName: (data as Record<string, unknown>).fileName
+    };
   } catch (err) {
     console.error('[workflow] Media generation failed:', err);
     return { error: String(err), mediaAssetId: null };
@@ -164,7 +230,7 @@ async function executePlatformRewriteStep(
   db: ReturnType<typeof createDatabaseClient>,
   orgId: string,
   userId: string,
-  input: Record<string, unknown>,
+  input: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   const runner = getSkillRunner();
   const result = await runner.run({
@@ -173,8 +239,8 @@ async function executePlatformRewriteStep(
       sourceTitle: input.sourceTitle,
       sourceBody: input.sourceBody,
       platform: input.platform,
-      contentType: input.contentType || 'text_image',
-    },
+      contentType: input.contentType || 'text_image'
+    }
   });
 
   if (result.status === 'success' && result.output) {
@@ -187,13 +253,17 @@ async function executePlatformRewriteStep(
             organizationId: orgId,
             userId,
             contentItemId: String(input.contentItemId),
-            platform: String(input.platform) as any,
-            contentType: String(input.contentType || 'text_image') as any,
+            platform: String(input.platform) as Platform,
+            contentType: String(input.contentType || 'text_image') as
+              | 'text_image'
+              | 'video'
+              | 'article'
+              | 'answer',
             title: String(output.title || ''),
             body: String(output.body || ''),
             tags: output.hashtags || [],
-            complianceStatus: 'pending',
-          },
+            complianceStatus: 'pending'
+          }
         });
       } catch (err) {
         console.error('[workflow] Variant creation failed:', err);
@@ -208,23 +278,34 @@ async function executePublishStep(
   db: ReturnType<typeof createDatabaseClient>,
   orgId: string,
   userId: string,
-  input: Record<string, unknown>,
+  input: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   const platforms = (input.platforms as string[]) || [];
   const contentItemId = String(input.contentItemId || '');
-  if (!contentItemId) return { error: 'contentItemId is required for publish step' };
+  if (!contentItemId)
+    return { error: 'contentItemId is required for publish step' };
 
   const results: Record<string, unknown>[] = [];
   for (const platform of platforms) {
     const account = await db.platformAccount.findFirst({
-      where: { organizationId: orgId, platform: platform as any, deletedAt: null },
+      where: {
+        organizationId: orgId,
+        platform: platform as Platform,
+        deletedAt: null
+      }
     });
-    if (!account) { results.push({ platform, error: 'No account found' }); continue; }
+    if (!account) {
+      results.push({ platform, error: 'No account found' });
+      continue;
+    }
 
     const variant = await db.contentVariant.findFirst({
-      where: { contentItemId, platform: platform as any },
+      where: { contentItemId, platform: platform as Platform }
     });
-    if (!variant) { results.push({ platform, error: 'No variant found' }); continue; }
+    if (!variant) {
+      results.push({ platform, error: 'No variant found' });
+      continue;
+    }
 
     const publishJob = await db.publishJob.create({
       data: {
@@ -232,37 +313,51 @@ async function executePublishStep(
         userId,
         contentVariantId: variant.id,
         platformAccountId: account.id,
-        platform: platform as any,
+        platform: platform as Platform,
         contentType: variant.contentType,
         mode: 'browser_assist',
-        status: 'DRAFT',
-      },
+        status: 'DRAFT'
+      }
     });
 
     const publishQueue = getQueue(QUEUE_NAMES.PUBLISH_EXECUTE);
-    await publishQueue.add(QUEUE_NAMES.PUBLISH_EXECUTE, {
-      publishJobId: publishJob.id,
-      contentVariantId: variant.id,
-      platformAccountId: account.id,
-      platform,
-      contentType: variant.contentType,
-      mode: 'browser_assist',
-    }, { attempts: 3, backoff: { type: 'exponential', delay: 5000 } });
+    await publishQueue.add(
+      QUEUE_NAMES.PUBLISH_EXECUTE,
+      {
+        publishJobId: publishJob.id,
+        contentVariantId: variant.id,
+        platformAccountId: account.id,
+        platform,
+        contentType: variant.contentType,
+        mode: 'browser_assist'
+      },
+      { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
+    );
 
     results.push({ platform, publishJobId: publishJob.id, status: 'enqueued' });
   }
   return { results };
 }
 
-async function executeSyncStep(input: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function executeSyncStep(
+  input: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   const platforms = (input.platforms as string[]) || [];
   const results: Record<string, string>[] = [];
 
   for (const platform of platforms) {
     const commentsQueue = getQueue(QUEUE_NAMES.INTERACTION_SYNC_COMMENTS);
     const messagesQueue = getQueue(QUEUE_NAMES.INTERACTION_SYNC_MESSAGES);
-    await commentsQueue.add(QUEUE_NAMES.INTERACTION_SYNC_COMMENTS, { platform, platformAccountId: input.platformAccountId }, { attempts: 2 });
-    await messagesQueue.add(QUEUE_NAMES.INTERACTION_SYNC_MESSAGES, { platform, platformAccountId: input.platformAccountId }, { attempts: 2 });
+    await commentsQueue.add(
+      QUEUE_NAMES.INTERACTION_SYNC_COMMENTS,
+      { platform, platformAccountId: input.platformAccountId },
+      { attempts: 2 }
+    );
+    await messagesQueue.add(
+      QUEUE_NAMES.INTERACTION_SYNC_MESSAGES,
+      { platform, platformAccountId: input.platformAccountId },
+      { attempts: 2 }
+    );
     results.push({ platform, status: 'enqueued' });
   }
   return { results };
@@ -283,14 +378,17 @@ interface StepResult {
   output: Record<string, unknown>;
 }
 
-function resolveVariables(input: Record<string, unknown>, results: StepResult[]): Record<string, unknown> {
+function resolveVariables(
+  input: Record<string, unknown>,
+  results: StepResult[]
+): Record<string, unknown> {
   const resolved: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
     if (typeof value === 'string') {
       // Replace ${stepId.field} references
       resolved[key] = value.replace(/\$\{([^}]+)\}/g, (_match, ref: string) => {
         const [stepId, ...fieldPath] = ref.split('.');
-        const stepResult = results.find(r => r.stepId === stepId);
+        const stepResult = results.find((r) => r.stepId === stepId);
         if (!stepResult) return '';
         let current: unknown = stepResult.output;
         for (const field of fieldPath) {
@@ -303,7 +401,10 @@ function resolveVariables(input: Record<string, unknown>, results: StepResult[])
         return String(current ?? '');
       });
     } else if (value && typeof value === 'object' && !Array.isArray(value)) {
-      resolved[key] = resolveVariables(value as Record<string, unknown>, results);
+      resolved[key] = resolveVariables(
+        value as Record<string, unknown>,
+        results
+      );
     } else {
       resolved[key] = value;
     }
@@ -317,11 +418,17 @@ function parseDuration(duration: string): number {
   const [, amount, unit] = match;
   const n = parseInt(amount);
   switch (unit) {
-    case 'ms': return n;
-    case 's': return n * 1000;
-    case 'm': return n * 60_000;
-    case 'h': return n * 3_600_000;
-    case 'd': return n * 86_400_000;
-    default: return 3_600_000;
+    case 'ms':
+      return n;
+    case 's':
+      return n * 1000;
+    case 'm':
+      return n * 60_000;
+    case 'h':
+      return n * 3_600_000;
+    case 'd':
+      return n * 86_400_000;
+    default:
+      return 3_600_000;
   }
 }

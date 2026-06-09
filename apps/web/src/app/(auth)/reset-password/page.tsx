@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,22 +10,29 @@ import { resetPassword } from '@/lib/api/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ApiError } from '@/lib/api/client';
 
-const resetSchema = z.object({
-  password: z.string().min(8, '密码至少 8 个字符'),
-  confirmPassword: z.string().min(8, '请确认密码'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: '两次输入的密码不一致',
-  path: ['confirmPassword'],
-});
+const resetSchema = z
+  .object({
+    password: z.string().min(8, '密码至少 8 个字符'),
+    confirmPassword: z.string().min(8, '请确认密码')
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: '两次输入的密码不一致',
+    path: ['confirmPassword']
+  });
 
 type ResetForm = z.infer<typeof resetSchema>;
 
 export default function ResetPasswordPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const [serverError, setServerError] = useState<string | null>(null);
@@ -34,9 +41,9 @@ export default function ResetPasswordPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }
   } = useForm<ResetForm>({
-    resolver: zodResolver(resetSchema),
+    resolver: zodResolver(resetSchema)
   });
 
   useEffect(() => {
@@ -78,7 +85,9 @@ export default function ResetPasswordPage() {
           {success ? (
             <div className="space-y-4">
               <Alert>
-                <AlertDescription>密码已重置成功，请使用新密码登录。</AlertDescription>
+                <AlertDescription>
+                  密码已重置成功，请使用新密码登录。
+                </AlertDescription>
               </Alert>
               <Link href="/login">
                 <Button className="w-full">前往登录</Button>
@@ -114,7 +123,11 @@ export default function ResetPasswordPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={isSubmitting || !token}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isSubmitting || !token}
+              >
                 {isSubmitting ? '重置中...' : '重置密码'}
               </Button>
 

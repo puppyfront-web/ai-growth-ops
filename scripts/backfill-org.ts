@@ -12,11 +12,12 @@ import { randomBytes } from 'node:crypto';
 const prisma = new PrismaClient();
 
 function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9一-龥]+/g, '-')
-    .replace(/^-|-$/g, '')
-    || `org-${randomBytes(4).toString('hex')}`;
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9一-龥]+/g, '-')
+      .replace(/^-|-$/g, '') || `org-${randomBytes(4).toString('hex')}`
+  );
 }
 
 async function main() {
@@ -42,11 +43,13 @@ async function main() {
         name: `${user.name}的工作空间`,
         slug,
         status: 'active',
-        metadata: { isDefault: true, createdByMigration: true },
-      },
+        metadata: { isDefault: true, createdByMigration: true }
+      }
     });
     userOrgMap.set(user.id, org.id);
-    console.log(`  Created org "${org.name}" (${org.id}) for user ${user.email}`);
+    console.log(
+      `  Created org "${org.name}" (${org.id}) for user ${user.email}`
+    );
   }
 
   // Step 3: Create OrganizationMember for each user
@@ -57,8 +60,8 @@ async function main() {
         organizationId: orgId,
         userId: user.id,
         role: 'owner',
-        status: 'active',
-      },
+        status: 'active'
+      }
     });
   }
   console.log('Created organization memberships');
@@ -81,7 +84,7 @@ async function main() {
     'SkillRun',
     'AgentRun',
     'AuditLog',
-    'AppConfig',
+    'AppConfig'
   ];
 
   for (const table of tables) {

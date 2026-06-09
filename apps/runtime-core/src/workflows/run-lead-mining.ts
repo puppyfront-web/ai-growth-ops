@@ -2,7 +2,7 @@ import {
   createLeadMiningGraph,
   type LeadCandidate,
   type LeadMiningResult,
-  type ClassifiedLead,
+  type ClassifiedLead
 } from '../graphs/lead-mining-graph.js';
 import { buildLeadBreakdown } from '../tools/lead-tools.js';
 import { runClassification, runReplySuggestion } from '../tools/ai-tools.js';
@@ -18,12 +18,13 @@ export async function runLeadMining(input: {
     for (const candidate of candidates) {
       try {
         // Step 1: Classify (LLM with rule fallback)
-        const { result: classification, source: classSource } = await runClassification({
-          platform: candidate.platform,
-          interactionType: candidate.interactionType,
-          content: candidate.content,
-          sourceContentTitle: candidate.sourceContentTitle,
-        });
+        const { result: classification, source: classSource } =
+          await runClassification({
+            platform: candidate.platform,
+            interactionType: candidate.interactionType,
+            content: candidate.content,
+            sourceContentTitle: candidate.sourceContentTitle
+          });
 
         // Step 2: Generate reply suggestion (skip for D-level / spam)
         let reply: ClassifiedLead['replySuggestion'] = undefined;
@@ -35,9 +36,9 @@ export async function runLeadMining(input: {
               interaction: {
                 content: candidate.content,
                 platform: candidate.platform,
-                type: candidate.interactionType,
+                type: candidate.interactionType
               },
-              classification,
+              classification
             });
             if (replyResult) {
               reply = replyResult.result;
@@ -47,7 +48,7 @@ export async function runLeadMining(input: {
             errors.push(
               `Reply suggestion failed for "${candidate.content.slice(0, 30)}...": ${
                 error instanceof Error ? error.message : String(error)
-              }`,
+              }`
             );
             // Reply failure does not block lead classification
           }
@@ -61,13 +62,13 @@ export async function runLeadMining(input: {
           classification: normalizeClassification(classification),
           replySuggestion: reply,
           classificationSource: classSource,
-          replySource,
+          replySource
         });
       } catch (error) {
         errors.push(
           `Classification failed for "${candidate.content.slice(0, 30)}...": ${
             error instanceof Error ? error.message : String(error)
-          }`,
+          }`
         );
       }
     }
@@ -85,7 +86,7 @@ export async function runLeadMining(input: {
       classified: leads.length,
       leads,
       levelBreakdown: buildLeadBreakdown(leads),
-      errors,
+      errors
     };
   });
 
@@ -93,7 +94,9 @@ export async function runLeadMining(input: {
 }
 
 /** Ensure all required fields have sensible defaults. */
-function normalizeClassification(raw: ClassificationResult): ClassifiedLead['classification'] {
+function normalizeClassification(
+  raw: ClassificationResult
+): ClassifiedLead['classification'] {
   return {
     intent: raw.intent || 'unknown',
     leadLevel: raw.leadLevel || 'C',
@@ -101,6 +104,6 @@ function normalizeClassification(raw: ClassificationResult): ClassifiedLead['cla
     riskLevel: raw.riskLevel || 'low',
     summary: raw.summary || '',
     tags: raw.tags || [],
-    nextAction: raw.nextAction || 'suggest_reply',
+    nextAction: raw.nextAction || 'suggest_reply'
   };
 }

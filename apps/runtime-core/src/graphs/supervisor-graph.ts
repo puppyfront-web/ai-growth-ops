@@ -5,8 +5,10 @@ export interface SupervisorGraphResult {
   workflow: 'publish' | 'auth' | 'interaction' | 'lead' | 'skill.lifecycle';
 }
 
-export function runSupervisorGraph(request: RuntimeRequest): SupervisorGraphResult {
+export function runSupervisorGraph(
+  request: RuntimeRequest
+): SupervisorGraphResult {
   return {
-    workflow: selectWorkflow(request),
+    workflow: selectWorkflow(request)
   };
 }

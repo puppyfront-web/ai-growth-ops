@@ -11,11 +11,22 @@ interface AuditRouteContext {
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(statusCode, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store'
+  });
   res.end(JSON.stringify(payload));
 }
 
-export const auditRoutes: Array<{ method: string; pattern: string; handler: (req: IncomingMessage, res: ServerResponse, ctx: AuditRouteContext) => Promise<void> }> = [
+export const auditRoutes: Array<{
+  method: string;
+  pattern: string;
+  handler: (
+    req: IncomingMessage,
+    res: ServerResponse,
+    ctx: AuditRouteContext
+  ) => Promise<void>;
+}> = [
   // GET /api/audit-logs - List audit logs
   {
     method: 'GET',
@@ -24,28 +35,41 @@ export const auditRoutes: Array<{ method: string; pattern: string; handler: (req
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const action = ctx.url.searchParams.get('action');
-      const entity = ctx.url.searchParams.get('entityType') ?? ctx.url.searchParams.get('entity');
-      const where: Record<string, unknown> = { organizationId: orgCtx.organization.id };
+      const entity =
+        ctx.url.searchParams.get('entityType') ??
+        ctx.url.searchParams.get('entity');
+      const where: Record<string, unknown> = {
+        organizationId: orgCtx.organization.id
+      };
       if (action) where.action = action;
       if (entity) where.entity = entity;
       const items = await ctx.db.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        take: 100,
+        take: 100
       });
       sendJson(res, 200, items);
-    },
-  },
+    }
+  }
 ];
 
 // Helper to write audit logs from any route
 export async function writeAuditLog(
   db: DatabaseClient,
-  data: { userId: string; organizationId: string; action: AuditAction; entity: string; entityId: string; before?: unknown; after?: unknown }
+  data: {
+    userId: string;
+    organizationId: string;
+    action: AuditAction;
+    entity: string;
+    entityId: string;
+    before?: unknown;
+    after?: unknown;
+  }
 ): Promise<void> {
-  const changes = (data.before !== undefined || data.after !== undefined)
-    ? { before: data.before ?? null, after: data.after ?? null }
-    : undefined;
+  const changes =
+    data.before !== undefined || data.after !== undefined
+      ? { before: data.before ?? null, after: data.after ?? null }
+      : undefined;
 
   await db.auditLog.create({
     data: {
@@ -54,33 +78,47 @@ export async function writeAuditLog(
       action: data.action,
       entity: data.entity,
       entityId: data.entityId,
-      changes: changes as never,
-    },
+      changes: changes as never
+    }
   });
 }
 
 // Helper to create notifications
 export async function createNotification(
   db: DatabaseClient,
-  data: { type: string; title: string; content: string; level?: string; userId?: string; organizationId?: string; actionUrl?: string }
+  data: {
+    type: string;
+    title: string;
+    content: string;
+    level?: string;
+    userId?: string;
+    organizationId?: string;
+    actionUrl?: string;
+  }
 ): Promise<void> {
   await db.notification.create({
     data: {
       type: data.type,
       title: data.title,
       content: data.content,
-      level: (data.level || 'info') as any,
+      level: (data.level || 'info') as 'info' | 'warning' | 'error',
       userId: data.userId,
       organizationId: data.organizationId,
-      actionUrl: data.actionUrl,
-    },
+      actionUrl: data.actionUrl
+    }
   });
 }
 
 // Helper to create system tasks
 export async function createSystemTask(
   db: DatabaseClient,
-  data: { taskType: string; title: string; relatedEntityType?: string; relatedEntityId?: string; createdBy?: string }
+  data: {
+    taskType: string;
+    title: string;
+    relatedEntityType?: string;
+    relatedEntityId?: string;
+    createdBy?: string;
+  }
 ) {
   return db.systemTask.create({
     data: {
@@ -88,7 +126,7 @@ export async function createSystemTask(
       title: data.title,
       relatedEntityType: data.relatedEntityType,
       relatedEntityId: data.relatedEntityId,
-      createdBy: data.createdBy,
-    },
+      createdBy: data.createdBy
+    }
   });
 }

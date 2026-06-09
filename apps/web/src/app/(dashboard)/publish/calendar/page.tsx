@@ -8,7 +8,11 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
-import { CalendarGrid, CalendarDayCell, DayDetailDialog } from '@/components/calendar';
+import {
+  CalendarGrid,
+  CalendarDayCell,
+  DayDetailDialog
+} from '@/components/calendar';
 import type { ViewMode } from '@/components/calendar';
 import type { CalendarItem } from '@/types/calendar';
 import { toDateKey } from '@/lib/utils';
@@ -18,7 +22,7 @@ const LEGEND = [
   { label: '已排期', dotClass: 'bg-amber-400' },
   { label: '发布中', dotClass: 'bg-blue-500' },
   { label: '失败', dotClass: 'bg-red-500' },
-  { label: '草稿', dotClass: 'bg-gray-400' },
+  { label: '草稿', dotClass: 'bg-gray-400' }
 ];
 
 export default function PublishCalendarPage() {
@@ -26,13 +30,21 @@ export default function PublishCalendarPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  const { data: publishJobs, isLoading, error, refetch } = useQuery({
+  const {
+    data: publishJobs,
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
     queryKey: queryKeys.publish.jobs,
-    queryFn: () => listPublishJobs(),
+    queryFn: () => listPublishJobs()
   });
 
   if (isLoading) return <LoadingState rows={6} />;
-  if (error) return <ErrorState message="加载发布日历数据失败" onRetry={() => refetch()} />;
+  if (error)
+    return (
+      <ErrorState message="加载发布日历数据失败" onRetry={() => refetch()} />
+    );
 
   const dateMap = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -48,7 +60,11 @@ export default function PublishCalendarPage() {
 
   const selectedKey = selectedDate ? toDateKey(selectedDate) : null;
   const selectedJobs = selectedKey
-    ? (dateMap.get(selectedKey) ?? []).filter((i): i is CalendarItem & { kind: 'publish' } => i.kind === 'publish').map((i) => i.job)
+    ? (dateMap.get(selectedKey) ?? [])
+        .filter(
+          (i): i is CalendarItem & { kind: 'publish' } => i.kind === 'publish'
+        )
+        .map((i) => i.job)
     : [];
 
   return (
@@ -66,14 +82,21 @@ export default function PublishCalendarPage() {
         onDateSelect={setSelectedDate}
         renderDayContent={(date) => {
           const items = dateMap.get(toDateKey(date)) ?? [];
-          return <CalendarDayCell items={items} onClick={() => setSelectedDate(date)} />;
+          return (
+            <CalendarDayCell
+              items={items}
+              onClick={() => setSelectedDate(date)}
+            />
+          );
         }}
       />
 
       {selectedDate && (
         <DayDetailDialog
           open={!!selectedDate}
-          onOpenChange={(open) => { if (!open) setSelectedDate(null); }}
+          onOpenChange={(open) => {
+            if (!open) setSelectedDate(null);
+          }}
           date={selectedDate}
           contentItems={[]}
           publishJobs={selectedJobs}

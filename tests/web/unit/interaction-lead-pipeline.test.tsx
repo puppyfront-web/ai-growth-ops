@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { LeadLevelBadge } from '@/components/shared/StatusBadge';
-import { interactionTypeLabels, syncStatusLabels, leadLevelLabels } from '@/lib/constants';
+import { interactionTypeLabels, syncStatusLabels } from '@/lib/constants';
 
 describe('interactionTypeLabels', () => {
   it('maps all interaction types to Chinese', () => {
@@ -68,12 +68,23 @@ describe('query keys', () => {
   it('has conversations.replies key', async () => {
     const mod = await import('@/lib/query-keys');
     expect(mod.queryKeys.conversations.replies).toBeDefined();
-    expect(mod.queryKeys.conversations.replies).toEqual(['conversations', 'replies']);
+    expect(mod.queryKeys.conversations.replies).toEqual([
+      'conversations',
+      'replies'
+    ]);
   });
 
   it('has leads.sinks key', async () => {
     const mod = await import('@/lib/query-keys');
-    expect(mod.queryKeys.leads.sinks('feishu')).toEqual(['leads', 'sinks', 'feishu']);
-    expect(mod.queryKeys.leads.sinks('wecom')).toEqual(['leads', 'sinks', 'wecom']);
+    expect(mod.queryKeys.leads.sinks('feishu')).toEqual([
+      'leads',
+      'sinks',
+      'feishu'
+    ]);
+    expect(mod.queryKeys.leads.sinks('wecom')).toEqual([
+      'leads',
+      'sinks',
+      'wecom'
+    ]);
   });
 });

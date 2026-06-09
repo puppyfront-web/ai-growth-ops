@@ -19,6 +19,6 @@ export function createTools(auth: AuthContext) {
     ...createCampaignTools(auth),
     ...createContentMediaTools(auth),
     ...createWorkflowTools(auth),
-    ...createAgentTools(auth),
+    ...createAgentTools(auth)
   };
 }

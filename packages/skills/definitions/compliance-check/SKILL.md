@@ -1,6 +1,7 @@
 # Compliance Check Skill
 
 Check content for compliance issues before publishing. Detect risks including:
+
 - Sensitive or prohibited words
 - Exaggerated claims or false advertising
 - External contact info (phone, WeChat)

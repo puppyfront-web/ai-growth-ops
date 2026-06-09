@@ -9,10 +9,12 @@ export interface BrowserAssistConfig {
 
 function requireArrayResponse(
   result: { success: boolean; data: unknown; errorMessage?: string },
-  fetchType: 'comments' | 'messages',
-): any[] {
+  fetchType: 'comments' | 'messages'
+): Record<string, unknown>[] {
   if (!result.success) {
-    throw new Error(result.errorMessage || `browser-assist ${fetchType} request failed`);
+    throw new Error(
+      result.errorMessage || `browser-assist ${fetchType} request failed`
+    );
   }
   if (!Array.isArray(result.data)) {
     const payload = result.data as Record<string, unknown> | null;
@@ -37,17 +39,22 @@ export class BrowserAssistClient {
     sourceContentId?: string,
     limit?: number,
     cursor?: string,
-    headed?: boolean,
-  ): Promise<any[]> {
+    headed?: boolean
+  ): Promise<Record<string, unknown>[]> {
     const url = `${this.runnerUrl}/assist/fetch-comments`;
-    const result = await platformPost<any[]>(url, {
-      platform: config.platform,
-      cookie: config.cookie,
-      sourceContentId,
-      limit: limit || 50,
-      cursor,
-      headed,
-    }, {}, 180_000);
+    const result = await platformPost<Record<string, unknown>[]>(
+      url,
+      {
+        platform: config.platform,
+        cookie: config.cookie,
+        sourceContentId,
+        limit: limit || 50,
+        cursor,
+        headed
+      },
+      {},
+      180_000
+    );
     return requireArrayResponse(result, 'comments');
   }
 
@@ -55,16 +62,21 @@ export class BrowserAssistClient {
     config: BrowserAssistConfig,
     limit?: number,
     cursor?: string,
-    headed?: boolean,
-  ): Promise<any[]> {
+    headed?: boolean
+  ): Promise<Record<string, unknown>[]> {
     const url = `${this.runnerUrl}/assist/fetch-messages`;
-    const result = await platformPost<any[]>(url, {
-      platform: config.platform,
-      cookie: config.cookie,
-      limit: limit || 50,
-      cursor,
-      headed,
-    }, {}, 180_000);
+    const result = await platformPost<Record<string, unknown>[]>(
+      url,
+      {
+        platform: config.platform,
+        cookie: config.cookie,
+        limit: limit || 50,
+        cursor,
+        headed
+      },
+      {},
+      180_000
+    );
     return requireArrayResponse(result, 'messages');
   }
 
@@ -72,15 +84,18 @@ export class BrowserAssistClient {
     config: BrowserAssistConfig,
     externalCommentId: string,
     replyText: string,
-    sourceContentId?: string,
+    sourceContentId?: string
   ): Promise<{ success: boolean; externalReplyId?: string }> {
     const url = `${this.runnerUrl}/assist/reply-comment`;
-    const result = await platformPost<{ success: boolean; externalReplyId?: string }>(url, {
+    const result = await platformPost<{
+      success: boolean;
+      externalReplyId?: string;
+    }>(url, {
       platform: config.platform,
       cookie: config.cookie,
       externalCommentId,
       replyText,
-      sourceContentId,
+      sourceContentId
     });
     return result.data || { success: false };
   }
@@ -88,14 +103,17 @@ export class BrowserAssistClient {
   async replyMessage(
     config: BrowserAssistConfig,
     externalUserId: string,
-    messageText: string,
+    messageText: string
   ): Promise<{ success: boolean; externalReplyId?: string }> {
     const url = `${this.runnerUrl}/assist/reply-message`;
-    const result = await platformPost<{ success: boolean; externalReplyId?: string }>(url, {
+    const result = await platformPost<{
+      success: boolean;
+      externalReplyId?: string;
+    }>(url, {
       platform: config.platform,
       cookie: config.cookie,
       externalUserId,
-      messageText,
+      messageText
     });
     return result.data || { success: false };
   }
@@ -108,7 +126,7 @@ export class BrowserAssistClient {
     config: BrowserAssistConfig,
     keyword: string,
     topN = 3,
-    headed?: boolean,
+    headed?: boolean
   ): Promise<{
     keyword: string;
     results: Array<{
@@ -119,15 +137,23 @@ export class BrowserAssistClient {
     }>;
   }> {
     const url = `${this.runnerUrl}/assist/search-and-fetch-comments`;
-    const result = await platformPost<any>(url, {
-      platform: config.platform,
-      cookie: config.cookie,
-      keyword,
-      topN,
-      headed,
-    }, {}, 180_000);
+    const result = await platformPost<Record<string, unknown>>(
+      url,
+      {
+        platform: config.platform,
+        cookie: config.cookie,
+        keyword,
+        topN,
+        headed
+      },
+      {},
+      180_000
+    );
     if (!result.success) {
-      const detail = (result.data as Record<string, unknown>)?.details || result.errorMessage || 'search-and-fetch failed';
+      const detail =
+        (result.data as Record<string, unknown>)?.details ||
+        result.errorMessage ||
+        'search-and-fetch failed';
       throw new Error(String(detail));
     }
     return result.data;

@@ -26,7 +26,7 @@ const STAGE_LABELS: Record<PublishProgressStage, string> = {
   browser_submit: '提交发布',
   api_publish: '调用平台接口发布',
   done: '发布完成',
-  failed: '发布失败',
+  failed: '发布失败'
 };
 
 const STAGE_PERCENT: Record<PublishProgressStage, number> = {
@@ -38,7 +38,7 @@ const STAGE_PERCENT: Record<PublishProgressStage, number> = {
   browser_submit: 85,
   api_publish: 50,
   done: 100,
-  failed: 0,
+  failed: 0
 };
 
 export function buildPublishProgress(
@@ -50,11 +50,13 @@ export function buildPublishProgress(
     label: STAGE_LABELS[stage],
     percent: STAGE_PERCENT[stage],
     message,
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 
-export function parsePublishProgress(metadata: unknown): PublishProgressSnapshot | null {
+export function parsePublishProgress(
+  metadata: unknown
+): PublishProgressSnapshot | null {
   if (!metadata || typeof metadata !== 'object') return null;
   const progress = (metadata as Record<string, unknown>).progress;
   if (!progress || typeof progress !== 'object') return null;
@@ -66,6 +68,7 @@ export function parsePublishProgress(metadata: unknown): PublishProgressSnapshot
     label: typeof p.label === 'string' ? p.label : STAGE_LABELS[stage],
     percent: typeof p.percent === 'number' ? p.percent : STAGE_PERCENT[stage],
     message: typeof p.message === 'string' ? p.message : undefined,
-    updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : new Date().toISOString(),
+    updatedAt:
+      typeof p.updatedAt === 'string' ? p.updatedAt : new Date().toISOString()
   };
 }

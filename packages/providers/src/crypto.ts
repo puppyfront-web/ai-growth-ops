@@ -1,4 +1,9 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  scryptSync
+} from 'node:crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
@@ -13,7 +18,10 @@ export function encryptToken(plaintext: string): string {
   const key = getKey();
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final()
+  ]);
   const authTag = cipher.getAuthTag();
   return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted.toString('base64')}`;
 }
@@ -21,7 +29,8 @@ export function encryptToken(plaintext: string): string {
 export function decryptToken(encrypted: string): string {
   const key = getKey();
   const [ivB64, authTagB64, ciphertextB64] = encrypted.split(':');
-  if (!ivB64 || !authTagB64 || !ciphertextB64) throw new Error('Invalid encrypted token format');
+  if (!ivB64 || !authTagB64 || !ciphertextB64)
+    throw new Error('Invalid encrypted token format');
   const iv = Buffer.from(ivB64, 'base64');
   const authTag = Buffer.from(authTagB64, 'base64');
   const ciphertext = Buffer.from(ciphertextB64, 'base64');

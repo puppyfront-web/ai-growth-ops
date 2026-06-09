@@ -9,7 +9,7 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 import { platformGet, platformPost } from './http-client.js';
 
@@ -72,7 +72,12 @@ export class DouyinConnector implements InteractionConnector {
       autoReplyAllowed: 'low_risk_only',
       requiresHumanReviewForMessageReply: false,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['official_api', 'browser_assist', 'manual_import', 'sandbox'],
+      supportedModes: [
+        'official_api',
+        'browser_assist',
+        'manual_import',
+        'sandbox'
+      ]
     };
   }
 
@@ -88,7 +93,7 @@ export class DouyinConnector implements InteractionConnector {
 
     const params = new URLSearchParams({
       item_id: sourceContentId,
-      count: String(limit),
+      count: String(limit)
     });
     if (cursor) {
       params.set('cursor', cursor);
@@ -102,17 +107,21 @@ export class DouyinConnector implements InteractionConnector {
       return [];
     }
 
-    return resp.data.data.list.map((item): PlatformComment => ({
-      externalCommentId: item.comment_id ?? '',
-      externalUserId: item.user?.open_id ?? '',
-      userNickname: item.user?.nickname ?? '',
-      content: item.content ?? '',
-      likeCount: item.digg_count,
-      replyCount: item.reply_comment_total,
-      publishedAt: item.create_time ? new Date(item.create_time * 1000).toISOString() : '',
-      sourceContentId,
-      rawPayload: item as unknown as Record<string, unknown>,
-    }));
+    return resp.data.data.list.map(
+      (item): PlatformComment => ({
+        externalCommentId: item.comment_id ?? '',
+        externalUserId: item.user?.open_id ?? '',
+        userNickname: item.user?.nickname ?? '',
+        content: item.content ?? '',
+        likeCount: item.digg_count,
+        replyCount: item.reply_comment_total,
+        publishedAt: item.create_time
+          ? new Date(item.create_time * 1000).toISOString()
+          : '',
+        sourceContentId,
+        rawPayload: item as unknown as Record<string, unknown>
+      })
+    );
   }
 
   async fetchMessages(input: FetchMessagesInput): Promise<PlatformMessage[]> {
@@ -127,7 +136,7 @@ export class DouyinConnector implements InteractionConnector {
 
     const params = new URLSearchParams({
       conversation_id: platformAccountId,
-      count: String(limit),
+      count: String(limit)
     });
     if (cursor) {
       params.set('cursor', cursor);
@@ -141,25 +150,37 @@ export class DouyinConnector implements InteractionConnector {
       return [];
     }
 
-    return resp.data.data.list.map((item): PlatformMessage => ({
-      externalMessageId: item.message_id ?? '',
-      externalUserId: item.from_user?.open_id ?? '',
-      userNickname: item.from_user?.nickname ?? '',
-      content: item.content ?? '',
-      type: mapDouyinMessageType(item.content_type),
-      publishedAt: item.create_time ? new Date(item.create_time * 1000).toISOString() : '',
-      rawPayload: item as unknown as Record<string, unknown>,
-    }));
+    return resp.data.data.list.map(
+      (item): PlatformMessage => ({
+        externalMessageId: item.message_id ?? '',
+        externalUserId: item.from_user?.open_id ?? '',
+        userNickname: item.from_user?.nickname ?? '',
+        content: item.content ?? '',
+        type: mapDouyinMessageType(item.content_type),
+        publishedAt: item.create_time
+          ? new Date(item.create_time * 1000).toISOString()
+          : '',
+        rawPayload: item as unknown as Record<string, unknown>
+      })
+    );
   }
 
   async replyComment(input: ReplyCommentInput): Promise<ReplyResult> {
     if (!this.config.accessToken) {
-      return { success: false, errorCode: 'NO_ACCESS_TOKEN', errorMessage: 'Missing access token' };
+      return {
+        success: false,
+        errorCode: 'NO_ACCESS_TOKEN',
+        errorMessage: 'Missing access token'
+      };
     }
 
     const { externalCommentId, replyText, sourceContentId } = input;
     if (!sourceContentId) {
-      return { success: false, errorCode: 'MISSING_CONTENT_ID', errorMessage: 'sourceContentId is required' };
+      return {
+        success: false,
+        errorCode: 'MISSING_CONTENT_ID',
+        errorMessage: 'sourceContentId is required'
+      };
     }
 
     const url = 'https://open.douyin.com/api/douyin/comment/reply/';
@@ -167,12 +188,16 @@ export class DouyinConnector implements InteractionConnector {
     const body = {
       item_id: sourceContentId,
       comment_id: externalCommentId,
-      content: replyText,
+      content: replyText
     };
 
     const resp = await platformPost<DouyinReplyResponse>(url, body, headers);
     if (!resp.success) {
-      return { success: false, errorCode: 'API_ERROR', errorMessage: resp.errorMessage };
+      return {
+        success: false,
+        errorCode: 'API_ERROR',
+        errorMessage: resp.errorMessage
+      };
     }
 
     const statusMsg = resp.data?.status_msg;
@@ -181,19 +206,23 @@ export class DouyinConnector implements InteractionConnector {
       return {
         success: false,
         errorCode: String(statusCode),
-        errorMessage: statusMsg ?? 'Unknown Douyin API error',
+        errorMessage: statusMsg ?? 'Unknown Douyin API error'
       };
     }
 
     return {
       success: true,
-      externalReplyId: resp.data?.data?.comment_id,
+      externalReplyId: resp.data?.data?.comment_id
     };
   }
 
   async replyMessage(input: ReplyMessageInput): Promise<ReplyResult> {
     if (!this.config.accessToken) {
-      return { success: false, errorCode: 'NO_ACCESS_TOKEN', errorMessage: 'Missing access token' };
+      return {
+        success: false,
+        errorCode: 'NO_ACCESS_TOKEN',
+        errorMessage: 'Missing access token'
+      };
     }
 
     const { externalUserId, messageText } = input;
@@ -202,12 +231,16 @@ export class DouyinConnector implements InteractionConnector {
     const body = {
       to_open_id: externalUserId,
       content_type: 'text',
-      content: JSON.stringify({ text: messageText }),
+      content: JSON.stringify({ text: messageText })
     };
 
     const resp = await platformPost<DouyinReplyResponse>(url, body, headers);
     if (!resp.success) {
-      return { success: false, errorCode: 'API_ERROR', errorMessage: resp.errorMessage };
+      return {
+        success: false,
+        errorCode: 'API_ERROR',
+        errorMessage: resp.errorMessage
+      };
     }
 
     const statusMsg = resp.data?.status_msg;
@@ -216,13 +249,13 @@ export class DouyinConnector implements InteractionConnector {
       return {
         success: false,
         errorCode: String(statusCode),
-        errorMessage: statusMsg ?? 'Unknown Douyin API error',
+        errorMessage: statusMsg ?? 'Unknown Douyin API error'
       };
     }
 
     return {
       success: true,
-      externalReplyId: resp.data?.data?.comment_id,
+      externalReplyId: resp.data?.data?.comment_id
     };
   }
 }

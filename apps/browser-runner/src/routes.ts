@@ -1,7 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { sessionManager } from './session-manager';
-import { getPlatformLoginConfig, getSupportedPlatforms } from './platform-configs';
+import {
+  getPlatformLoginConfig,
+  getSupportedPlatforms
+} from './platform-configs';
 import { createHealthSnapshot } from '@ai-growth-ops/shared';
 import { assistRoutes } from './assist-routes.js';
 import { publishAssistRoutes } from './publish-routes.js';
@@ -11,7 +14,8 @@ import { publishAssistRoutes } from './publish-routes.js';
 // require the caller to send an `Authorization: Bearer <SECRET>` header
 // matching the BROWSER_RUNNER_SECRET env var (or falling back to
 // TOKEN_ENCRYPTION_KEY for convenience in dev).
-const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+const RUNNER_SECRET =
+  process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
 
 function safeEqual(a: string, b: string): boolean {
   if (!a || !b || a.length !== b.length) return false;
@@ -56,9 +60,9 @@ const routes: Route[] = [
       sendJson(res, 200, {
         ...createHealthSnapshot('browser-runner'),
         activeSessions: sessionManager.activeSessionCount,
-        supportedPlatforms: getSupportedPlatforms(),
+        supportedPlatforms: getSupportedPlatforms()
       });
-    },
+    }
   },
   {
     method: 'POST',
@@ -82,7 +86,7 @@ const routes: Route[] = [
       } catch (err) {
         sendJson(res, 500, { error: (err as Error).message });
       }
-    },
+    }
   },
   {
     method: 'GET',
@@ -95,7 +99,7 @@ const routes: Route[] = [
       } catch (err) {
         sendJson(res, 500, { error: (err as Error).message });
       }
-    },
+    }
   },
   {
     method: 'POST',
@@ -104,8 +108,8 @@ const routes: Route[] = [
       const { sessionId } = ctx.params;
       await sessionManager.cancelSession(sessionId);
       sendJson(res, 200, { ok: true });
-    },
-  },
+    }
+  }
 ];
 
 interface MatchResult {
@@ -150,8 +154,14 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function routeRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = new URL(req.url ?? '/', `http://localhost:${process.env.BROWSER_RUNNER_PORT ?? 3200}`);
+export async function routeRequest(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  const url = new URL(
+    req.url ?? '/',
+    `http://localhost:${process.env.BROWSER_RUNNER_PORT ?? 3200}`
+  );
   const result = matchRoute(req.method ?? 'GET', url.pathname);
 
   if (!result) {

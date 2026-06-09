@@ -16,7 +16,9 @@ export function mapConfidenceToLeadLevel(confidence: number): LeadLevel {
 }
 
 /** Count how many leads fall into each level. */
-export function buildLeadBreakdown(leads: Array<{ classification: { leadLevel: LeadLevel } }>): LevelBreakdown {
+export function buildLeadBreakdown(
+  leads: Array<{ classification: { leadLevel: LeadLevel } }>
+): LevelBreakdown {
   const breakdown: LevelBreakdown = { A: 0, B: 0, C: 0, D: 0 };
   for (const lead of leads) {
     breakdown[lead.classification.leadLevel]++;

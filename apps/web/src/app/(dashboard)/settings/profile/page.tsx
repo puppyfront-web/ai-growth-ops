@@ -10,7 +10,11 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/components/ui/toast';
 
-const roleLabels: Record<string, string> = { admin: '管理员', operator: '运营', viewer: '只读' };
+const roleLabels: Record<string, string> = {
+  admin: '管理员',
+  operator: '运营',
+  viewer: '只读'
+};
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -22,7 +26,11 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user) {
       getProfile()
-        .then((p) => { setName(p.name); setEmail(p.email); setRole(p.role); })
+        .then((p) => {
+          setName(p.name);
+          setEmail(p.email);
+          setRole(p.role);
+        })
         .catch(() => {})
         .finally(() => setIsLoading(false));
     }
@@ -31,7 +39,7 @@ export default function ProfilePage() {
   const saveMutation = useMutation({
     mutationFn: () => updateProfile({ name, email }),
     onSuccess: () => toast.success('个人设置已保存'),
-    onError: () => toast.error('保存失败，请重试'),
+    onError: () => toast.error('保存失败，请重试')
   });
 
   if (isLoading) return <LoadingState />;
@@ -45,18 +53,34 @@ export default function ProfilePage() {
         <CardContent className="space-y-4 pt-6">
           <div>
             <label className="text-sm font-medium">姓名</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-md border p-2 text-sm" />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 w-full rounded-md border p-2 text-sm"
+            />
           </div>
           <div>
             <label className="text-sm font-medium">邮箱</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-md border p-2 text-sm" />
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full rounded-md border p-2 text-sm"
+            />
           </div>
           <div>
             <label className="text-sm font-medium">角色</label>
-            <input value={roleLabels[role] ?? role} disabled className="mt-1 w-full rounded-md border bg-muted p-2 text-sm" />
+            <input
+              value={roleLabels[role] ?? role}
+              disabled
+              className="mt-1 w-full rounded-md border bg-muted p-2 text-sm"
+            />
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50">
+            <button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            >
               {saveMutation.isPending ? '保存中...' : '保存'}
             </button>
           </div>

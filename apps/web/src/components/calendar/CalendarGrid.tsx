@@ -32,13 +32,16 @@ export function CalendarGrid({
   renderDayContent,
   selectedDate,
   onDateSelect,
-  className,
+  className
 }: CalendarGridProps) {
   return (
     <div className={className}>
       {/* View toggle */}
       <div className="flex items-center justify-between mb-4">
-        <Tabs value={viewMode} onValueChange={(v) => onViewModeChange(v as ViewMode)}>
+        <Tabs
+          value={viewMode}
+          onValueChange={(v) => onViewModeChange(v as ViewMode)}
+        >
           <TabsList>
             <TabsTrigger value="month">月视图</TabsTrigger>
             <TabsTrigger value="week">周视图</TabsTrigger>
@@ -49,8 +52,12 @@ export function CalendarGrid({
         <div className="flex items-center gap-3">
           {legendItems.map((item) => (
             <div key={item.label} className="flex items-center gap-1">
-              <span className={`inline-block h-2 w-2 rounded-full ${item.dotClass}`} />
-              <span className="text-xs text-muted-foreground">{item.label}</span>
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${item.dotClass}`}
+              />
+              <span className="text-xs text-muted-foreground">
+                {item.label}
+              </span>
             </div>
           ))}
         </div>
@@ -62,7 +69,7 @@ export function CalendarGrid({
         onMonthChange={onMonthChange}
         selectedDate={selectedDate}
         onSelectDate={onDateSelect}
-        renderDay={(date, _isCurrentMonth) => renderDayContent(date)}
+        renderDay={(date) => renderDayContent(date)}
       />
     </div>
   );

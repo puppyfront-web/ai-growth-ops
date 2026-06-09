@@ -16,10 +16,17 @@ export type ChartContainerProps = {
 const rangeOptions: { value: DateRange; label: string }[] = [
   { value: '7d', label: '7天' },
   { value: '30d', label: '30天' },
-  { value: '90d', label: '90天' },
+  { value: '90d', label: '90天' }
 ];
 
-export function ChartContainer({ title, icon, children, dateRange, onDateRangeChange, className }: ChartContainerProps) {
+export function ChartContainer({
+  title,
+  icon,
+  children,
+  dateRange,
+  onDateRangeChange,
+  className
+}: ChartContainerProps) {
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

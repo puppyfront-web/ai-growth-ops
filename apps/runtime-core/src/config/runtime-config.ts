@@ -26,7 +26,8 @@ export interface RuntimeConfig {
 }
 
 export function loadRuntimeConfig(): RuntimeConfig {
-  const localSocialPublishRoot = '/Users/tutu/.agents/skills/social-publish-skills';
+  const localSocialPublishRoot =
+    '/Users/tutu/.agents/skills/social-publish-skills';
   const socialPublishSkillsRoot =
     process.env.AI_GROWTH_OPS_SOCIAL_PUBLISH_ROOT ??
     (existsSync(localSocialPublishRoot) ? localSocialPublishRoot : undefined);
@@ -40,14 +41,19 @@ export function loadRuntimeConfig(): RuntimeConfig {
     sharedAccounts: {
       douyin: process.env.AI_GROWTH_OPS_DOUYIN_SHARED_ACCOUNT ?? 'shared',
       kuaishou: process.env.AI_GROWTH_OPS_KUAISHOU_SHARED_ACCOUNT ?? 'shared',
-      wechat_channels: process.env.AI_GROWTH_OPS_WECHAT_CHANNELS_SHARED_ACCOUNT ?? 'shared',
-      xiaohongshu: process.env.AI_GROWTH_OPS_XIAOHONGSHU_SHARED_ACCOUNT ?? 'shared',
-      wechat_official: process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_SHARED_ACCOUNT ?? 'shared',
+      wechat_channels:
+        process.env.AI_GROWTH_OPS_WECHAT_CHANNELS_SHARED_ACCOUNT ?? 'shared',
+      xiaohongshu:
+        process.env.AI_GROWTH_OPS_XIAOHONGSHU_SHARED_ACCOUNT ?? 'shared',
+      wechat_official:
+        process.env.AI_GROWTH_OPS_WECHAT_OFFICIAL_SHARED_ACCOUNT ?? 'shared',
       zhihu: process.env.AI_GROWTH_OPS_ZHIHU_SHARED_ACCOUNT ?? 'shared',
-      baijiahao: process.env.AI_GROWTH_OPS_BAIJIAHAO_SHARED_ACCOUNT ?? 'shared',
+      baijiahao: process.env.AI_GROWTH_OPS_BAIJIAHAO_SHARED_ACCOUNT ?? 'shared'
     },
     llm: {
-      provider: (process.env.LLM_PROVIDER as 'openai' | 'anthropic' | undefined) ?? undefined,
+      provider:
+        (process.env.LLM_PROVIDER as 'openai' | 'anthropic' | undefined) ??
+        undefined,
       apiKey:
         process.env.LLM_PROVIDER === 'anthropic'
           ? process.env.ANTHROPIC_API_KEY || undefined
@@ -56,7 +62,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
         process.env.LLM_PROVIDER === 'anthropic'
           ? process.env.ANTHROPIC_BASE_URL || undefined
           : process.env.OPENAI_BASE_URL || undefined,
-      model: process.env.LLM_MODEL || undefined,
-    },
+      model: process.env.LLM_MODEL || undefined
+    }
   };
 }

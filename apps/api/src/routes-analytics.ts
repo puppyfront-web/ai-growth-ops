@@ -10,11 +10,22 @@ interface AnalyticsRouteContext {
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(statusCode, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store'
+  });
   res.end(JSON.stringify(payload));
 }
 
-export const analyticsRoutes: Array<{ method: string; pattern: string; handler: (req: IncomingMessage, res: ServerResponse, ctx: AnalyticsRouteContext) => Promise<void> }> = [
+export const analyticsRoutes: Array<{
+  method: string;
+  pattern: string;
+  handler: (
+    req: IncomingMessage,
+    res: ServerResponse,
+    ctx: AnalyticsRouteContext
+  ) => Promise<void>;
+}> = [
   // GET /api/analytics/events - List analytics events
   {
     method: 'GET',
@@ -38,10 +49,10 @@ export const analyticsRoutes: Array<{ method: string; pattern: string; handler: 
       const items = await ctx.db.analyticsEvent.findMany({
         where,
         orderBy: { occurredAt: 'desc' },
-        take: 200,
+        take: 200
       });
       sendJson(res, 200, items);
-    },
+    }
   },
   // POST /api/analytics/events - Create an analytics event
   {
@@ -58,19 +69,28 @@ export const analyticsRoutes: Array<{ method: string; pattern: string; handler: 
           entityType: body.entityType ? String(body.entityType) : null,
           entityId: body.entityId ? String(body.entityId) : null,
           value: body.value ? Number(body.value) : null,
-          metadata: body.metadata as any || null,
-          occurredAt: body.occurredAt ? new Date(body.occurredAt as string) : new Date(),
-        },
+          metadata: (body.metadata as Record<string, unknown>) || null,
+          occurredAt: body.occurredAt
+            ? new Date(body.occurredAt as string)
+            : new Date()
+        }
       });
       sendJson(res, 201, item);
-    },
-  },
+    }
+  }
 ];
 
 // Helper to track analytics events from any route
 export async function trackEvent(
   db: DatabaseClient,
-  data: { eventType: string; platform?: string; entityType?: string; entityId?: string; value?: number; metadata?: unknown }
+  data: {
+    eventType: string;
+    platform?: string;
+    entityType?: string;
+    entityId?: string;
+    value?: number;
+    metadata?: unknown;
+  }
 ): Promise<void> {
   await db.analyticsEvent.create({
     data: {
@@ -79,8 +99,8 @@ export async function trackEvent(
       entityType: data.entityType || null,
       entityId: data.entityId || null,
       value: data.value || null,
-      metadata: (data.metadata || null) as any,
-      occurredAt: new Date(),
-    },
+      metadata: (data.metadata || null) as Record<string, unknown>,
+      occurredAt: new Date()
+    }
   });
 }

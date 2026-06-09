@@ -7,4 +7,7 @@ export const getBrowserRunnerHealth = () => createHealthSnapshot(appName);
 export { startBrowserRunnerServer, createBrowserRunnerServer } from './server';
 export { routeRequest } from './routes';
 export { sessionManager } from './session-manager';
-export { getPlatformLoginConfig, getSupportedPlatforms } from './platform-configs';
+export {
+  getPlatformLoginConfig,
+  getSupportedPlatforms
+} from './platform-configs';

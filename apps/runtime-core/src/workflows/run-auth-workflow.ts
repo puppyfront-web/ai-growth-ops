@@ -1,6 +1,9 @@
 import { getRuntimeAdapter } from '../runtime-adapters/index.js';
 import { createDefaultPublishRegistry } from '../tools/publish-tools.js';
-import { resolveSharedAccountForPlatform, validateCookieCredential } from '../tools/credential-tools.js';
+import {
+  resolveSharedAccountForPlatform,
+  validateCookieCredential
+} from '../tools/credential-tools.js';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
 
 export async function runAuthWorkflow(input: {
@@ -8,7 +11,10 @@ export async function runAuthWorkflow(input: {
   platform: string;
   account?: string;
 }) {
-  const account = resolveSharedAccountForPlatform(input.platform, input.account);
+  const account = resolveSharedAccountForPlatform(
+    input.platform,
+    input.account
+  );
   const registry = await createDefaultPublishRegistry();
   const capability = input.action === 'check' ? 'auth.check' : 'auth.login';
   const manifest = registry.resolve(capability, { platform: input.platform });
@@ -23,9 +29,9 @@ export async function runAuthWorkflow(input: {
         mode: 'validated',
         detail: {
           valid: validation.valid,
-          error: validation.error,
-        },
-      },
+          error: validation.error
+        }
+      }
     };
   }
 
@@ -35,8 +41,8 @@ export async function runAuthWorkflow(input: {
       status: 'failed' as const,
       result: {
         platform: input.platform,
-        reason: 'capability_unresolved',
-      },
+        reason: 'capability_unresolved'
+      }
     };
   }
 
@@ -44,7 +50,8 @@ export async function runAuthWorkflow(input: {
   if (!config.socialPublishSkillsRoot || !account) {
     const required = [];
     if (!account) required.push('account');
-    if (!config.socialPublishSkillsRoot) required.push('socialPublishSkillsRoot');
+    if (!config.socialPublishSkillsRoot)
+      required.push('socialPublishSkillsRoot');
 
     return {
       workflow: 'auth' as const,
@@ -52,12 +59,14 @@ export async function runAuthWorkflow(input: {
       result: {
         platform: input.platform,
         mode: 'planned',
-        required,
-      },
+        required
+      }
     };
   }
 
-  const commandPlatform = (manifest.metadata?.commandPlatform as string | undefined) ?? input.platform;
+  const commandPlatform =
+    (manifest.metadata?.commandPlatform as string | undefined) ??
+    input.platform;
   const subcommand = 'login';
   const adapter = getRuntimeAdapter(manifest.runtime);
   const execution = await adapter.runSkill({
@@ -65,8 +74,8 @@ export async function runAuthWorkflow(input: {
     payload: {
       root: config.socialPublishSkillsRoot,
       cliRelativePath: 'dist/cli.js',
-      command: [commandPlatform, subcommand, '--account', account],
-    },
+      command: [commandPlatform, subcommand, '--account', account]
+    }
   });
 
   return {
@@ -75,7 +84,7 @@ export async function runAuthWorkflow(input: {
     result: {
       platform: input.platform,
       mode: 'executed',
-      detail: execution.output ?? execution.error,
-    },
+      detail: execution.output ?? execution.error
+    }
   };
 }

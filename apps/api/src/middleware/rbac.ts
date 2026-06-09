@@ -9,42 +9,62 @@
 
 export type Permission =
   // Content
-  | 'content:create' | 'content:edit' | 'content:delete' | 'content:publish'
+  | 'content:create'
+  | 'content:edit'
+  | 'content:delete'
+  | 'content:publish'
   // Leads
-  | 'lead:view' | 'lead:edit' | 'lead:export'
+  | 'lead:view'
+  | 'lead:edit'
+  | 'lead:export'
   // Interactions
-  | 'interaction:view' | 'interaction:reply'
+  | 'interaction:view'
+  | 'interaction:reply'
   // Analytics
-  | 'analytics:view' | 'analytics:export'
+  | 'analytics:view'
+  | 'analytics:export'
   // Research
-  | 'research:create' | 'research:view'
+  | 'research:create'
+  | 'research:view'
   // Settings
-  | 'settings:manage' | 'team:manage' | 'integration:manage'
+  | 'settings:manage'
+  | 'team:manage'
+  | 'integration:manage'
   // Media
-  | 'media:upload' | 'media:generate'
+  | 'media:upload'
+  | 'media:generate'
   // Webhooks
   | 'webhook:manage';
 
 // ── Role-Permission matrix ───────────────────────────────────────────────
 
 const ROLE_PERMISSIONS: Record<string, Permission[] | '*'> = {
-  owner: '*',     // All permissions
-  admin: '*',     // All permissions
+  owner: '*', // All permissions
+  admin: '*', // All permissions
   member: [
-    'content:create', 'content:edit', 'content:delete', 'content:publish',
-    'lead:view', 'lead:edit', 'lead:export',
-    'interaction:view', 'interaction:reply',
-    'analytics:view', 'analytics:export',
-    'research:create', 'research:view',
-    'media:upload', 'media:generate',
+    'content:create',
+    'content:edit',
+    'content:delete',
+    'content:publish',
+    'lead:view',
+    'lead:edit',
+    'lead:export',
+    'interaction:view',
+    'interaction:reply',
+    'analytics:view',
+    'analytics:export',
+    'research:create',
+    'research:view',
+    'media:upload',
+    'media:generate'
   ],
   viewer: [
     'content:edit',
     'lead:view',
     'interaction:view',
     'analytics:view',
-    'research:view',
-  ],
+    'research:view'
+  ]
 };
 
 // ── Permission checker ───────────────────────────────────────────────────
@@ -63,15 +83,21 @@ export function hasPermission(role: string, permission: Permission): boolean {
 /**
  * Check if a role has ANY of the specified permissions.
  */
-export function hasAnyPermission(role: string, permissions: Permission[]): boolean {
-  return permissions.some(p => hasPermission(role, p));
+export function hasAnyPermission(
+  role: string,
+  permissions: Permission[]
+): boolean {
+  return permissions.some((p) => hasPermission(role, p));
 }
 
 /**
  * Check if a role has ALL of the specified permissions.
  */
-export function hasAllPermissions(role: string, permissions: Permission[]): boolean {
-  return permissions.every(p => hasPermission(role, p));
+export function hasAllPermissions(
+  role: string,
+  permissions: Permission[]
+): boolean {
+  return permissions.every((p) => hasPermission(role, p));
 }
 
 /**

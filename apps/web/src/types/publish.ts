@@ -1,4 +1,9 @@
-import type { PublishJobStatus, Platform, ContentType, ProviderMode } from './enums';
+import type {
+  PublishJobStatus,
+  Platform,
+  ContentType,
+  ProviderMode
+} from './enums';
 import type { ContentVariant } from './content';
 
 export type PlatformAccount = {

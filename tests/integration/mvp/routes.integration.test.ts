@@ -47,7 +47,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await new Promise<void>((resolve) => server.close((e) => e ? Promise.reject(e) : resolve()));
+  await new Promise<void>((resolve) =>
+    server.close((e) => (e ? Promise.reject(e) : resolve()))
+  );
   await db.$disconnect();
 });
 
@@ -134,7 +136,9 @@ describe('Research Tasks', () => {
   });
 
   it('GET /api/research-tasks/:taskId/comments returns array', async () => {
-    const { status, body } = await get(`/api/research-tasks/${taskId}/comments`);
+    const { status, body } = await get(
+      `/api/research-tasks/${taskId}/comments`
+    );
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
   });
@@ -162,13 +166,17 @@ describe('Content Opportunities', () => {
 
   it('POST /api/content-opportunities/:id/create-content creates item', async () => {
     if (!oppId) return; // skip if no demo opportunities
-    const { status, body } = await post(`/api/content-opportunities/${oppId}/create-content`);
+    const { status, body } = await post(
+      `/api/content-opportunities/${oppId}/create-content`
+    );
     expect(status).toBe(201);
     expect(body.contentItemId).toBeDefined();
   });
 
   it('POST /api/content-opportunities/:id/create-content 404 for missing', async () => {
-    const { status } = await post('/api/content-opportunities/nonexistent/create-content');
+    const { status } = await post(
+      '/api/content-opportunities/nonexistent/create-content'
+    );
     expect(status).toBe(404);
   });
 });
@@ -216,13 +224,17 @@ describe('Content Items', () => {
   });
 
   it('GET /api/content-items/:id/variants returns array', async () => {
-    const { status, body } = await get(`/api/content-items/${contentId}/variants`);
+    const { status, body } = await get(
+      `/api/content-items/${contentId}/variants`
+    );
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
   });
 
   it('POST /api/content-items/:id/generate-variants creates variants', async () => {
-    const { status, body } = await post(`/api/content-items/${contentId}/generate-variants`);
+    const { status, body } = await post(
+      `/api/content-items/${contentId}/generate-variants`
+    );
     expect(status).toBe(201);
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBeGreaterThan(0);
@@ -251,7 +263,9 @@ describe('Media Assets', () => {
   });
 
   it('GET /api/media-assets?reviewStatus=approved filters', async () => {
-    const { status, body } = await get('/api/media-assets?reviewStatus=approved');
+    const { status, body } = await get(
+      '/api/media-assets?reviewStatus=approved'
+    );
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
   });
@@ -325,14 +339,21 @@ describe('Publish Jobs', () => {
     if (!jobs || jobs.length === 0) {
       // No DRAFT jobs available; use a PENDING one
       const { body: allJobs } = await get('/api/publish-jobs');
-      const candidate = allJobs?.find((j: { status: string }) => j.status !== 'CANCELLED' && j.status !== 'PUBLISHED');
+      const candidate = allJobs?.find(
+        (j: { status: string }) =>
+          j.status !== 'CANCELLED' && j.status !== 'PUBLISHED'
+      );
       if (!candidate) return; // skip
-      const { status, body } = await post(`/api/publish-jobs/${candidate.id}/cancel`);
+      const { status, body } = await post(
+        `/api/publish-jobs/${candidate.id}/cancel`
+      );
       expect(status).toBe(200);
       expect(body.status).toBe('CANCELLED');
       return;
     }
-    const { status, body } = await post(`/api/publish-jobs/${jobs[0].id}/cancel`);
+    const { status, body } = await post(
+      `/api/publish-jobs/${jobs[0].id}/cancel`
+    );
     expect(status).toBe(200);
     expect(body.status).toBe('CANCELLED');
   });
@@ -368,16 +389,21 @@ describe('Interactions', () => {
 
   it('GET /api/interactions/:id/reply-suggestions returns array', async () => {
     if (!interactionId) return;
-    const { status, body } = await get(`/api/interactions/${interactionId}/reply-suggestions`);
+    const { status, body } = await get(
+      `/api/interactions/${interactionId}/reply-suggestions`
+    );
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
   });
 
   it('POST /api/interactions/:id/reply sends reply', async () => {
     if (!interactionId) return;
-    const { status, body } = await post(`/api/interactions/${interactionId}/reply`, {
-      content: 'Test reply content'
-    });
+    const { status, body } = await post(
+      `/api/interactions/${interactionId}/reply`,
+      {
+        content: 'Test reply content'
+      }
+    );
     expect(status).toBe(200);
     expect(body.status).toBe('REPLIED');
   });
@@ -385,22 +411,34 @@ describe('Interactions', () => {
   it('POST /api/interactions/:id/review approves', async () => {
     // Need a fresh interaction that wasn't already replied to
     const { body: interactions } = await get('/api/interactions');
-    const fresh = interactions.find((i: { status: string }) => i.status !== 'REPLIED' && i.status !== 'IGNORED');
+    const fresh = interactions.find(
+      (i: { status: string }) =>
+        i.status !== 'REPLIED' && i.status !== 'IGNORED'
+    );
     if (!fresh) return;
-    const { status, body } = await post(`/api/interactions/${fresh.id}/review`, {
-      action: 'approve'
-    });
+    const { status, body } = await post(
+      `/api/interactions/${fresh.id}/review`,
+      {
+        action: 'approve'
+      }
+    );
     expect(status).toBe(200);
     expect(['REPLIED', 'IGNORED']).toContain(body.status);
   });
 
   it('POST /api/interactions/:id/review rejects', async () => {
     const { body: interactions } = await get('/api/interactions');
-    const fresh = interactions.find((i: { status: string }) => i.status !== 'REPLIED' && i.status !== 'IGNORED');
+    const fresh = interactions.find(
+      (i: { status: string }) =>
+        i.status !== 'REPLIED' && i.status !== 'IGNORED'
+    );
     if (!fresh) return;
-    const { status, body } = await post(`/api/interactions/${fresh.id}/review`, {
-      action: 'reject'
-    });
+    const { status, body } = await post(
+      `/api/interactions/${fresh.id}/review`,
+      {
+        action: 'reject'
+      }
+    );
     expect(status).toBe(200);
     expect(body.status).toBe('IGNORED');
   });
@@ -416,7 +454,7 @@ describe('Interactions', () => {
       platform: 'douyin',
       platformAccountId: 'test-account-1',
       syncType: 'comments',
-      mode: 'sandbox',
+      mode: 'sandbox'
     });
     // May be 202 (success) or 500 (Redis not available in test)
     if (status === 202) {
@@ -439,9 +477,13 @@ describe('Conversations', () => {
 
   it('GET /api/conversations/:id returns conversation when exists', async () => {
     const { body: interactions } = await get('/api/interactions');
-    const withConversation = interactions.find((i: { conversationId: string | null }) => i.conversationId);
+    const withConversation = interactions.find(
+      (i: { conversationId: string | null }) => i.conversationId
+    );
     if (!withConversation) return;
-    const { status, body } = await get(`/api/conversations/${withConversation.conversationId}`);
+    const { status, body } = await get(
+      `/api/conversations/${withConversation.conversationId}`
+    );
     expect(status).toBe(200);
     expect(body.id).toBe(withConversation.conversationId);
     expect(Array.isArray(body.interactions)).toBe(true);

@@ -12,12 +12,13 @@ const providers = new Map<string, PlatformProvider>([
   ['wechat_official', new WechatOfficialProvider()],
   ['wechat_channels', new WechatChannelsProvider()],
   ['baijiahao', new BaijiahaoProvider()],
-  ['zhihu', new ZhihuProvider()],
+  ['zhihu', new ZhihuProvider()]
 ]);
 
 export function getPlatformProvider(platform: string): PlatformProvider {
   const provider = providers.get(platform);
-  if (!provider) throw new Error(`No provider registered for platform: ${platform}`);
+  if (!provider)
+    throw new Error(`No provider registered for platform: ${platform}`);
   return provider;
 }
 

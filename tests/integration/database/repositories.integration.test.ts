@@ -189,6 +189,8 @@ describe('database repositories integration', () => {
     );
 
     expect(accounts).toHaveLength(6);
-    expect(accounts.every((account) => account.mode === 'manual_confirm')).toBe(true);
+    expect(accounts.every((account) => account.mode === 'manual_confirm')).toBe(
+      true
+    );
   });
 });

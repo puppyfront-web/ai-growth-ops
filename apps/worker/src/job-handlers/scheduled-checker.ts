@@ -18,12 +18,12 @@ export async function handleScheduledChecker(_job: Job): Promise<void> {
     where: {
       status: 'SCHEDULED',
       scheduledAt: { lte: now },
-      deletedAt: null,
+      deletedAt: null
     },
     include: {
       contentVariant: { select: { id: true } },
-      platformAccount: { select: { id: true } },
-    },
+      platformAccount: { select: { id: true } }
+    }
   });
 
   if (dueJobs.length === 0) return;
@@ -38,31 +38,42 @@ export async function handleScheduledChecker(_job: Job): Promise<void> {
       // Mark as RUNNING to prevent double-enqueue
       await db.publishJob.update({
         where: { id: job.id },
-        data: { status: 'RUNNING', startedAt: new Date() },
+        data: { status: 'RUNNING', startedAt: new Date() }
       });
 
-      await publishQueue.add(QUEUE_NAMES.PUBLISH_EXECUTE, {
-        publishJobId: job.id,
-        contentVariantId: job.contentVariantId,
-        platformAccountId: job.platformAccountId,
-        platform: job.platform,
-        contentType: job.contentType,
-        mode: job.mode,
-      }, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-      });
+      await publishQueue.add(
+        QUEUE_NAMES.PUBLISH_EXECUTE,
+        {
+          publishJobId: job.id,
+          contentVariantId: job.contentVariantId,
+          platformAccountId: job.platformAccountId,
+          platform: job.platform,
+          contentType: job.contentType,
+          mode: job.mode
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 }
+        }
+      );
 
       enqueued++;
     } catch (err) {
-      console.error(`[scheduled-checker] Failed to enqueue job ${job.id}:`, err);
+      console.error(
+        `[scheduled-checker] Failed to enqueue job ${job.id}:`,
+        err
+      );
       // Revert status so it can be picked up next cycle
-      await db.publishJob.update({
-        where: { id: job.id },
-        data: { status: 'SCHEDULED' },
-      }).catch(() => {});
+      await db.publishJob
+        .update({
+          where: { id: job.id },
+          data: { status: 'SCHEDULED' }
+        })
+        .catch(() => {});
     }
   }
 
-  console.log(`[scheduled-checker] Enqueued ${enqueued}/${dueJobs.length} jobs`);
+  console.log(
+    `[scheduled-checker] Enqueued ${enqueued}/${dueJobs.length} jobs`
+  );
 }

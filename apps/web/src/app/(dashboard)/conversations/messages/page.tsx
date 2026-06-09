@@ -15,26 +15,60 @@ import type { Interaction } from '@/types/interaction';
 
 const columns: ColumnDef<Interaction>[] = [
   { accessorKey: 'externalUserName', header: '用户' },
-  { accessorKey: 'platform', header: '平台', cell: ({ getValue }) => <PlatformBadge platform={getValue() as string} /> },
-  { accessorKey: 'content', header: '消息内容', cell: ({ getValue }) => <span className="text-sm line-clamp-1">{getValue() as string}</span> },
-  { accessorKey: 'status', header: '状态', cell: ({ getValue }) => <StatusBadge status={getValue() as string} label={interactionStatusLabels[getValue() as keyof typeof interactionStatusLabels]} /> },
-  { accessorKey: 'receivedAt', header: '时间', cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{formatDate(getValue() as string)}</span> },
+  {
+    accessorKey: 'platform',
+    header: '平台',
+    cell: ({ getValue }) => <PlatformBadge platform={getValue() as string} />
+  },
+  {
+    accessorKey: 'content',
+    header: '消息内容',
+    cell: ({ getValue }) => (
+      <span className="text-sm line-clamp-1">{getValue() as string}</span>
+    )
+  },
+  {
+    accessorKey: 'status',
+    header: '状态',
+    cell: ({ getValue }) => (
+      <StatusBadge
+        status={getValue() as string}
+        label={
+          interactionStatusLabels[
+            getValue() as keyof typeof interactionStatusLabels
+          ]
+        }
+      />
+    )
+  },
+  {
+    accessorKey: 'receivedAt',
+    header: '时间',
+    cell: ({ getValue }) => (
+      <span className="text-sm text-muted-foreground">
+        {formatDate(getValue() as string)}
+      </span>
+    )
+  }
 ];
 
 export default function MessagesPage() {
   const qc = useQueryClient();
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [useHeadedBrowser, setUseHeadedBrowser] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [syncMsg, setSyncMsg] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['messages'],
-    queryFn: () => listInteractions({ type: 'message' }),
+    queryFn: () => listInteractions({ type: 'message' })
   });
 
   const { data: accounts } = useQuery({
     queryKey: ['platform-accounts'],
-    queryFn: getPlatformAccounts,
+    queryFn: getPlatformAccounts
   });
 
   const syncMutation = useMutation({
@@ -46,17 +80,21 @@ export default function MessagesPage() {
         platform: account.platform,
         mode: account.mode,
         syncType: 'messages',
-        headed: useHeadedBrowser,
+        headed: useHeadedBrowser
       });
     },
     onSuccess: (result) => {
-      setSyncMsg({ type: 'success', text: `私信同步已触发（任务 ${result.syncJobId.slice(0, 8)}…），后台处理中` });
+      setSyncMsg({
+        type: 'success',
+        text: `私信同步已触发（任务 ${result.syncJobId.slice(0, 8)}…），后台处理中`
+      });
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: ['messages'] });
         setSyncMsg(null);
       }, 6000);
     },
-    onError: (err: Error) => setSyncMsg({ type: 'error', text: `同步失败：${err.message}` }),
+    onError: (err: Error) =>
+      setSyncMsg({ type: 'error', text: `同步失败：${err.message}` })
   });
 
   const activeAccounts = (accounts ?? []).filter((a) => a.status === 'active');
@@ -72,13 +110,19 @@ export default function MessagesPage() {
             <div className="flex items-center gap-2">
               <select
                 value={selectedAccountId}
-                onChange={(e) => { setSelectedAccountId(e.target.value); setSyncMsg(null); }}
+                onChange={(e) => {
+                  setSelectedAccountId(e.target.value);
+                  setSyncMsg(null);
+                }}
                 className="rounded-md border p-1.5 text-xs min-w-[160px]"
               >
                 <option value="">选择账号…</option>
                 {activeAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {platformLabels[a.platform as keyof typeof platformLabels] ?? a.platform} · {a.name}
+                    {platformLabels[
+                      a.platform as keyof typeof platformLabels
+                    ] ?? a.platform}{' '}
+                    · {a.name}
                   </option>
                 ))}
               </select>
@@ -100,7 +144,10 @@ export default function MessagesPage() {
               </label>
             </div>
           ) : (
-            <Link href="/integrations/platforms" className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent">
+            <Link
+              href="/integrations/platforms"
+              className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent"
+            >
               去配置平台账号
             </Link>
           )
@@ -108,23 +155,42 @@ export default function MessagesPage() {
       />
 
       {syncMsg && (
-        <div className={`mb-4 rounded-md px-4 py-2 text-sm flex items-center justify-between ${
-          syncMsg.type === 'error' ? 'bg-red-50 dark:bg-red-950 text-red-700' : 'bg-blue-50 dark:bg-blue-950 text-blue-700'
-        }`}>
+        <div
+          className={`mb-4 rounded-md px-4 py-2 text-sm flex items-center justify-between ${
+            syncMsg.type === 'error'
+              ? 'bg-red-50 dark:bg-red-950 text-red-700'
+              : 'bg-blue-50 dark:bg-blue-950 text-blue-700'
+          }`}
+        >
           <span>{syncMsg.text}</span>
-          <button onClick={() => setSyncMsg(null)} className="opacity-60 hover:opacity-100 ml-4">✕</button>
+          <button
+            onClick={() => setSyncMsg(null)}
+            className="opacity-60 hover:opacity-100 ml-4"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      {!hasAccounts && (accounts !== undefined) && (
+      {!hasAccounts && accounts !== undefined && (
         <div className="mb-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 text-sm text-amber-800">
           尚未配置平台账号。请先前往
-          <Link href="/integrations/platforms" className="mx-1 underline font-medium">集成 → 平台账号</Link>
+          <Link
+            href="/integrations/platforms"
+            className="mx-1 underline font-medium"
+          >
+            集成 → 平台账号
+          </Link>
           添加抖音等账号，选择「浏览器辅助」或「官方 API」模式后即可拉取私信。
         </div>
       )}
 
-      <DataTable columns={columns} data={data ?? []} loading={isLoading} emptyTitle="暂无私信" />
+      <DataTable
+        columns={columns}
+        data={data ?? []}
+        loading={isLoading}
+        emptyTitle="暂无私信"
+      />
     </div>
   );
 }

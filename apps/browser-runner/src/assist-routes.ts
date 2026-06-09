@@ -3,47 +3,50 @@ import type { RouteHandler, Route } from './routes.js';
 import { createStealthSession } from './browser-session.js';
 import {
   dedupeByKey,
-  isPublishedTodayInShanghai,
   RECENT_INTERACTION_FALLBACK_LIMIT,
-  selectTodayOrRecent,
+  selectTodayOrRecent
 } from '@ai-growth-ops/shared';
 
 // ── Platform comment management page URLs ─────────────────────────
 
 /** 抖音创作者中心：互动管理 → 评论管理 */
-const DOUYIN_COMMENT_MANAGE_URL = 'https://creator.douyin.com/creator-micro/interaction/comment';
+const DOUYIN_COMMENT_MANAGE_URL =
+  'https://creator.douyin.com/creator-micro/interaction/comment';
 const DOUYIN_ITEM_LIST_PATTERNS = [
   '/web/api/creator/item/list',
   '/aweme/v1/creator/item/list',
-  '/creator/item/list',
+  '/creator/item/list'
 ];
 
 function douyinPostCommentUrl(itemId: string): string {
   return `https://creator.douyin.com/creator-micro/content/post-comment/${encodeURIComponent(itemId)}`;
 }
 
-const COMMENT_PAGE_URLS: Record<string, (sourceContentId?: string) => string> = {
-  douyin: (sourceContentId) =>
-    sourceContentId ? douyinPostCommentUrl(sourceContentId) : DOUYIN_COMMENT_MANAGE_URL,
-  xiaohongshu: (sourceContentId) =>
-    sourceContentId ? xhsNotePublicUrl(sourceContentId) : XHS_NOTE_MANAGE_URL,
-  wechat_official: () => 'https://mp.weixin.qq.com/',
-  wechat_channels: () => 'https://channels.weixin.qq.com/platform/comment',
-  baijiahao: (sourceContentId) =>
-    sourceContentId
-      ? `https://baijiahao.baidu.com/builder/rc/edit?type=comment&id=${sourceContentId}`
-      : 'https://baijiahao.baidu.com/builder/rc/edit?type=comment',
-  zhihu: (sourceContentId) =>
-    sourceContentId
-      ? `https://www.zhihu.com/question/${sourceContentId}`
-      : 'https://www.zhihu.com/',
-};
+const COMMENT_PAGE_URLS: Record<string, (sourceContentId?: string) => string> =
+  {
+    douyin: (sourceContentId) =>
+      sourceContentId
+        ? douyinPostCommentUrl(sourceContentId)
+        : DOUYIN_COMMENT_MANAGE_URL,
+    xiaohongshu: (sourceContentId) =>
+      sourceContentId ? xhsNotePublicUrl(sourceContentId) : XHS_NOTE_MANAGE_URL,
+    wechat_official: () => 'https://mp.weixin.qq.com/',
+    wechat_channels: () => 'https://channels.weixin.qq.com/platform/comment',
+    baijiahao: (sourceContentId) =>
+      sourceContentId
+        ? `https://baijiahao.baidu.com/builder/rc/edit?type=comment&id=${sourceContentId}`
+        : 'https://baijiahao.baidu.com/builder/rc/edit?type=comment',
+    zhihu: (sourceContentId) =>
+      sourceContentId
+        ? `https://www.zhihu.com/question/${sourceContentId}`
+        : 'https://www.zhihu.com/'
+  };
 
 const MESSAGE_PAGE_URLS: Record<string, () => string> = {
   douyin: () => 'https://creator.douyin.com/creator-micro/home/message',
   xiaohongshu: () => 'https://creator.xiaohongshu.com/message/chatList',
   wechat_channels: () => 'https://channels.weixin.qq.com/platform/msg',
-  zhihu: () => 'https://www.zhihu.com/messages',
+  zhihu: () => 'https://www.zhihu.com/messages'
 };
 
 // ── Per-platform XHR network-intercept patterns ───────────────────
@@ -56,7 +59,7 @@ const COMMENT_API_PATTERNS: Record<string, string[]> = {
     '/web/api/creator/comment',
     '/api/comment/list',
     '/openapi/v1/post/comment/list/',
-    '/creator/openapi/v1/comment/list/',
+    '/creator/openapi/v1/comment/list/'
   ],
   xiaohongshu: [
     '/api/sns/web/v2/comment/page',
@@ -64,27 +67,24 @@ const COMMENT_API_PATTERNS: Record<string, string[]> = {
     '/web_api/sns/v3/note/comment',
     '/api/sns/web/v1/feed/comment',
     '/api/sns/web/v1/note/comment/page',
-    '/web_api/sns/v2/note/comment',
+    '/web_api/sns/v2/note/comment'
   ],
-  wechat_official: [
-    '/cgi-bin/appmsg_comment',
-    '/cgi-bin/comment/list',
-  ],
+  wechat_official: ['/cgi-bin/appmsg_comment', '/cgi-bin/comment/list'],
   wechat_channels: [
     '/channels/finder/comment/list',
-    '/cgi-bin/channels/platform/comment',
+    '/cgi-bin/channels/platform/comment'
   ],
   baijiahao: [
     '/builderinner/api/content/comment/list',
     '/api/pc/article_comment',
-    '/comment/v3/comment/list',
+    '/comment/v3/comment/list'
   ],
   zhihu: [
     '/api/v4/comment_v5',
     '/api/v4/answers/',
     '/api/v4/articles/',
-    '/api/v4/questions/',
-  ],
+    '/api/v4/questions/'
+  ]
 };
 
 const MESSAGE_API_PATTERNS: Record<string, string[]> = {
@@ -94,40 +94,36 @@ const MESSAGE_API_PATTERNS: Record<string, string[]> = {
     '/aweme/v1/im/message/list/',
     '/api/im/message/list',
     '/creator-micro/api/im/',
-    '/openapi/v1/im/message/list/',
+    '/openapi/v1/im/message/list/'
   ],
   xiaohongshu: [
     '/api/sns/web/v1/msg/chat',
     '/api/sns/web/v2/msg/channels',
-    '/api/sns/web/v1/inbox',
+    '/api/sns/web/v1/inbox'
   ],
   wechat_channels: [
     '/channels/finder/contact/message',
-    '/cgi-bin/channels/platform/contact',
+    '/cgi-bin/channels/platform/contact'
   ],
-  zhihu: [
-    '/api/v4/messages',
-    '/api/v4/inbox',
-  ],
+  zhihu: ['/api/v4/messages', '/api/v4/inbox']
 };
 
 // ── Search API patterns ─────────────────────────────────────────────
 
-const SEARCH_API_PATTERNS: Record<string, string[]> = {
+const _SEARCH_API_PATTERNS: Record<string, string[]> = {
   douyin: [
     '/aweme/v1/web/search/item/',
     '/aweme/v1/general/search/',
-    '/api/v2/search/',
+    '/api/v2/search/'
   ],
-  xiaohongshu: [
-    '/api/sns/web/v1/search/notes',
-    '/api/sns/web/v1/elrsearch',
-  ],
+  xiaohongshu: ['/api/sns/web/v1/search/notes', '/api/sns/web/v1/elrsearch']
 };
 
 const SEARCH_PAGE_URLS: Record<string, (keyword: string) => string> = {
-  douyin: (keyword) => `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=video`,
-  xiaohongshu: (keyword) => `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keyword)}&source=web_search_result_notes`,
+  douyin: (keyword) =>
+    `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=video`,
+  xiaohongshu: (keyword) =>
+    `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keyword)}&source=web_search_result_notes`
 };
 
 interface SearchResultItem {
@@ -138,11 +134,13 @@ interface SearchResultItem {
 
 export function extractSearchResults(
   platform: string,
-  json: Record<string, unknown>,
+  json: Record<string, unknown>
 ): SearchResultItem[] {
   if (platform === 'douyin') {
     const data = json.data as Record<string, unknown> | undefined;
-    const list = (data?.list ?? json.list ?? []) as Array<Record<string, unknown>>;
+    const list = (data?.list ?? json.list ?? []) as Array<
+      Record<string, unknown>
+    >;
     return list
       .filter((item) => {
         const aweme = item.aweme_info as Record<string, unknown> | undefined;
@@ -154,17 +152,19 @@ export function extractSearchResults(
         return {
           contentId: String(aweme.aweme_id ?? aweme.id ?? ''),
           title: String(aweme.desc ?? aweme.title ?? ''),
-          author: String(authorInfo?.nickname ?? ''),
+          author: String(authorInfo?.nickname ?? '')
         };
       });
   }
 
   if (platform === 'xiaohongshu') {
     const data = json.data as Record<string, unknown> | undefined;
-    const items = (data?.items ?? json.items ?? []) as Array<Record<string, unknown>>;
+    const items = (data?.items ?? json.items ?? []) as Array<
+      Record<string, unknown>
+    >;
     return items
       .filter((item) => {
-        const card = item.note_card ?? item as Record<string, unknown>;
+        const card = item.note_card ?? (item as Record<string, unknown>);
         return (card as Record<string, unknown>).note_id;
       })
       .map((item) => {
@@ -173,7 +173,7 @@ export function extractSearchResults(
         return {
           contentId: String(card.note_id ?? ''),
           title: String(card.title ?? card.display_title ?? ''),
-          author: String(user?.nickname ?? ''),
+          author: String(user?.nickname ?? '')
         };
       });
   }
@@ -196,20 +196,26 @@ interface SearchAndFetchCommentsBody {
 const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
   const body = ctx.body as SearchAndFetchCommentsBody;
   if (!body.platform || !body.cookie || !body.keyword) {
-    sendJson(res, 400, { error: 'Missing required fields: platform, cookie, keyword' });
+    sendJson(res, 400, {
+      error: 'Missing required fields: platform, cookie, keyword'
+    });
     return;
   }
 
   const supportedPlatforms = ['douyin', 'xiaohongshu'];
   if (!supportedPlatforms.includes(body.platform)) {
-    sendJson(res, 400, { error: `Unsupported platform for search: ${body.platform}. Supported: ${supportedPlatforms.join(', ')}` });
+    sendJson(res, 400, {
+      error: `Unsupported platform for search: ${body.platform}. Supported: ${supportedPlatforms.join(', ')}`
+    });
     return;
   }
 
   const topN = body.topN ?? 3;
   const searchUrl = SEARCH_PAGE_URLS[body.platform]?.(body.keyword);
   if (!searchUrl) {
-    sendJson(res, 400, { error: `No search URL for platform: ${body.platform}` });
+    sendJson(res, 400, {
+      error: `No search URL for platform: ${body.platform}`
+    });
     return;
   }
 
@@ -221,14 +227,22 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     // Pre-visit douyin.com homepage to establish session + dismiss popups
     if (body.platform === 'douyin') {
       try {
-        await page.goto('https://www.douyin.com/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.goto('https://www.douyin.com/', {
+          waitUntil: 'domcontentloaded',
+          timeout: 15000
+        });
         await page.waitForTimeout(2000);
         await dismissDouyinPopups(page);
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
     }
 
     // ── Phase 1: Search → extract video links from DOM ──────────
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(searchUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
     await page.waitForTimeout(4000);
 
     // Check for CAPTCHA on search page
@@ -242,7 +256,7 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
           keyword: body.keyword,
           results: [],
           message: '搜索页面出现验证码，请在浏览器中手动完成验证后重试',
-          captchaRequired: true,
+          captchaRequired: true
         });
         return;
       }
@@ -252,11 +266,18 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     await page.waitForTimeout(2000);
 
     // Extract search results from DOM
-    const searchResults = await extractSearchResultsFromDOM(page, body.platform);
+    const searchResults = await extractSearchResultsFromDOM(
+      page,
+      body.platform
+    );
     const topResults = searchResults.slice(0, topN);
 
     if (topResults.length === 0) {
-      sendJson(res, 200, { keyword: body.keyword, results: [], message: 'No search results found on page' });
+      sendJson(res, 200, {
+        keyword: body.keyword,
+        results: [],
+        message: 'No search results found on page'
+      });
       return;
     }
 
@@ -277,7 +298,10 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
       }
 
       try {
-        await page.goto(contentUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(contentUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000
+        });
         await page.waitForTimeout(4000);
         await dismissDouyinPopups(page);
 
@@ -288,24 +312,41 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
         await humanLikeScroll(page, scrollRounds);
 
         // Extract comments from DOM
-        const comments = await extractCommentsFromDOM(page, body.platform, result.contentId);
-        console.log('[prospecting] Video', result.contentId, '-', comments.length, 'comments extracted');
+        const comments = await extractCommentsFromDOM(
+          page,
+          body.platform,
+          result.contentId
+        );
+        console.log(
+          '[prospecting] Video',
+          result.contentId,
+          '-',
+          comments.length,
+          'comments extracted'
+        );
         const maxPerVideo = body.maxCommentsPerVideo ?? 50;
 
         allResults.push({
           contentId: result.contentId,
           title: result.title,
           author: result.author,
-          comments: dedupeByKey(comments, (c) => String(c.externalCommentId ?? '')).slice(0, maxPerVideo),
+          comments: dedupeByKey(comments, (c) =>
+            String(c.externalCommentId ?? '')
+          ).slice(0, maxPerVideo)
         });
       } catch (err) {
         // Navigation failed for this content — skip
-        console.log('[prospecting] Video', result.contentId, 'failed:', err instanceof Error ? err.message : String(err));
+        console.log(
+          '[prospecting] Video',
+          result.contentId,
+          'failed:',
+          err instanceof Error ? err.message : String(err)
+        );
         allResults.push({
           contentId: result.contentId,
           title: result.title,
           author: result.author,
-          comments: [],
+          comments: []
         });
       }
     }
@@ -315,7 +356,7 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     sendJson(res, 502, {
       error: 'Search and fetch comments failed',
       errorCode: 'SEARCH_FETCH_COMMENTS_FAILED',
-      details: error instanceof Error ? error.message : String(error),
+      details: error instanceof Error ? error.message : String(error)
     });
   } finally {
     await session?.close();
@@ -325,37 +366,55 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
 // ── DOM-based extraction helpers ──────────────────────────────
 
 /** Dismiss common Douyin popups (login, verification overlays). */
-async function dismissDouyinPopups(page: import('playwright').Page): Promise<void> {
+async function dismissDouyinPopups(
+  page: import('playwright').Page
+): Promise<void> {
   await page.evaluate(() => {
-    document.querySelectorAll('[class*=mask], [id*=dialog], [id*=verify], [id*=trust]').forEach(m => {
-      if (m instanceof HTMLElement) m.style.display = 'none';
-    });
+    document
+      .querySelectorAll(
+        '[class*=mask], [id*=dialog], [id*=verify], [id*=trust]'
+      )
+      .forEach((m) => {
+        if (m instanceof HTMLElement) m.style.display = 'none';
+      });
   });
   await page.keyboard.press('Escape').catch(() => {});
   await page.waitForTimeout(500);
 }
 
 /** Detect if a CAPTCHA/verification is blocking the page. */
-async function detectCaptcha(page: import('playwright').Page): Promise<boolean> {
+async function detectCaptcha(
+  page: import('playwright').Page
+): Promise<boolean> {
   return page.evaluate(() => {
     const text = document.body.innerText;
-    return text.includes('请完成下列验证') || text.includes('拖动完成上方拼图') || text.includes('请完成安全验证');
+    return (
+      text.includes('请完成下列验证') ||
+      text.includes('拖动完成上方拼图') ||
+      text.includes('请完成安全验证')
+    );
   });
 }
 
 /** Extract search result videos from the rendered DOM. */
 async function extractSearchResultsFromDOM(
   page: import('playwright').Page,
-  platform: string,
+  platform: string
 ): Promise<SearchResultItem[]> {
   if (platform === 'douyin') {
     return page.evaluate(() => {
       const container = document.getElementById('search-result-container');
       if (!container) return [];
       // Match both /video/ID and /note/ID patterns
-      const links = container.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"], a[href*="/note/"]');
+      const links = container.querySelectorAll<HTMLAnchorElement>(
+        'a[href*="/video/"], a[href*="/note/"]'
+      );
       const seen = new Set<string>();
-      const results: Array<{ contentId: string; title: string; author: string }> = [];
+      const results: Array<{
+        contentId: string;
+        title: string;
+        author: string;
+      }> = [];
 
       links.forEach((a) => {
         const href = a.href;
@@ -368,13 +427,18 @@ async function extractSearchResultsFromDOM(
         const lines = text.split('\n').filter((l: string) => l.trim());
 
         // Find the title (longest meaningful line) and author (starts with @)
-        const author = (lines.find((l: string) => l.startsWith('@')) || '').replace('@', '');
-        const title = lines.find((l: string) => l.length > 5 && !l.match(/^\d{2}:\d{2}$/)) || '';
+        const author = (
+          lines.find((l: string) => l.startsWith('@')) || ''
+        ).replace('@', '');
+        const title =
+          lines.find(
+            (l: string) => l.length > 5 && !l.match(/^\d{2}:\d{2}$/)
+          ) || '';
 
         results.push({
           contentId: match[1],
           title,
-          author,
+          author
         });
       });
       return results;
@@ -387,79 +451,104 @@ async function extractSearchResultsFromDOM(
 
 /** UI-noise filter patterns for comment extraction. */
 const COMMENT_NOISE_PATTERNS = [
-  '分享', '回复', '展开', '收起', '删除', '点赞',
-  '留下你的精彩评论', '全部评论', '精选', '推荐',
-  '客户端', '充钻石', '...', '…', '作者', '粉丝',
+  '分享',
+  '回复',
+  '展开',
+  '收起',
+  '删除',
+  '点赞',
+  '留下你的精彩评论',
+  '全部评论',
+  '精选',
+  '推荐',
+  '客户端',
+  '充钻石',
+  '...',
+  '…',
+  '作者',
+  '粉丝'
 ];
 
 /** Check if a string is likely UI noise rather than a real comment. */
-function isUINoise(text: string): boolean {
-  return COMMENT_NOISE_PATTERNS.some((p) => text === p) || /^\d+$/.test(text) || /^[\d.]+万?$/.test(text);
+function _isUINoise(text: string): boolean {
+  return (
+    COMMENT_NOISE_PATTERNS.some((p) => text === p) ||
+    /^\d+$/.test(text) ||
+    /^[\d.]+万?$/.test(text)
+  );
 }
 
 /** Extract comments from the video page DOM. */
 async function extractCommentsFromDOM(
   page: import('playwright').Page,
   platform: string,
-  sourceContentId: string,
+  sourceContentId: string
 ): Promise<Array<Record<string, unknown>>> {
   if (platform === 'douyin') {
-    return page.evaluate((args: { noisePatterns: string[]; contentId: string }) => {
-      const { noisePatterns, contentId } = args;
-      const userLinks = document.querySelectorAll<HTMLAnchorElement>('a[href*="/user/"]');
-      const results: Array<Record<string, unknown>> = [];
-      const seen = new Set<string>();
+    return page.evaluate(
+      (args: { noisePatterns: string[]; contentId: string }) => {
+        const { noisePatterns, contentId } = args;
+        const userLinks =
+          document.querySelectorAll<HTMLAnchorElement>('a[href*="/user/"]');
+        const results: Array<Record<string, unknown>> = [];
+        const seen = new Set<string>();
 
-      for (const link of userLinks) {
-        const href = link.getAttribute('href') || '';
-        if (!href.includes('/user/')) continue;
+        for (const link of userLinks) {
+          const href = link.getAttribute('href') || '';
+          if (!href.includes('/user/')) continue;
 
-        // Walk up the DOM tree to find the comment container
-        let el: HTMLElement | null = link;
-        for (let i = 0; i < 6; i++) {
-          el = el?.parentElement as HTMLElement | null;
-          if (!el) break;
-          const text = el.innerText || '';
-          const lines = text.split('\n').filter((l: string) => l.trim());
+          // Walk up the DOM tree to find the comment container
+          let el: HTMLElement | null = link;
+          for (let i = 0; i < 6; i++) {
+            el = el?.parentElement as HTMLElement | null;
+            if (!el) break;
+            const text = el.innerText || '';
+            const lines = text.split('\n').filter((l: string) => l.trim());
 
-          // A proper comment has: username + content + metadata (3+ lines)
-          if (lines.length < 3 || lines.length > 12) continue;
+            // A proper comment has: username + content + metadata (3+ lines)
+            if (lines.length < 3 || lines.length > 12) continue;
 
-          const username = lines[0]?.trim() || '';
-          const contentLine = lines.slice(1).find((l: string) => {
-            const trimmed = l.trim();
-            return trimmed.length >= 3 &&
-              trimmed !== username &&
-              !noisePatterns.some((p: string) => trimmed === p) &&
-              trimmed.length < 300 &&
-              !/^\d+\s*(分享|回复|展开|收起|删除|点赞)/.test(trimmed) &&
-              !/^[\d.]+万?$/.test(trimmed) &&
-              !/^\d+$/.test(trimmed);
-          });
+            const username = lines[0]?.trim() || '';
+            const contentLine = lines.slice(1).find((l: string) => {
+              const trimmed = l.trim();
+              return (
+                trimmed.length >= 3 &&
+                trimmed !== username &&
+                !noisePatterns.some((p: string) => trimmed === p) &&
+                trimmed.length < 300 &&
+                !/^\d+\s*(分享|回复|展开|收起|删除|点赞)/.test(trimmed) &&
+                !/^[\d.]+万?$/.test(trimmed) &&
+                !/^\d+$/.test(trimmed)
+              );
+            });
 
-          if (!contentLine || !username || username.length > 30) continue;
-          if (noisePatterns.some((p: string) => username === p)) continue;
+            if (!contentLine || !username || username.length > 30) continue;
+            if (noisePatterns.some((p: string) => username === p)) continue;
 
-          const key = username + contentLine.slice(0, 20);
-          if (seen.has(key)) continue;
-          seen.add(key);
+            const key = username + contentLine.slice(0, 20);
+            if (seen.has(key)) continue;
+            seen.add(key);
 
-          // Get time info
-          const timeLine = lines.find((l: string) => /前|天|小时|分钟|秒/.test(l));
+            // Get time info
+            const timeLine = lines.find((l: string) =>
+              /前|天|小时|分钟|秒/.test(l)
+            );
 
-          results.push({
-            externalCommentId: `dom-${href.slice(-10)}-${key.replace(/\s/g, '').slice(0, 8)}`,
-            userNickname: username,
-            content: contentLine.trim().slice(0, 300),
-            publishedAt: timeLine || '',
-            sourceContentId: contentId,
-          });
-          break; // Found the right container level
+            results.push({
+              externalCommentId: `dom-${href.slice(-10)}-${key.replace(/\s/g, '').slice(0, 8)}`,
+              userNickname: username,
+              content: contentLine.trim().slice(0, 300),
+              publishedAt: timeLine || '',
+              sourceContentId: contentId
+            });
+            break; // Found the right container level
+          }
         }
-      }
 
-      return results;
-    }, { noisePatterns: COMMENT_NOISE_PATTERNS, contentId: sourceContentId });
+        return results;
+      },
+      { noisePatterns: COMMENT_NOISE_PATTERNS, contentId: sourceContentId }
+    );
   }
 
   return [];
@@ -475,35 +564,39 @@ interface ReplySelectors {
 
 const REPLY_SELECTORS: Record<string, ReplySelectors> = {
   douyin: {
-    replyButton: '[class*="reply-btn"], [class*="replyBtn"], button:has-text("回复")',
+    replyButton:
+      '[class*="reply-btn"], [class*="replyBtn"], button:has-text("回复")',
     replyInput: '[class*="reply-input"], textarea, [contenteditable="true"]',
-    submitButton: '[class*="submit"], button:has-text("发送"), button:has-text("发布")',
+    submitButton:
+      '[class*="submit"], button:has-text("发送"), button:has-text("发布")'
   },
   xiaohongshu: {
     replyButton: '[class*="reply"], button:has-text("回复")',
     replyInput: '[class*="reply-input"], textarea, [contenteditable="true"]',
-    submitButton: '[class*="submit"], button:has-text("发送")',
+    submitButton: '[class*="submit"], button:has-text("发送")'
   },
   wechat_official: {
     replyButton: '[class*="reply"], .reply_btn, button:has-text("回复")',
     replyInput: 'textarea, [contenteditable="true"], .reply_input',
-    submitButton: 'button:has-text("确认"), button:has-text("发表"), button:has-text("提交"), .submit_btn',
+    submitButton:
+      'button:has-text("确认"), button:has-text("发表"), button:has-text("提交"), .submit_btn'
   },
   wechat_channels: {
     replyButton: '[class*="reply"], button:has-text("回复")',
     replyInput: 'textarea, [contenteditable="true"]',
-    submitButton: '[class*="submit"], button:has-text("发送")',
+    submitButton: '[class*="submit"], button:has-text("发送")'
   },
   baijiahao: {
     replyButton: '[class*="reply"], button:has-text("回复")',
     replyInput: 'textarea, [contenteditable="true"]',
-    submitButton: '[class*="submit"], button:has-text("发送"), button:has-text("发布")',
+    submitButton:
+      '[class*="submit"], button:has-text("发送"), button:has-text("发布")'
   },
   zhihu: {
     replyButton: '.ReplyButton, button:has-text("回复")',
     replyInput: '.ReplyEditor textarea, textarea, [contenteditable="true"]',
-    submitButton: '.ReplyEditor button[type="submit"], button:has-text("发布")',
-  },
+    submitButton: '.ReplyEditor button[type="submit"], button:has-text("发布")'
+  }
 };
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -516,7 +609,7 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
 function sendAssistFetchError(
   res: ServerResponse,
   fetchType: 'comments' | 'messages',
-  error: unknown,
+  error: unknown
 ) {
   sendJson(res, 502, {
     error: `Failed to fetch ${fetchType}`,
@@ -524,7 +617,7 @@ function sendAssistFetchError(
       fetchType === 'comments'
         ? 'ASSIST_FETCH_COMMENTS_FAILED'
         : 'ASSIST_FETCH_MESSAGES_FAILED',
-    details: error instanceof Error ? error.message : String(error),
+    details: error instanceof Error ? error.message : String(error)
   });
 }
 
@@ -543,7 +636,11 @@ function extractDomain(url: string): string {
 }
 
 /** Thin wrapper that applies cookies on root domain and creates a stealth context. */
-async function createSession(cookie: string, targetUrl: string, headed?: boolean) {
+async function createSession(
+  cookie: string,
+  targetUrl: string,
+  headed?: boolean
+) {
   const hostname = extractDomain(targetUrl);
   const domain = rootDomain(hostname);
   return createStealthSession(cookie, domain, headed);
@@ -570,11 +667,17 @@ function xhsCommentPublishedAt(item: Record<string, unknown>): string {
   const raw = item.create_time;
   if (raw == null || raw === '') return '';
   const timestamp = Number(raw);
-  return new Date(timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000).toISOString();
+  return new Date(
+    timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000
+  ).toISOString();
 }
 
 /** Extract a normalised comment list from a raw XHR JSON payload. */
-export function extractCommentList(platform: string, json: Record<string, unknown>, sourceContentId?: string): Array<Record<string, unknown>> {
+export function extractCommentList(
+  platform: string,
+  json: Record<string, unknown>,
+  sourceContentId?: string
+): Array<Record<string, unknown>> {
   const data = json?.data as Record<string, unknown> | undefined;
 
   switch (platform) {
@@ -588,19 +691,30 @@ export function extractCommentList(platform: string, json: Record<string, unknow
       if (!Array.isArray(list)) return [];
       return list
         .map((item: Record<string, unknown>) => {
-          const user = (item.user ?? item.author) as Record<string, unknown> | undefined;
-          const itemId = item.item_id != null ? String(item.item_id) : undefined;
-          const externalCommentId = String(item.id ?? item.cid ?? item.comment_id ?? '');
+          const user = (item.user ?? item.author) as
+            | Record<string, unknown>
+            | undefined;
+          const itemId =
+            item.item_id != null ? String(item.item_id) : undefined;
+          const externalCommentId = String(
+            item.id ?? item.cid ?? item.comment_id ?? ''
+          );
           return {
             externalCommentId,
-            externalUserId: String(user?.uid ?? user?.open_id ?? item.user_id ?? item.uid ?? ''),
-            userNickname: String(user?.nickname ?? item.nick_name ?? item.nickname ?? ''),
+            externalUserId: String(
+              user?.uid ?? user?.open_id ?? item.user_id ?? item.uid ?? ''
+            ),
+            userNickname: String(
+              user?.nickname ?? item.nick_name ?? item.nickname ?? ''
+            ),
             content: String(item.text ?? item.content ?? ''),
             likeCount: Number(item.digg_count ?? item.like_count ?? 0),
-            replyCount: Number(item.reply_comment_total ?? item.all_comment_num ?? 0),
+            replyCount: Number(
+              item.reply_comment_total ?? item.all_comment_num ?? 0
+            ),
             publishedAt: douyinCommentPublishedAt(item),
             sourceContentId: sourceContentId ?? itemId,
-            rawPayload: item,
+            rawPayload: item
           };
         })
         .filter((item) => item.externalCommentId.length > 0);
@@ -615,25 +729,41 @@ export function extractCommentList(platform: string, json: Record<string, unknow
       if (!Array.isArray(list)) return [];
       return list
         .map((item: Record<string, unknown>) => {
-          const userInfo = (item.user_info ?? item.author ?? item.user) as Record<string, unknown> | undefined;
-          const itemNoteId = item.note_id != null ? String(item.note_id) : undefined;
+          const userInfo = (item.user_info ?? item.author ?? item.user) as
+            | Record<string, unknown>
+            | undefined;
+          const itemNoteId =
+            item.note_id != null ? String(item.note_id) : undefined;
           const externalCommentId = String(item.id ?? item.comment_id ?? '');
           return {
             externalCommentId,
-            externalUserId: String(userInfo?.user_id ?? userInfo?.userid ?? userInfo?.id ?? item.user_id ?? ''),
+            externalUserId: String(
+              userInfo?.user_id ??
+                userInfo?.userid ??
+                userInfo?.id ??
+                item.user_id ??
+                ''
+            ),
             userNickname: String(userInfo?.nickname ?? userInfo?.name ?? ''),
             content: String(item.content ?? item.note_content ?? ''),
             likeCount: Number(item.like_count ?? item.liked_count ?? 0),
-            replyCount: Number(item.sub_comment_count ?? item.reply_count ?? item.sub_comment_num ?? 0),
+            replyCount: Number(
+              item.sub_comment_count ??
+                item.reply_count ??
+                item.sub_comment_num ??
+                0
+            ),
             publishedAt: xhsCommentPublishedAt(item),
             sourceContentId: sourceContentId ?? itemNoteId,
-            rawPayload: item,
+            rawPayload: item
           };
         })
         .filter((item) => item.externalCommentId.length > 0);
     }
     case 'wechat_official': {
-      const list = (json?.commentlist ?? data?.commentlist) as Array<Record<string, unknown>> | undefined;
+      const list = (json?.commentlist ?? data?.commentlist) as
+        | Array<Record<string, unknown>>
+        | undefined;
       if (!Array.isArray(list)) return [];
       return list.map((item: Record<string, unknown>) => ({
         externalCommentId: String(item.comment_id ?? item.id ?? ''),
@@ -645,7 +775,7 @@ export function extractCommentList(platform: string, json: Record<string, unknow
           ? new Date(Number(item.create_time) * 1000).toISOString()
           : '',
         sourceContentId,
-        rawPayload: item,
+        rawPayload: item
       }));
     }
     case 'wechat_channels': {
@@ -661,7 +791,7 @@ export function extractCommentList(platform: string, json: Record<string, unknow
           ? new Date(Number(item.create_time) * 1000).toISOString()
           : '',
         sourceContentId,
-        rawPayload: item,
+        rawPayload: item
       }));
     }
     case 'baijiahao': {
@@ -676,26 +806,32 @@ export function extractCommentList(platform: string, json: Record<string, unknow
         replyCount: Number(item.reply_num ?? 0),
         publishedAt: item.create_time != null ? String(item.create_time) : '',
         sourceContentId,
-        rawPayload: item,
+        rawPayload: item
       }));
     }
     case 'zhihu': {
       const list = data ?? json?.data;
       if (!Array.isArray(list)) return [];
       return list.map((item: Record<string, unknown>) => {
-        const author = (item.author ?? item.member) as Record<string, unknown> | undefined;
+        const author = (item.author ?? item.member) as
+          | Record<string, unknown>
+          | undefined;
         return {
           externalCommentId: String(item.id ?? item.comment_id ?? ''),
           externalUserId: String(author?.id ?? author?.url_token ?? ''),
           userNickname: String(author?.name ?? ''),
-          content: String((item.content ?? (item.body as Record<string, unknown>)?.content ?? '') as string),
+          content: String(
+            (item.content ??
+              (item.body as Record<string, unknown>)?.content ??
+              '') as string
+          ),
           likeCount: Number(item.vote_count ?? item.like_count ?? 0),
           replyCount: Number(item.child_comment_count ?? 0),
           publishedAt: item.created_time
             ? new Date(Number(item.created_time) * 1000).toISOString()
             : '',
           sourceContentId,
-          rawPayload: item,
+          rawPayload: item
         };
       });
     }
@@ -704,8 +840,13 @@ export function extractCommentList(platform: string, json: Record<string, unknow
   }
 }
 
-async function openDouyinCommentManagement(page: import('playwright').Page): Promise<void> {
-  await page.goto(DOUYIN_COMMENT_MANAGE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+async function openDouyinCommentManagement(
+  page: import('playwright').Page
+): Promise<void> {
+  await page.goto(DOUYIN_COMMENT_MANAGE_URL, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
+  });
   await page.waitForTimeout(2000);
 
   if (!page.url().includes('interaction')) {
@@ -727,7 +868,9 @@ async function openDouyinCommentManagement(page: import('playwright').Page): Pro
   }
 }
 
-async function scrollForLazyLoad(page: import('playwright').Page): Promise<void> {
+async function scrollForLazyLoad(
+  page: import('playwright').Page
+): Promise<void> {
   for (let i = 0; i < 4; i++) {
     await page.mouse.wheel(0, 900);
     await page.waitForTimeout(800 + Math.floor(Math.random() * 400));
@@ -739,7 +882,10 @@ async function scrollForLazyLoad(page: import('playwright').Page): Promise<void>
  * Human-like scroll: varies speed, distance, direction, and pauses.
  * @param rounds How many scroll cycles (default 8)
  */
-async function humanLikeScroll(page: import('playwright').Page, rounds = 8): Promise<void> {
+async function humanLikeScroll(
+  page: import('playwright').Page,
+  rounds = 8
+): Promise<void> {
   for (let i = 0; i < rounds; i++) {
     // Main scroll: 300-1200px downward
     const distance = 300 + Math.floor(Math.random() * 900);
@@ -761,7 +907,8 @@ async function humanLikeScroll(page: import('playwright').Page, rounds = 8): Pro
 }
 
 /** XHS note management page — used to discover the latest note ID when none is supplied. */
-const XHS_NOTE_MANAGE_URL = 'https://creator.xiaohongshu.com/creator/notemanage';
+const XHS_NOTE_MANAGE_URL =
+  'https://creator.xiaohongshu.com/creator/notemanage';
 
 /**
  * API paths fired by the note management page that carry note IDs.
@@ -773,7 +920,7 @@ const XHS_NOTE_LIST_PATTERNS = [
   '/api/galaxy/creator/data/note_detail_new',
   '/api/creator/note/user/posted',
   '/api/creator/note/list',
-  '/api/galaxy/creator/home/notemanage',
+  '/api/galaxy/creator/home/notemanage'
 ];
 
 export function xhsNotePublicUrl(noteId: string, xsecToken?: string): string {
@@ -790,7 +937,9 @@ interface XhsNoteRef {
   xsecToken?: string;
 }
 
-export function pickXhsNoteRef(json: Record<string, unknown>): XhsNoteRef | undefined {
+export function pickXhsNoteRef(
+  json: Record<string, unknown>
+): XhsNoteRef | undefined {
   const data = json.data as Record<string, unknown> | undefined;
 
   // latest_note_data format: { data: { noteInfo: { id: '...' } } }
@@ -799,13 +948,16 @@ export function pickXhsNoteRef(json: Record<string, unknown>): XhsNoteRef | unde
     const xsecToken = noteInfo.xsec_token ?? noteInfo.xsecToken;
     return {
       id: String(noteInfo.id),
-      xsecToken: xsecToken != null ? String(xsecToken) : undefined,
+      xsecToken: xsecToken != null ? String(xsecToken) : undefined
     };
   }
 
   // note_detail_new / note list formats: { data: { notes: [{id, note_id}] } }
-  const notes =
-    (data?.notes ?? data?.list ?? data?.items ?? json.notes ?? json.list) as unknown[] | undefined;
+  const notes = (data?.notes ??
+    data?.list ??
+    data?.items ??
+    json.notes ??
+    json.list) as unknown[] | undefined;
   if (Array.isArray(notes) && notes.length > 0) {
     const first = notes[0] as Record<string, unknown>;
     const id = first.note_id ?? first.id ?? first.noteId;
@@ -813,7 +965,7 @@ export function pickXhsNoteRef(json: Record<string, unknown>): XhsNoteRef | unde
     if (id != null) {
       return {
         id: String(id),
-        xsecToken: xsecToken != null ? String(xsecToken) : undefined,
+        xsecToken: xsecToken != null ? String(xsecToken) : undefined
       };
     }
   }
@@ -821,17 +973,20 @@ export function pickXhsNoteRef(json: Record<string, unknown>): XhsNoteRef | unde
   return undefined;
 }
 
-function pickXhsNoteId(json: Record<string, unknown>): string | undefined {
+function _pickXhsNoteId(json: Record<string, unknown>): string | undefined {
   return pickXhsNoteRef(json)?.id;
 }
 
-async function waitForXhsNoteRef(page: import('playwright').Page): Promise<XhsNoteRef | undefined> {
+async function waitForXhsNoteRef(
+  page: import('playwright').Page
+): Promise<XhsNoteRef | undefined> {
   try {
     const response = await page.waitForResponse(
-      (item) => XHS_NOTE_LIST_PATTERNS.some((pattern) => item.url().includes(pattern)),
-      { timeout: 10000 },
+      (item) =>
+        XHS_NOTE_LIST_PATTERNS.some((pattern) => item.url().includes(pattern)),
+      { timeout: 10000 }
     );
-    return pickXhsNoteRef(await response.json() as Record<string, unknown>);
+    return pickXhsNoteRef((await response.json()) as Record<string, unknown>);
   } catch {
     return undefined;
   }
@@ -841,11 +996,21 @@ export function isDouyinEncodedItemId(value: string): boolean {
   return value.startsWith('@') || (value.length > 18 && !/^\d+$/.test(value));
 }
 
-function pickDouyinItemIdFromItem(item: Record<string, unknown>): string | undefined {
-  const encodedInJson = JSON.stringify(item).match(/"(?:item_id|open_item_id)"\s*:\s*"(@[^"]+)"/);
+function pickDouyinItemIdFromItem(
+  item: Record<string, unknown>
+): string | undefined {
+  const encodedInJson = JSON.stringify(item).match(
+    /"(?:item_id|open_item_id)"\s*:\s*"(@[^"]+)"/
+  );
   if (encodedInJson?.[1]) return encodedInJson[1];
 
-  const candidates = [item.item_id, item.open_item_id, item.id, item.aweme_id, item.group_id];
+  const candidates = [
+    item.item_id,
+    item.open_item_id,
+    item.id,
+    item.aweme_id,
+    item.group_id
+  ];
   for (const candidate of candidates) {
     if (candidate == null) continue;
     const value = String(candidate);
@@ -853,7 +1018,10 @@ function pickDouyinItemIdFromItem(item: Record<string, unknown>): string | undef
   }
 
   const nested = item.aweme as Record<string, unknown> | undefined;
-  if (nested?.aweme_id != null && isDouyinEncodedItemId(String(nested.aweme_id))) {
+  if (
+    nested?.aweme_id != null &&
+    isDouyinEncodedItemId(String(nested.aweme_id))
+  ) {
     return String(nested.aweme_id);
   }
 
@@ -864,7 +1032,9 @@ function pickDouyinItemIdFromItem(item: Record<string, unknown>): string | undef
   return undefined;
 }
 
-export function pickDouyinItemId(json: Record<string, unknown>): string | undefined {
+export function pickDouyinItemId(
+  json: Record<string, unknown>
+): string | undefined {
   const noticeComments = json.comments;
   if (Array.isArray(noticeComments) && noticeComments.length > 0) {
     const first = noticeComments[0] as Record<string, unknown>;
@@ -872,21 +1042,21 @@ export function pickDouyinItemId(json: Record<string, unknown>): string | undefi
   }
 
   const data = json.data as Record<string, unknown> | undefined;
-  const items =
-    json.items ??
-    data?.items ??
-    data?.item_list ??
-    json.item_list;
+  const items = json.items ?? data?.items ?? data?.item_list ?? json.item_list;
   if (!Array.isArray(items) || items.length === 0) return undefined;
   return pickDouyinItemIdFromItem(items[0] as Record<string, unknown>);
 }
 
-export function pickDouyinEncodedItemId(json: Record<string, unknown>): string | undefined {
+export function pickDouyinEncodedItemId(
+  json: Record<string, unknown>
+): string | undefined {
   const id = pickDouyinItemId(json);
   return id && isDouyinEncodedItemId(id) ? id : undefined;
 }
 
-async function trySelectVideoOnCommentPage(page: import('playwright').Page): Promise<void> {
+async function trySelectVideoOnCommentPage(
+  page: import('playwright').Page
+): Promise<void> {
   const selectVideo = page.getByText('选择视频').first();
   try {
     await selectVideo.click({ timeout: 4000 });
@@ -901,7 +1071,7 @@ async function trySelectVideoOnCommentPage(page: import('playwright').Page): Pro
     '[class*="item-card"]',
     '[class*="video-card"]',
     '[class*="list"] [class*="item"]',
-    'tr',
+    'tr'
   ];
   for (const selector of rowSelectors) {
     try {
@@ -917,7 +1087,7 @@ async function trySelectVideoOnCommentPage(page: import('playwright').Page): Pro
 
 async function loadDouyinCommentsFromLatestVideo(
   page: import('playwright').Page,
-  itemIdRef: { encoded?: string; numeric?: string },
+  itemIdRef: { encoded?: string; numeric?: string }
 ): Promise<void> {
   if (!itemIdRef.encoded && !itemIdRef.numeric) {
     // Page should already be on comment management from caller;
@@ -928,7 +1098,10 @@ async function loadDouyinCommentsFromLatestVideo(
   }
 
   if (itemIdRef.encoded) {
-    await page.goto(douyinPostCommentUrl(itemIdRef.encoded), { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(douyinPostCommentUrl(itemIdRef.encoded), {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
     await page.waitForTimeout(5000);
     return;
   }
@@ -939,12 +1112,15 @@ async function loadDouyinCommentsFromLatestVideo(
   await page.waitForTimeout(3000);
 }
 
-function dedupeAndFilterTodayComments(items: Array<Record<string, unknown>>, limit: number): Array<Record<string, unknown>> {
+function dedupeAndFilterTodayComments(
+  items: Array<Record<string, unknown>>,
+  limit: number
+): Array<Record<string, unknown>> {
   return selectTodayOrRecent(
     items,
     (item) => String(item.externalCommentId ?? ''),
     (item) => item.publishedAt,
-    { limit, fallbackLimit: RECENT_INTERACTION_FALLBACK_LIMIT },
+    { limit, fallbackLimit: RECENT_INTERACTION_FALLBACK_LIMIT }
   );
 }
 
@@ -957,7 +1133,9 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
 
   const urlFn = COMMENT_PAGE_URLS[body.platform];
   if (!urlFn) {
-    sendJson(res, 400, { error: `Unsupported platform for comment fetching: ${body.platform}` });
+    sendJson(res, 400, {
+      error: `Unsupported platform for comment fetching: ${body.platform}`
+    });
     return;
   }
 
@@ -965,10 +1143,12 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
   const xhrPatterns = COMMENT_API_PATTERNS[body.platform] ?? [];
   const itemIdRef: { encoded?: string; numeric?: string } = {};
   if (body.sourceContentId) {
-    if (isDouyinEncodedItemId(body.sourceContentId)) itemIdRef.encoded = body.sourceContentId;
+    if (isDouyinEncodedItemId(body.sourceContentId))
+      itemIdRef.encoded = body.sourceContentId;
     else itemIdRef.numeric = body.sourceContentId;
   }
-  const resolveDouyinItemId = () => itemIdRef.encoded ?? itemIdRef.numeric ?? body.sourceContentId;
+  const resolveDouyinItemId = () =>
+    itemIdRef.encoded ?? itemIdRef.numeric ?? body.sourceContentId;
 
   let session: Awaited<ReturnType<typeof createSession>> | null = null;
   try {
@@ -997,48 +1177,72 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
 
     const responseListener = (response: import('playwright').Response) => {
       const task = (async () => {
-      const url = response.url();
-      // Determine whether this URL carries metadata we need to parse
-      const isDouyinItemList = body.platform === 'douyin' && DOUYIN_ITEM_LIST_PATTERNS.some((pattern) => url.includes(pattern));
-      const isDouyinNoticeComment = body.platform === 'douyin' && url.includes('/aweme/v1/creator/notice/comment');
-      const isXhsNoteList = body.platform === 'xiaohongshu' && !xhsNoteRef.value?.xsecToken && XHS_NOTE_LIST_PATTERNS.some((p) => url.includes(p));
-      const isCommentApi = xhrPatterns.some((p) => url.includes(p));
+        const url = response.url();
+        // Determine whether this URL carries metadata we need to parse
+        const isDouyinItemList =
+          body.platform === 'douyin' &&
+          DOUYIN_ITEM_LIST_PATTERNS.some((pattern) => url.includes(pattern));
+        const isDouyinNoticeComment =
+          body.platform === 'douyin' &&
+          url.includes('/aweme/v1/creator/notice/comment');
+        const isXhsNoteList =
+          body.platform === 'xiaohongshu' &&
+          !xhsNoteRef.value?.xsecToken &&
+          XHS_NOTE_LIST_PATTERNS.some((p) => url.includes(p));
+        const isCommentApi = xhrPatterns.some((p) => url.includes(p));
 
-      // Skip URLs that carry no useful data
-      if (!isDouyinItemList && !isDouyinNoticeComment && !isXhsNoteList && !isCommentApi) return;
+        // Skip URLs that carry no useful data
+        if (
+          !isDouyinItemList &&
+          !isDouyinNoticeComment &&
+          !isXhsNoteList &&
+          !isCommentApi
+        )
+          return;
 
-      // Read the response body ONCE — Response.json() can only be called once
-      let json: Record<string, unknown>;
-      try {
-        json = await response.json() as Record<string, unknown>;
-      } catch { return; /* non-JSON, skip */ }
-
-      // Extract Douyin item ID from item-list or notice-comment APIs
-      if (isDouyinItemList || isDouyinNoticeComment) {
+        // Read the response body ONCE — Response.json() can only be called once
+        let json: Record<string, unknown>;
         try {
-          rememberDouyinItemId(json);
-        } catch { /* skip */ }
-      }
+          json = (await response.json()) as Record<string, unknown>;
+        } catch {
+          return; /* non-JSON, skip */
+        }
 
-      // Extract XHS note ref for xsec_token
-      if (isXhsNoteList) {
-        try {
-          const note = pickXhsNoteRef(json);
-          if (note && (!xhsNoteRef.value || note.id === xhsNoteRef.value.id)) xhsNoteRef.value = note;
-        } catch { /* skip */ }
-      }
+        // Extract Douyin item ID from item-list or notice-comment APIs
+        if (isDouyinItemList || isDouyinNoticeComment) {
+          try {
+            rememberDouyinItemId(json);
+          } catch {
+            /* skip */
+          }
+        }
 
-      // Extract comment data from comment API responses
-      if (isCommentApi) {
-        try {
-          const items = extractCommentList(
-            body.platform,
-            json,
-            body.platform === 'xiaohongshu' ? xhsNoteRef.value?.id : resolveDouyinItemId(),
-          );
-          captured.push(...items);
-        } catch { /* skip */ }
-      }
+        // Extract XHS note ref for xsec_token
+        if (isXhsNoteList) {
+          try {
+            const note = pickXhsNoteRef(json);
+            if (note && (!xhsNoteRef.value || note.id === xhsNoteRef.value.id))
+              xhsNoteRef.value = note;
+          } catch {
+            /* skip */
+          }
+        }
+
+        // Extract comment data from comment API responses
+        if (isCommentApi) {
+          try {
+            const items = extractCommentList(
+              body.platform,
+              json,
+              body.platform === 'xiaohongshu'
+                ? xhsNoteRef.value?.id
+                : resolveDouyinItemId()
+            );
+            captured.push(...items);
+          } catch {
+            /* skip */
+          }
+        }
       })();
       responseTasks.push(task);
     };
@@ -1055,18 +1259,27 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
       }
     } else if (body.platform === 'xiaohongshu' && !body.sourceContentId) {
       // Step 1: note management page → triggers note list API → captures note ID
-      await page.goto(XHS_NOTE_MANAGE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(XHS_NOTE_MANAGE_URL, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+      });
       xhsNoteRef.value ??= await waitForXhsNoteRef(page);
       await Promise.allSettled(responseTasks.splice(0));
       // Step 2: if we got a note ref, navigate to its public page where comments load
       if (xhsNoteRef.value) {
-        await page.goto(xhsNotePublicUrl(xhsNoteRef.value.id, xhsNoteRef.value.xsecToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(
+          xhsNotePublicUrl(xhsNoteRef.value.id, xhsNoteRef.value.xsecToken),
+          { waitUntil: 'domcontentloaded', timeout: 30000 }
+        );
         await page.waitForTimeout(3000);
         await scrollForLazyLoad(page);
         await page.waitForTimeout(2000);
       }
     } else {
-      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(targetUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+      });
       if (body.platform === 'douyin') {
         await page.waitForTimeout(5000);
         if (body.sourceContentId) {
@@ -1088,7 +1301,11 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
 
     page.off('response', responseListener);
     await Promise.allSettled(responseTasks.splice(0));
-    sendJson(res, 200, dedupeAndFilterTodayComments(captured, body.limit ?? 50));
+    sendJson(
+      res,
+      200,
+      dedupeAndFilterTodayComments(captured, body.limit ?? 50)
+    );
   } catch (error) {
     sendAssistFetchError(res, 'comments', error);
   } finally {
@@ -1104,29 +1321,43 @@ interface FetchMessagesBody {
   headed?: boolean;
 }
 
-function dedupeAndFilterTodayMessages(items: Array<Record<string, unknown>>, limit: number): Array<Record<string, unknown>> {
+function dedupeAndFilterTodayMessages(
+  items: Array<Record<string, unknown>>,
+  limit: number
+): Array<Record<string, unknown>> {
   return selectTodayOrRecent(
     items,
     (item) => String(item.externalMessageId ?? ''),
     (item) => item.publishedAt,
-    { limit, fallbackLimit: RECENT_INTERACTION_FALLBACK_LIMIT },
+    { limit, fallbackLimit: RECENT_INTERACTION_FALLBACK_LIMIT }
   );
 }
 
 /** Extract a normalised message list from a raw XHR JSON payload. */
-function extractMessageList(platform: string, json: Record<string, unknown>): Array<Record<string, unknown>> {
+function extractMessageList(
+  platform: string,
+  json: Record<string, unknown>
+): Array<Record<string, unknown>> {
   const data = json?.data as Record<string, unknown> | undefined;
 
   switch (platform) {
     case 'douyin': {
-      const list = data?.list ?? data?.messages ?? json?.message_list ?? json?.list;
+      const list =
+        data?.list ?? data?.messages ?? json?.message_list ?? json?.list;
       if (!Array.isArray(list)) return [];
       return list.map((item: Record<string, unknown>) => {
-        const sender = (item.sender ?? item.from_user) as Record<string, unknown> | undefined;
+        const sender = (item.sender ?? item.from_user) as
+          | Record<string, unknown>
+          | undefined;
         const contentRaw = item.content;
         let content = '';
         if (typeof contentRaw === 'string') {
-          try { content = (JSON.parse(contentRaw) as { text?: string }).text ?? contentRaw; } catch { content = contentRaw; }
+          try {
+            content =
+              (JSON.parse(contentRaw) as { text?: string }).text ?? contentRaw;
+          } catch {
+            content = contentRaw;
+          }
         }
         return {
           externalMessageId: String(item.message_id ?? item.msg_id ?? ''),
@@ -1137,7 +1368,7 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
             : '',
-          rawPayload: item,
+          rawPayload: item
         };
       });
     }
@@ -1145,7 +1376,9 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
       const list = data?.chats ?? data?.list ?? data?.messages ?? json?.data;
       if (!Array.isArray(list)) return [];
       return list.map((item: Record<string, unknown>) => {
-        const userInfo = (item.user_info ?? item.contact ?? item.sender) as Record<string, unknown> | undefined;
+        const userInfo = (item.user_info ?? item.contact ?? item.sender) as
+          | Record<string, unknown>
+          | undefined;
         return {
           externalMessageId: String(item.id ?? item.message_id ?? ''),
           externalUserId: String(userInfo?.user_id ?? userInfo?.userid ?? ''),
@@ -1155,7 +1388,7 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
             : '',
-          rawPayload: item,
+          rawPayload: item
         };
       });
     }
@@ -1163,7 +1396,9 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
       const list = data?.messages ?? data?.contacts ?? json?.messages;
       if (!Array.isArray(list)) return [];
       return list.map((item: Record<string, unknown>) => {
-        const sender = (item.sender ?? item.contact) as Record<string, unknown> | undefined;
+        const sender = (item.sender ?? item.contact) as
+          | Record<string, unknown>
+          | undefined;
         return {
           externalMessageId: String(item.message_id ?? item.id ?? ''),
           externalUserId: String(sender?.openid ?? item.openid ?? ''),
@@ -1173,7 +1408,7 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
           publishedAt: item.create_time
             ? new Date(Number(item.create_time) * 1000).toISOString()
             : '',
-          rawPayload: item,
+          rawPayload: item
         };
       });
     }
@@ -1181,7 +1416,9 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
       const list = data ?? json?.data;
       if (!Array.isArray(list)) return [];
       return list.map((item: Record<string, unknown>) => {
-        const sender = (item.sender ?? item.from_member) as Record<string, unknown> | undefined;
+        const sender = (item.sender ?? item.from_member) as
+          | Record<string, unknown>
+          | undefined;
         return {
           externalMessageId: String(item.id ?? ''),
           externalUserId: String(sender?.id ?? sender?.url_token ?? ''),
@@ -1191,7 +1428,7 @@ function extractMessageList(platform: string, json: Record<string, unknown>): Ar
           publishedAt: item.created_time
             ? new Date(Number(item.created_time) * 1000).toISOString()
             : '',
-          rawPayload: item,
+          rawPayload: item
         };
       });
     }
@@ -1230,22 +1467,31 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
         const url = response.url();
         if (!xhrPatterns.some((p) => url.includes(p))) return;
         try {
-          const json = await response.json() as Record<string, unknown>;
+          const json = (await response.json()) as Record<string, unknown>;
           const items = extractMessageList(body.platform, json);
           captured.push(...items);
-        } catch { /* non-JSON, skip */ }
+        } catch {
+          /* non-JSON, skip */
+        }
       })();
       messageTasks.push(task);
     };
     page.on('response', messageListener);
 
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(targetUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
 
     await scrollForLazyLoad(page);
 
     page.off('response', messageListener);
     await Promise.allSettled(messageTasks.splice(0));
-    sendJson(res, 200, dedupeAndFilterTodayMessages(captured, body.limit ?? 50));
+    sendJson(
+      res,
+      200,
+      dedupeAndFilterTodayMessages(captured, body.limit ?? 50)
+    );
   } catch (error) {
     sendAssistFetchError(res, 'messages', error);
   } finally {
@@ -1263,15 +1509,24 @@ interface ReplyCommentBody {
 
 const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
   const body = ctx.body as ReplyCommentBody | null;
-  if (!body?.platform || !body?.cookie || !body?.externalCommentId || !body?.replyText) {
-    sendJson(res, 400, { error: 'Missing platform, cookie, externalCommentId, or replyText' });
+  if (
+    !body?.platform ||
+    !body?.cookie ||
+    !body?.externalCommentId ||
+    !body?.replyText
+  ) {
+    sendJson(res, 400, {
+      error: 'Missing platform, cookie, externalCommentId, or replyText'
+    });
     return;
   }
 
   const replySels = REPLY_SELECTORS[body.platform];
   const urlFn = COMMENT_PAGE_URLS[body.platform];
   if (!replySels || !urlFn) {
-    sendJson(res, 400, { error: `Unsupported platform for comment reply: ${body.platform}` });
+    sendJson(res, 400, {
+      error: `Unsupported platform for comment reply: ${body.platform}`
+    });
     return;
   }
 
@@ -1282,7 +1537,10 @@ const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
     session = await createSession(body.cookie, targetUrl);
     const { page } = session;
 
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(targetUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
 
     try {
       await page.waitForSelector('[class*="comment"]', { timeout: 8000 });
@@ -1291,11 +1549,13 @@ const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
     }
 
     // Find the target comment by data-id attribute or by content matching
-    const commentLocator = page.locator(
-      `[data-id="${body.externalCommentId}"], [data-comment-id="${body.externalCommentId}"]`
-    ).first();
+    const commentLocator = page
+      .locator(
+        `[data-id="${body.externalCommentId}"], [data-comment-id="${body.externalCommentId}"]`
+      )
+      .first();
 
-    if (await commentLocator.count() > 0) {
+    if ((await commentLocator.count()) > 0) {
       // Click reply button within the comment
       const replyBtn = commentLocator.locator(replySels.replyButton).first();
       try {
@@ -1329,14 +1589,21 @@ const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
       // Brief wait for submission confirmation
       await page.waitForTimeout(2000);
 
-      sendJson(res, 200, { success: true, externalReplyId: `reply-${Date.now()}` });
+      sendJson(res, 200, {
+        success: true,
+        externalReplyId: `reply-${Date.now()}`
+      });
     } else {
-      sendJson(res, 200, { success: false, errorMessage: 'Target comment not found on page' });
+      sendJson(res, 200, {
+        success: false,
+        errorMessage: 'Target comment not found on page'
+      });
     }
   } catch (err) {
     sendJson(res, 200, {
       success: false,
-      errorMessage: err instanceof Error ? err.message : 'Unknown error during reply',
+      errorMessage:
+        err instanceof Error ? err.message : 'Unknown error during reply'
     });
   } finally {
     await session?.close();
@@ -1352,14 +1619,24 @@ interface ReplyMessageBody {
 
 const handleReplyMessage: RouteHandler = async (_req, res, ctx) => {
   const body = ctx.body as ReplyMessageBody | null;
-  if (!body?.platform || !body?.cookie || !body?.externalUserId || !body?.messageText) {
-    sendJson(res, 400, { error: 'Missing platform, cookie, externalUserId, or messageText' });
+  if (
+    !body?.platform ||
+    !body?.cookie ||
+    !body?.externalUserId ||
+    !body?.messageText
+  ) {
+    sendJson(res, 400, {
+      error: 'Missing platform, cookie, externalUserId, or messageText'
+    });
     return;
   }
 
   const urlFn = MESSAGE_PAGE_URLS[body.platform];
   if (!urlFn) {
-    sendJson(res, 200, { success: false, errorMessage: `Messaging not supported for platform: ${body.platform}` });
+    sendJson(res, 200, {
+      success: false,
+      errorMessage: `Messaging not supported for platform: ${body.platform}`
+    });
     return;
   }
 
@@ -1370,12 +1647,17 @@ const handleReplyMessage: RouteHandler = async (_req, res, ctx) => {
     session = await createSession(body.cookie, targetUrl);
     const { page } = session;
 
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(targetUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
 
     // Try to find and click the conversation with the target user
-    const userLink = page.locator(
-      `[data-id="${body.externalUserId}"], [data-user-id="${body.externalUserId}"], a:has-text("${body.externalUserId}")`
-    ).first();
+    const userLink = page
+      .locator(
+        `[data-id="${body.externalUserId}"], [data-user-id="${body.externalUserId}"], a:has-text("${body.externalUserId}")`
+      )
+      .first();
     try {
       await userLink.click({ timeout: 5000 });
       await page.waitForTimeout(1000);
@@ -1384,26 +1666,36 @@ const handleReplyMessage: RouteHandler = async (_req, res, ctx) => {
     }
 
     // Find message input and type
-    const messageInput = page.locator(
-      'textarea, [contenteditable="true"], [class*="message-input"], [class*="msg-input"]'
-    ).first();
+    const messageInput = page
+      .locator(
+        'textarea, [contenteditable="true"], [class*="message-input"], [class*="msg-input"]'
+      )
+      .first();
     await messageInput.click({ timeout: 5000 });
     await messageInput.fill(body.messageText);
 
     // Submit
-    const sendBtn = page.locator(
-      '[class*="send"], button:has-text("发送"), button:has-text("Send"), button[type="submit"]'
-    ).first();
+    const sendBtn = page
+      .locator(
+        '[class*="send"], button:has-text("发送"), button:has-text("Send"), button[type="submit"]'
+      )
+      .first();
     await sendBtn.click({ timeout: 3000 });
 
     // Brief wait for confirmation
     await page.waitForTimeout(2000);
 
-    sendJson(res, 200, { success: true, externalReplyId: `msg-reply-${Date.now()}` });
+    sendJson(res, 200, {
+      success: true,
+      externalReplyId: `msg-reply-${Date.now()}`
+    });
   } catch (err) {
     sendJson(res, 200, {
       success: false,
-      errorMessage: err instanceof Error ? err.message : 'Unknown error during message reply',
+      errorMessage:
+        err instanceof Error
+          ? err.message
+          : 'Unknown error during message reply'
     });
   } finally {
     await session?.close();
@@ -1413,9 +1705,29 @@ const handleReplyMessage: RouteHandler = async (_req, res, ctx) => {
 // ── Exported route array ──────────────────────────────────────────
 
 export const assistRoutes: Route[] = [
-  { method: 'POST', pattern: '/assist/fetch-comments', handler: handleFetchComments },
-  { method: 'POST', pattern: '/assist/fetch-messages', handler: handleFetchMessages },
-  { method: 'POST', pattern: '/assist/reply-comment', handler: handleReplyComment },
-  { method: 'POST', pattern: '/assist/reply-message', handler: handleReplyMessage },
-  { method: 'POST', pattern: '/assist/search-and-fetch-comments', handler: handleSearchAndFetchComments },
+  {
+    method: 'POST',
+    pattern: '/assist/fetch-comments',
+    handler: handleFetchComments
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/fetch-messages',
+    handler: handleFetchMessages
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/reply-comment',
+    handler: handleReplyComment
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/reply-message',
+    handler: handleReplyMessage
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/search-and-fetch-comments',
+    handler: handleSearchAndFetchComments
+  }
 ];

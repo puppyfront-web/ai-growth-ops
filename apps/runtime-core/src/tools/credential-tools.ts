@@ -16,7 +16,7 @@ interface StorageStateFile {
 
 export function resolveSharedAccountForPlatform(
   platform: string,
-  account?: string,
+  account?: string
 ): string | undefined {
   if (account?.trim()) return account.trim();
 
@@ -28,19 +28,21 @@ export function resolveSharedAccountForPlatform(
     xiaohongshu: config.sharedAccounts.xiaohongshu,
     wechat_official: config.sharedAccounts.wechat_official,
     zhihu: config.sharedAccounts.zhihu,
-    baijiahao: config.sharedAccounts.baijiahao,
+    baijiahao: config.sharedAccounts.baijiahao
   };
 
   return sharedAccountMap[platform];
 }
 
-export async function storageStateToCookieHeader(path: string): Promise<string | null> {
+export async function storageStateToCookieHeader(
+  path: string
+): Promise<string | null> {
   return storageStateToCookieHeaderFromRaw(await readFile(path, 'utf8'));
 }
 
 async function readStorageStatePayload(
   platform: string,
-  account?: string,
+  account?: string
 ): Promise<string | null> {
   const envMap: Record<string, string | undefined> = {
     douyin: process.env.AI_GROWTH_OPS_DOUYIN_COOKIE,
@@ -49,7 +51,7 @@ async function readStorageStatePayload(
     wechat_channels: process.env.AI_GROWTH_OPS_WECHAT_CHANNELS_COOKIE,
     kuaishou: process.env.AI_GROWTH_OPS_KUAISHOU_COOKIE,
     zhihu: process.env.AI_GROWTH_OPS_ZHIHU_COOKIE,
-    baijiahao: process.env.AI_GROWTH_OPS_BAIJIAHAO_COOKIE,
+    baijiahao: process.env.AI_GROWTH_OPS_BAIJIAHAO_COOKIE
   };
 
   const fromEnv = envMap[platform];
@@ -59,7 +61,9 @@ async function readStorageStatePayload(
   const resolvedAccount = resolveSharedAccountForPlatform(platform, account);
   if (!mapped || !resolvedAccount) return null;
 
-  const root = process.env.SOCIAL_PUBLISH_DATA_DIR ?? join(process.env.HOME ?? '', '.social-publish-skills');
+  const root =
+    process.env.SOCIAL_PUBLISH_DATA_DIR ??
+    join(process.env.HOME ?? '', '.social-publish-skills');
   const path = join(root, 'cookies', mapped, `${resolvedAccount}.json`);
   if (!existsSync(path)) return null;
 
@@ -68,7 +72,7 @@ async function readStorageStatePayload(
 
 export async function resolveCookieForPlatform(
   platform: string,
-  account?: string,
+  account?: string
 ): Promise<string | null> {
   const payload = await readStorageStatePayload(platform, account);
   if (!payload) return null;
@@ -81,12 +85,14 @@ export async function resolveCookieForPlatform(
 /** Prefer full Playwright storageState JSON for browser-runner (keeps per-domain cookies). */
 export async function resolveAuthStateForPlatform(
   platform: string,
-  account?: string,
+  account?: string
 ): Promise<string | null> {
   return readStorageStatePayload(platform, account);
 }
 
-async function storageStateToCookieHeaderFromRaw(raw: string): Promise<string | null> {
+async function storageStateToCookieHeaderFromRaw(
+  raw: string
+): Promise<string | null> {
   let parsed: StorageStateFile;
   try {
     parsed = JSON.parse(raw) as StorageStateFile;
@@ -100,7 +106,7 @@ async function storageStateToCookieHeaderFromRaw(raw: string): Promise<string | 
 
 export async function validateCookieCredential(
   platform: string,
-  account?: string,
+  account?: string
 ): Promise<{
   valid: boolean;
   platform: string;
@@ -113,7 +119,7 @@ export async function validateCookieCredential(
       valid: false,
       platform,
       cookie: null,
-      error: 'cookie_not_found',
+      error: 'cookie_not_found'
     };
   }
 
@@ -121,21 +127,21 @@ export async function validateCookieCredential(
     const provider = getPlatformProvider(platform);
     const result = await provider.validateCredentials({
       authType: 'cookie',
-      cookie,
+      cookie
     });
 
     return {
       valid: result.valid,
       platform,
       cookie,
-      error: result.error,
+      error: result.error
     };
   } catch (error) {
     return {
       valid: false,
       platform,
       cookie,
-      error: error instanceof Error ? error.message : 'unknown_error',
+      error: error instanceof Error ? error.message : 'unknown_error'
     };
   }
 }

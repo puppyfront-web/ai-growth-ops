@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import { createServer } from 'node:http';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import { createApiServer } from '../../../apps/api/src';
 
@@ -11,7 +15,7 @@ const db = createDatabaseClient();
 
 // Auth state
 let authToken = '';
-let orgId = '';
+let _orgId = '';
 
 // Mock browser-runner server
 let mockRunner: Server;
@@ -21,7 +25,7 @@ let mockCookies = '';
 
 async function get(path: string) {
   const res = await fetch(`${baseUrl}${path}`, {
-    headers: { authorization: `Bearer ${authToken}` },
+    headers: { authorization: `Bearer ${authToken}` }
   });
   return { status: res.status, body: await res.json() };
 }
@@ -31,9 +35,9 @@ async function post(path: string, body?: unknown) {
     method: 'POST',
     headers: {
       ...(body ? { 'content-type': 'application/json' } : {}),
-      authorization: `Bearer ${authToken}`,
+      authorization: `Bearer ${authToken}`
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   return { status: res.status, body: await res.json() };
 }
@@ -46,18 +50,31 @@ beforeAll(async () => {
     if (req.url === '/session/start' && req.method === 'POST') {
       mockSessionState = 'waiting';
       mockCookies = '';
-      res.end(JSON.stringify({ sessionId: 'mock-session-001', status: 'waiting_scan' }));
-    } else if (req.url?.startsWith('/session/') && req.url.endsWith('/status')) {
+      res.end(
+        JSON.stringify({
+          sessionId: 'mock-session-001',
+          status: 'waiting_scan'
+        })
+      );
+    } else if (
+      req.url?.startsWith('/session/') &&
+      req.url.endsWith('/status')
+    ) {
       if (mockSessionState === 'logged_in') {
         res.end(JSON.stringify({ status: 'logged_in', cookies: mockCookies }));
       } else if (mockSessionState === 'expired') {
-        res.end(JSON.stringify({ status: 'expired', error: 'Session expired' }));
+        res.end(
+          JSON.stringify({ status: 'expired', error: 'Session expired' })
+        );
       } else if (mockSessionState === 'error') {
         res.end(JSON.stringify({ status: 'error', error: 'Browser error' }));
       } else {
         res.end(JSON.stringify({ status: 'waiting_scan' }));
       }
-    } else if (req.url?.startsWith('/session/') && req.url.endsWith('/cancel')) {
+    } else if (
+      req.url?.startsWith('/session/') &&
+      req.url.endsWith('/cancel')
+    ) {
       mockSessionState = 'expired';
       res.end(JSON.stringify({ ok: true }));
     } else {
@@ -65,7 +82,9 @@ beforeAll(async () => {
       res.end(JSON.stringify({ error: 'Not found' }));
     }
   });
-  await new Promise<void>((resolve) => mockRunner.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) =>
+    mockRunner.listen(0, '127.0.0.1', resolve)
+  );
   const addr = mockRunner.address() as { address: string; port: number };
   mockRunnerUrl = `http://${addr.address}:${addr.port}`;
 
@@ -76,18 +95,27 @@ beforeAll(async () => {
   await seedDatabase(db);
 
   // 3. Create organization + membership for seeded admin
-  const admin = await db.user.findFirstOrThrow({ where: { email: 'admin@ai-growth-ops.local' } });
+  const admin = await db.user.findFirstOrThrow({
+    where: { email: 'admin@ai-growth-ops.local' }
+  });
   const org = await db.organization.create({
-    data: { name: 'Test Org', slug: `test-org-${Date.now()}`, status: 'active' },
+    data: { name: 'Test Org', slug: `test-org-${Date.now()}`, status: 'active' }
   });
   await db.organizationMember.create({
-    data: { organizationId: org.id, userId: admin.id, role: 'owner', status: 'active' },
+    data: {
+      organizationId: org.id,
+      userId: admin.id,
+      role: 'owner',
+      status: 'active'
+    }
   });
-  orgId = org.id;
+  _orgId = org.id;
 
   // 4. Start API server
   apiServer = createApiServer({ db }) as Server;
-  await new Promise<void>((resolve) => apiServer.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) =>
+    apiServer.listen(0, '127.0.0.1', resolve)
+  );
   const apiAddr = apiServer.address() as { address: string; port: number };
   baseUrl = `http://${apiAddr.address}:${apiAddr.port}`;
 
@@ -95,13 +123,23 @@ beforeAll(async () => {
   const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@ai-growth-ops.local', password: 'changeme123' }),
+    body: JSON.stringify({
+      email: 'admin@ai-growth-ops.local',
+      password: 'changeme123'
+    })
   });
-  const loginBody = await loginRes.json() as { token: string };
+  const loginBody = (await loginRes.json()) as { token: string };
   authToken = loginBody.token;
 
   // 6. Create platform accounts (one per platform, with null cookieRef)
-  const platforms = ['douyin', 'xiaohongshu', 'wechat_official', 'wechat_channels', 'baijiahao', 'zhihu'];
+  const platforms = [
+    'douyin',
+    'xiaohongshu',
+    'wechat_official',
+    'wechat_channels',
+    'baijiahao',
+    'zhihu'
+  ];
   for (const platform of platforms) {
     await db.platformAccount.create({
       data: {
@@ -111,8 +149,8 @@ beforeAll(async () => {
         name: `${platform}-test-account`,
         mode: 'browser_assist',
         status: 'active',
-        cookieRef: null,
-      },
+        cookieRef: null
+      }
     });
   }
 });
@@ -131,7 +169,7 @@ const platformCookieSamples: Record<string, string> = {
   wechat_official: 'slave_sid=wx_off_sid; bizuin=123456',
   wechat_channels: 'finder_username=wx_ch_001; userName=test_channel',
   baijiahao: 'BDUSS=bjh_bduss_xyz; STOKEN=bjh_stk_001',
-  zhihu: 'z_c0=zhihu_token_abc; _xsrf=xsr_001',
+  zhihu: 'z_c0=zhihu_token_abc; _xsrf=xsr_001'
 };
 
 const platforms = Object.keys(platformCookieSamples);
@@ -143,8 +181,10 @@ describe('Browser Login Flow — all platforms', () => {
 
       it(`finds seed ${platform} account`, async () => {
         const { body } = await get('/api/accounts');
-        const accounts = body as any[];
-        const account = accounts.find((a: any) => a.platform === platform);
+        const accounts = body as Record<string, unknown>[];
+        const account = accounts.find(
+          (a: Record<string, unknown>) => a.platform === platform
+        ) as Record<string, unknown>;
         expect(account).toBeDefined();
         expect(account.cookieRef).toBeNull();
         accountId = account.id;
@@ -152,14 +192,18 @@ describe('Browser Login Flow — all platforms', () => {
 
       it('starts a browser login session', async () => {
         mockSessionState = 'waiting';
-        const { status, body } = await post(`/api/accounts/${accountId}/browser-login/start`);
+        const { status, body } = await post(
+          `/api/accounts/${accountId}/browser-login/start`
+        );
         expect(status).toBe(200);
         expect(body.status).toBe('waiting_scan');
         expect(body.sessionId).toBe('mock-session-001');
       });
 
       it('returns waiting_scan while not logged in', async () => {
-        const { status, body } = await get(`/api/accounts/${accountId}/browser-login/status`);
+        const { status, body } = await get(
+          `/api/accounts/${accountId}/browser-login/status`
+        );
         expect(status).toBe(200);
         expect(body.status).toBe('waiting_scan');
       });
@@ -168,26 +212,34 @@ describe('Browser Login Flow — all platforms', () => {
         mockSessionState = 'logged_in';
         mockCookies = platformCookieSamples[platform];
 
-        const { body } = await get(`/api/accounts/${accountId}/browser-login/status`);
+        const { body } = await get(
+          `/api/accounts/${accountId}/browser-login/status`
+        );
         expect(body.status).toBe('logged_in');
         // Bug 2 fix: response should NOT contain plaintext cookies
         expect(body.cookies).toBeUndefined();
 
-        const account = await db.platformAccount.findFirst({ where: { id: accountId } });
+        const account = await db.platformAccount.findFirst({
+          where: { id: accountId }
+        });
         expect(account!.cookieRef).not.toBeNull();
         expect(account!.authType).toBe('cookie');
         expect(account!.mode).toBe('browser_assist');
         expect(account!.status).toBe('active');
 
         const decrypted = decryptToken(account!.cookieRef!);
-        expect(decrypted).toContain(platformCookieSamples[platform].split('=')[0]);
+        expect(decrypted).toContain(
+          platformCookieSamples[platform].split('=')[0]
+        );
       });
 
       it('cancels a login session', async () => {
         mockSessionState = 'waiting';
         await post(`/api/accounts/${accountId}/browser-login/start`);
 
-        const { status, body } = await post(`/api/accounts/${accountId}/browser-login/cancel`);
+        const { status, body } = await post(
+          `/api/accounts/${accountId}/browser-login/cancel`
+        );
         expect(status).toBe(200);
         expect(body.ok).toBe(true);
       });
@@ -197,16 +249,22 @@ describe('Browser Login Flow — all platforms', () => {
 
 describe('Browser Login — error handling', () => {
   it('returns 404 for non-existent account', async () => {
-    const { status } = await post('/api/accounts/nonexistent/browser-login/start');
+    const { status } = await post(
+      '/api/accounts/nonexistent/browser-login/start'
+    );
     expect(status).toBe(404);
   });
 
   it('handles browser-runner being unreachable', async () => {
     process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
     const { body } = await get('/api/accounts');
-    const accounts = body as any[];
-    const dy = accounts.find((a: any) => a.platform === 'douyin');
-    const { status, body: resBody } = await post(`/api/accounts/${dy.id}/browser-login/start`);
+    const accounts = body as Record<string, unknown>[];
+    const dy = accounts.find(
+      (a: Record<string, unknown>) => a.platform === 'douyin'
+    ) as Record<string, unknown>;
+    const { status, body: resBody } = await post(
+      `/api/accounts/${dy.id}/browser-login/start`
+    );
     expect(status).toBe(502);
     expect(resBody.status).toBe('error');
     expect(resBody.error).toContain('浏览器辅助服务不可用');
@@ -219,8 +277,10 @@ describe('Browser Login — error handling', () => {
 describe('Browser Login — concurrent start protection', () => {
   it('rejects duplicate start requests for the same account with 409', async () => {
     const { body } = await get('/api/accounts');
-    const accounts = body as any[];
-    const dy = accounts.find((a: any) => a.platform === 'douyin');
+    const accounts = body as Record<string, unknown>[];
+    const dy = accounts.find(
+      (a: Record<string, unknown>) => a.platform === 'douyin'
+    ) as Record<string, unknown>;
 
     // Temporarily override browser-runner URL to a slow mock
     const slowMock = createServer(async (req, res) => {
@@ -228,20 +288,27 @@ describe('Browser Login — concurrent start protection', () => {
         // Simulate slow browser launch — hold the connection open
         await new Promise((r) => setTimeout(r, 500));
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ sessionId: 'slow-mock-session', status: 'waiting_scan' }));
+        res.end(
+          JSON.stringify({
+            sessionId: 'slow-mock-session',
+            status: 'waiting_scan'
+          })
+        );
       } else {
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ status: 'waiting_scan' }));
       }
     });
-    await new Promise<void>((resolve) => slowMock.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) =>
+      slowMock.listen(0, '127.0.0.1', resolve)
+    );
     const slowAddr = slowMock.address() as { address: string; port: number };
     process.env.BROWSER_RUNNER_URL = `http://${slowAddr.address}:${slowAddr.port}`;
 
     // Fire two concurrent start requests
     const [res1, res2] = await Promise.all([
       post(`/api/accounts/${dy.id}/browser-login/start`),
-      post(`/api/accounts/${dy.id}/browser-login/start`),
+      post(`/api/accounts/${dy.id}/browser-login/start`)
     ]);
 
     const statuses = [res1.status, res2.status].sort();
@@ -261,15 +328,19 @@ describe('Browser Login — concurrent start protection', () => {
 
   it('allows start after previous session completes', async () => {
     const { body } = await get('/api/accounts');
-    const accounts = body as any[];
-    const xhs = accounts.find((a: any) => a.platform === 'xiaohongshu');
+    const accounts = body as Record<string, unknown>[];
+    const xhs = accounts.find(
+      (a: Record<string, unknown>) => a.platform === 'xiaohongshu'
+    ) as Record<string, unknown>;
 
     // First start — should succeed
     const res1 = await post(`/api/accounts/${xhs.id}/browser-login/start`);
     expect(res1.status).toBe(200);
 
     // Cancel the session
-    const cancelRes = await post(`/api/accounts/${xhs.id}/browser-login/cancel`);
+    const cancelRes = await post(
+      `/api/accounts/${xhs.id}/browser-login/cancel`
+    );
     expect(cancelRes.status).toBe(200);
 
     // Second start after cancel — should also succeed
@@ -282,10 +353,14 @@ describe('Browser Login — timeout and error detail', () => {
   it('error message contains runner URL and non-empty detail', async () => {
     process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
     const { body } = await get('/api/accounts');
-    const accounts = body as any[];
-    const dy = accounts.find((a: any) => a.platform === 'douyin');
+    const accounts = body as Record<string, unknown>[];
+    const dy = accounts.find(
+      (a: Record<string, unknown>) => a.platform === 'douyin'
+    ) as Record<string, unknown>;
 
-    const { body: resBody } = await post(`/api/accounts/${dy.id}/browser-login/start`);
+    const { body: resBody } = await post(
+      `/api/accounts/${dy.id}/browser-login/start`
+    );
 
     // Error should include the URL being connected to
     expect(resBody.error).toContain('http://127.0.0.1:1');
@@ -300,11 +375,15 @@ describe('Browser Login — timeout and error detail', () => {
 
   it('status endpoint returns 200 with error for missing session', async () => {
     const { body } = await get('/api/accounts');
-    const accounts = body as any[];
-    const bh = accounts.find((a: any) => a.platform === 'baijiahao');
+    const accounts = body as Record<string, unknown>[];
+    const bh = accounts.find(
+      (a: Record<string, unknown>) => a.platform === 'baijiahao'
+    ) as Record<string, unknown>;
 
     // Poll status without starting a session — should return error gracefully
-    const { status, body: resBody } = await get(`/api/accounts/${bh.id}/browser-login/status`);
+    const { status, body: resBody } = await get(
+      `/api/accounts/${bh.id}/browser-login/status`
+    );
     expect(status).toBe(200);
     expect(resBody.status).toBe('error');
   });

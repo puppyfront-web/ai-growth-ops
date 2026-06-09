@@ -4,8 +4,8 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 const connectionOptions: QueueOptions = {
   connection: {
-    url: REDIS_URL,
-  },
+    url: REDIS_URL
+  }
 };
 
 const queues = new Map<string, Queue>();
@@ -31,7 +31,7 @@ export const QUEUE_NAMES = {
   INTERACTION_AUTO_REPLY: 'interaction.auto-reply',
   INTERACTION_MANUAL_REPLY: 'interaction.manual-reply',
   SCHEDULED_INTERACTION_SYNC: 'scheduled.interaction-sync',
-  WORKFLOW_EXECUTE: 'workflow.execute',
+  WORKFLOW_EXECUTE: 'workflow.execute'
 } as const;
 
-export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];
+export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

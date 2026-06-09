@@ -1,18 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { verifyEmail } from '@/lib/api/auth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function VerifyEmailPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
+    'loading'
+  );
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -50,7 +57,9 @@ export default function VerifyEmailPage() {
         <CardContent className="space-y-4">
           {status === 'success' && (
             <Alert>
-              <AlertDescription>您的邮箱已验证成功，现在可以正常使用所有功能。</AlertDescription>
+              <AlertDescription>
+                您的邮箱已验证成功，现在可以正常使用所有功能。
+              </AlertDescription>
             </Alert>
           )}
           {status === 'error' && (

@@ -15,7 +15,11 @@ export interface AiConfig {
   temperature: number;
   maxTokens: number;
   dailyTokenLimit: number;
-  features: { textGeneration: boolean; leadIdentification: boolean; replySuggestion: boolean };
+  features: {
+    textGeneration: boolean;
+    leadIdentification: boolean;
+    replySuggestion: boolean;
+  };
   lastRunAt: string | null;
   mediaGeneration: MediaGenerationConfig;
 }
@@ -48,7 +52,9 @@ export function getAiConfig(): Promise<AiConfig> {
   return apiGet<AiConfig>('/api/settings/ai');
 }
 
-export function updateAiConfig(data: Record<string, unknown>): Promise<{ ok: boolean }> {
+export function updateAiConfig(
+  data: Record<string, unknown>
+): Promise<{ ok: boolean }> {
   return apiPut<{ ok: boolean }>('/api/settings/ai', data);
 }
 
@@ -60,7 +66,9 @@ export function getComplianceRules(): Promise<ComplianceRules> {
   return apiGet<ComplianceRules>('/api/settings/compliance');
 }
 
-export function updateComplianceRules(data: Record<string, unknown>): Promise<{ ok: boolean }> {
+export function updateComplianceRules(
+  data: Record<string, unknown>
+): Promise<{ ok: boolean }> {
   return apiPut<{ ok: boolean }>('/api/settings/compliance', data);
 }
 
@@ -68,7 +76,9 @@ export function getStorageConfig(): Promise<StorageConfig> {
   return apiGet<StorageConfig>('/api/settings/storage');
 }
 
-export function updateStorageConfig(data: Partial<StorageConfig>): Promise<{ ok: boolean }> {
+export function updateStorageConfig(
+  data: Partial<StorageConfig>
+): Promise<{ ok: boolean }> {
   return apiPut<{ ok: boolean }>('/api/settings/storage', data);
 }
 
@@ -85,7 +95,10 @@ export function getProfile(): Promise<UserProfile> {
   return apiGet<UserProfile>('/api/user/profile');
 }
 
-export function updateProfile(data: { name?: string; email?: string }): Promise<UserProfile> {
+export function updateProfile(data: {
+  name?: string;
+  email?: string;
+}): Promise<UserProfile> {
   return apiPut<UserProfile>('/api/user/profile', data);
 }
 
@@ -102,11 +115,18 @@ export function getTeamMembers(): Promise<TeamMember[]> {
   return apiGet<TeamMember[]>('/api/team/members');
 }
 
-export function inviteTeamMember(data: { email: string; role?: string; name?: string }): Promise<TeamMember> {
+export function inviteTeamMember(data: {
+  email: string;
+  role?: string;
+  name?: string;
+}): Promise<TeamMember> {
   return apiPost<TeamMember>('/api/team/invite', data);
 }
 
-export function updateMemberRole(memberId: string, role: string): Promise<TeamMember> {
+export function updateMemberRole(
+  memberId: string,
+  role: string
+): Promise<TeamMember> {
   return apiPut<TeamMember>(`/api/team/members/${memberId}/role`, { role });
 }
 
@@ -127,7 +147,10 @@ export function getWebhooks(): Promise<WebhookEntry[]> {
   return apiGet<WebhookEntry[]>('/api/webhooks');
 }
 
-export function createWebhook(data: { url: string; events: string[] }): Promise<WebhookEntry> {
+export function createWebhook(data: {
+  url: string;
+  events: string[];
+}): Promise<WebhookEntry> {
   return apiPost<WebhookEntry>('/api/webhooks', data);
 }
 

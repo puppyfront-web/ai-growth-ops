@@ -1,24 +1,38 @@
 import {
   createPublishGraph,
   type PublishGraphInput,
-  type PublishGraphResult,
+  type PublishGraphResult
 } from '../graphs/publish-graph.js';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
 import { getRuntimeAdapter } from '../runtime-adapters/index.js';
-import { resolveCookieForPlatform, resolveSharedAccountForPlatform } from '../tools/credential-tools.js';
+import {
+  resolveCookieForPlatform,
+  resolveSharedAccountForPlatform
+} from '../tools/credential-tools.js';
 import { publishViaBrowserRunner } from '../tools/browser-runner-tools.js';
-import { buildPublishInvocation, createDefaultPublishRegistry } from '../tools/publish-tools.js';
+import {
+  buildPublishInvocation,
+  createDefaultPublishRegistry
+} from '../tools/publish-tools.js';
 
-export async function runPublishWorkflow(input: PublishGraphInput): Promise<PublishGraphResult> {
+export async function runPublishWorkflow(
+  input: PublishGraphInput
+): Promise<PublishGraphResult> {
   const graph = createPublishGraph(async (graphInput) => {
     const registry = await createDefaultPublishRegistry();
     const config = loadRuntimeConfig();
     const results = [];
 
     for (const platform of graphInput.platforms) {
-      const requestedAccount = (graphInput as PublishGraphInput & { account?: string }).account;
-      const account = resolveSharedAccountForPlatform(platform, requestedAccount);
-      const source = (graphInput as PublishGraphInput & { source?: string }).source;
+      const requestedAccount = (
+        graphInput as PublishGraphInput & { account?: string }
+      ).account;
+      const account = resolveSharedAccountForPlatform(
+        platform,
+        requestedAccount
+      );
+      const source = (graphInput as PublishGraphInput & { source?: string })
+        .source;
       const resolved =
         registry.resolve('publish.video', { platform }) ??
         registry.resolve('publish.article', { platform }) ??
@@ -29,7 +43,7 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
           platform,
           skillId: 'missing',
           status: 'failed' as const,
-          mode: 'unresolved',
+          mode: 'unresolved'
         });
         continue;
       }
@@ -42,14 +56,23 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
           title: graphInput.title,
           content: graphInput.content,
           mediaFilePaths: graphInput.mediaFilePaths,
-          source,
+          source
         },
-        config.socialPublishSkillsRoot,
+        config.socialPublishSkillsRoot
       );
 
       if (!invocation.executable) {
         const cookie = await resolveCookieForPlatform(platform, account);
-        if (cookie && ['xiaohongshu', 'wechat_official', 'wechat_channels', 'baijiahao', 'zhihu'].includes(platform)) {
+        if (
+          cookie &&
+          [
+            'xiaohongshu',
+            'wechat_official',
+            'wechat_channels',
+            'baijiahao',
+            'zhihu'
+          ].includes(platform)
+        ) {
           try {
             const execution = await publishViaBrowserRunner({
               platform,
@@ -57,14 +80,14 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
               title: graphInput.title,
               content: graphInput.content,
               mediaFilePaths: graphInput.mediaFilePaths,
-              source,
+              source
             });
             results.push({
               platform,
               skillId: resolved.skillId,
               status: execution.status,
               mode: 'executed',
-              detail: execution.detail,
+              detail: execution.detail
             });
             continue;
           } catch (error) {
@@ -73,7 +96,10 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
               skillId: resolved.skillId,
               status: 'failed' as const,
               mode: 'executed',
-              detail: error instanceof Error ? error.message : 'browser_runner_publish_failed',
+              detail:
+                error instanceof Error
+                  ? error.message
+                  : 'browser_runner_publish_failed'
             });
             continue;
           }
@@ -92,8 +118,8 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
             mode: 'planned',
             detail: {
               ...invocation.payload,
-              missing: ['cookie'],
-            },
+              missing: ['cookie']
+            }
           });
           continue;
         }
@@ -103,7 +129,7 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
           skillId: resolved.skillId,
           status: 'success' as const,
           mode: 'planned',
-          detail: invocation.payload,
+          detail: invocation.payload
         });
         continue;
       }
@@ -111,7 +137,7 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
       const adapter = getRuntimeAdapter(resolved.runtime);
       const execution = await adapter.runSkill({
         skillId: resolved.skillId,
-        payload: invocation.payload,
+        payload: invocation.payload
       });
 
       results.push({
@@ -119,14 +145,16 @@ export async function runPublishWorkflow(input: PublishGraphInput): Promise<Publ
         skillId: resolved.skillId,
         status: execution.status,
         mode: 'executed',
-        detail: execution.output ?? execution.error,
+        detail: execution.output ?? execution.error
       });
     }
 
     return {
       workflow: 'publish',
-      status: results.every((item) => item.status === 'success') ? 'success' : 'failed',
-      results: results as PublishGraphResult['results'],
+      status: results.every((item) => item.status === 'success')
+        ? 'success'
+        : 'failed',
+      results: results as PublishGraphResult['results']
     };
   });
 

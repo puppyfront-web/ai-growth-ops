@@ -22,9 +22,9 @@ export interface InteractionOpsResult {
 }
 
 export function createInteractionOpsGraph(
-  executor: (input: InteractionOpsInput) => Promise<InteractionOpsResult>,
+  executor: (input: InteractionOpsInput) => Promise<InteractionOpsResult>
 ): { run(input: InteractionOpsInput): Promise<InteractionOpsResult> } {
   return {
-    run: executor,
+    run: executor
   };
 }

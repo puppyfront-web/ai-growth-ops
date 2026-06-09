@@ -16,7 +16,7 @@ function Skeleton({ className, lines, ...props }: SkeletonProps) {
             className={cn(
               'h-4 animate-pulse rounded-md bg-muted',
               i === lines - 1 && 'w-3/4',
-              className,
+              className
             )}
           />
         ))}

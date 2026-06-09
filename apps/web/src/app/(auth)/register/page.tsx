@@ -10,19 +10,27 @@ import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ApiError } from '@/lib/api/client';
 
-const registerSchema = z.object({
-  name: z.string().min(1, '请输入用户名').max(50, '用户名最多 50 个字符'),
-  email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(8, '密码至少 8 个字符'),
-  confirmPassword: z.string().min(8, '请确认密码'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: '两次输入的密码不一致',
-  path: ['confirmPassword'],
-});
+const registerSchema = z
+  .object({
+    name: z.string().min(1, '请输入用户名').max(50, '用户名最多 50 个字符'),
+    email: z.string().email('请输入有效的邮箱地址'),
+    password: z.string().min(8, '密码至少 8 个字符'),
+    confirmPassword: z.string().min(8, '请确认密码')
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: '两次输入的密码不一致',
+    path: ['confirmPassword']
+  });
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
@@ -34,15 +42,15 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }
   } = useForm<RegisterForm>({
-    resolver: zodResolver(registerSchema),
+    resolver: zodResolver(registerSchema)
   });
 
   const onSubmit = async (data: RegisterForm) => {
     setServerError(null);
     try {
-      const result = await setAuthFromRegister(data);
+      await setAuthFromRegister(data);
       router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
@@ -67,7 +75,9 @@ export default function RegisterPage() {
             </div>
           </div>
           <CardTitle className="text-2xl">创建账号</CardTitle>
-          <CardDescription>注册 AI Growth Ops，开启智能内容运营</CardDescription>
+          <CardDescription>
+            注册 AI Growth Ops，开启智能内容运营
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

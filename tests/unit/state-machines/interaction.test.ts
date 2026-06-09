@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest';
 
 type InteractionStatus =
-  | 'NEW' | 'NORMALIZED' | 'CLASSIFYING' | 'CLASSIFIED'
-  | 'REPLY_SUGGESTED' | 'WAITING_HUMAN_REVIEW' | 'REPLIED'
-  | 'CONVERTED_TO_LEAD' | 'IGNORED';
+  | 'NEW'
+  | 'NORMALIZED'
+  | 'CLASSIFYING'
+  | 'CLASSIFIED'
+  | 'REPLY_SUGGESTED'
+  | 'WAITING_HUMAN_REVIEW'
+  | 'REPLIED'
+  | 'CONVERTED_TO_LEAD'
+  | 'IGNORED';
 
 const VALID_TRANSITIONS: Record<InteractionStatus, InteractionStatus[]> = {
   NEW: ['NORMALIZED', 'CLASSIFIED', 'IGNORED'],
@@ -14,10 +20,13 @@ const VALID_TRANSITIONS: Record<InteractionStatus, InteractionStatus[]> = {
   WAITING_HUMAN_REVIEW: ['REPLIED', 'IGNORED', 'CONVERTED_TO_LEAD'],
   REPLIED: ['CONVERTED_TO_LEAD'],
   CONVERTED_TO_LEAD: [],
-  IGNORED: [],
+  IGNORED: []
 };
 
-function canTransition(from: InteractionStatus, to: InteractionStatus): boolean {
+function canTransition(
+  from: InteractionStatus,
+  to: InteractionStatus
+): boolean {
   return VALID_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
@@ -41,12 +50,12 @@ describe('Interaction State Machine', () => {
       ['REPLY_SUGGESTED', 'WAITING_HUMAN_REVIEW'],
       ['WAITING_HUMAN_REVIEW', 'REPLIED'],
       ['WAITING_HUMAN_REVIEW', 'IGNORED'],
-      ['REPLIED', 'CONVERTED_TO_LEAD'],
+      ['REPLIED', 'CONVERTED_TO_LEAD']
     ] as [InteractionStatus, InteractionStatus][])(
       'allows %s → %s',
       (from, to) => {
         expect(canTransition(from, to)).toBe(true);
-      },
+      }
     );
   });
 
@@ -56,12 +65,12 @@ describe('Interaction State Machine', () => {
       ['IGNORED', 'REPLIED'],
       ['IGNORED', 'CLASSIFIED'],
       ['REPLIED', 'CLASSIFIED'],
-      ['CONVERTED_TO_LEAD', 'REPLY_SUGGESTED'],
+      ['CONVERTED_TO_LEAD', 'REPLY_SUGGESTED']
     ] as [InteractionStatus, InteractionStatus][])(
       'blocks %s → %s',
       (from, to) => {
         expect(canTransition(from, to)).toBe(false);
-      },
+      }
     );
   });
 

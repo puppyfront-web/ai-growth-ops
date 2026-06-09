@@ -12,9 +12,14 @@ export function buildSystemPrompt(context: {
   platforms: PlatformAccount[];
   today: string;
 }): string {
-  const platformList = context.platforms.length > 0
-    ? context.platforms.map(p => `  - ${p.platform} (${p.name}): ${p.status}, mode=${p.mode}`).join('\n')
-    : '  (暂无已连接账号)';
+  const platformList =
+    context.platforms.length > 0
+      ? context.platforms
+          .map(
+            (p) => `  - ${p.platform} (${p.name}): ${p.status}, mode=${p.mode}`
+          )
+          .join('\n')
+      : '  (暂无已连接账号)';
 
   return `你是 AI Growth Ops 的智能运营助手。你拥有 47 个工具，可以帮用户完成从内容创作到互动管理的完整闭环运营任务。
 

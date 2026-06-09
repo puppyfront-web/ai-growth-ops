@@ -43,7 +43,12 @@ function ToastContainer() {
   return createPortal(
     <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 w-80">
       {toasts.map((t) => {
-        const Icon = t.type === 'success' ? CheckCircle : t.type === 'error' ? AlertCircle : Info;
+        const Icon =
+          t.type === 'success'
+            ? CheckCircle
+            : t.type === 'error'
+              ? AlertCircle
+              : Info;
         const colors =
           t.type === 'success'
             ? 'border-green-200 bg-green-50 text-green-800'
@@ -55,19 +60,22 @@ function ToastContainer() {
             key={t.id}
             className={cn(
               'flex items-start gap-2 rounded-lg border p-3 shadow-lg animate-in slide-in-from-bottom-5 fade-in-0',
-              colors,
+              colors
             )}
           >
             <Icon className="h-5 w-5 shrink-0 mt-0.5" />
             <p className="flex-1 text-sm">{t.message}</p>
-            <button onClick={() => removeToast(t.id)} className="shrink-0 opacity-70 hover:opacity-100">
+            <button
+              onClick={() => removeToast(t.id)}
+              className="shrink-0 opacity-70 hover:opacity-100"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
         );
       })}
     </div>,
-    document.body,
+    document.body
   );
 }
 
@@ -75,7 +83,7 @@ function ToastContainer() {
 const toast = {
   success: (message: string) => addToast?.('success', message),
   error: (message: string) => addToast?.('error', message),
-  info: (message: string) => addToast?.('info', message),
+  info: (message: string) => addToast?.('info', message)
 };
 
 export { ToastContainer, toast };

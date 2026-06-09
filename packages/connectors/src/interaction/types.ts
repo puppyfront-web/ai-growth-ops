@@ -1,4 +1,10 @@
-export type PlatformCode = 'douyin' | 'xiaohongshu' | 'wechat_official' | 'wechat_channels' | 'baijiahao' | 'zhihu';
+export type PlatformCode =
+  | 'douyin'
+  | 'xiaohongshu'
+  | 'wechat_official'
+  | 'wechat_channels'
+  | 'baijiahao'
+  | 'zhihu';
 
 export type InteractionMode =
   | 'official_api'
@@ -9,7 +15,14 @@ export type InteractionMode =
   | 'sandbox'
   | 'disabled';
 
-export type InteractionType = 'comment' | 'comment_reply' | 'private_message' | 'official_account_message' | 'lead_form' | 'system_message' | 'manual_import';
+export type InteractionType =
+  | 'comment'
+  | 'comment_reply'
+  | 'private_message'
+  | 'official_account_message'
+  | 'lead_form'
+  | 'system_message'
+  | 'manual_import';
 
 export interface InteractionCapabilities {
   platform: PlatformCode;

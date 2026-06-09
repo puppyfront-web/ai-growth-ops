@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
 
 let server: Server;
@@ -12,11 +16,19 @@ async function get(path: string) {
   return { status: res.status, body: await res.json() };
 }
 async function post(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, { method: 'POST', headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: body ? { 'content-type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined
+  });
   return { status: res.status, body: await res.json() };
 }
 async function put(path: string, body: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
   return { status: res.status, body: await res.json() };
 }
 async function del(path: string) {
@@ -30,7 +42,7 @@ beforeAll(async () => {
   server = createApiServer({ db }) as Server;
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const addr = server.address()!;
-  baseUrl = `http://${(addr as any).address}:${(addr as any).port}`;
+  baseUrl = `http://${(addr as Record<string, unknown>).address}:${(addr as Record<string, unknown>).port}`;
 });
 
 afterAll(async () => {
@@ -49,7 +61,9 @@ describe('Content API', () => {
 
   it('POST /api/content-items creates item', async () => {
     const { status, body } = await post('/api/content-items', {
-      type: 'text_image', title: 'Test Content', body: 'Test body'
+      type: 'text_image',
+      title: 'Test Content',
+      body: 'Test body'
     });
     expect(status).toBe(201);
     expect(body.id).toBeDefined();
@@ -72,27 +86,35 @@ describe('Content API', () => {
 
   it('PUT /api/content-items/:id updates item', async () => {
     const { status, body } = await put(`/api/content-items/${contentId}`, {
-      title: 'Updated Title', body: 'Updated body'
+      title: 'Updated Title',
+      body: 'Updated body'
     });
     expect(status).toBe(200);
     expect(body.title).toBe('Updated Title');
   });
 
   it('POST /api/content-items/:id/generate-variants creates 6 variants', async () => {
-    const { status, body } = await post(`/api/content-items/${contentId}/generate-variants`);
+    const { status, body } = await post(
+      `/api/content-items/${contentId}/generate-variants`
+    );
     expect(status).toBe(201);
     expect(body.length).toBe(6);
   });
 
   it('POST /api/content-items/:id/compliance-check creates skill run', async () => {
-    const { status, body } = await post(`/api/content-items/${contentId}/compliance-check`);
+    const { status, body } = await post(
+      `/api/content-items/${contentId}/compliance-check`
+    );
     expect(status).toBe(200);
     expect(body.skillRunId).toBeDefined();
     expect(body.passed).toBe(true);
   });
 
   it('DELETE /api/content-items/:id soft-deletes draft content', async () => {
-    const { body: item } = await post('/api/content-items', { type: 'text_image', title: 'To Delete' });
+    const { body: item } = await post('/api/content-items', {
+      type: 'text_image',
+      title: 'To Delete'
+    });
     const { status, body } = await del(`/api/content-items/${item.id}`);
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
@@ -100,7 +122,14 @@ describe('Content API', () => {
 
   it('DELETE /api/content-items/:id blocks published content', async () => {
     const { body: items } = await get('/api/content-items');
-    const published = items.find((i: any) => i.contentVariants?.some((v: any) => v.publishJobs?.some((j: any) => j.status === 'PUBLISHED')));
+    const published = items.find((i: Record<string, unknown>) =>
+      (i.contentVariants as Array<Record<string, unknown>>)?.some(
+        (v: Record<string, unknown>) =>
+          (v.publishJobs as Array<Record<string, unknown>>)?.some(
+            (j: Record<string, unknown>) => j.status === 'PUBLISHED'
+          )
+      )
+    );
     if (published) {
       const { status } = await del(`/api/content-items/${published.id}`);
       expect(status).toBe(400);
@@ -119,7 +148,9 @@ describe('Media API', () => {
 
   it('POST /api/media-assets creates asset via JSON', async () => {
     const { status, body } = await post('/api/media-assets', {
-      fileName: 'test.png', fileType: 'image/png', fileSize: 2048
+      fileName: 'test.png',
+      fileType: 'image/png',
+      fileSize: 2048
     });
     expect(status).toBe(201);
     expect(body.id).toBeDefined();
@@ -128,14 +159,19 @@ describe('Media API', () => {
   });
 
   it('GET /api/media-assets?reviewStatus=approved filters', async () => {
-    const { status, body } = await get('/api/media-assets?reviewStatus=approved');
+    const { status, body } = await get(
+      '/api/media-assets?reviewStatus=approved'
+    );
     expect(status).toBe(200);
-    expect(body.every((m: any) => m.reviewStatus === 'approved')).toBe(true);
+    expect(
+      body.every((m: Record<string, unknown>) => m.reviewStatus === 'approved')
+    ).toBe(true);
   });
 
   it('PUT /api/media-assets/:id/review approves', async () => {
     const { status, body } = await put(`/api/media-assets/${mediaId}/review`, {
-      status: 'approved', note: 'Looks good'
+      status: 'approved',
+      note: 'Looks good'
     });
     expect(status).toBe(200);
     expect(body.reviewStatus).toBe('approved');

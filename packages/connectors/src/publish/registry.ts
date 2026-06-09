@@ -10,13 +10,16 @@ import { WechatChannelsPublishConnector } from './wechat-channels-connector.js';
 import { BaijiahaoPublishConnector } from './baijiahao-connector.js';
 import { ZhihuPublishConnector } from './zhihu-connector.js';
 
-const platformPublishConnectors: Record<string, new (config: PublishConnectorConfig) => PublishConnector> = {
+const platformPublishConnectors: Record<
+  string,
+  new (config: PublishConnectorConfig) => PublishConnector
+> = {
   douyin: DouyinPublishConnector,
   xiaohongshu: XiaohongshuPublishConnector,
   wechat_official: WechatOfficialPublishConnector,
   wechat_channels: WechatChannelsPublishConnector,
   baijiahao: BaijiahaoPublishConnector,
-  zhihu: ZhihuPublishConnector,
+  zhihu: ZhihuPublishConnector
 };
 
 const publishConnectors = new Map<string, PublishConnector>();
@@ -25,14 +28,16 @@ export function registerPublishConnector(connector: PublishConnector): void {
   publishConnectors.set(connector.platform, connector);
 }
 
-export function getPublishConnector(platform: PlatformCode): PublishConnector | undefined {
+export function getPublishConnector(
+  platform: PlatformCode
+): PublishConnector | undefined {
   return publishConnectors.get(platform);
 }
 
 export function getOrCreatePublishConnector(
   platform: PlatformCode,
   mode: InteractionMode,
-  config?: PublishConnectorConfig,
+  config?: PublishConnectorConfig
 ): PublishConnector {
   const existing = publishConnectors.get(platform);
   if (existing) return existing;

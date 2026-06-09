@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
 
 let server: Server;
@@ -34,7 +38,7 @@ beforeAll(async () => {
   server = createApiServer({ db }) as Server;
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const addr = server.address()!;
-  baseUrl = `http://${(addr as any).address}:${(addr as any).port}`;
+  baseUrl = `http://${(addr as Record<string, unknown>).address}:${(addr as Record<string, unknown>).port}`;
 
   const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
@@ -175,7 +179,10 @@ describe('Research API', () => {
   });
 
   it('POST /api/research-tasks/:id/pause validates status (DRAFT cannot pause)', async () => {
-    const { body: draftTask } = await post('/api/research-tasks', { type: 'test', platforms: ['douyin'] });
+    const { body: draftTask } = await post('/api/research-tasks', {
+      type: 'test',
+      platforms: ['douyin']
+    });
     const { status } = await post(`/api/research-tasks/${draftTask.id}/pause`);
     expect(status).toBe(400);
   });
@@ -187,13 +194,17 @@ describe('Research API', () => {
   });
 
   it('GET /api/research-tasks/:taskId/posts returns collected posts', async () => {
-    const { status, body } = await get(`/api/research-tasks/${seededCompletedTaskId}/posts`);
+    const { status, body } = await get(
+      `/api/research-tasks/${seededCompletedTaskId}/posts`
+    );
     expect(status).toBe(200);
     expect(body.length).toBeGreaterThanOrEqual(5);
   });
 
   it('GET /api/research-tasks/:taskId/comments returns collected comments', async () => {
-    const { status, body } = await get(`/api/research-tasks/${seededCompletedTaskId}/comments`);
+    const { status, body } = await get(
+      `/api/research-tasks/${seededCompletedTaskId}/comments`
+    );
     expect(status).toBe(200);
     expect(body.length).toBeGreaterThanOrEqual(5);
   });
@@ -211,7 +222,9 @@ describe('Research API', () => {
   });
 
   it('POST /api/content-opportunities/:id/create-content creates content', async () => {
-    const { status, body } = await post(`/api/content-opportunities/${seededOpportunityId}/create-content`);
+    const { status, body } = await post(
+      `/api/content-opportunities/${seededOpportunityId}/create-content`
+    );
     expect(status).toBe(201);
     expect(body.contentItemId).toBeDefined();
   });

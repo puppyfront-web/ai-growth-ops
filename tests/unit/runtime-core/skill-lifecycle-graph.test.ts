@@ -5,7 +5,7 @@ describe('skill lifecycle graph', () => {
   it('installs and enables a skill manifest', async () => {
     const result = await runSkillLifecycle({
       action: 'install',
-      source: 'skills/manifests/example.douyin.publish.json',
+      source: 'skills/manifests/example.douyin.publish.json'
     });
 
     expect(result.status).toBe('success');

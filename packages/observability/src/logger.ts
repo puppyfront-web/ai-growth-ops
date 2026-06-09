@@ -21,7 +21,7 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
   warn: 2,
-  error: 3,
+  error: 3
 };
 
 function getMinLevel(): LogLevel {
@@ -35,13 +35,19 @@ function shouldLog(level: LogLevel): boolean {
 function formatEntry(entry: LogEntry): string {
   const { timestamp, level, message, context, ...rest } = entry;
   const prefix = `[${timestamp}] [${level.toUpperCase()}]${context ? ` [${context}]` : ''}`;
-  const metaKeys = Object.keys(rest).filter(k => !['timestamp', 'level', 'message', 'context'].includes(k));
+  const metaKeys = Object.keys(rest).filter(
+    (k) => !['timestamp', 'level', 'message', 'context'].includes(k)
+  );
   if (metaKeys.length === 0) return `${prefix} ${message}`;
   return `${prefix} ${message} ${JSON.stringify(rest)}`;
 }
 
 export function createLogger(defaultContext?: string): Logger {
-  function log(level: LogLevel, message: string, meta?: Record<string, unknown>) {
+  function log(
+    level: LogLevel,
+    message: string,
+    meta?: Record<string, unknown>
+  ) {
     if (!shouldLog(level)) return;
 
     const entry: LogEntry = {
@@ -49,7 +55,7 @@ export function createLogger(defaultContext?: string): Logger {
       level,
       message,
       context: defaultContext,
-      ...meta,
+      ...meta
     };
 
     const formatted = formatEntry(entry);
@@ -67,7 +73,8 @@ export function createLogger(defaultContext?: string): Logger {
     info: (msg, meta) => log('info', msg, meta),
     warn: (msg, meta) => log('warn', msg, meta),
     error: (msg, meta) => log('error', msg, meta),
-    child: (context) => createLogger(defaultContext ? `${defaultContext}:${context}` : context),
+    child: (context) =>
+      createLogger(defaultContext ? `${defaultContext}:${context}` : context)
   };
 }
 

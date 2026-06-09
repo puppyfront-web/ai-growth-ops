@@ -43,16 +43,18 @@ class SandboxResearchProvider implements ResearchProvider {
       externalPostId: `post_${i}`,
       title: `热门内容 ${input.keywords[0]} #${i}`,
       content: `关于${input.keywords.join('、')}的讨论内容...`,
-      likeCount: 100 + i * 10,
+      likeCount: 100 + i * 10
     }));
   }
 
-  async collectPostComments(input: CollectCommentsInput): Promise<CollectedComment[]> {
+  async collectPostComments(
+    input: CollectCommentsInput
+  ): Promise<CollectedComment[]> {
     const count = Math.min(input.maxComments, 3);
     return Array.from({ length: count }, (_, i) => ({
       externalCommentId: `comment_${input.externalPostId}_${i}`,
       content: `评论内容 ${i}`,
-      likeCount: i,
+      likeCount: i
     }));
   }
 }
@@ -73,7 +75,10 @@ describe('ResearchProvider Contract', () => {
   });
 
   it('collectPostComments respects maxComments', async () => {
-    const comments = await provider.collectPostComments({ externalPostId: 'p1', maxComments: 2 });
+    const comments = await provider.collectPostComments({
+      externalPostId: 'p1',
+      maxComments: 2
+    });
     expect(comments.length).toBe(2);
   });
 
@@ -89,6 +94,8 @@ describe('ResearchProvider Contract', () => {
 
     await limited.searchPosts({ keywords: ['test'], maxPosts: 1 });
     await limited.searchPosts({ keywords: ['test'], maxPosts: 1 });
-    await expect(limited.searchPosts({ keywords: ['test'], maxPosts: 1 })).rejects.toThrow('Rate limit exceeded');
+    await expect(
+      limited.searchPosts({ keywords: ['test'], maxPosts: 1 })
+    ).rejects.toThrow('Rate limit exceeded');
   });
 });

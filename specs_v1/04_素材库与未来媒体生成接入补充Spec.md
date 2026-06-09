@@ -221,12 +221,12 @@ MockProvider 只生成 metadata，不生成真实文件。
 
 ## 7. 前端页面
 
-| 页面 | 路径 |
-|---|---|
-| 素材库 | /media |
-| 上传素材 | /media/upload |
-| 素材审核 | /media/review |
-| 素材详情 | /media/[id] |
+| 页面         | 路径                        |
+| ------------ | --------------------------- |
+| 素材库       | /media                      |
+| 上传素材     | /media/upload               |
+| 素材审核     | /media/review               |
+| 素材详情     | /media/[id]                 |
 | 未来生成入口 | /media/generation，当前禁用 |
 
 ---

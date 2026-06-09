@@ -12,8 +12,10 @@ import { createLogger } from '@ai-growth-ops/observability';
 
 const logger = createLogger('auto-reply');
 
-const BROWSER_RUNNER_URL = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+const BROWSER_RUNNER_URL =
+  process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
+const RUNNER_SECRET =
+  process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
 
 function runnerHeaders(): Record<string, string> {
   const h: Record<string, string> = { 'content-type': 'application/json' };
@@ -26,7 +28,9 @@ interface AutoReplyJobData {
   replySuggestionId: string;
 }
 
-export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Promise<void> {
+export async function handleInteractionAutoReply(
+  job: Job<AutoReplyJobData>
+): Promise<void> {
   const { interactionId, replySuggestionId } = job.data;
   const db = createDatabaseClient();
 
@@ -35,8 +39,8 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
     where: { id: interactionId },
     include: {
       replySuggestions: { where: { id: replySuggestionId } },
-      platformAccount: true,
-    },
+      platformAccount: true
+    }
   });
 
   if (!interaction) {
@@ -52,7 +56,9 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
 
   // Verify it's still auto-sendable
   if (suggestion.status !== 'draft' && suggestion.status !== 'waiting_review') {
-    logger.info('Reply suggestion no longer eligible', { status: suggestion.status });
+    logger.info('Reply suggestion no longer eligible', {
+      status: suggestion.status
+    });
     return;
   }
 
@@ -61,7 +67,7 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
     logger.error('No cookie available for account');
     await db.replySuggestion.update({
       where: { id: suggestion.id },
-      data: { status: 'failed' },
+      data: { status: 'failed' }
     });
     return;
   }
@@ -72,7 +78,9 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
   try {
     // Determine reply endpoint based on interaction type
     const isComment = interaction.type === 'comment';
-    const endpoint = isComment ? '/assist/reply-comment' : '/assist/reply-message';
+    const endpoint = isComment
+      ? '/assist/reply-comment'
+      : '/assist/reply-message';
 
     const response = await fetch(`${BROWSER_RUNNER_URL}${endpoint}`, {
       method: 'POST',
@@ -83,12 +91,13 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
         externalCommentId: interaction.externalInteractionId,
         externalUserId: interaction.externalUserId,
         replyText: suggestion.suggestedText,
-        sourceContentId: (interaction.rawPayload as any)?.sourceContentId,
+        sourceContentId: (interaction.rawPayload as Record<string, unknown>)
+          ?.sourceContentId
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(30000)
     });
 
-    const result = await response.json() as Record<string, unknown>;
+    const result = (await response.json()) as Record<string, unknown>;
 
     if (!response.ok || result.error) {
       throw new Error(String(result.error || `HTTP ${response.status}`));
@@ -102,21 +111,25 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
         providerMode: 'browser_assist',
         status: 'sent',
         externalReplyId: (result.replyId as string) || `auto-${Date.now()}`,
-        rawResponse: result as any,
-      },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rawResponse: result as any
+      }
     });
 
     await db.replySuggestion.update({
       where: { id: suggestion.id },
-      data: { status: 'sent', sentAt: new Date() },
+      data: { status: 'sent', sentAt: new Date() }
     });
 
     await db.interaction.update({
       where: { id: interactionId },
-      data: { status: 'REPLIED' },
+      data: { status: 'REPLIED' }
     });
 
-    logger.info('Auto-reply sent', { interactionId, platform: interaction.platform });
+    logger.info('Auto-reply sent', {
+      interactionId,
+      platform: interaction.platform
+    });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
 
@@ -126,13 +139,13 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
         platform: interaction.platform,
         providerMode: 'browser_assist',
         status: 'failed',
-        errorMessage,
-      },
+        errorMessage
+      }
     });
 
     await db.replySuggestion.update({
       where: { id: suggestion.id },
-      data: { status: 'failed' },
+      data: { status: 'failed' }
     });
 
     logger.error('Auto-reply failed', { interactionId, error: errorMessage });

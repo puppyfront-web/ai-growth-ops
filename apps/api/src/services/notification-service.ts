@@ -18,9 +18,22 @@ interface NotificationInput {
 // ── Publish Events ─────────────────────────────────────────────────────────
 
 export async function onPublishCompleted(
-  ctx: NotificationInput & { publishJobId: string; platform: string; externalUrl?: string; contentTitle?: string },
+  ctx: NotificationInput & {
+    publishJobId: string;
+    platform: string;
+    externalUrl?: string;
+    contentTitle?: string;
+  }
 ): Promise<void> {
-  const { db, userId, organizationId, publishJobId, platform, externalUrl, contentTitle } = ctx;
+  const {
+    db,
+    userId,
+    organizationId,
+    publishJobId,
+    platform,
+    externalUrl,
+    contentTitle
+  } = ctx;
 
   await db.notification.create({
     data: {
@@ -30,22 +43,35 @@ export async function onPublishCompleted(
       level: 'info',
       userId,
       organizationId,
-      actionUrl: externalUrl || `/publish/jobs/${publishJobId}`,
-    },
+      actionUrl: externalUrl || `/publish/jobs/${publishJobId}`
+    }
   });
 
   await fireWebhook(db, organizationId, 'publish.completed', {
     publishJobId,
     platform,
     externalUrl,
-    contentTitle,
+    contentTitle
   });
 }
 
 export async function onPublishFailed(
-  ctx: NotificationInput & { publishJobId: string; platform: string; errorMessage: string; contentTitle?: string },
+  ctx: NotificationInput & {
+    publishJobId: string;
+    platform: string;
+    errorMessage: string;
+    contentTitle?: string;
+  }
 ): Promise<void> {
-  const { db, userId, organizationId, publishJobId, platform, errorMessage, contentTitle } = ctx;
+  const {
+    db,
+    userId,
+    organizationId,
+    publishJobId,
+    platform,
+    errorMessage,
+    contentTitle
+  } = ctx;
 
   await db.notification.create({
     data: {
@@ -55,19 +81,23 @@ export async function onPublishFailed(
       level: 'error',
       userId,
       organizationId,
-      actionUrl: `/publish/jobs/${publishJobId}`,
-    },
+      actionUrl: `/publish/jobs/${publishJobId}`
+    }
   });
 
   await fireWebhook(db, organizationId, 'publish.failed', {
     publishJobId,
     platform,
-    errorMessage,
+    errorMessage
   });
 }
 
 export async function onPublishNeedsHumanConfirm(
-  ctx: NotificationInput & { publishJobId: string; platform: string; reason?: string },
+  ctx: NotificationInput & {
+    publishJobId: string;
+    platform: string;
+    reason?: string;
+  }
 ): Promise<void> {
   const { db, userId, organizationId, publishJobId, platform, reason } = ctx;
 
@@ -79,21 +109,25 @@ export async function onPublishNeedsHumanConfirm(
       level: 'warning',
       userId,
       organizationId,
-      actionUrl: `/publish/jobs/${publishJobId}`,
-    },
+      actionUrl: `/publish/jobs/${publishJobId}`
+    }
   });
 
   await fireWebhook(db, organizationId, 'publish.needs_human', {
     publishJobId,
     platform,
-    reason,
+    reason
   });
 }
 
 // ── Lead Events ────────────────────────────────────────────────────────────
 
 export async function onLeadCreated(
-  ctx: NotificationInput & { leadId: string; leadName?: string; source?: string },
+  ctx: NotificationInput & {
+    leadId: string;
+    leadName?: string;
+    source?: string;
+  }
 ): Promise<void> {
   const { db, userId, organizationId, leadId, leadName, source } = ctx;
 
@@ -105,21 +139,27 @@ export async function onLeadCreated(
       level: 'info',
       userId,
       organizationId,
-      actionUrl: `/leads`,
-    },
+      actionUrl: `/leads`
+    }
   });
 
   await fireWebhook(db, organizationId, 'lead.created', {
     leadId,
     leadName,
-    source,
+    source
   });
 }
 
 export async function onLeadScoreChanged(
-  ctx: NotificationInput & { leadId: string; leadName?: string; oldScore: number; newScore: number },
+  ctx: NotificationInput & {
+    leadId: string;
+    leadName?: string;
+    oldScore: number;
+    newScore: number;
+  }
 ): Promise<void> {
-  const { db, userId, organizationId, leadId, leadName, oldScore, newScore } = ctx;
+  const { db, userId, organizationId, leadId, leadName, oldScore, newScore } =
+    ctx;
 
   // Only notify on significant score changes (>= 10 point jump)
   if (Math.abs(newScore - oldScore) < 10) return;
@@ -132,17 +172,30 @@ export async function onLeadScoreChanged(
       level: newScore > oldScore ? 'info' : 'warning',
       userId,
       organizationId,
-      actionUrl: `/leads`,
-    },
+      actionUrl: `/leads`
+    }
   });
 }
 
 // ── Interaction Events ─────────────────────────────────────────────────────
 
 export async function onNewComment(
-  ctx: NotificationInput & { interactionId: string; platform: string; commenterName?: string; contentPreview?: string },
+  ctx: NotificationInput & {
+    interactionId: string;
+    platform: string;
+    commenterName?: string;
+    contentPreview?: string;
+  }
 ): Promise<void> {
-  const { db, userId, organizationId, interactionId, platform, commenterName, contentPreview } = ctx;
+  const {
+    db,
+    userId,
+    organizationId,
+    interactionId,
+    platform,
+    commenterName,
+    contentPreview
+  } = ctx;
 
   await db.notification.create({
     data: {
@@ -152,21 +205,34 @@ export async function onNewComment(
       level: 'info',
       userId,
       organizationId,
-      actionUrl: `/conversations/comments`,
-    },
+      actionUrl: `/conversations/comments`
+    }
   });
 
   await fireWebhook(db, organizationId, 'interaction.comment', {
     interactionId,
     platform,
-    commenterName,
+    commenterName
   });
 }
 
 export async function onNewMessage(
-  ctx: NotificationInput & { interactionId: string; platform: string; senderName?: string; contentPreview?: string },
+  ctx: NotificationInput & {
+    interactionId: string;
+    platform: string;
+    senderName?: string;
+    contentPreview?: string;
+  }
 ): Promise<void> {
-  const { db, userId, organizationId, interactionId, platform, senderName, contentPreview } = ctx;
+  const {
+    db,
+    userId,
+    organizationId,
+    interactionId,
+    platform,
+    senderName,
+    contentPreview
+  } = ctx;
 
   await db.notification.create({
     data: {
@@ -176,21 +242,25 @@ export async function onNewMessage(
       level: 'info',
       userId,
       organizationId,
-      actionUrl: `/conversations/messages`,
-    },
+      actionUrl: `/conversations/messages`
+    }
   });
 
   await fireWebhook(db, organizationId, 'interaction.message', {
     interactionId,
     platform,
-    senderName,
+    senderName
   });
 }
 
 // ── Research Events ────────────────────────────────────────────────────────
 
 export async function onResearchCompleted(
-  ctx: NotificationInput & { taskId: string; taskTitle?: string; insightCount: number },
+  ctx: NotificationInput & {
+    taskId: string;
+    taskTitle?: string;
+    insightCount: number;
+  }
 ): Promise<void> {
   const { db, userId, organizationId, taskId, taskTitle, insightCount } = ctx;
 
@@ -202,20 +272,20 @@ export async function onResearchCompleted(
       level: 'info',
       userId,
       organizationId,
-      actionUrl: `/research`,
-    },
+      actionUrl: `/research`
+    }
   });
 
   await fireWebhook(db, organizationId, 'research.completed', {
     taskId,
-    insightCount,
+    insightCount
   });
 }
 
 // ── System Events ──────────────────────────────────────────────────────────
 
 export async function onSystemError(
-  ctx: NotificationInput & { error: string; module: string },
+  ctx: NotificationInput & { error: string; module: string }
 ): Promise<void> {
   const { db, userId, organizationId, error, module } = ctx;
 
@@ -226,20 +296,31 @@ export async function onSystemError(
       content: `[${module}] ${error.substring(0, 120)}`,
       level: 'error',
       userId,
-      organizationId,
-    },
+      organizationId
+    }
   });
 
   await fireWebhook(db, organizationId, 'system.error', {
     error,
-    module,
+    module
   });
 }
 
 export async function onPlatformAccountExpired(
-  ctx: NotificationInput & { platformAccountId: string; platform: string; accountName: string },
+  ctx: NotificationInput & {
+    platformAccountId: string;
+    platform: string;
+    accountName: string;
+  }
 ): Promise<void> {
-  const { db, userId, organizationId, platformAccountId, platform, accountName } = ctx;
+  const {
+    db,
+    userId,
+    organizationId,
+    platformAccountId,
+    platform,
+    accountName
+  } = ctx;
 
   await db.notification.create({
     data: {
@@ -249,20 +330,20 @@ export async function onPlatformAccountExpired(
       level: 'warning',
       userId,
       organizationId,
-      actionUrl: `/integrations/platforms`,
-    },
+      actionUrl: `/integrations/platforms`
+    }
   });
 
   await fireWebhook(db, organizationId, 'integration.expired', {
     platformAccountId,
-    platform,
+    platform
   });
 }
 
 // ── Team Events ────────────────────────────────────────────────────────────
 
 export async function onMemberJoined(
-  ctx: NotificationInput & { newMemberName: string; orgName: string },
+  ctx: NotificationInput & { newMemberName: string; orgName: string }
 ): Promise<void> {
   const { db, userId, organizationId, newMemberName, orgName } = ctx;
 
@@ -274,8 +355,8 @@ export async function onMemberJoined(
       level: 'info',
       userId,
       organizationId,
-      actionUrl: `/settings/team`,
-    },
+      actionUrl: `/settings/team`
+    }
   });
 
   await writeAuditLog(db, {
@@ -283,7 +364,7 @@ export async function onMemberJoined(
     organizationId,
     action: 'create',
     entity: 'OrganizationMember',
-    entityId: userId,
+    entityId: userId
   });
 }
 
@@ -295,11 +376,11 @@ export async function onMemberJoined(
 export async function getUnreadCount(
   db: DatabaseClient,
   organizationId: string,
-  userId?: string,
+  userId?: string
 ): Promise<number> {
   const where: Record<string, unknown> = {
     organizationId,
-    readAt: null,
+    readAt: null
   };
   if (userId) where.userId = userId;
   return db.notification.count({ where });
@@ -310,10 +391,10 @@ export async function getUnreadCount(
  */
 export async function markNotificationsRead(
   db: DatabaseClient,
-  notificationIds: string[],
+  notificationIds: string[]
 ): Promise<void> {
   await db.notification.updateMany({
     where: { id: { in: notificationIds } },
-    data: { readAt: new Date() },
+    data: { readAt: new Date() }
   });
 }

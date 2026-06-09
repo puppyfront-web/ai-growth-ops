@@ -9,7 +9,7 @@ export const CAPABILITIES = {
   LEAD_EXTRACT: 'lead.extract',
   AUTH_CHECK: 'auth.check',
   AUTH_LOGIN: 'auth.login',
-  SKILL_HEALTHCHECK: 'skill.healthcheck',
+  SKILL_HEALTHCHECK: 'skill.healthcheck'
 } as const;
 
-export type CapabilityName = typeof CAPABILITIES[keyof typeof CAPABILITIES];
+export type CapabilityName = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];

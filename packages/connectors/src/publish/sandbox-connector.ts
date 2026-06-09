@@ -9,7 +9,7 @@ import type {
   DeleteContentInput,
   DeleteContentResult,
   UploadMediaInput,
-  UploadMediaResult,
+  UploadMediaResult
 } from './types.js';
 import { randomUUID } from 'crypto';
 
@@ -17,7 +17,7 @@ export class SandboxPublishConnector implements PublishConnector {
   readonly platform;
   private config: PublishConnectorConfig;
 
-  constructor(platform: any, config: PublishConnectorConfig) {
+  constructor(platform: string, config: PublishConnectorConfig) {
     this.platform = platform;
     this.config = config;
   }
@@ -32,18 +32,20 @@ export class SandboxPublishConnector implements PublishConnector {
       supportedContentTypes: ['text_image', 'video', 'article', 'answer'],
       maxTitleLength: 100,
       maxContentLength: 10000,
-      supportedModes: ['sandbox', 'recorded'],
+      supportedModes: ['sandbox', 'recorded']
     };
   }
 
-  async publishContent(input: PublishContentInput): Promise<PublishContentResult> {
+  async publishContent(
+    input: PublishContentInput
+  ): Promise<PublishContentResult> {
     const id = `sandbox_post_${randomUUID().slice(0, 8)}`;
     return {
       success: true,
       externalPostId: id,
       externalUrl: `https://sandbox.example.com/post/${id}`,
       status: 'published',
-      rawResponse: { id, contentType: input.contentType, title: input.title },
+      rawResponse: { id, contentType: input.contentType, title: input.title }
     };
   }
 
@@ -54,20 +56,22 @@ export class SandboxPublishConnector implements PublishConnector {
       likeCount: Math.floor(Math.random() * 1000),
       commentCount: Math.floor(Math.random() * 100),
       shareCount: Math.floor(Math.random() * 50),
-      viewCount: Math.floor(Math.random() * 10000),
+      viewCount: Math.floor(Math.random() * 10000)
     };
   }
 
-  async deleteContent(input: DeleteContentInput): Promise<DeleteContentResult> {
+  async deleteContent(
+    _input: DeleteContentInput
+  ): Promise<DeleteContentResult> {
     return { success: true };
   }
 
-  async uploadMedia(input: UploadMediaInput): Promise<UploadMediaResult> {
+  async uploadMedia(_input: UploadMediaInput): Promise<UploadMediaResult> {
     const id = `sandbox_media_${randomUUID().slice(0, 8)}`;
     return {
       success: true,
       mediaId: id,
-      mediaUrl: `https://sandbox.example.com/media/${id}`,
+      mediaUrl: `https://sandbox.example.com/media/${id}`
     };
   }
 }

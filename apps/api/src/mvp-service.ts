@@ -1,7 +1,4 @@
-import type {
-  DatabaseClient,
-  Platform,
-} from '@ai-growth-ops/database';
+import type { DatabaseClient, Platform } from '@ai-growth-ops/database';
 
 export const platformLabels: Record<Platform, string> = {
   douyin: '抖音',
@@ -70,27 +67,65 @@ export async function getCustomerDashboard(
     db.contentItem.count({ where: { userId, deletedAt: null } }),
     db.contentVariant.count({ where: { userId, deletedAt: null } }),
     db.publishJob.count({ where: { userId, deletedAt: null } }),
-    db.publishJob.count({ where: { userId, status: 'PUBLISHED', deletedAt: null } }),
+    db.publishJob.count({
+      where: { userId, status: 'PUBLISHED', deletedAt: null }
+    }),
     db.interaction.count({ where: { userId, deletedAt: null } }),
-    db.lead.count({ where: { userId, level: { in: ['A', 'B'] }, deletedAt: null } }),
+    db.lead.count({
+      where: { userId, level: { in: ['A', 'B'] }, deletedAt: null }
+    }),
     db.researchInsight.count({ where: { researchTask: { userId } } }),
     db.contentOpportunity.count({ where: { researchTask: { userId } } }),
     db.providerRunLog.count({ where: { status: 'success' } }),
-    db.publishJob.findMany({ where: { userId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 12 }),
-    db.lead.findMany({ where: { userId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 5 }),
-    db.researchInsight.findMany({ where: { researchTask: { userId } }, orderBy: { createdAt: 'desc' }, take: 5 })
+    db.publishJob.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 12
+    }),
+    db.lead.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    }),
+    db.researchInsight.findMany({
+      where: { researchTask: { userId } },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    })
   ]);
 
   return {
-    metrics: { platformAccounts, contentItems, contentVariants, publishJobs, publishedJobs, interactions, qualifiedLeads, researchInsights, contentOpportunities, providerRuns },
+    metrics: {
+      platformAccounts,
+      contentItems,
+      contentVariants,
+      publishJobs,
+      publishedJobs,
+      interactions,
+      qualifiedLeads,
+      researchInsights,
+      contentOpportunities,
+      providerRuns
+    },
     recentPublishJobs: recentPublishJobs.map((job) => ({
-      id: job.id, platform: job.platform, platformLabel: platformLabels[job.platform], contentType: job.contentType, status: job.status, externalUrl: job.externalUrl
+      id: job.id,
+      platform: job.platform,
+      platformLabel: platformLabels[job.platform],
+      contentType: job.contentType,
+      status: job.status,
+      externalUrl: job.externalUrl
     })),
     leadSummaries: leads.map((lead) => ({
-      id: lead.id, name: lead.externalUserName ?? lead.externalUserId, level: lead.level, status: lead.status, summary: lead.summary
+      id: lead.id,
+      name: lead.externalUserName ?? lead.externalUserId,
+      level: lead.level,
+      status: lead.status,
+      summary: lead.summary
     })),
     insights: insights.map((insight) => ({
-      id: insight.id, title: insight.title, summary: insight.summary
+      id: insight.id,
+      title: insight.title,
+      summary: insight.summary
     }))
   };
 }

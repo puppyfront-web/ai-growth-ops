@@ -8,8 +8,8 @@ export class OpenClawAdapter implements RuntimeAdapter {
       status: 'success',
       output: {
         skillId: input.skillId,
-        accepted: true,
-      },
+        accepted: true
+      }
     };
   }
 

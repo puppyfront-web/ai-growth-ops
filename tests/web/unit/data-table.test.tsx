@@ -3,16 +3,20 @@ import { render, screen } from '@testing-library/react';
 import { DataTable } from '@/components/shared/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 
-interface TestRow { id: string; name: string; status: string }
+interface TestRow {
+  id: string;
+  name: string;
+  status: string;
+}
 
 const columns: ColumnDef<TestRow>[] = [
   { accessorKey: 'name', header: '名称' },
-  { accessorKey: 'status', header: '状态' },
+  { accessorKey: 'status', header: '状态' }
 ];
 
 const sampleData: TestRow[] = [
   { id: '1', name: '测试内容', status: 'PUBLISHED' },
-  { id: '2', name: '草稿内容', status: 'DRAFT' },
+  { id: '2', name: '草稿内容', status: 'DRAFT' }
 ];
 
 describe('DataTable', () => {
@@ -32,7 +36,9 @@ describe('DataTable', () => {
   });
 
   it('shows skeleton loading state', () => {
-    const { container } = render(<DataTable columns={columns} data={[]} isLoading />);
+    const { container } = render(
+      <DataTable columns={columns} data={[]} isLoading />
+    );
     // Skeleton renders divs with animate-pulse
     const skeletons = container.querySelectorAll('.animate-pulse');
     expect(skeletons.length).toBeGreaterThan(0);
@@ -44,7 +50,9 @@ describe('DataTable', () => {
   });
 
   it('accepts legacy loading prop', () => {
-    const { container } = render(<DataTable columns={columns} data={[]} loading />);
+    const { container } = render(
+      <DataTable columns={columns} data={[]} loading />
+    );
     const skeletons = container.querySelectorAll('.animate-pulse');
     expect(skeletons.length).toBeGreaterThan(0);
   });

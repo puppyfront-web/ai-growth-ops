@@ -7,25 +7,46 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { formatNumber } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
 
 export default function AnalyticsPage() {
-  const { data: overview, isLoading, isError: overviewError, refetch: refetchOverview } = useQuery({ queryKey: ['analytics-overview'], queryFn: getAnalyticsOverview });
-  const { data: trend, isError: trendError, refetch: refetchTrend } = useQuery({ queryKey: ['lead-trend'], queryFn: getLeadTrend });
+  const {
+    data: overview,
+    isLoading,
+    isError: overviewError,
+    refetch: refetchOverview
+  } = useQuery({
+    queryKey: ['analytics-overview'],
+    queryFn: getAnalyticsOverview
+  });
+  const { data: trend } = useQuery({
+    queryKey: ['lead-trend'],
+    queryFn: getLeadTrend
+  });
 
   if (isLoading) return <LoadingState />;
   if (overviewError) return <ErrorState onRetry={() => refetchOverview()} />;
 
-  const metrics = overview ? [
-    { label: '已发布', value: overview.totalPublished },
-    { label: '互动总数', value: overview.totalInteractions },
-    { label: '合格线索', value: overview.totalLeads },
-    { label: '调研洞察', value: overview.totalResearchInsights },
-    { label: '内容项', value: overview.totalContentItems },
-    { label: '发布任务', value: overview.totalPublishJobs },
-    { label: '平台账号', value: overview.platformAccounts },
-    { label: '内容变体', value: overview.contentVariants },
-  ] : [];
+  const metrics = overview
+    ? [
+        { label: '已发布', value: overview.totalPublished },
+        { label: '互动总数', value: overview.totalInteractions },
+        { label: '合格线索', value: overview.totalLeads },
+        { label: '调研洞察', value: overview.totalResearchInsights },
+        { label: '内容项', value: overview.totalContentItems },
+        { label: '发布任务', value: overview.totalPublishJobs },
+        { label: '平台账号', value: overview.platformAccounts },
+        { label: '内容变体', value: overview.contentVariants }
+      ]
+    : [];
 
   return (
     <div>
@@ -36,7 +57,9 @@ export default function AnalyticsPage() {
         {metrics.map((m) => (
           <div key={m.label} className="rounded-xl border bg-card p-4">
             <div className="text-sm text-muted-foreground">{m.label}</div>
-            <div className="mt-1 text-2xl font-bold">{formatNumber(m.value)}</div>
+            <div className="mt-1 text-2xl font-bold">
+              {formatNumber(m.value)}
+            </div>
           </div>
         ))}
       </div>

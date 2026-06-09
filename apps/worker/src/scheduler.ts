@@ -19,11 +19,14 @@ export async function startScheduler(): Promise<void> {
   const scheduledQueue = getQueue(SCHEDULED_QUEUE);
   await scheduledQueue.add(
     SCHEDULED_QUEUE,
-    { task: 'check-scheduled-publishes', triggeredAt: new Date().toISOString() },
+    {
+      task: 'check-scheduled-publishes',
+      triggeredAt: new Date().toISOString()
+    },
     {
       repeat: { every: 60_000 },
-      jobId: 'scheduled-checker-repeat',
-    },
+      jobId: 'scheduled-checker-repeat'
+    }
   );
   logger.info('Scheduler started — scheduled checker runs every 60s');
 
@@ -34,8 +37,8 @@ export async function startScheduler(): Promise<void> {
     { task: 'check-campaign-schedule', triggeredAt: new Date().toISOString() },
     {
       repeat: { every: 300_000 },
-      jobId: 'campaign-check-repeat',
-    },
+      jobId: 'campaign-check-repeat'
+    }
   );
   logger.info('Campaign scheduler started — campaign checker runs every 5min');
 
@@ -46,8 +49,8 @@ export async function startScheduler(): Promise<void> {
     { task: 'sync-all-interactions', triggeredAt: new Date().toISOString() },
     {
       repeat: { every: 1_800_000 }, // 30 minutes
-      jobId: 'interaction-sync-repeat',
-    },
+      jobId: 'interaction-sync-repeat'
+    }
   );
   logger.info('Interaction sync scheduler started — sync runs every 30min');
 }

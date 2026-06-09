@@ -384,11 +384,7 @@ export type PublishMode =
 ### 6.3 内容类型
 
 ```ts
-export type ContentType =
-  | 'text_image'
-  | 'video'
-  | 'article'
-  | 'qa_answer';
+export type ContentType = 'text_image' | 'video' | 'article' | 'qa_answer';
 ```
 
 ### 6.4 素材来源
@@ -404,10 +400,7 @@ export type MediaSourceType =
 ### 6.5 素材审核状态
 
 ```ts
-export type MediaReviewStatus =
-  | 'pending_review'
-  | 'approved'
-  | 'rejected';
+export type MediaReviewStatus = 'pending_review' | 'approved' | 'rejected';
 ```
 
 ### 6.6 线索等级

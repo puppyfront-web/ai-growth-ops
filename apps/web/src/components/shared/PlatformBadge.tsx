@@ -15,7 +15,7 @@ export function PlatformBadge({ platform, className }: PlatformBadgeProps) {
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium',
-        className,
+        className
       )}
     >
       {icon && <span>{icon}</span>}

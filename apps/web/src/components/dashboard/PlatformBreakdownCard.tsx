@@ -11,7 +11,10 @@ export type PlatformBreakdownCardProps = {
   className?: string;
 };
 
-export function PlatformBreakdownCard({ data, className }: PlatformBreakdownCardProps) {
+export function PlatformBreakdownCard({
+  data,
+  className
+}: PlatformBreakdownCardProps) {
   if (data.length === 0) {
     return (
       <Card className={className}>
@@ -22,7 +25,9 @@ export function PlatformBreakdownCard({ data, className }: PlatformBreakdownCard
           </div>
         </CardHeader>
         <CardContent>
-          <p className="py-4 text-center text-sm text-muted-foreground">暂无平台数据</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            暂无平台数据
+          </p>
         </CardContent>
       </Card>
     );
@@ -39,10 +44,19 @@ export function PlatformBreakdownCard({ data, className }: PlatformBreakdownCard
       <CardContent>
         <div className="space-y-2">
           {data.map((p) => (
-            <div key={p.platform} className="flex items-center justify-between rounded-lg border p-2.5">
+            <div
+              key={p.platform}
+              className="flex items-center justify-between rounded-lg border p-2.5"
+            >
               <div className="flex items-center gap-2">
-                <span className="text-lg">{platformIcons[p.platform as keyof typeof platformIcons] ?? '📱'}</span>
-                <span className="text-sm font-medium">{platformLabels[p.platform as keyof typeof platformLabels] ?? p.platform}</span>
+                <span className="text-lg">
+                  {platformIcons[p.platform as keyof typeof platformIcons] ??
+                    '📱'}
+                </span>
+                <span className="text-sm font-medium">
+                  {platformLabels[p.platform as keyof typeof platformLabels] ??
+                    p.platform}
+                </span>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>发布 {formatNumber(p.publishCount)}</span>

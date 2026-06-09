@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
 
 let server: Server;
@@ -12,11 +16,19 @@ async function get(path: string) {
   return { status: res.status, body: await res.json() };
 }
 async function post(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, { method: 'POST', headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: body ? { 'content-type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined
+  });
   return { status: res.status, body: await res.json() };
 }
 async function patch(path: string, body: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
   return { status: res.status, body: await res.json() };
 }
 
@@ -26,7 +38,7 @@ beforeAll(async () => {
   server = createApiServer({ db }) as Server;
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const addr = server.address()!;
-  baseUrl = `http://${(addr as any).address}:${(addr as any).port}`;
+  baseUrl = `http://${(addr as Record<string, unknown>).address}:${(addr as Record<string, unknown>).port}`;
 });
 
 afterAll(async () => {
@@ -46,22 +58,30 @@ describe('Interaction API', () => {
   it('GET /api/interactions?status=NEW filters', async () => {
     const { status, body } = await get('/api/interactions?status=NEW');
     expect(status).toBe(200);
-    expect(body.every((i: any) => i.status === 'NEW')).toBe(true);
+    expect(body.every((i: Record<string, unknown>) => i.status === 'NEW')).toBe(
+      true
+    );
     if (body.length > 0) interactionId = body[0].id;
   });
 
   it('POST /api/interactions/:id/classify sets CLASSIFIED', async () => {
     if (!interactionId) return;
-    const { status, body } = await post(`/api/interactions/${interactionId}/classify`, {
-      intentLevel: 'A', intent: 'pricing_inquiry'
-    });
+    const { status, body } = await post(
+      `/api/interactions/${interactionId}/classify`,
+      {
+        intentLevel: 'A',
+        intent: 'pricing_inquiry'
+      }
+    );
     expect(status).toBe(200);
     expect(body.status).toBe('CLASSIFIED');
   });
 
   it('POST /api/interactions/:id/suggest-reply returns suggestions', async () => {
     if (!interactionId) return;
-    const { status, body } = await post(`/api/interactions/${interactionId}/suggest-reply`);
+    const { status, body } = await post(
+      `/api/interactions/${interactionId}/suggest-reply`
+    );
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBeGreaterThan(0);
@@ -70,9 +90,12 @@ describe('Interaction API', () => {
 
   it('POST /api/interactions/:id/reply sets REPLIED', async () => {
     if (!interactionId) return;
-    const { status, body } = await post(`/api/interactions/${interactionId}/reply`, {
-      content: '感谢咨询，稍后回复您'
-    });
+    const { status, body } = await post(
+      `/api/interactions/${interactionId}/reply`,
+      {
+        content: '感谢咨询，稍后回复您'
+      }
+    );
     expect(status).toBe(200);
     expect(body.status).toBe('REPLIED');
   });
@@ -84,9 +107,14 @@ describe('Interaction API', () => {
     const intId = interactions[0].id;
 
     // Classify first
-    await post(`/api/interactions/${intId}/classify`, { intentLevel: 'B', intent: 'info_request' });
+    await post(`/api/interactions/${intId}/classify`, {
+      intentLevel: 'B',
+      intent: 'info_request'
+    });
 
-    const { status, body } = await post(`/api/interactions/${intId}/convert-to-lead`);
+    const { status, body } = await post(
+      `/api/interactions/${intId}/convert-to-lead`
+    );
     expect(status).toBe(201);
     expect(body.id).toBeDefined();
     expect(body.sourceInteractionId).toBe(intId);
@@ -137,7 +165,9 @@ describe('Lead API', () => {
   it('GET /api/leads?level=A filters', async () => {
     const { status, body } = await get('/api/leads?level=A');
     expect(status).toBe(200);
-    expect(body.every((l: any) => l.level === 'A')).toBe(true);
+    expect(body.every((l: Record<string, unknown>) => l.level === 'A')).toBe(
+      true
+    );
   });
 
   it('PATCH /api/leads/:id/assign assigns owner', async () => {
@@ -154,7 +184,9 @@ describe('Lead API', () => {
     if (!leadId) return;
     const { status, body } = await get(`/api/leads/${leadId}/activities`);
     expect(status).toBe(200);
-    const assignAct = body.find((a: any) => a.action === 'assigned');
+    const assignAct = body.find(
+      (a: Record<string, unknown>) => a.action === 'assigned'
+    );
     expect(assignAct).toBeDefined();
   });
 

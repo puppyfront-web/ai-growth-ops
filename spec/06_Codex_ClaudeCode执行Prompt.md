@@ -725,7 +725,7 @@ AI 洞察输出：painPoints, popularTopics, contentAngles, suggestedOpportuniti
 
 ### 15.7 Provider Gateway 执行 Prompt
 
-```text
+````text
 请实现 Provider Gateway。
 
 目录：apps/provider-gateway/src/
@@ -751,14 +751,16 @@ export interface ExternalProvider {
   mode: ProviderMode;
   healthCheck(): Promise<ProviderHealth>;
 }
-```
+````
 
 验收：
+
 - Provider healthCheck 可运行
 - Provider 失败写 ProviderRunLog
 - Disabled Provider 调用返回明确错误
 - 业务模块不能绕过 Gateway
-```
+
+````
 
 ### 15.8 审计与安全执行 Prompt
 
@@ -787,7 +789,7 @@ export interface ExternalProvider {
 - Secret 不在 API 响应中明文返回
 - 导出文件生成并记录日志
 - 备份命令可执行并产生文件
-```
+````
 
 ## 16. 阶段 13：未来 Media Generation 预留 Prompt
 

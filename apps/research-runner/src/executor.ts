@@ -1,4 +1,10 @@
-import type { ResearchProvider, CollectPostsInput, CollectCommentsInput, CollectedPostData, CollectedCommentData } from './types.js';
+import type {
+  ResearchProvider,
+  CollectPostsInput,
+  CollectCommentsInput,
+  CollectedPostData,
+  CollectedCommentData
+} from './types.js';
 import { SandboxResearchProvider } from './sandbox-provider.js';
 
 const providers = new Map<string, ResearchProvider>();
@@ -33,10 +39,14 @@ export interface ExecuteResearchResult {
   comments: CollectedCommentData[];
 }
 
-export async function executeResearch(input: ExecuteResearchInput): Promise<ExecuteResearchResult> {
+export async function executeResearch(
+  input: ExecuteResearchInput
+): Promise<ExecuteResearchResult> {
   const provider = providers.get(input.provider);
   if (!provider) {
-    throw new Error(`Research provider not found: ${input.provider}. Available: ${Array.from(providers.keys()).join(', ')}`);
+    throw new Error(
+      `Research provider not found: ${input.provider}. Available: ${Array.from(providers.keys()).join(', ')}`
+    );
   }
 
   // Collect posts
@@ -45,18 +55,18 @@ export async function executeResearch(input: ExecuteResearchInput): Promise<Exec
     keywords: input.keywords,
     targetAccountIds: input.targetAccountIds,
     maxPosts: input.maxPosts || 20,
-    cookie: input.cookie,
+    cookie: input.cookie
   };
 
   const posts = await provider.collectPosts(postsInput);
 
   // Collect comments for collected posts
-  const postIds = posts.map(p => p.externalPostId);
+  const postIds = posts.map((p) => p.externalPostId);
   const commentsInput: CollectCommentsInput = {
     platform: input.platform,
     postIds,
     maxCommentsPerPost: input.maxComments || 5,
-    cookie: input.cookie,
+    cookie: input.cookie
   };
 
   const comments = await provider.collectComments(commentsInput);
@@ -65,6 +75,6 @@ export async function executeResearch(input: ExecuteResearchInput): Promise<Exec
     postsCollected: posts.length,
     commentsCollected: comments.length,
     posts,
-    comments,
+    comments
   };
 }

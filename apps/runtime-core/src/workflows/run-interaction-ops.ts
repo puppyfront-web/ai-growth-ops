@@ -1,26 +1,37 @@
 import { BrowserAssistClient } from '@ai-growth-ops/connectors';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
-import { resolveAuthStateForPlatform, resolveSharedAccountForPlatform } from '../tools/credential-tools.js';
+import {
+  resolveAuthStateForPlatform,
+  resolveSharedAccountForPlatform
+} from '../tools/credential-tools.js';
 import {
   createInteractionOpsGraph,
   type InteractionOpsInput,
-  type InteractionOpsResult,
+  type InteractionOpsResult
 } from '../graphs/interaction-ops-graph.js';
 
 export async function runInteractionOps(
-  input: InteractionOpsInput,
+  input: InteractionOpsInput
 ): Promise<InteractionOpsResult> {
   const graph = createInteractionOpsGraph(async (graphInput) => {
-    const requestedAccount = (graphInput as InteractionOpsInput & { account?: string }).account;
-    const account = resolveSharedAccountForPlatform(graphInput.platform, requestedAccount);
-    const cookie = await resolveAuthStateForPlatform(graphInput.platform, account);
+    const requestedAccount = (
+      graphInput as InteractionOpsInput & { account?: string }
+    ).account;
+    const account = resolveSharedAccountForPlatform(
+      graphInput.platform,
+      requestedAccount
+    );
+    const cookie = await resolveAuthStateForPlatform(
+      graphInput.platform,
+      account
+    );
     if (!cookie) {
       return {
         status: 'failed',
         mode: 'blocked',
         reason: 'cookie_not_found',
         items: [],
-        replySuggestions: [],
+        replySuggestions: []
       };
     }
 
@@ -31,12 +42,12 @@ export async function runInteractionOps(
         const comments = await client.fetchComments(
           {
             platform: graphInput.platform,
-            cookie,
+            cookie
           },
           undefined,
           20,
           undefined,
-          false,
+          false
         );
         return {
           status: 'success',
@@ -45,21 +56,25 @@ export async function runInteractionOps(
             platform: graphInput.platform,
             interactionType: graphInput.interactionType,
             content: String(item.content ?? ''),
-            sourceContentTitle: item.sourceContentTitle ? String(item.sourceContentTitle) : undefined,
-            userNickname: item.userNickname ? String(item.userNickname) : undefined,
+            sourceContentTitle: item.sourceContentTitle
+              ? String(item.sourceContentTitle)
+              : undefined,
+            userNickname: item.userNickname
+              ? String(item.userNickname)
+              : undefined
           })),
-          replySuggestions: [],
+          replySuggestions: []
         };
       }
 
       const messages = await client.fetchMessages(
         {
           platform: graphInput.platform,
-          cookie,
+          cookie
         },
         20,
         undefined,
-        false,
+        false
       );
       return {
         status: 'success',
@@ -68,10 +83,14 @@ export async function runInteractionOps(
           platform: graphInput.platform,
           interactionType: graphInput.interactionType,
           content: String(item.content ?? ''),
-          sourceContentTitle: item.sourceContentTitle ? String(item.sourceContentTitle) : undefined,
-          userNickname: item.userNickname ? String(item.userNickname) : undefined,
+          sourceContentTitle: item.sourceContentTitle
+            ? String(item.sourceContentTitle)
+            : undefined,
+          userNickname: item.userNickname
+            ? String(item.userNickname)
+            : undefined
         })),
-        replySuggestions: [],
+        replySuggestions: []
       };
     } catch (error) {
       console.error('[interaction-ops] browser-runner fetch failed:', error);
@@ -80,7 +99,7 @@ export async function runInteractionOps(
         mode: 'blocked',
         reason: error instanceof Error ? error.message : 'browser_runner_error',
         items: [],
-        replySuggestions: [],
+        replySuggestions: []
       };
     }
   });

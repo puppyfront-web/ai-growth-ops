@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   memo,
@@ -6,34 +6,34 @@ import {
   useRef,
   useState,
   type FC,
-  type PropsWithChildren,
-} from "react";
-import { ChevronDownIcon, LoaderIcon } from "lucide-react";
-import { cva, type VariantProps } from "class-variance-authority";
-import { useScrollLock } from "@assistant-ui/react";
+  type PropsWithChildren
+} from 'react';
+import { ChevronDownIcon, LoaderIcon } from 'lucide-react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { useScrollLock } from '@assistant-ui/react';
 import {
   Collapsible,
   CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
+  CollapsibleTrigger
+} from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 const ANIMATION_DURATION = 200;
 
-const toolGroupVariants = cva("aui-tool-group-root group/tool-group w-full", {
+const toolGroupVariants = cva('aui-tool-group-root group/tool-group w-full', {
   variants: {
     variant: {
-      outline: "rounded-lg border py-3",
-      ghost: "",
-      muted: "border-muted-foreground/30 bg-muted/30 rounded-lg border py-3",
-    },
+      outline: 'rounded-lg border py-3',
+      ghost: '',
+      muted: 'border-muted-foreground/30 bg-muted/30 rounded-lg border py-3'
+    }
   },
-  defaultVariants: { variant: "outline" },
+  defaultVariants: { variant: 'outline' }
 });
 
 export type ToolGroupRootProps = Omit<
   React.ComponentProps<typeof Collapsible>,
-  "open" | "onOpenChange"
+  'open' | 'onOpenChange'
 > &
   VariantProps<typeof toolGroupVariants> & {
     open?: boolean;
@@ -67,24 +67,24 @@ function ToolGroupRoot({
       }
       controlledOnOpenChange?.(open);
     },
-    [lockScroll, isControlled, controlledOnOpenChange],
+    [lockScroll, isControlled, controlledOnOpenChange]
   );
 
   return (
     <Collapsible
       ref={collapsibleRef}
       data-slot="tool-group-root"
-      data-variant={variant ?? "outline"}
+      data-variant={variant ?? 'outline'}
       open={isOpen}
       onOpenChange={handleOpenChange}
       className={cn(
         toolGroupVariants({ variant }),
-        "group/tool-group-root",
-        className,
+        'group/tool-group-root',
+        className
       )}
       style={
         {
-          "--animation-duration": `${ANIMATION_DURATION}ms`,
+          '--animation-duration': `${ANIMATION_DURATION}ms`
         } as React.CSSProperties
       }
       {...props}
@@ -103,16 +103,16 @@ function ToolGroupTrigger({
   count: number;
   active?: boolean;
 }) {
-  const label = `${count} tool ${count === 1 ? "call" : "calls"}`;
+  const label = `${count} tool ${count === 1 ? 'call' : 'calls'}`;
 
   return (
     <CollapsibleTrigger
       data-slot="tool-group-trigger"
       className={cn(
-        "aui-tool-group-trigger group/trigger flex items-center gap-2 text-sm transition-colors",
-        "group-data-[variant=outline]/tool-group-root:w-full group-data-[variant=outline]/tool-group-root:px-4",
-        "group-data-[variant=muted]/tool-group-root:w-full group-data-[variant=muted]/tool-group-root:px-4",
-        className,
+        'aui-tool-group-trigger group/trigger flex items-center gap-2 text-sm transition-colors',
+        'group-data-[variant=outline]/tool-group-root:w-full group-data-[variant=outline]/tool-group-root:px-4',
+        'group-data-[variant=muted]/tool-group-root:w-full group-data-[variant=muted]/tool-group-root:px-4',
+        className
       )}
       {...props}
     >
@@ -125,9 +125,9 @@ function ToolGroupTrigger({
       <span
         data-slot="tool-group-trigger-label"
         className={cn(
-          "aui-tool-group-trigger-label-wrapper relative inline-block text-start leading-none font-medium",
-          "group-data-[variant=outline]/tool-group-root:grow",
-          "group-data-[variant=muted]/tool-group-root:grow",
+          'aui-tool-group-trigger-label-wrapper relative inline-block text-start leading-none font-medium',
+          'group-data-[variant=outline]/tool-group-root:grow',
+          'group-data-[variant=muted]/tool-group-root:grow'
         )}
       >
         <span>{label}</span>
@@ -145,10 +145,10 @@ function ToolGroupTrigger({
       <ChevronDownIcon
         data-slot="tool-group-trigger-chevron"
         className={cn(
-          "aui-tool-group-trigger-chevron size-4 shrink-0",
-          "transition-transform duration-(--animation-duration) ease-out",
-          "group-data-[state=closed]/trigger:-rotate-90",
-          "group-data-[state=open]/trigger:rotate-0",
+          'aui-tool-group-trigger-chevron size-4 shrink-0',
+          'transition-transform duration-(--animation-duration) ease-out',
+          'group-data-[state=closed]/trigger:-rotate-90',
+          'group-data-[state=open]/trigger:rotate-0'
         )}
       />
     </CollapsibleTrigger>
@@ -164,23 +164,23 @@ function ToolGroupContent({
     <CollapsibleContent
       data-slot="tool-group-content"
       className={cn(
-        "aui-tool-group-content relative overflow-hidden text-sm outline-none",
-        "group/collapsible-content ease-out",
-        "data-[state=closed]:animate-collapsible-up",
-        "data-[state=open]:animate-collapsible-down",
-        "data-[state=closed]:fill-mode-forwards",
-        "data-[state=closed]:pointer-events-none",
-        "data-[state=open]:duration-(--animation-duration)",
-        "data-[state=closed]:duration-(--animation-duration)",
-        className,
+        'aui-tool-group-content relative overflow-hidden text-sm outline-none',
+        'group/collapsible-content ease-out',
+        'data-[state=closed]:animate-collapsible-up',
+        'data-[state=open]:animate-collapsible-down',
+        'data-[state=closed]:fill-mode-forwards',
+        'data-[state=closed]:pointer-events-none',
+        'data-[state=open]:duration-(--animation-duration)',
+        'data-[state=closed]:duration-(--animation-duration)',
+        className
       )}
       {...props}
     >
       <div
         className={cn(
-          "mt-2 flex flex-col gap-2",
-          "group-data-[variant=outline]/tool-group-root:mt-3 group-data-[variant=outline]/tool-group-root:border-t group-data-[variant=outline]/tool-group-root:px-4 group-data-[variant=outline]/tool-group-root:pt-3",
-          "group-data-[variant=muted]/tool-group-root:mt-3 group-data-[variant=muted]/tool-group-root:border-t group-data-[variant=muted]/tool-group-root:px-4 group-data-[variant=muted]/tool-group-root:pt-3",
+          'mt-2 flex flex-col gap-2',
+          'group-data-[variant=outline]/tool-group-root:mt-3 group-data-[variant=outline]/tool-group-root:border-t group-data-[variant=outline]/tool-group-root:px-4 group-data-[variant=outline]/tool-group-root:pt-3',
+          'group-data-[variant=muted]/tool-group-root:mt-3 group-data-[variant=muted]/tool-group-root:border-t group-data-[variant=muted]/tool-group-root:px-4 group-data-[variant=muted]/tool-group-root:pt-3'
         )}
       >
         {children}
@@ -212,7 +212,7 @@ const ToolGroupImpl: FC<
 
 const ToolGroup = memo(ToolGroupImpl) as unknown as ToolGroupComponent;
 
-ToolGroup.displayName = "ToolGroup";
+ToolGroup.displayName = 'ToolGroup';
 ToolGroup.Root = ToolGroupRoot;
 ToolGroup.Trigger = ToolGroupTrigger;
 ToolGroup.Content = ToolGroupContent;
@@ -222,5 +222,5 @@ export {
   ToolGroupRoot,
   ToolGroupTrigger,
   ToolGroupContent,
-  toolGroupVariants,
+  toolGroupVariants
 };

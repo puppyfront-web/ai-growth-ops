@@ -2,8 +2,27 @@
   "type": "object",
   "properties": {
     "riskLevel": { "type": "string", "enum": ["low", "medium", "high"] },
-    "issues": { "type": "array", "items": { "type": "object", "properties": { "type": { "type": "string" }, "description": { "type": "string" }, "severity": { "type": "string" } } } },
-    "suggestedFixes": { "type": "array", "items": { "type": "object", "properties": { "issue": { "type": "string" }, "suggestion": { "type": "string" } } } },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "description": { "type": "string" },
+          "severity": { "type": "string" }
+        }
+      }
+    },
+    "suggestedFixes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "issue": { "type": "string" },
+          "suggestion": { "type": "string" }
+        }
+      }
+    },
     "passed": { "type": "boolean" }
   },
   "required": ["riskLevel", "issues", "passed"]

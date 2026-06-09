@@ -10,7 +10,7 @@ import {
   Plug,
   Settings,
   MessageCircle,
-  type LucideIcon,
+  type LucideIcon
 } from 'lucide-react';
 
 export type NavItem = {
@@ -33,5 +33,5 @@ export const navItems: NavItem[] = [
   { label: '线索管理', href: '/leads', icon: UserCheck },
   { label: '数据复盘', href: '/analytics', icon: BarChart3 },
   { label: '集成配置', href: '/integrations', icon: Plug },
-  { label: '系统设置', href: '/settings', icon: Settings },
+  { label: '系统设置', href: '/settings', icon: Settings }
 ];

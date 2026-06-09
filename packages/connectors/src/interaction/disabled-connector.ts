@@ -2,19 +2,15 @@ import type {
   InteractionConnector,
   InteractionCapabilities,
   InteractionConnectorConfig,
-  FetchCommentsInput,
-  FetchMessagesInput,
   PlatformComment,
   PlatformMessage,
-  ReplyCommentInput,
-  ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 
 export class DisabledInteractionConnector implements InteractionConnector {
   readonly platform;
 
-  constructor(platform: any, _config?: InteractionConnectorConfig) {
+  constructor(platform: string, _config?: InteractionConnectorConfig) {
     this.platform = platform;
   }
 
@@ -32,7 +28,7 @@ export class DisabledInteractionConnector implements InteractionConnector {
       autoReplyAllowed: false,
       requiresHumanReviewForMessageReply: true,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['disabled'],
+      supportedModes: ['disabled']
     };
   }
 
@@ -45,10 +41,18 @@ export class DisabledInteractionConnector implements InteractionConnector {
   }
 
   async replyComment(): Promise<ReplyResult> {
-    return { success: false, errorCode: 'DISABLED', errorMessage: `Reply is disabled for ${this.platform}` };
+    return {
+      success: false,
+      errorCode: 'DISABLED',
+      errorMessage: `Reply is disabled for ${this.platform}`
+    };
   }
 
   async replyMessage(): Promise<ReplyResult> {
-    return { success: false, errorCode: 'DISABLED', errorMessage: `Reply is disabled for ${this.platform}` };
+    return {
+      success: false,
+      errorCode: 'DISABLED',
+      errorMessage: `Reply is disabled for ${this.platform}`
+    };
   }
 }

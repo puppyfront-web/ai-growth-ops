@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyByRules,
   generateRuleBasedReply,
-  containsSensitiveContent,
+  containsSensitiveContent
 } from '../../../apps/runtime-core/src/tools/rule-classifier.js';
 
 describe('classifyByRules', () => {
@@ -72,20 +72,32 @@ describe('classifyByRules', () => {
 describe('generateRuleBasedReply', () => {
   it('generates guide_to_private for price inquiry', () => {
     const classification = classifyByRules('多少钱');
-    const reply = generateRuleBasedReply('多少钱', classification, 'xiaohongshu');
+    const reply = generateRuleBasedReply(
+      '多少钱',
+      classification,
+      'xiaohongshu'
+    );
     expect(reply.replyType).toBe('guide_to_private');
     expect(reply.needReview).toBe(false);
   });
 
   it('generates guide_to_wecom for appointment', () => {
     const classification = classifyByRules('可以预约吗');
-    const reply = generateRuleBasedReply('可以预约吗', classification, 'douyin');
+    const reply = generateRuleBasedReply(
+      '可以预约吗',
+      classification,
+      'douyin'
+    );
     expect(reply.replyType).toBe('guide_to_wecom');
   });
 
   it('generates complaint_response with needReview', () => {
     const classification = classifyByRules('太差了 投诉');
-    const reply = generateRuleBasedReply('太差了 投诉', classification, 'douyin');
+    const reply = generateRuleBasedReply(
+      '太差了 投诉',
+      classification,
+      'douyin'
+    );
     expect(reply.replyType).toBe('complaint_response');
     expect(reply.needReview).toBe(true);
   });

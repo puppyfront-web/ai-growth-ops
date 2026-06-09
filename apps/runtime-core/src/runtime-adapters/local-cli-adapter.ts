@@ -16,7 +16,7 @@ export class LocalCliAdapter implements RuntimeAdapter {
     const cliPath = join(payload.root, payload.cliRelativePath);
     const result = spawnSync(process.execPath, [cliPath, ...payload.command], {
       cwd: payload.root,
-      encoding: 'utf8',
+      encoding: 'utf8'
     });
 
     if (result.status === 0) {
@@ -24,18 +24,21 @@ export class LocalCliAdapter implements RuntimeAdapter {
         status: 'success',
         output: {
           stdout: result.stdout.trim(),
-          stderr: result.stderr.trim(),
-        },
+          stderr: result.stderr.trim()
+        }
       };
     }
 
     return {
       status: 'failed',
-      error: result.stderr.trim() || result.stdout.trim() || `exit code ${result.status ?? 1}`,
+      error:
+        result.stderr.trim() ||
+        result.stdout.trim() ||
+        `exit code ${result.status ?? 1}`,
       output: {
         stdout: result.stdout.trim(),
-        stderr: result.stderr.trim(),
-      },
+        stderr: result.stderr.trim()
+      }
     };
   }
 

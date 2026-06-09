@@ -19,14 +19,14 @@ function parseProgress(metadata: unknown): ProgressMeta | null {
     label: p.label,
     percent: typeof p.percent === 'number' ? p.percent : 0,
     message: typeof p.message === 'string' ? p.message : undefined,
-    updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : undefined,
+    updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : undefined
   };
 }
 
 export function PublishProgressInline({
   status,
   metadata,
-  compact = false,
+  compact = false
 }: {
   status: string;
   metadata: unknown;
@@ -39,7 +39,13 @@ export function PublishProgressInline({
 
   if (status === 'RUNNING' && !progress) {
     return (
-      <p className={compact ? 'mt-1 text-xs text-muted-foreground' : 'text-sm text-muted-foreground'}>
+      <p
+        className={
+          compact
+            ? 'mt-1 text-xs text-muted-foreground'
+            : 'text-sm text-muted-foreground'
+        }
+      >
         正在执行发布，请稍候…
       </p>
     );
@@ -56,7 +62,9 @@ export function PublishProgressInline({
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-blue-500 transition-all duration-500"
-          style={{ width: `${Math.min(100, Math.max(0, progress.percent ?? 0))}%` }}
+          style={{
+            width: `${Math.min(100, Math.max(0, progress.percent ?? 0))}%`
+          }}
         />
       </div>
     </div>

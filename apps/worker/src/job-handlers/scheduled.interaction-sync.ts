@@ -17,13 +17,15 @@ export async function handleScheduledInteractionSync(_job: Job): Promise<void> {
     where: {
       mode: 'browser_assist',
       deletedAt: null,
-      status: 'active',
-    },
+      status: 'active'
+    }
   });
 
   if (accounts.length === 0) return;
 
-  console.log(`[interaction-sync-scheduler] Syncing ${accounts.length} account(s)`);
+  console.log(
+    `[interaction-sync-scheduler] Syncing ${accounts.length} account(s)`
+  );
 
   const commentsQueue = getQueue(QUEUE_NAMES.INTERACTION_SYNC_COMMENTS);
   const messagesQueue = getQueue(QUEUE_NAMES.INTERACTION_SYNC_MESSAGES);
@@ -33,39 +35,54 @@ export async function handleScheduledInteractionSync(_job: Job): Promise<void> {
   for (const account of accounts) {
     // Check per-account sync config
     const metadata = account.metadata as Record<string, unknown> | null;
-    const syncConfig = metadata?.syncConfig as Record<string, unknown> | undefined;
+    const syncConfig = metadata?.syncConfig as
+      | Record<string, unknown>
+      | undefined;
     if (syncConfig?.enabled === false) continue;
 
     try {
-      await commentsQueue.add(QUEUE_NAMES.INTERACTION_SYNC_COMMENTS, {
-        userId: account.userId,
-        platform: account.platform,
-        platformAccountId: account.id,
-        mode: 'browser_assist',
-        headed: false, // Scheduled syncs always run headless — no visible browser windows
-      }, {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 5000 },
-        jobId: `sync-comments-${account.id}-${Date.now()}`,
-      });
+      await commentsQueue.add(
+        QUEUE_NAMES.INTERACTION_SYNC_COMMENTS,
+        {
+          userId: account.userId,
+          platform: account.platform,
+          platformAccountId: account.id,
+          mode: 'browser_assist',
+          headed: false // Scheduled syncs always run headless — no visible browser windows
+        },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          jobId: `sync-comments-${account.id}-${Date.now()}`
+        }
+      );
 
-      await messagesQueue.add(QUEUE_NAMES.INTERACTION_SYNC_MESSAGES, {
-        userId: account.userId,
-        platform: account.platform,
-        platformAccountId: account.id,
-        mode: 'browser_assist',
-        headed: false, // Scheduled syncs always run headless — no visible browser windows
-      }, {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 5000 },
-        jobId: `sync-messages-${account.id}-${Date.now()}`,
-      });
+      await messagesQueue.add(
+        QUEUE_NAMES.INTERACTION_SYNC_MESSAGES,
+        {
+          userId: account.userId,
+          platform: account.platform,
+          platformAccountId: account.id,
+          mode: 'browser_assist',
+          headed: false // Scheduled syncs always run headless — no visible browser windows
+        },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          jobId: `sync-messages-${account.id}-${Date.now()}`
+        }
+      );
 
       enqueued++;
     } catch (err) {
-      console.error(`[interaction-sync-scheduler] Failed for account ${account.id}:`, err);
+      console.error(
+        `[interaction-sync-scheduler] Failed for account ${account.id}:`,
+        err
+      );
     }
   }
 
-  console.log(`[interaction-sync-scheduler] Enqueued sync for ${enqueued}/${accounts.length} accounts`);
+  console.log(
+    `[interaction-sync-scheduler] Enqueued sync for ${enqueued}/${accounts.length} accounts`
+  );
 }

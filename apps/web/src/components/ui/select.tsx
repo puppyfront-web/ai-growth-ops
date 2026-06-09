@@ -13,7 +13,14 @@ type SelectProps = {
   children: React.ReactNode;
 };
 
-function Select({ value, onValueChange, placeholder, disabled, className, children }: SelectProps) {
+function Select({
+  value,
+  onValueChange,
+  placeholder,
+  disabled,
+  className,
+  children
+}: SelectProps) {
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onValueChange?.(e.target.value);
   };
@@ -25,7 +32,7 @@ function Select({ value, onValueChange, placeholder, disabled, className, childr
         onChange={handleChange}
         disabled={disabled}
         className={cn(
-          'flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-8 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-8 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
         )}
       >
         {placeholder && (
@@ -40,7 +47,13 @@ function Select({ value, onValueChange, placeholder, disabled, className, childr
   );
 }
 
-function SelectOption({ value, children }: { value: string; children: React.ReactNode }) {
+function SelectOption({
+  value,
+  children
+}: {
+  value: string;
+  children: React.ReactNode;
+}) {
   return <option value={value}>{children}</option>;
 }
 

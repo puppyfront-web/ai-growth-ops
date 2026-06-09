@@ -10,8 +10,8 @@ describe('publish workflow', () => {
         platforms: ['douyin'],
         title: 'AI Native Demo',
         content: 'hello',
-        mediaFilePaths: ['/tmp/demo.mp4'],
-      },
+        mediaFilePaths: ['/tmp/demo.mp4']
+      }
     });
 
     expect(result.workflow).toBe('publish');

@@ -10,9 +10,15 @@ const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] ?? null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    }
   };
 })();
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
@@ -28,7 +34,7 @@ describe('API Client', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ data: 'ok' }),
+      json: () => Promise.resolve({ data: 'ok' })
     });
 
     await apiGet('/api/test');
@@ -43,7 +49,8 @@ describe('API Client', () => {
       ok: false,
       status: 404,
       statusText: 'Not Found',
-      json: () => Promise.resolve({ error: { code: 'NOT_FOUND', message: '资源不存在' } }),
+      json: () =>
+        Promise.resolve({ error: { code: 'NOT_FOUND', message: '资源不存在' } })
     });
 
     try {
@@ -64,17 +71,22 @@ describe('API Client', () => {
     Object.defineProperty(window, 'location', {
       value: { href: '' },
       writable: true,
-      configurable: true,
+      configurable: true
     });
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 401,
       statusText: 'Unauthorized',
-      json: () => Promise.resolve({ error: { code: 'UNAUTHORIZED', message: '未授权' } }),
+      json: () =>
+        Promise.resolve({ error: { code: 'UNAUTHORIZED', message: '未授权' } })
     });
 
-    try { await apiPost('/api/test', {}); } catch {}
+    try {
+      await apiPost('/api/test', {});
+    } catch {
+      /* expected 401 error */
+    }
 
     expect(authToken.get()).toBeNull();
     expect(window.location.href).toBe('/login');
@@ -83,7 +95,7 @@ describe('API Client', () => {
     Object.defineProperty(window, 'location', {
       value: originalLocation,
       writable: true,
-      configurable: true,
+      configurable: true
     });
   });
 });

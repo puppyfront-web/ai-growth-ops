@@ -3,13 +3,16 @@ import type {
   PublishCapabilities,
   PublishConnectorConfig,
   PublishContentInput,
-  PublishContentResult,
+  PublishContentResult
 } from './types.js';
 
 export class ManualImportPublishConnector implements PublishConnector {
   readonly platform;
 
-  constructor(platform: any, private config?: PublishConnectorConfig) {
+  constructor(
+    platform: string,
+    private config?: PublishConnectorConfig
+  ) {
     this.platform = platform;
   }
 
@@ -21,15 +24,17 @@ export class ManualImportPublishConnector implements PublishConnector {
       deleteContent: false,
       uploadMedia: false,
       supportedContentTypes: [],
-      supportedModes: ['manual_import'],
+      supportedModes: ['manual_import']
     };
   }
 
-  async publishContent(_input: PublishContentInput): Promise<PublishContentResult> {
+  async publishContent(
+    _input: PublishContentInput
+  ): Promise<PublishContentResult> {
     return {
       success: false,
       errorCode: 'MANUAL_REQUIRED',
-      errorMessage: `Platform ${this.platform} requires manual publishing. Use manual-confirm flow.`,
+      errorMessage: `Platform ${this.platform} requires manual publishing. Use manual-confirm flow.`
     };
   }
 }

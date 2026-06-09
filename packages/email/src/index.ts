@@ -12,6 +12,6 @@ export {
   verifyEmailTemplate,
   resetPasswordEmail,
   inviteMemberEmail,
-  notificationEmail,
+  notificationEmail
 } from './templates/index.js';
 export type { EmailTemplate } from './templates/index.js';

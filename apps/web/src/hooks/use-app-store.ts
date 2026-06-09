@@ -9,5 +9,5 @@ interface AppStore {
 export const useAppStore = create<AppStore>((set) => ({
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed })
 }));

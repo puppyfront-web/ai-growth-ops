@@ -1,5 +1,10 @@
 import { apiGet } from './client';
-import type { AnalyticsOverview, PlatformAnalytics, ContentRoiItem, TrendDataPoint } from '@/types/analytics';
+import type {
+  AnalyticsOverview,
+  PlatformAnalytics,
+  ContentRoiItem,
+  TrendDataPoint
+} from '@/types/analytics';
 
 export function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   return apiGet<AnalyticsOverview>('/api/analytics/overview');

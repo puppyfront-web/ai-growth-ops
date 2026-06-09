@@ -96,12 +96,12 @@ model Notification {
 
 角色：
 
-| 角色 | 权限 |
-|---|---|
-| Admin | 系统配置、平台账号、Provider、自动回复、密钥管理 |
-| Operator | 内容、发布、调研、评论处理 |
-| Sales | 线索跟进、已分配会话回复 |
-| Viewer | 只读报表 |
+| 角色     | 权限                                             |
+| -------- | ------------------------------------------------ |
+| Admin    | 系统配置、平台账号、Provider、自动回复、密钥管理 |
+| Operator | 内容、发布、调研、评论处理                       |
+| Sales    | 线索跟进、已分配会话回复                         |
+| Viewer   | 只读报表                                         |
 
 权限点：
 
@@ -225,15 +225,15 @@ research_task_completed
 
 ### 6.2 指标口径
 
-| 指标 | 口径 |
-|---|---|
-| 内容发布数 | PublishJob.status=published |
-| 互动数 | Interaction 总数 |
-| 咨询数 | leadLevel=A/B/C 的互动数 |
-| A 级线索数 | Lead.leadLevel=A |
-| 内容获客率 | Lead 数 / Published Content 数 |
-| 平台获客贡献 | 平台 Lead 数 / 总 Lead 数 |
-| 回复转线索率 | Lead 数 / ReplyAttempt success 数 |
+| 指标         | 口径                                                         |
+| ------------ | ------------------------------------------------------------ |
+| 内容发布数   | PublishJob.status=published                                  |
+| 互动数       | Interaction 总数                                             |
+| 咨询数       | leadLevel=A/B/C 的互动数                                     |
+| A 级线索数   | Lead.leadLevel=A                                             |
+| 内容获客率   | Lead 数 / Published Content 数                               |
+| 平台获客贡献 | 平台 Lead 数 / 总 Lead 数                                    |
+| 回复转线索率 | Lead 数 / ReplyAttempt success 数                            |
 | 调研转内容率 | 由 ContentOpportunity 创建的 ContentItem 数 / Opportunity 数 |
 
 ### 6.3 聚合任务
@@ -285,15 +285,15 @@ Skill 包导出
 
 ## 8. 前端页面
 
-| 页面 | 路径 |
-|---|---|
-| 任务中心 | /tasks |
-| 通知中心 | /notifications |
+| 页面     | 路径                 |
+| -------- | -------------------- |
+| 任务中心 | /tasks               |
+| 通知中心 | /notifications       |
 | 审计日志 | /settings/audit-logs |
-| 权限管理 | /settings/team |
-| 数据复盘 | /analytics |
-| 导入导出 | /settings/data |
-| 备份恢复 | /settings/backup |
+| 权限管理 | /settings/team       |
+| 数据复盘 | /analytics           |
+| 导入导出 | /settings/data       |
+| 备份恢复 | /settings/backup     |
 
 ---
 

@@ -16,7 +16,12 @@ export default function NotFound() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => typeof window !== 'undefined' && window.history.back()}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              typeof window !== 'undefined' && window.history.back()
+            }
+          >
             <ArrowLeft className="mr-2 h-4 w-4" />
             返回上页
           </Button>

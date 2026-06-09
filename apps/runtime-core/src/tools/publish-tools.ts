@@ -20,12 +20,20 @@ export function buildPublishInvocation(
     mediaFilePaths?: string[];
     source?: string;
   },
-  socialPublishSkillsRoot?: string,
-): { executable: boolean; payload: Record<string, unknown>; capability: string } {
+  socialPublishSkillsRoot?: string
+): {
+  executable: boolean;
+  payload: Record<string, unknown>;
+  capability: string;
+} {
   const platform = input.platform;
-  const commandPlatform = (manifest.metadata?.commandPlatform as string | undefined) ?? platform;
+  const commandPlatform =
+    (manifest.metadata?.commandPlatform as string | undefined) ?? platform;
   const executionMode =
-    (manifest.metadata?.executionMode as 'local_cli' | 'browser_runner' | undefined) ?? 'local_cli';
+    (manifest.metadata?.executionMode as
+      | 'local_cli'
+      | 'browser_runner'
+      | undefined) ?? 'local_cli';
   const root = socialPublishSkillsRoot;
   const file = input.mediaFilePaths?.[0];
   const capability = manifest.capabilities[0] ?? CAPABILITIES.PUBLISH_VIDEO;
@@ -37,8 +45,8 @@ export function buildPublishInvocation(
       payload: {
         platform,
         commandPlatform,
-        reason: 'browser_runner_execution',
-      },
+        reason: 'browser_runner_execution'
+      }
     };
   }
 
@@ -48,12 +56,17 @@ export function buildPublishInvocation(
       capability,
       payload: {
         platform,
-        reason: 'missing_social_publish_root',
-      },
+        reason: 'missing_social_publish_root'
+      }
     };
   }
 
-  if (capability === CAPABILITIES.PUBLISH_VIDEO && input.account && file && input.title) {
+  if (
+    capability === CAPABILITIES.PUBLISH_VIDEO &&
+    input.account &&
+    file &&
+    input.title
+  ) {
     return {
       executable: true,
       capability,
@@ -68,13 +81,18 @@ export function buildPublishInvocation(
           '--file',
           file,
           '--title',
-          input.title,
-        ],
-      },
+          input.title
+        ]
+      }
     };
   }
 
-  if (capability === CAPABILITIES.PUBLISH_ARTICLE && input.account && input.source && input.title) {
+  if (
+    capability === CAPABILITIES.PUBLISH_ARTICLE &&
+    input.account &&
+    input.source &&
+    input.title
+  ) {
     return {
       executable: true,
       capability,
@@ -89,9 +107,9 @@ export function buildPublishInvocation(
           '--source',
           input.source,
           '--title',
-          input.title,
-        ],
-      },
+          input.title
+        ]
+      }
     };
   }
 
@@ -105,7 +123,7 @@ export function buildPublishInvocation(
       required:
         capability === CAPABILITIES.PUBLISH_ARTICLE
           ? ['account', 'source', 'title']
-          : ['account', 'mediaFilePaths[0]', 'title'],
-    },
+          : ['account', 'mediaFilePaths[0]', 'title']
+    }
   };
 }

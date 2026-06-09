@@ -1,4 +1,9 @@
-import type { ContentType, ContentStatus, Platform, ComplianceStatus } from './enums';
+import type {
+  ContentType,
+  ContentStatus,
+  Platform,
+  ComplianceStatus
+} from './enums';
 
 export type ContentVariant = {
   id: string;

@@ -19,7 +19,10 @@ import { existsSync, readFileSync } from 'node:fs';
     const eqIdx = trimmed.indexOf('=');
     if (eqIdx < 1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+    const val = trimmed
+      .slice(eqIdx + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
     if (!(key in process.env)) process.env[key] = val;
   }
 })();
@@ -43,7 +46,10 @@ function addSecurityHeaders(res: ServerResponse): void {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=()'
+  );
 }
 
 function handleCORS(req: IncomingMessage, res: ServerResponse): boolean {
@@ -52,8 +58,14 @@ function handleCORS(req: IncomingMessage, res: ServerResponse): boolean {
   const allowed = ['http://localhost:3001', 'http://localhost:3000'];
   if (origin && allowed.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID, X-Publish-Progress-Key, X-Organization-Id');
+    res.setHeader(
+      'Access-Control-Allow-Methods',
+      'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+    );
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Request-ID, X-Publish-Progress-Key, X-Organization-Id'
+    );
     res.setHeader('Access-Control-Max-Age', '86400');
   }
   if (req.method === 'OPTIONS') {
@@ -81,14 +93,21 @@ function isLoginRateLimited(ip: string): boolean {
 }
 
 // ── General-purpose rate limiter for expensive API operations ──────────
-interface RateBucket { count: number; resetAt: number }
+interface RateBucket {
+  count: number;
+  resetAt: number;
+}
 const apiBuckets = new Map<string, RateBucket>();
 
 /**
  * Check if an action is rate-limited for a given key.
  * Returns true if the action should be blocked.
  */
-export function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {
+export function isRateLimited(
+  key: string,
+  maxRequests: number,
+  windowMs: number
+): boolean {
   const now = Date.now();
   const entry = apiBuckets.get(key);
   if (!entry || now > entry.resetAt) {
@@ -111,29 +130,31 @@ export function createApiServer(options: ApiServerOptions = {}): Server {
   initSkills();
   const db = options.db ?? createDatabaseClient();
 
-  return createServer(async (request: IncomingMessage, response: ServerResponse) => {
-    addSecurityHeaders(response);
+  return createServer(
+    async (request: IncomingMessage, response: ServerResponse) => {
+      addSecurityHeaders(response);
 
-    if (handleCORS(request, response)) return;
+      if (handleCORS(request, response)) return;
 
-    try {
-      await routeRequest(request, response, db);
-    } catch (error) {
-      logger.error('Unhandled request error', {
-        error: error instanceof Error ? error.message : String(error),
-        url: request.url,
-        method: request.method,
-      });
-      response.writeHead(500, {
-        'content-type': 'application/json; charset=utf-8'
-      });
-      response.end(
-        JSON.stringify({
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      );
+      try {
+        await routeRequest(request, response, db);
+      } catch (error) {
+        logger.error('Unhandled request error', {
+          error: error instanceof Error ? error.message : String(error),
+          url: request.url,
+          method: request.method
+        });
+        response.writeHead(500, {
+          'content-type': 'application/json; charset=utf-8'
+        });
+        response.end(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        );
+      }
     }
-  });
+  );
 }
 
 export { isLoginRateLimited };
@@ -157,5 +178,7 @@ if (
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   await startApiServer();
-  logger.info(`AI Growth Ops API listening on http://localhost:${process.env.API_PORT ?? 3100}`);
+  logger.info(
+    `AI Growth Ops API listening on http://localhost:${process.env.API_PORT ?? 3100}`
+  );
 }

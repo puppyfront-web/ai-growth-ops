@@ -6,7 +6,7 @@ import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 
 export default function DashboardError({
   error,
-  reset,
+  reset
 }: {
   error: Error & { digest?: string };
   reset: () => void;
@@ -22,7 +22,9 @@ export default function DashboardError({
           <AlertTriangle className="h-7 w-7 text-destructive" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-foreground">页面加载失败</h2>
+          <h2 className="text-xl font-semibold text-foreground">
+            页面加载失败
+          </h2>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             {error.message || '遇到了意外错误，请尝试重新加载。'}
           </p>
@@ -32,7 +34,10 @@ export default function DashboardError({
             <RotateCcw className="mr-2 h-4 w-4" />
             重试
           </Button>
-          <Button onClick={() => (window.location.href = '/dashboard')} size="sm">
+          <Button
+            onClick={() => (window.location.href = '/dashboard')}
+            size="sm"
+          >
             <Home className="mr-2 h-4 w-4" />
             返回工作台
           </Button>

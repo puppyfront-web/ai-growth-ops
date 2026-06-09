@@ -15,15 +15,9 @@ interface GenerateMediaOptions {
 
 export async function generateMediaAsset(
   db: DatabaseClient,
-  options: GenerateMediaOptions,
+  options: GenerateMediaOptions
 ) {
-  const {
-    prompt,
-    style,
-    size = '1024x1024',
-    orgId,
-    userId,
-  } = options;
+  const { prompt, style, size = '1024x1024', orgId, userId } = options;
 
   // Ensure uploads dir exists
   if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -56,15 +50,15 @@ export async function generateMediaAsset(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
       model,
       prompt: fullPrompt,
       n: 1,
       size,
-      response_format: 'b64_json',
-    }),
+      response_format: 'b64_json'
+    })
   });
 
   if (!genResponse.ok) {
@@ -73,15 +67,18 @@ export async function generateMediaAsset(
     throw new Error('图片生成失败，请检查 AI 配置');
   }
 
-  const genResult = await genResponse.json() as any;
-  const imageData = genResult.data?.[0];
+  const genResult = (await genResponse.json()) as Record<string, unknown>;
+  const resultData = genResult.data as
+    | Array<Record<string, unknown>>
+    | undefined;
+  const imageData = resultData?.[0];
   if (!imageData) throw new Error('生成结果为空');
 
   // Save generated image to uploads
   const imageBuffer = imageData.b64_json
-    ? Buffer.from(imageData.b64_json, 'base64')
+    ? Buffer.from(imageData.b64_json as string, 'base64')
     : null;
-  const imageUrl = imageData.url ?? null;
+  const imageUrl = (imageData.url as string) ?? null;
 
   const savedName = `${randomUUID()}.png`;
   const filePath = join(UPLOADS_DIR, savedName);
@@ -112,14 +109,17 @@ export async function generateMediaAsset(
       reviewStatus: 'pending_review',
       generationProvider: `${genProvider}/${model}`,
       generationPromptHash: promptHash,
-      costEstimate: genResult.usage?.total_tokens ? genResult.usage.total_tokens * 0.00004 : 0.04,
+      costEstimate: (genResult.usage as Record<string, number> | undefined)
+        ?.total_tokens
+        ? (genResult.usage as Record<string, number>).total_tokens * 0.00004
+        : 0.04,
       metadata: {
         prompt,
         style,
         size,
-        revisedPrompt: imageData.revised_prompt ?? null,
-      } as any,
-    },
+        revisedPrompt: (imageData.revised_prompt as string) ?? null
+      } as Record<string, unknown>
+    }
   });
 
   return asset;

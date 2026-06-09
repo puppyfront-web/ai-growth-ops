@@ -12,8 +12,14 @@
       "items": {
         "type": "object",
         "properties": {
-          "prompt": { "type": "string", "description": "English prompt for DALL-E image generation" },
-          "purpose": { "type": "string", "description": "Purpose of this image: main, thumbnail, banner" }
+          "prompt": {
+            "type": "string",
+            "description": "English prompt for DALL-E image generation"
+          },
+          "purpose": {
+            "type": "string",
+            "description": "Purpose of this image: main, thumbnail, banner"
+          }
         },
         "required": ["prompt"]
       }

@@ -28,7 +28,10 @@ export interface LLMResponse {
 }
 
 export interface LLMClient {
-  chat(messages: LLMMessage[], options?: { maxTokens?: number; temperature?: number }): Promise<LLMResponse>;
+  chat(
+    messages: LLMMessage[],
+    options?: { maxTokens?: number; temperature?: number }
+  ): Promise<LLMResponse>;
   getProvider(): LLMProvider;
   getModel(): string;
 }

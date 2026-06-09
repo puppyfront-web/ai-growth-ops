@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
 
 describe('Dialog', () => {
   it('does not render content when closed', () => {
@@ -46,7 +53,7 @@ describe('Dialog', () => {
     expect(screen.getByText('可关闭弹窗')).toBeInTheDocument();
     // Find the X close button (rendered as a button with X icon inside the dialog content)
     const closeButtons = document.querySelectorAll('button');
-    const xButton = Array.from(closeButtons).find(btn => {
+    const xButton = Array.from(closeButtons).find((btn) => {
       const svg = btn.querySelector('svg');
       return svg && btn.getAttribute('class')?.includes('absolute');
     });

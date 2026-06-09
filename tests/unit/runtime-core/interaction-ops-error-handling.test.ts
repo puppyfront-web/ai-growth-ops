@@ -4,9 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runInteractionOps } from '../../../apps/runtime-core/src/workflows/run-interaction-ops';
 
 const originalEnv = {
-  AI_GROWTH_OPS_DOUYIN_SHARED_ACCOUNT: process.env.AI_GROWTH_OPS_DOUYIN_SHARED_ACCOUNT,
+  AI_GROWTH_OPS_DOUYIN_SHARED_ACCOUNT:
+    process.env.AI_GROWTH_OPS_DOUYIN_SHARED_ACCOUNT,
   SOCIAL_PUBLISH_DATA_DIR: process.env.SOCIAL_PUBLISH_DATA_DIR,
-  BROWSER_RUNNER_URL: process.env.BROWSER_RUNNER_URL,
+  BROWSER_RUNNER_URL: process.env.BROWSER_RUNNER_URL
 };
 
 afterEach(() => {
@@ -23,14 +24,18 @@ afterEach(() => {
 
 describe('runInteractionOps error handling', () => {
   it('falls back when browser-runner returns a structured message-fetch error', async () => {
-    const tempRoot = join(process.cwd(), '.tmp-tests', `douyin-message-cookie-${Date.now()}`);
+    const tempRoot = join(
+      process.cwd(),
+      '.tmp-tests',
+      `douyin-message-cookie-${Date.now()}`
+    );
     await mkdir(join(tempRoot, 'cookies', 'douyin'), { recursive: true });
     await writeFile(
       join(tempRoot, 'cookies', 'douyin', 'shared.json'),
       JSON.stringify({
-        cookies: [{ name: 'sessionid', value: 'shared-session' }],
+        cookies: [{ name: 'sessionid', value: 'shared-session' }]
       }),
-      'utf8',
+      'utf8'
     );
 
     process.env.AI_GROWTH_OPS_DOUYIN_SHARED_ACCOUNT = 'shared';
@@ -43,19 +48,19 @@ describe('runInteractionOps error handling', () => {
         new Response(
           JSON.stringify({
             error: 'Failed to fetch messages',
-            errorCode: 'ASSIST_FETCH_MESSAGES_FAILED',
+            errorCode: 'ASSIST_FETCH_MESSAGES_FAILED'
           }),
           {
             status: 502,
-            headers: { 'content-type': 'application/json' },
-          },
-        ),
-      ),
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+      )
     );
 
     const result = await runInteractionOps({
       platform: 'douyin',
-      interactionType: 'messages',
+      interactionType: 'messages'
     });
 
     expect(result.status).toBe('success');

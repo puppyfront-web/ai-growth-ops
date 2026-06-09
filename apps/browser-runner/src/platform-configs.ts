@@ -30,7 +30,7 @@ export const DOUYIN_AUTH_COOKIE_NAMES = [
   'sessionid',
   'sid_tt',
   'sid_guard',
-  'sessionid_ss',
+  'sessionid_ss'
 ] as const;
 
 export const DOUYIN_POST_LOGIN_URL_PATTERNS = [
@@ -38,7 +38,7 @@ export const DOUYIN_POST_LOGIN_URL_PATTERNS = [
   '/content',
   '/home',
   '/dashboard',
-  '/media',
+  '/media'
 ];
 
 const IGNORABLE_COOKIE_NAMES = new Set([
@@ -52,22 +52,29 @@ const IGNORABLE_COOKIE_NAMES = new Set([
   'HMACCOUNT',
   'HMACCOUNT_BFESS',
   'sensorsdata2015jssdkcross',
-  'sensorsdata2015session',
+  'sensorsdata2015session'
 ]);
 
 // ── Shared helpers ──────────────────────────────────────────────
 
 function isIgnorableCookie(name: string): boolean {
   const lower = name.toLowerCase();
-  if (IGNORABLE_COOKIE_NAMES.has(name) || IGNORABLE_COOKIE_NAMES.has(lower)) return true;
-  return lower.startsWith('_ga') || lower.startsWith('_hj') || lower.startsWith('__utm');
+  if (IGNORABLE_COOKIE_NAMES.has(name) || IGNORABLE_COOKIE_NAMES.has(lower))
+    return true;
+  return (
+    lower.startsWith('_ga') ||
+    lower.startsWith('_hj') ||
+    lower.startsWith('__utm')
+  );
 }
 
 function cookieKey(domain: string, name: string): string {
   return `${domain}|${name}`;
 }
 
-export function snapshotCookieKeys(cookies: { domain: string; name: string }[]): Set<string> {
+export function snapshotCookieKeys(
+  cookies: { domain: string; name: string }[]
+): Set<string> {
   return new Set(cookies.map((c) => cookieKey(c.domain, c.name)));
 }
 
@@ -79,12 +86,18 @@ function anyPageUrlMatches(page: Page, patterns: string[]): boolean {
   return false;
 }
 
-export function hasCookieNamed(cookies: { name: string }[], name: string): boolean {
+export function hasCookieNamed(
+  cookies: { name: string }[],
+  name: string
+): boolean {
   const target = name.toLowerCase();
   return cookies.some((c) => c.name.toLowerCase() === target);
 }
 
-export function cookieHeaderHasNamedCookie(cookieHeader: string, name: string): boolean {
+export function cookieHeaderHasNamedCookie(
+  cookieHeader: string,
+  name: string
+): boolean {
   const target = name.toLowerCase();
   for (const pair of cookieHeader.split(';')) {
     const key = pair.trim().split('=')[0]?.trim().toLowerCase();
@@ -96,10 +109,11 @@ export function cookieHeaderHasNamedCookie(cookieHeader: string, name: string): 
 function matchesRule(
   page: Page,
   rule: DetectionRule,
-  contextCookies: { name: string }[],
+  contextCookies: { name: string }[]
 ): boolean {
   if (rule.cookieNames?.length) {
-    if (rule.cookieNames.some((name) => hasCookieNamed(contextCookies, name))) return true;
+    if (rule.cookieNames.some((name) => hasCookieNamed(contextCookies, name)))
+      return true;
   }
   if (rule.urlIncludes?.length) {
     if (anyPageUrlMatches(page, rule.urlIncludes)) return true;
@@ -116,14 +130,18 @@ export async function extractAllCookies(page: Page): Promise<string> {
     for (const c of storageCookies) {
       if (c.name && c.value) merged.set(c.name, c.value);
     }
-  } catch { /* storageState unavailable, fall through */ }
+  } catch {
+    /* storageState unavailable, fall through */
+  }
 
   try {
     const contextCookies = await context.cookies();
     for (const c of contextCookies) {
       if (c.name && c.value) merged.set(c.name, c.value);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   for (const p of context.pages()) {
     try {
@@ -133,7 +151,9 @@ export async function extractAllCookies(page: Page): Promise<string> {
         const [k, ...v] = pair.trim().split('=');
         if (k && v.join('=')) merged.set(k.trim(), v.join('='));
       }
-    } catch { /* frame may be detached */ }
+    } catch {
+      /* frame may be detached */
+    }
   }
 
   return Array.from(merged.entries())
@@ -144,12 +164,14 @@ export async function extractAllCookies(page: Page): Promise<string> {
 function hasNewAuthCookies(
   current: { domain: string; name: string; value: string }[],
   baseline: Set<string>,
-  authNames?: string[],
+  authNames?: string[]
 ): boolean {
   return current.some((c) => {
-    if (!c.value || c.value.length < 4 || isIgnorableCookie(c.name)) return false;
+    if (!c.value || c.value.length < 4 || isIgnorableCookie(c.name))
+      return false;
     if (authNames?.length) {
-      if (!authNames.some((n) => c.name.toLowerCase() === n.toLowerCase())) return false;
+      if (!authNames.some((n) => c.name.toLowerCase() === n.toLowerCase()))
+        return false;
     }
     return !baseline.has(cookieKey(c.domain, c.name));
   });
@@ -157,7 +179,7 @@ function hasNewAuthCookies(
 
 async function finalizeLogin(
   page: Page,
-  requiredNames: string[] = [],
+  requiredNames: string[] = []
 ): Promise<LoginDetectionResult> {
   const cookies = await extractAllCookies(page);
   if (cookies.length < MIN_COOKIE_PAYLOAD) {
@@ -183,9 +205,11 @@ async function finalizeLogin(
  */
 async function isDouyinLoginFormReady(page: Page): Promise<boolean> {
   // Quick structural check — login card container
-  const loginCard = page.locator(
-    '[class*="douyin_login"], [id*="douyin-login"], [class*="login-card"]',
-  ).first();
+  const loginCard = page
+    .locator(
+      '[class*="douyin_login"], [id*="douyin-login"], [class*="login-card"]'
+    )
+    .first();
   const cardCount = await loginCard.count();
   if (cardCount === 0) return false;
 
@@ -255,7 +279,9 @@ async function detectDouyinLogin(page: Page): Promise<LoginDetectionResult> {
 }
 
 /** Build a detectLogin function from a declarative rule set. */
-function buildDetector(rule: DetectionRule): (page: Page) => Promise<LoginDetectionResult> {
+function buildDetector(
+  rule: DetectionRule
+): (page: Page) => Promise<LoginDetectionResult> {
   return async (page: Page) => {
     const contextCookies = await page.context().cookies();
     if (!matchesRule(page, rule, contextCookies)) {
@@ -269,13 +295,19 @@ function buildDetector(rule: DetectionRule): (page: Page) => Promise<LoginDetect
 export async function detectLoginWithBaseline(
   page: Page,
   config: PlatformLoginConfig,
-  baselineKeys: Set<string>,
+  baselineKeys: Set<string>
 ): Promise<LoginDetectionResult> {
   const primary = await config.detectLogin(page);
   if (primary.loggedIn) return primary;
 
   const contextCookies = await page.context().cookies();
-  if (!hasNewAuthCookies(contextCookies, baselineKeys, config.baselineAuthCookieNames)) {
+  if (
+    !hasNewAuthCookies(
+      contextCookies,
+      baselineKeys,
+      config.baselineAuthCookieNames
+    )
+  ) {
     return { loggedIn: false, cookies: '' };
   }
 
@@ -290,13 +322,13 @@ function definePlatform(
   loginUrl: string,
   loginMode: LoginMode,
   rule: DetectionRule,
-  baselineAuthCookieNames?: string[],
+  baselineAuthCookieNames?: string[]
 ): PlatformLoginConfig {
   return {
     loginUrl,
     loginMode,
     detectLogin: buildDetector(rule),
-    baselineAuthCookieNames,
+    baselineAuthCookieNames
   };
 }
 
@@ -307,14 +339,17 @@ const configs: Record<string, PlatformLoginConfig> = {
     loginUrl: 'https://creator.douyin.com/',
     loginMode: 'qr',
     detectLogin: detectDouyinLogin,
-    baselineAuthCookieNames: [...DOUYIN_AUTH_COOKIE_NAMES],
+    baselineAuthCookieNames: [...DOUYIN_AUTH_COOKIE_NAMES]
   },
 
   xiaohongshu: definePlatform(
     'https://creator.xiaohongshu.com/login',
     'form',
-    { cookieNames: ['web_session', 'xsecappid'], urlIncludes: ['/creator/home', '/creator-center'] },
-    ['web_session'],
+    {
+      cookieNames: ['web_session', 'xsecappid'],
+      urlIncludes: ['/creator/home', '/creator-center']
+    },
+    ['web_session']
   ),
 
   wechat_official: definePlatform(
@@ -322,9 +357,9 @@ const configs: Record<string, PlatformLoginConfig> = {
     'qr',
     {
       cookieNames: ['slave_user', 'slave_sid', 'bizuin', 'data_bizuin'],
-      urlIncludes: ['/cgi-bin/home', '/cgi-bin/index', '/cgi-bin/frame'],
+      urlIncludes: ['/cgi-bin/home', '/cgi-bin/index', '/cgi-bin/frame']
     },
-    ['slave_sid', 'slave_user'],
+    ['slave_sid', 'slave_user']
   ),
 
   wechat_channels: definePlatform(
@@ -332,24 +367,27 @@ const configs: Record<string, PlatformLoginConfig> = {
     'qr',
     {
       cookieNames: ['finder_username', 'userName', 'sessionid', 'wxuin'],
-      urlIncludes: ['/platform/', '/post/', '/login_done', '/cgi-bin/'],
+      urlIncludes: ['/platform/', '/post/', '/login_done', '/cgi-bin/']
     },
-    ['finder_username', 'userName'],
+    ['finder_username', 'userName']
   ),
 
   baijiahao: definePlatform(
     'https://baijiahao.baidu.com/',
     'form',
-    { cookieNames: ['BDUSS', 'STOKEN'], urlIncludes: ['/builder', '/builder/rc'] },
-    ['BDUSS'],
+    {
+      cookieNames: ['BDUSS', 'STOKEN'],
+      urlIncludes: ['/builder', '/builder/rc']
+    },
+    ['BDUSS']
   ),
 
   zhihu: definePlatform(
     'https://www.zhihu.com/signin',
     'form',
     { cookieNames: ['z_c0', '_zap'], urlIncludes: ['/creator', '/settings'] },
-    ['z_c0'],
-  ),
+    ['z_c0']
+  )
 };
 
 export function getPlatformLoginConfig(platform: string): PlatformLoginConfig {

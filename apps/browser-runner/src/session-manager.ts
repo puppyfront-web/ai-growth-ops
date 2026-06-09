@@ -4,7 +4,7 @@ import {
   detectLoginWithBaseline,
   getPlatformLoginConfig,
   snapshotCookieKeys,
-  DOUYIN_POST_LOGIN_URL_PATTERNS,
+  DOUYIN_POST_LOGIN_URL_PATTERNS
 } from './platform-configs';
 
 interface BrowserSession {
@@ -32,12 +32,16 @@ class SessionManager {
     const config = getPlatformLoginConfig(platform);
     const browser = await chromium.launch({ headless: false });
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 900 },
+      userAgent:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 900 }
     });
     const page = await context.newPage();
 
-    await page.goto(config.loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(config.loginUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
 
     // 等待登录页面完全加载 — 动态渲染的 login UI 需要额外时间
     // 这样 baseline cookie 快照更准确，同时让用户看到完整的 QR 码
@@ -53,7 +57,7 @@ class SessionManager {
       context,
       page,
       createdAt: Date.now(),
-      baselineCookieKeys,
+      baselineCookieKeys
     });
 
     return { sessionId };
@@ -82,12 +86,14 @@ class SessionManager {
 
       const currentUrl = session.page.url();
       const contextCookies = await session.context.cookies();
-      console.log(`[session:${sessionId.slice(0,8)}] platform=${session.platform} url=${currentUrl} cookies=[${contextCookies.map(c => c.name).join(',')}]`);
+      console.log(
+        `[session:${sessionId.slice(0, 8)}] platform=${session.platform} url=${currentUrl} cookies=[${contextCookies.map((c) => c.name).join(',')}]`
+      );
 
       let result = await detectLoginWithBaseline(
         session.page,
         config,
-        session.baselineCookieKeys,
+        session.baselineCookieKeys
       );
 
       // QR 扫码后页面可能未自动跳转，主动驱动导航以触发 cookie 写入（仅执行一次）
@@ -95,23 +101,34 @@ class SessionManager {
       //   1. 登录 UI 已经不可见（说明用户已操作或页面已跳转）
       //   2. 页面 URL 仍在 douyin 域名下
       //   3. 距 session 创建超过 15 秒（给用户足够时间扫码）
-      if (!result.loggedIn && session.platform === 'douyin' && !session.douyinNavAttempted) {
+      if (
+        !result.loggedIn &&
+        session.platform === 'douyin' &&
+        !session.douyinNavAttempted
+      ) {
         const sessionAge = Date.now() - session.createdAt;
         if (sessionAge > 15_000) {
           // 检查登录 UI 是否已消失（用户可能已扫码但页面未跳转）
-          const loginCardVisible = await session.page.locator(
-            '[class*="douyin_login"], [id*="douyin-login"]',
-          ).first().isVisible().catch(() => false);
+          const loginCardVisible = await session.page
+            .locator('[class*="douyin_login"], [id*="douyin-login"]')
+            .first()
+            .isVisible()
+            .catch(() => false);
 
           if (!loginCardVisible) {
             session.douyinNavAttempted = true;
-            console.log(`[session:${sessionId.slice(0,8)}] douyin retry triggered: login UI gone, sessionAge=${Math.round(sessionAge/1000)}s`);
+            console.log(
+              `[session:${sessionId.slice(0, 8)}] douyin retry triggered: login UI gone, sessionAge=${Math.round(sessionAge / 1000)}s`
+            );
 
             // 1) 先等待页面自然跳转（最多 5 秒）
             try {
               await session.page.waitForURL(
-                u => DOUYIN_POST_LOGIN_URL_PATTERNS.some(p => u.toString().includes(p)),
-                { timeout: 5000 },
+                (u) =>
+                  DOUYIN_POST_LOGIN_URL_PATTERNS.some((p) =>
+                    u.toString().includes(p)
+                  ),
+                { timeout: 5000 }
               );
             } catch {
               // 跳转没发生 — 继续尝试主动导航
@@ -119,12 +136,19 @@ class SessionManager {
 
             // 2) 如果仍未到 dashboard，主动导航触发 cookie 写入
             const currentUrl = session.page.url();
-            if (!DOUYIN_POST_LOGIN_URL_PATTERNS.some(p => currentUrl.includes(p))) {
+            if (
+              !DOUYIN_POST_LOGIN_URL_PATTERNS.some((p) =>
+                currentUrl.includes(p)
+              )
+            ) {
               try {
-                await session.page.goto('https://creator.douyin.com/creator-micro/home', {
-                  waitUntil: 'domcontentloaded',
-                  timeout: 8000,
-                });
+                await session.page.goto(
+                  'https://creator.douyin.com/creator-micro/home',
+                  {
+                    waitUntil: 'domcontentloaded',
+                    timeout: 8000
+                  }
+                );
               } catch {
                 // 导航失败也继续尝试检测
               }
@@ -135,25 +159,31 @@ class SessionManager {
             result = await detectLoginWithBaseline(
               session.page,
               config,
-              session.baselineCookieKeys,
+              session.baselineCookieKeys
             );
           }
         }
       }
 
-      console.log(`[session:${sessionId.slice(0,8)}] loggedIn=${result.loggedIn} cookieLen=${result.cookies.length}`);
+      console.log(
+        `[session:${sessionId.slice(0, 8)}] loggedIn=${result.loggedIn} cookieLen=${result.cookies.length}`
+      );
 
       if (result.loggedIn && result.cookies.trim()) {
         // Cache cookies so subsequent polls still get the result until API confirms.
         session.completedCookies = result.cookies;
         // Close browser immediately to free resources, but keep session in map.
-        try { await session.browser.close(); } catch { /* already closed */ }
+        try {
+          await session.browser.close();
+        } catch {
+          /* already closed */
+        }
         return { status: 'logged_in', cookies: result.cookies };
       }
 
       return { status: 'waiting_scan' };
     } catch (err) {
-      console.error(`[session:${sessionId.slice(0,8)}] error:`, err);
+      console.error(`[session:${sessionId.slice(0, 8)}] error:`, err);
       return { status: 'error', error: (err as Error).message };
     }
   }
@@ -164,7 +194,9 @@ class SessionManager {
     this.sessions.delete(sessionId);
     try {
       await session.browser.close();
-    } catch { /* browser may already be closed */ }
+    } catch {
+      /* browser may already be closed */
+    }
   }
 
   async cleanupStaleSessions(): Promise<void> {
@@ -183,4 +215,6 @@ class SessionManager {
 
 export const sessionManager = new SessionManager();
 
-setInterval(() => { sessionManager.cleanupStaleSessions().catch(() => {}); }, 30_000);
+setInterval(() => {
+  sessionManager.cleanupStaleSessions().catch(() => {});
+}, 30_000);

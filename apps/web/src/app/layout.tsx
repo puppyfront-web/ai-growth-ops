@@ -10,10 +10,14 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'AI Growth Ops',
-  description: 'AI 全域内容获客运营系统',
+  description: 'AI 全域内容获客运营系统'
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="zh-CN">
       <body className={inter.className}>

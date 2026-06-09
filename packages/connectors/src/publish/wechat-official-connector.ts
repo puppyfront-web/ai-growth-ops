@@ -5,7 +5,7 @@ import type {
   PublishContentInput,
   PublishContentResult,
   UploadMediaInput,
-  UploadMediaResult,
+  UploadMediaResult
 } from './types.js';
 
 export class WechatOfficialPublishConnector implements PublishConnector {
@@ -24,13 +24,19 @@ export class WechatOfficialPublishConnector implements PublishConnector {
       deleteContent: true,
       uploadMedia: true,
       supportedContentTypes: ['article'],
-      supportedModes: ['official_api'],
+      supportedModes: ['official_api']
     };
   }
 
-  async publishContent(input: PublishContentInput): Promise<PublishContentResult> {
+  async publishContent(
+    input: PublishContentInput
+  ): Promise<PublishContentResult> {
     if (!this.config.appId || !this.config.appSecret) {
-      return { success: false, errorCode: 'NO_CREDENTIALS', errorMessage: 'WeChat Official requires appId and appSecret' };
+      return {
+        success: false,
+        errorCode: 'NO_CREDENTIALS',
+        errorMessage: 'WeChat Official requires appId and appSecret'
+      };
     }
 
     try {
@@ -42,23 +48,25 @@ export class WechatOfficialPublishConnector implements PublishConnector {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            articles: [{
-              title: input.title || 'Untitled',
-              content: input.content,
-              digest: input.content.slice(0, 120),
-            }],
-          }),
-        },
+            articles: [
+              {
+                title: input.title || 'Untitled',
+                content: input.content,
+                digest: input.content.slice(0, 120)
+              }
+            ]
+          })
+        }
       );
 
-      const draftData = await draftResp.json() as Record<string, unknown>;
+      const draftData = (await draftResp.json()) as Record<string, unknown>;
 
       if (draftData.errcode && draftData.errcode !== 0) {
         return {
           success: false,
           errorCode: String(draftData.errcode),
           errorMessage: String(draftData.errmsg || 'WeChat API error'),
-          rawResponse: draftData,
+          rawResponse: draftData
         };
       }
 
@@ -70,18 +78,18 @@ export class WechatOfficialPublishConnector implements PublishConnector {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media_id: mediaId }),
-        },
+          body: JSON.stringify({ media_id: mediaId })
+        }
       );
 
-      const pubData = await pubResp.json() as Record<string, unknown>;
+      const pubData = (await pubResp.json()) as Record<string, unknown>;
 
       if (pubData.errcode && pubData.errcode !== 0) {
         return {
           success: true,
           externalPostId: mediaId,
           status: 'pending_review',
-          rawResponse: { draft: draftData, publish: pubData },
+          rawResponse: { draft: draftData, publish: pubData }
         };
       }
 
@@ -89,13 +97,13 @@ export class WechatOfficialPublishConnector implements PublishConnector {
         success: true,
         externalPostId: mediaId,
         status: 'pending_review',
-        rawResponse: { draft: draftData, publish: pubData },
+        rawResponse: { draft: draftData, publish: pubData }
       };
     } catch (err) {
       return {
         success: false,
         errorCode: 'NETWORK_ERROR',
-        errorMessage: err instanceof Error ? err.message : 'Network error',
+        errorMessage: err instanceof Error ? err.message : 'Network error'
       };
     }
   }
@@ -105,24 +113,31 @@ export class WechatOfficialPublishConnector implements PublishConnector {
       const accessToken = await this.getAccessToken();
       const resp = await fetch(
         `https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${accessToken}&type=${input.fileType === 'video' ? 'video' : 'image'}`,
-        { method: 'POST', body: JSON.stringify({ url: input.fileUrl }) },
+        { method: 'POST', body: JSON.stringify({ url: input.fileUrl }) }
       );
-      const data = await resp.json() as Record<string, unknown>;
+      const data = (await resp.json()) as Record<string, unknown>;
       if (data.errcode && data.errcode !== 0) {
         return { success: false, errorMessage: String(data.errmsg) };
       }
-      return { success: true, mediaId: data.media_id as string, mediaUrl: data.url as string };
+      return {
+        success: true,
+        mediaId: data.media_id as string,
+        mediaUrl: data.url as string
+      };
     } catch (err) {
-      return { success: false, errorMessage: err instanceof Error ? err.message : 'Upload failed' };
+      return {
+        success: false,
+        errorMessage: err instanceof Error ? err.message : 'Upload failed'
+      };
     }
   }
 
   private async getAccessToken(): Promise<string> {
     if (this.config.accessToken) return this.config.accessToken;
     const resp = await fetch(
-      `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${this.config.appId}&secret=${this.config.appSecret}`,
+      `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${this.config.appId}&secret=${this.config.appSecret}`
     );
-    const data = await resp.json() as Record<string, unknown>;
+    const data = (await resp.json()) as Record<string, unknown>;
     return data.access_token as string;
   }
 }

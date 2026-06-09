@@ -11,10 +11,10 @@ export interface SkillLifecycleGraph {
 }
 
 export function createSkillLifecycleGraph(
-  executor: (input: SkillLifecycleState) => Promise<SkillLifecycleState>,
+  executor: (input: SkillLifecycleState) => Promise<SkillLifecycleState>
 ): SkillLifecycleGraph {
   return {
     name: 'skill-lifecycle',
-    run: executor,
+    run: executor
   };
 }

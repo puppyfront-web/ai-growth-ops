@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
 
 const db = createDatabaseClient();
@@ -16,9 +20,9 @@ async function post(path: string, body?: unknown) {
     headers: {
       ...(body ? { 'content-type': 'application/json' } : {}),
       authorization: `Bearer ${authToken}`,
-      'x-organization-id': orgId,
+      'x-organization-id': orgId
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   return { status: res.status, body: await res.json() };
 }
@@ -27,8 +31,8 @@ async function get(path: string) {
   const res = await fetch(`${baseUrl}${path}`, {
     headers: {
       authorization: `Bearer ${authToken}`,
-      'x-organization-id': orgId,
-    },
+      'x-organization-id': orgId
+    }
   });
   return { status: res.status, body: await res.json() };
 }
@@ -39,9 +43,9 @@ async function patch(path: string, body?: unknown) {
     headers: {
       ...(body ? { 'content-type': 'application/json' } : {}),
       authorization: `Bearer ${authToken}`,
-      'x-organization-id': orgId,
+      'x-organization-id': orgId
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   return { status: res.status, body: await res.json() };
 }
@@ -52,18 +56,31 @@ beforeAll(async () => {
   await seedDatabase(db);
 
   // Create organization + membership for seeded admin
-  const admin = await db.user.findFirstOrThrow({ where: { email: 'admin@ai-growth-ops.local' } });
+  const admin = await db.user.findFirstOrThrow({
+    where: { email: 'admin@ai-growth-ops.local' }
+  });
   const org = await db.organization.create({
-    data: { name: 'Chat Test Org', slug: `chat-test-${Date.now()}`, status: 'active' },
+    data: {
+      name: 'Chat Test Org',
+      slug: `chat-test-${Date.now()}`,
+      status: 'active'
+    }
   });
   await db.organizationMember.create({
-    data: { organizationId: org.id, userId: admin.id, role: 'owner', status: 'active' },
+    data: {
+      organizationId: org.id,
+      userId: admin.id,
+      role: 'owner',
+      status: 'active'
+    }
   });
   orgId = org.id;
 
   // Start API server on random port
   apiServer = createApiServer({ db }) as Server;
-  await new Promise<void>((resolve) => apiServer.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) =>
+    apiServer.listen(0, '127.0.0.1', resolve)
+  );
   const addr = apiServer.address() as { address: string; port: number };
   baseUrl = `http://${addr.address}:${addr.port}`;
 
@@ -71,9 +88,12 @@ beforeAll(async () => {
   const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@ai-growth-ops.local', password: 'changeme123' }),
+    body: JSON.stringify({
+      email: 'admin@ai-growth-ops.local',
+      password: 'changeme123'
+    })
   });
-  const loginBody = await loginRes.json() as { token: string };
+  const loginBody = (await loginRes.json()) as { token: string };
   authToken = loginBody.token;
 });
 
@@ -95,7 +115,9 @@ describe('Chat Thread CRUD', () => {
   });
 
   it('creates a thread with title', async () => {
-    const { status, body } = await post('/api/chat/threads', { title: '测试标题' });
+    const { status, body } = await post('/api/chat/threads', {
+      title: '测试标题'
+    });
     expect(status).toBe(201);
     expect(body.title).toBe('测试标题');
   });
@@ -116,10 +138,13 @@ describe('Chat Thread CRUD', () => {
   });
 
   it('adds a message to a thread', async () => {
-    const { status, body } = await post(`/api/chat/threads/${threadId}/messages`, {
-      role: 'user',
-      content: '帮我发布到抖音',
-    });
+    const { status, body } = await post(
+      `/api/chat/threads/${threadId}/messages`,
+      {
+        role: 'user',
+        content: '帮我发布到抖音'
+      }
+    );
     expect(status).toBe(201);
     expect(body.role).toBe('user');
     expect(body.content).toBe('帮我发布到抖音');
@@ -132,7 +157,7 @@ describe('Chat Thread CRUD', () => {
 
   it('updates thread status', async () => {
     const { status, body } = await patch(`/api/chat/threads/${threadId}`, {
-      status: 'archived',
+      status: 'archived'
     });
     expect(status).toBe(200);
     expect(body.status).toBe('archived');

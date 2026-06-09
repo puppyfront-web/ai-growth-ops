@@ -54,9 +54,11 @@ export interface LeadMiningResult {
 // ── Graph factory ──────────────────────────────────────────────────
 
 export function createLeadMiningGraph(
-  executor: (input: { candidates: LeadCandidate[] }) => Promise<LeadMiningResult>,
+  executor: (input: {
+    candidates: LeadCandidate[];
+  }) => Promise<LeadMiningResult>
 ): { run(input: { candidates: LeadCandidate[] }): Promise<LeadMiningResult> } {
   return {
-    run: executor,
+    run: executor
   };
 }

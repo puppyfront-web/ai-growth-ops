@@ -3,7 +3,7 @@ import type {
   PublishCapabilities,
   PublishConnectorConfig,
   PublishContentInput,
-  PublishContentResult,
+  PublishContentResult
 } from './types.js';
 
 export class XiaohongshuPublishConnector implements PublishConnector {
@@ -24,18 +24,24 @@ export class XiaohongshuPublishConnector implements PublishConnector {
       supportedContentTypes: ['text_image', 'video'],
       maxTitleLength: 20,
       maxContentLength: 1000,
-      supportedModes: ['browser_assist', 'manual_import'],
+      supportedModes: ['browser_assist', 'manual_import']
     };
   }
 
-  async publishContent(_input: PublishContentInput): Promise<PublishContentResult> {
+  async publishContent(
+    _input: PublishContentInput
+  ): Promise<PublishContentResult> {
     if (this.config.mode === 'browser_assist') {
-      return { success: false, errorCode: 'BROWSER_ASSIST_REQUIRED', errorMessage: 'Use browser-runner for Xiaohongshu publishing' };
+      return {
+        success: false,
+        errorCode: 'BROWSER_ASSIST_REQUIRED',
+        errorMessage: 'Use browser-runner for Xiaohongshu publishing'
+      };
     }
     return {
       success: false,
       errorCode: 'MANUAL_REQUIRED',
-      errorMessage: 'Xiaohongshu requires browser_assist or manual publishing',
+      errorMessage: 'Xiaohongshu requires browser_assist or manual publishing'
     };
   }
 }

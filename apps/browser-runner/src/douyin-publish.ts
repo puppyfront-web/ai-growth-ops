@@ -4,9 +4,8 @@ import { createHeadlessSession } from './browser-session.js';
 import { reportPublishProgress } from './report-publish-progress.js';
 
 const UPLOAD_URL = 'https://creator.douyin.com/creator-micro/content/upload';
-const PUBLISH_V1 = 'https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page';
-const PUBLISH_V2 = 'https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page';
-const MANAGE_PATTERN = 'https://creator.douyin.com/creator-micro/content/manage**';
+const MANAGE_PATTERN =
+  'https://creator.douyin.com/creator-micro/content/manage**';
 
 export type DouyinPublishInput = {
   publishJobId?: string;
@@ -30,11 +29,26 @@ function modKey(): string {
 }
 
 async function isLoginOverlay(page: Page): Promise<boolean> {
-  if (await page.getByRole('textbox', { name: '请输入手机号' }).isVisible().catch(() => false)) return true;
-  return page.getByText('扫码登录', { exact: true }).first().isVisible().catch(() => false);
+  if (
+    await page
+      .getByRole('textbox', { name: '请输入手机号' })
+      .isVisible()
+      .catch(() => false)
+  )
+    return true;
+  return page
+    .getByText('扫码登录', { exact: true })
+    .first()
+    .isVisible()
+    .catch(() => false);
 }
 
-async function fillTitleAndDescription(page: Page, title: string, description: string, tags: string[]): Promise<void> {
+async function fillTitleAndDescription(
+  page: Page,
+  title: string,
+  description: string,
+  tags: string[]
+): Promise<void> {
   const section = page
     .getByText('作品描述', { exact: true })
     .locator('xpath=ancestor::div[2]')
@@ -44,7 +58,9 @@ async function fillTitleAndDescription(page: Page, title: string, description: s
   await titleInput.waitFor({ state: 'visible', timeout: 15_000 });
   await titleInput.fill(title.slice(0, 30));
 
-  const editor = section.locator('.zone-container[contenteditable="true"]').first();
+  const editor = section
+    .locator('.zone-container[contenteditable="true"]')
+    .first();
   await editor.waitFor({ state: 'visible', timeout: 15_000 });
   await editor.click();
   const mod = modKey();
@@ -62,7 +78,8 @@ async function waitForPublishPage(page: Page): Promise<void> {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     const url = page.url();
-    if (url.includes('/content/publish') || url.includes('/content/post/video')) return;
+    if (url.includes('/content/publish') || url.includes('/content/post/video'))
+      return;
     await page.waitForTimeout(500);
   }
   throw new Error('等待进入抖音发布编辑页超时');
@@ -72,7 +89,10 @@ async function waitForUploadFileInput(page: Page): Promise<void> {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     if ((await page.locator('input[type="file"]').count()) > 0) {
-      await page.locator('input[type="file"]').first().waitFor({ state: 'attached', timeout: 5000 });
+      await page
+        .locator('input[type="file"]')
+        .first()
+        .waitFor({ state: 'attached', timeout: 5000 });
       return;
     }
     if (await isLoginOverlay(page)) {
@@ -83,16 +103,30 @@ async function waitForUploadFileInput(page: Page): Promise<void> {
   throw new Error('未找到视频/图片上传控件，请确认创作者账号权限');
 }
 
-async function waitForUploadComplete(page: Page, filePath: string): Promise<void> {
+async function waitForUploadComplete(
+  page: Page,
+  filePath: string
+): Promise<void> {
   const deadline = Date.now() + 300_000;
   while (Date.now() < deadline) {
-    const reupload = await page.locator('[class^="long-card"] div:has-text("重新上传")').count();
+    const reupload = await page
+      .locator('[class^="long-card"] div:has-text("重新上传")')
+      .count();
     if (reupload > 0) return;
-    const failed = await page.locator('div.progress-div > div:has-text("上传失败")').count();
+    const failed = await page
+      .locator('div.progress-div > div:has-text("上传失败")')
+      .count();
     if (failed > 0) {
-      await page.locator('div.progress-div input[type="file"]').first().setInputFiles(filePath).catch(() => {
-        return page.locator('input[type="file"]').first().setInputFiles(filePath);
-      });
+      await page
+        .locator('div.progress-div input[type="file"]')
+        .first()
+        .setInputFiles(filePath)
+        .catch(() => {
+          return page
+            .locator('input[type="file"]')
+            .first()
+            .setInputFiles(filePath);
+        });
     }
     await page.waitForTimeout(2000);
   }
@@ -134,7 +168,9 @@ async function handleDeclarationModal(page: Page): Promise<boolean> {
   const title = page.getByText('未添加自主声明', { exact: true }).first();
   if (!(await title.isVisible().catch(() => false))) return false;
 
-  const directPublishButton = page.getByRole('button', { name: '直接发布', exact: true }).first();
+  const directPublishButton = page
+    .getByRole('button', { name: '直接发布', exact: true })
+    .first();
   await directPublishButton.waitFor({ state: 'visible', timeout: 5_000 });
 
   const deadline = Date.now() + 15_000;
@@ -148,18 +184,27 @@ async function handleDeclarationModal(page: Page): Promise<boolean> {
     await page.waitForTimeout(500);
   }
 
-  throw new Error('抖音出现“未添加自主声明”弹窗，但“直接发布”按钮长时间不可点击，请人工确认声明设置');
+  throw new Error(
+    '抖音出现“未添加自主声明”弹窗，但“直接发布”按钮长时间不可点击，请人工确认声明设置'
+  );
 }
 
-async function clickPublish(page: Page): Promise<{ postId: string | null; postUrl: string }> {
+async function clickPublish(
+  page: Page
+): Promise<{ postId: string | null; postUrl: string }> {
   const deadline = Date.now() + 120_000;
   let declarationHandled = false;
   while (Date.now() < deadline) {
-    if (await page.locator('#uc-second-verify, .second-verify-mask').isVisible().catch(() => false)) {
+    if (
+      await page
+        .locator('#uc-second-verify, .second-verify-mask')
+        .isVisible()
+        .catch(() => false)
+    ) {
       const verified = await waitForSecondVerifyIfHeaded(page);
       if (verified) continue;
       throw new Error(
-        '抖音要求二次安全验证（扫码/短信）。请用有界面浏览器登录创作者中心完成验证，或设置 BROWSER_RUNNER_HEADED=true 后重试并在弹出的窗口中完成验证',
+        '抖音要求二次安全验证（扫码/短信）。请用有界面浏览器登录创作者中心完成验证，或设置 BROWSER_RUNNER_HEADED=true 后重试并在弹出的窗口中完成验证'
       );
     }
 
@@ -173,7 +218,9 @@ async function clickPublish(page: Page): Promise<{ postId: string | null; postUr
         .catch(() => false);
       if (declarationVisible && (await handleDeclarationModal(page))) {
         if (declarationHandled) {
-          throw new Error('抖音“未添加自主声明”弹窗重复出现，已停止重试以避免死循环，请人工确认发布配置');
+          throw new Error(
+            '抖音“未添加自主声明”弹窗重复出现，已停止重试以避免死循环，请人工确认发布配置'
+          );
         }
         declarationHandled = true;
       }
@@ -191,10 +238,14 @@ async function clickPublish(page: Page): Promise<{ postId: string | null; postUr
       let postId: string | null = null;
       try {
         await page.waitForTimeout(3000);
-        const firstItem = page.locator('a[href*="/content/detail/"], [data-item-id]').first();
+        const firstItem = page
+          .locator('a[href*="/content/detail/"], [data-item-id]')
+          .first();
         if (await firstItem.isVisible({ timeout: 5000 }).catch(() => false)) {
           const href = await firstItem.getAttribute('href').catch(() => null);
-          const dataId = await firstItem.getAttribute('data-item-id').catch(() => null);
+          const dataId = await firstItem
+            .getAttribute('data-item-id')
+            .catch(() => null);
           if (dataId) {
             postId = dataId;
           } else if (href) {
@@ -216,7 +267,7 @@ async function clickPublish(page: Page): Promise<{ postId: string | null; postUr
 async function tryOpenImagePostTab(page: Page): Promise<boolean> {
   const imageUrls = [
     'https://creator.douyin.com/creator-micro/content/upload?default-tab=3',
-    'https://creator.douyin.com/creator-micro/content/upload/image',
+    'https://creator.douyin.com/creator-micro/content/upload/image'
   ];
   for (const url of imageUrls) {
     try {
@@ -228,7 +279,10 @@ async function tryOpenImagePostTab(page: Page): Promise<boolean> {
     }
   }
 
-  await page.goto(UPLOAD_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.goto(UPLOAD_URL, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60_000
+  });
   await page.waitForTimeout(2000);
 
   for (const label of ['发布图文', '图文创作', '图文', '图片']) {
@@ -251,40 +305,70 @@ async function tryOpenImagePostTab(page: Page): Promise<boolean> {
 async function publishDouyinVideo(
   page: Page,
   input: DouyinPublishInput,
-  videoPath: string,
+  videoPath: string
 ): Promise<{ postId: string | null; postUrl: string }> {
-  await reportPublishProgress(input.publishJobId, 'browser_page', '打开抖音视频上传页…');
-  await page.goto(UPLOAD_URL, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_page',
+    '打开抖音视频上传页…'
+  );
+  await page.goto(UPLOAD_URL, {
+    waitUntil: 'domcontentloaded',
+    timeout: 120_000
+  });
   await page.waitForTimeout(3000);
 
   if (await isLoginOverlay(page)) {
     throw new Error('抖音登录已失效，请在「集成 → 平台账号」重新扫码登录');
   }
 
-  await reportPublishProgress(input.publishJobId, 'browser_fill', '上传视频文件…');
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_fill',
+    '上传视频文件…'
+  );
   await waitForUploadFileInput(page);
   await page.locator('input[type="file"]').first().setInputFiles(videoPath);
   await waitForPublishPage(page);
   await page.waitForTimeout(1000);
 
-  await reportPublishProgress(input.publishJobId, 'browser_fill', '填写标题与作品描述…');
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_fill',
+    '填写标题与作品描述…'
+  );
   const desc = input.content || input.title;
   await fillTitleAndDescription(page, input.title, desc, input.tags ?? []);
 
-  await reportPublishProgress(input.publishJobId, 'browser_submit', '等待视频上传完成…');
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_submit',
+    '等待视频上传完成…'
+  );
   await waitForUploadComplete(page, videoPath);
 
-  await reportPublishProgress(input.publishJobId, 'browser_submit', '提交发布…');
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_submit',
+    '提交发布…'
+  );
   return clickPublish(page);
 }
 
 async function publishDouyinImages(
   page: Page,
   input: DouyinPublishInput,
-  imagePaths: string[],
+  imagePaths: string[]
 ): Promise<{ postId: string | null; postUrl: string }> {
-  await reportPublishProgress(input.publishJobId, 'browser_page', '打开抖音创作者上传页…');
-  await page.goto(UPLOAD_URL, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_page',
+    '打开抖音创作者上传页…'
+  );
+  await page.goto(UPLOAD_URL, {
+    waitUntil: 'domcontentloaded',
+    timeout: 120_000
+  });
   await page.waitForTimeout(3000);
 
   if (await isLoginOverlay(page)) {
@@ -311,7 +395,11 @@ async function publishDouyinImages(
     /* 部分账号停留在当前页，继续尝试填写 */
   }
 
-  await reportPublishProgress(input.publishJobId, 'browser_fill', '填写标题与描述…');
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_fill',
+    '填写标题与描述…'
+  );
   const desc = input.content || input.title;
   try {
     await fillTitleAndDescription(page, input.title, desc, input.tags ?? []);
@@ -320,26 +408,36 @@ async function publishDouyinImages(
       throw new Error(
         onImageTab
           ? '图文素材已上传，但未找到「作品描述」编辑区'
-          : '未进入抖音图文发布流程，请在创作者中心确认账号支持图文创作',
+          : '未进入抖音图文发布流程，请在创作者中心确认账号支持图文创作'
       );
     }
     throw new Error('找到作品描述区域但填写失败，请稍后重试');
   }
 
-  await reportPublishProgress(input.publishJobId, 'browser_submit', '提交发布…');
+  await reportPublishProgress(
+    input.publishJobId,
+    'browser_submit',
+    '提交发布…'
+  );
   return clickPublish(page);
 }
 
 function pickVideoFile(paths: string[]): string | null {
-  const video = paths.find((p) => /\.(mp4|mov|webm|avi)$/i.test(p) && existsSync(p));
+  const video = paths.find(
+    (p) => /\.(mp4|mov|webm|avi)$/i.test(p) && existsSync(p)
+  );
   return video ?? null;
 }
 
 function pickImageFiles(paths: string[]): string[] {
-  return paths.filter((p) => /\.(png|jpe?g|webp|gif)$/i.test(p) && existsSync(p));
+  return paths.filter(
+    (p) => /\.(png|jpe?g|webp|gif)$/i.test(p) && existsSync(p)
+  );
 }
 
-export async function publishDouyin(input: DouyinPublishInput): Promise<DouyinPublishResult> {
+export async function publishDouyin(
+  input: DouyinPublishInput
+): Promise<DouyinPublishResult> {
   const media = (input.mediaFilePaths ?? []).filter((p) => existsSync(p));
   const session = await createHeadlessSession(input.cookie, 'douyin.com');
 
@@ -353,23 +451,28 @@ export async function publishDouyin(input: DouyinPublishInput): Promise<DouyinPu
       if (!videoPath) {
         return {
           success: false,
-          errorMessage: '抖音视频发布需要上传 mp4/mov 等视频文件，请先在素材库添加视频',
+          errorMessage:
+            '抖音视频发布需要上传 mp4/mov 等视频文件，请先在素材库添加视频'
         };
       }
       publishResult = await publishDouyinVideo(session.page, input, videoPath);
-    } else if (input.contentType === 'text_image' || pickImageFiles(media).length > 0) {
+    } else if (
+      input.contentType === 'text_image' ||
+      pickImageFiles(media).length > 0
+    ) {
       const images = pickImageFiles(media);
       if (images.length === 0) {
         return {
           success: false,
-          errorMessage: '抖音图文发布需要至少一张图片素材；纯文字暂不支持自动发布',
+          errorMessage:
+            '抖音图文发布需要至少一张图片素材；纯文字暂不支持自动发布'
         };
       }
       publishResult = await publishDouyinImages(session.page, input, images);
     } else {
       return {
         success: false,
-        errorMessage: '抖音浏览器发布需要视频或图片素材，请为内容关联素材后重试',
+        errorMessage: '抖音浏览器发布需要视频或图片素材，请为内容关联素材后重试'
       };
     }
 
@@ -377,10 +480,11 @@ export async function publishDouyin(input: DouyinPublishInput): Promise<DouyinPu
     return {
       success: true,
       externalPostId: publishResult.postId ?? undefined,
-      externalUrl: publishResult.postUrl,
+      externalUrl: publishResult.postUrl
     };
   } catch (err) {
-    let errorMessage = err instanceof Error ? err.message : 'Douyin publish failed';
+    let errorMessage =
+      err instanceof Error ? err.message : 'Douyin publish failed';
     if (/second-verify|uc-second-verify/i.test(errorMessage)) {
       errorMessage =
         '抖音要求二次安全验证（扫码/短信）。请打开创作者中心完成验证，或在 .env 设置 BROWSER_RUNNER_HEADED=true 后重试并在弹出窗口中完成验证';

@@ -5,7 +5,7 @@ function formatShanghaiDay(date: Date): string {
     timeZone: SHANGHAI_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
+    day: '2-digit'
   }).format(date);
 }
 
@@ -28,13 +28,19 @@ export function parsePublishedAt(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function isPublishedTodayInShanghai(value: unknown, now: Date = new Date()): boolean {
+export function isPublishedTodayInShanghai(
+  value: unknown,
+  now: Date = new Date()
+): boolean {
   const parsed = parsePublishedAt(value);
   if (!parsed) return false;
   return formatShanghaiDay(parsed) === formatShanghaiDay(now);
 }
 
-export function dedupeByKey<T>(items: T[], getKey: (item: T) => string | null | undefined): T[] {
+export function dedupeByKey<T>(
+  items: T[],
+  getKey: (item: T) => string | null | undefined
+): T[] {
   const seen = new Set<string>();
   const unique: T[] = [];
 
@@ -58,7 +64,7 @@ export interface SelectTodayOrRecentOptions {
 
 function sortByPublishedAtDesc<T>(
   items: T[],
-  getPublishedAt: (item: T) => unknown,
+  getPublishedAt: (item: T) => unknown
 ): T[] {
   return [...items].sort((a, b) => {
     const ta = parsePublishedAt(getPublishedAt(a))?.getTime() ?? 0;
@@ -72,14 +78,17 @@ export function selectTodayOrRecent<T>(
   items: T[],
   getKey: (item: T) => string | null | undefined,
   getPublishedAt: (item: T) => unknown,
-  options: SelectTodayOrRecentOptions = {},
+  options: SelectTodayOrRecentOptions = {}
 ): T[] {
   const limit = options.limit ?? 50;
-  const fallbackLimit = options.fallbackLimit ?? RECENT_INTERACTION_FALLBACK_LIMIT;
+  const fallbackLimit =
+    options.fallbackLimit ?? RECENT_INTERACTION_FALLBACK_LIMIT;
   const now = options.now ?? new Date();
 
   const unique = dedupeByKey(items, getKey);
-  const today = unique.filter((item) => isPublishedTodayInShanghai(getPublishedAt(item), now));
+  const today = unique.filter((item) =>
+    isPublishedTodayInShanghai(getPublishedAt(item), now)
+  );
   if (today.length > 0) {
     return sortByPublishedAtDesc(today, getPublishedAt).slice(0, limit);
   }

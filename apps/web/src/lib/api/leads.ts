@@ -9,7 +9,12 @@ interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-export function listLeads(filters?: { level?: string; status?: string; page?: number; pageSize?: number }): Promise<PaginatedResponse<Lead>> {
+export function listLeads(filters?: {
+  level?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<PaginatedResponse<Lead>> {
   const params = new URLSearchParams();
   if (filters?.level) params.set('level', filters.level);
   if (filters?.status) params.set('status', filters.status);
@@ -45,10 +50,15 @@ export type LeadSinkConfig = {
   lastSyncAt?: string | null;
 } & Record<string, unknown>;
 
-export function getLeadSinkConfig(sinkType: 'feishu' | 'wecom'): Promise<LeadSinkConfig> {
+export function getLeadSinkConfig(
+  sinkType: 'feishu' | 'wecom'
+): Promise<LeadSinkConfig> {
   return apiGet<LeadSinkConfig>(`/api/lead-sinks/${sinkType}`);
 }
 
-export function updateLeadSinkConfig(sinkType: 'feishu' | 'wecom', data: Record<string, unknown>): Promise<{ ok: boolean }> {
+export function updateLeadSinkConfig(
+  sinkType: 'feishu' | 'wecom',
+  data: Record<string, unknown>
+): Promise<{ ok: boolean }> {
   return apiPut<{ ok: boolean }>(`/api/lead-sinks/${sinkType}`, data);
 }

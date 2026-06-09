@@ -1,20 +1,31 @@
 import { describe, it, expect } from 'vitest';
 
 type PublishJobStatus =
-  | 'DRAFT' | 'READY' | 'SCHEDULED' | 'RUNNING'
-  | 'WAITING_HUMAN_CONFIRM' | 'PUBLISHED' | 'FAILED'
-  | 'NEED_MANUAL_REPAIR' | 'CANCELLED';
+  | 'DRAFT'
+  | 'READY'
+  | 'SCHEDULED'
+  | 'RUNNING'
+  | 'WAITING_HUMAN_CONFIRM'
+  | 'PUBLISHED'
+  | 'FAILED'
+  | 'NEED_MANUAL_REPAIR'
+  | 'CANCELLED';
 
 const VALID_TRANSITIONS: Record<PublishJobStatus, PublishJobStatus[]> = {
   DRAFT: ['READY', 'SCHEDULED'],
   READY: ['RUNNING', 'CANCELLED'],
   SCHEDULED: ['READY', 'RUNNING', 'CANCELLED'],
-  RUNNING: ['PUBLISHED', 'FAILED', 'WAITING_HUMAN_CONFIRM', 'NEED_MANUAL_REPAIR'],
+  RUNNING: [
+    'PUBLISHED',
+    'FAILED',
+    'WAITING_HUMAN_CONFIRM',
+    'NEED_MANUAL_REPAIR'
+  ],
   WAITING_HUMAN_CONFIRM: ['PUBLISHED', 'FAILED'],
   NEED_MANUAL_REPAIR: ['RUNNING', 'CANCELLED'],
   PUBLISHED: [],
   FAILED: ['READY'],
-  CANCELLED: [],
+  CANCELLED: []
 };
 
 function canTransition(from: PublishJobStatus, to: PublishJobStatus): boolean {
@@ -41,12 +52,12 @@ describe('PublishJob State Machine', () => {
       ['WAITING_HUMAN_CONFIRM', 'FAILED'],
       ['NEED_MANUAL_REPAIR', 'RUNNING'],
       ['NEED_MANUAL_REPAIR', 'CANCELLED'],
-      ['FAILED', 'READY'],
+      ['FAILED', 'READY']
     ] as [PublishJobStatus, PublishJobStatus][])(
       'allows %s → %s',
       (from, to) => {
         expect(canTransition(from, to)).toBe(true);
-      },
+      }
     );
   });
 
@@ -61,12 +72,12 @@ describe('PublishJob State Machine', () => {
       ['DRAFT', 'PUBLISHED'],
       ['DRAFT', 'RUNNING'],
       ['WAITING_HUMAN_CONFIRM', 'RUNNING'],
-      ['READY', 'PUBLISHED'],
+      ['READY', 'PUBLISHED']
     ] as [PublishJobStatus, PublishJobStatus][])(
       'blocks %s → %s',
       (from, to) => {
         expect(canTransition(from, to)).toBe(false);
-      },
+      }
     );
   });
 

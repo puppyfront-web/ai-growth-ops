@@ -10,21 +10,39 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
-import { platformLabels, interactionStatusLabels } from '@/lib/constants';
+import { platformLabels } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
 import type { Platform } from '@/types/enums';
 
-const platforms = ['all', 'douyin', 'xiaohongshu', 'wechat_official', 'wechat_channels', 'baijiahao', 'zhihu'] as const;
+const platforms = [
+  'all',
+  'douyin',
+  'xiaohongshu',
+  'wechat_official',
+  'wechat_channels',
+  'baijiahao',
+  'zhihu'
+] as const;
 
 export default function RepliesPage() {
   const [platformFilter, setPlatformFilter] = useState<string>('all');
-  const { data: interactions, isLoading, error, refetch } = useQuery({
+  const {
+    data: interactions,
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
     queryKey: [...queryKeys.conversations.replies, platformFilter],
-    queryFn: () => listInteractions({ status: 'REPLIED', ...(platformFilter !== 'all' ? { platform: platformFilter } : {}) }),
+    queryFn: () =>
+      listInteractions({
+        status: 'REPLIED',
+        ...(platformFilter !== 'all' ? { platform: platformFilter } : {})
+      })
   });
 
   if (isLoading) return <LoadingState rows={4} />;
-  if (error) return <ErrorState message="加载回复记录失败" onRetry={() => refetch()} />;
+  if (error)
+    return <ErrorState message="加载回复记录失败" onRetry={() => refetch()} />;
 
   return (
     <div>
@@ -38,7 +56,9 @@ export default function RepliesPage() {
             key={p}
             onClick={() => setPlatformFilter(p)}
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              platformFilter === p ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+              platformFilter === p
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-accent'
             }`}
           >
             {p === 'all' ? '全部' : platformLabels[p as Platform]}
@@ -48,7 +68,9 @@ export default function RepliesPage() {
 
       {/* Replies list */}
       {(interactions ?? []).length === 0 ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">暂无回复记录</div>
+        <div className="flex items-center justify-center py-20 text-muted-foreground">
+          暂无回复记录
+        </div>
       ) : (
         <div className="space-y-2">
           {interactions!.map((interaction) => (
@@ -61,7 +83,9 @@ export default function RepliesPage() {
                 <PlatformBadge platform={interaction.platform} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{interaction.externalUserName ?? '未知用户'}</span>
+                    <span className="text-sm font-medium">
+                      {interaction.externalUserName ?? '未知用户'}
+                    </span>
                     <StatusBadge status="REPLIED" label="已回复" />
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">

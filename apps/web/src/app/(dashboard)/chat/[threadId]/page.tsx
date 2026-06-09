@@ -5,7 +5,11 @@ import { AssistantProvider } from '@/components/chat/AssistantProvider';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { useRouter } from 'next/navigation';
 
-export default function ThreadPage({ params }: { params: Promise<{ threadId: string }> }) {
+export default function ThreadPage({
+  params
+}: {
+  params: Promise<{ threadId: string }>;
+}) {
   const { threadId } = use(params);
   const router = useRouter();
 

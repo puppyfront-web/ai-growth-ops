@@ -9,7 +9,11 @@ type ErrorStateProps = {
   className?: string;
 };
 
-export function ErrorState({ message = '加载失败，请重试', onRetry, className }: ErrorStateProps) {
+export function ErrorState({
+  message = '加载失败，请重试',
+  onRetry,
+  className
+}: ErrorStateProps) {
   return (
     <Alert variant="destructive" className={cn('max-w-lg mx-auto', className)}>
       <AlertTriangle className="h-4 w-4" />

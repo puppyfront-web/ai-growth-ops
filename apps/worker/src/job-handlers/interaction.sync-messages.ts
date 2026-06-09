@@ -1,7 +1,7 @@
 import type { PlatformCode, InteractionMode } from '@ai-growth-ops/connectors';
 import { getOrCreateConnector } from '@ai-growth-ops/connectors';
 import { createDatabaseClient } from '@ai-growth-ops/database';
-import type { DatabaseClient } from '@ai-growth-ops/database';
+import type { DatabaseClient, Platform } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import type { Job } from 'bullmq';
 import type { InteractionSyncMessagesInput } from '../job-types.js';
@@ -20,7 +20,7 @@ export async function handleInteractionSyncMessages(
     headed,
     cursor,
     limit,
-    syncJobId,
+    syncJobId
   } = job.data;
   const db: DatabaseClient = createDatabaseClient();
 
@@ -28,27 +28,33 @@ export async function handleInteractionSyncMessages(
   if (syncJobId) {
     await db.interactionSyncJob.update({
       where: { id: syncJobId },
-      data: { status: 'running', startedAt: new Date() },
+      data: { status: 'running', startedAt: new Date() }
     });
   }
 
   try {
     // Resolve credentials from the platform account
     const account = await db.platformAccount.findFirst({
-      where: { id: platformAccountId },
+      where: { id: platformAccountId }
     });
 
     if (!account) {
       if (syncJobId) {
         await db.interactionSyncJob.update({
           where: { id: syncJobId },
-          data: { status: 'failed', errorMessage: `PlatformAccount not found: ${platformAccountId}`, finishedAt: new Date() },
+          data: {
+            status: 'failed',
+            errorMessage: `PlatformAccount not found: ${platformAccountId}`,
+            finishedAt: new Date()
+          }
         });
       }
       return;
     }
 
-    const cookie = account.cookieRef ? decryptToken(account.cookieRef) : undefined;
+    const cookie = account.cookieRef
+      ? decryptToken(account.cookieRef)
+      : undefined;
     const accessToken = account.accessTokenEncrypted
       ? decryptToken(account.accessTokenEncrypted)
       : undefined;
@@ -56,7 +62,7 @@ export async function handleInteractionSyncMessages(
     const connector = getOrCreateConnector(
       platform as PlatformCode,
       mode as InteractionMode,
-      { mode: mode as InteractionMode, cookie, accessToken, headed },
+      { mode: mode as InteractionMode, cookie, accessToken, headed }
     );
 
     // Fetch messages from platform
@@ -64,7 +70,7 @@ export async function handleInteractionSyncMessages(
       platformAccountId,
       cursor,
       limit: limit || 50,
-      headed,
+      headed
     });
     const messages = prepareMessagesForSync(fetchedMessages);
 
@@ -76,8 +82,8 @@ export async function handleInteractionSyncMessages(
       const existing = await db.interaction.findFirst({
         where: {
           platformAccountId,
-          externalInteractionId: message.externalMessageId,
-        },
+          externalInteractionId: message.externalMessageId
+        }
       });
 
       if (existing) {
@@ -94,18 +100,23 @@ export async function handleInteractionSyncMessages(
             organizationId: account.organizationId,
             externalInteractionId: message.externalMessageId,
             platformAccountId,
-            platform: platform as any,
+            platform: platform as Platform,
             type: 'message',
             status: 'NEW',
             content: message.content,
             externalUserId: message.externalUserId,
             externalUserName: message.userNickname,
-            rawPayload: (message.rawPayload as any) ?? undefined,
-          },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            rawPayload: (message.rawPayload as any) ?? undefined
+          }
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Unique constraint violation — another worker beat us; treat as duplicate
-        if (err?.code === 'P2002') {
+        if (
+          err instanceof Error &&
+          'code' in err &&
+          (err as Record<string, unknown>).code === 'P2002'
+        ) {
           skippedCount++;
           continue;
         }
@@ -119,7 +130,7 @@ export async function handleInteractionSyncMessages(
         interaction.id,
         message.content,
         platform,
-        'message',
+        'message'
       );
     }
 
@@ -130,8 +141,8 @@ export async function handleInteractionSyncMessages(
         data: {
           status: 'completed',
           finishedAt: new Date(),
-          fetchedCount: messages.length,
-        },
+          fetchedCount: messages.length
+        }
       });
     }
 
@@ -141,14 +152,16 @@ export async function handleInteractionSyncMessages(
   } catch (err) {
     const transient = isTransientError(err);
     if (syncJobId) {
-      await db.interactionSyncJob.update({
-        where: { id: syncJobId },
-        data: {
-          status: transient ? 'pending' : 'failed',
-          finishedAt: transient ? undefined : new Date(),
-          errorMessage: err instanceof Error ? err.message : String(err),
-        },
-      }).catch(() => {}); // DB may be down too
+      await db.interactionSyncJob
+        .update({
+          where: { id: syncJobId },
+          data: {
+            status: transient ? 'pending' : 'failed',
+            finishedAt: transient ? undefined : new Date(),
+            errorMessage: err instanceof Error ? err.message : String(err)
+          }
+        })
+        .catch(() => {}); // DB may be down too
     }
     throw err;
   } finally {

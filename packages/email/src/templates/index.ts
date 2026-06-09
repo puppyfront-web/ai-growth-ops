@@ -40,87 +40,122 @@ function buttonHtml(url: string, label: string): string {
 
 // ── Welcome Email ──────────────────────────────────────────────────────────
 
-export function welcomeEmail(params: { name: string; verifyUrl: string }): EmailTemplate {
+export function welcomeEmail(params: {
+  name: string;
+  verifyUrl: string;
+}): EmailTemplate {
   const { name, verifyUrl } = params;
   return {
     subject: '欢迎加入 AI Growth Ops！',
-    html: baseHtml('欢迎加入！', `
+    html: baseHtml(
+      '欢迎加入！',
+      `
       <p style="color:#333;font-size:15px;line-height:1.6;">你好 ${name}，</p>
       <p style="color:#333;font-size:15px;line-height:1.6;">欢迎加入 AI Growth Ops！我们很高兴你的到来。</p>
       <p style="color:#333;font-size:15px;line-height:1.6;">请点击下方按钮验证你的邮箱地址，以激活账户的所有功能：</p>
       ${buttonHtml(verifyUrl, '验证邮箱')}
-    `),
-    text: `你好 ${name}，\n\n欢迎加入 AI Growth Ops！\n\n请点击以下链接验证你的邮箱地址：\n${verifyUrl}`,
+    `
+    ),
+    text: `你好 ${name}，\n\n欢迎加入 AI Growth Ops！\n\n请点击以下链接验证你的邮箱地址：\n${verifyUrl}`
   };
 }
 
 // ── Email Verification ─────────────────────────────────────────────────────
 
-export function verifyEmailTemplate(params: { name: string; verifyUrl: string }): EmailTemplate {
+export function verifyEmailTemplate(params: {
+  name: string;
+  verifyUrl: string;
+}): EmailTemplate {
   const { name, verifyUrl } = params;
   return {
     subject: '验证你的邮箱地址',
-    html: baseHtml('验证邮箱', `
+    html: baseHtml(
+      '验证邮箱',
+      `
       <p style="color:#333;font-size:15px;line-height:1.6;">你好 ${name}，</p>
       <p style="color:#333;font-size:15px;line-height:1.6;">请点击下方按钮验证你的邮箱地址：</p>
       ${buttonHtml(verifyUrl, '验证邮箱')}
       <p style="color:#888;font-size:13px;">此链接有效期为 24 小时。如果你没有请求验证，请忽略此邮件。</p>
-    `),
-    text: `你好 ${name}，\n\n请点击以下链接验证你的邮箱地址：\n${verifyUrl}\n\n此链接有效期为 24 小时。`,
+    `
+    ),
+    text: `你好 ${name}，\n\n请点击以下链接验证你的邮箱地址：\n${verifyUrl}\n\n此链接有效期为 24 小时。`
   };
 }
 
 // ── Password Reset ─────────────────────────────────────────────────────────
 
-export function resetPasswordEmail(params: { name: string; resetUrl: string }): EmailTemplate {
+export function resetPasswordEmail(params: {
+  name: string;
+  resetUrl: string;
+}): EmailTemplate {
   const { name, resetUrl } = params;
   return {
     subject: '重置你的密码',
-    html: baseHtml('重置密码', `
+    html: baseHtml(
+      '重置密码',
+      `
       <p style="color:#333;font-size:15px;line-height:1.6;">你好 ${name}，</p>
       <p style="color:#333;font-size:15px;line-height:1.6;">我们收到了你重置密码的请求。点击下方按钮设置新密码：</p>
       ${buttonHtml(resetUrl, '重置密码')}
       <p style="color:#888;font-size:13px;">此链接有效期为 1 小时。如果你没有请求重置密码，请忽略此邮件。</p>
-    `),
-    text: `你好 ${name}，\n\n请点击以下链接重置你的密码：\n${resetUrl}\n\n此链接有效期为 1 小时。`,
+    `
+    ),
+    text: `你好 ${name}，\n\n请点击以下链接重置你的密码：\n${resetUrl}\n\n此链接有效期为 1 小时。`
   };
 }
 
 // ── Team Invitation ────────────────────────────────────────────────────────
 
-export function inviteMemberEmail(params: { inviterName: string; orgName: string; acceptUrl: string }): EmailTemplate {
+export function inviteMemberEmail(params: {
+  inviterName: string;
+  orgName: string;
+  acceptUrl: string;
+}): EmailTemplate {
   const { inviterName, orgName, acceptUrl } = params;
   return {
     subject: `${inviterName} 邀请你加入 ${orgName}`,
-    html: baseHtml('团队邀请', `
+    html: baseHtml(
+      '团队邀请',
+      `
       <p style="color:#333;font-size:15px;line-height:1.6;"><strong>${inviterName}</strong> 邀请你加入组织 <strong>${orgName}</strong>。</p>
       <p style="color:#333;font-size:15px;line-height:1.6;">点击下方按钮接受邀请：</p>
       ${buttonHtml(acceptUrl, '接受邀请')}
       <p style="color:#888;font-size:13px;">此邀请有效期为 7 天。</p>
-    `),
-    text: `${inviterName} 邀请你加入组织 ${orgName}。\n\n请点击以下链接接受邀请：\n${acceptUrl}\n\n此邀请有效期为 7 天。`,
+    `
+    ),
+    text: `${inviterName} 邀请你加入组织 ${orgName}。\n\n请点击以下链接接受邀请：\n${acceptUrl}\n\n此邀请有效期为 7 天。`
   };
 }
 
 // ── Notification Digest ────────────────────────────────────────────────────
 
-export function notificationEmail(params: { name: string; notifications: Array<{ title: string; content: string; actionUrl?: string }> }): EmailTemplate {
+export function notificationEmail(params: {
+  name: string;
+  notifications: Array<{ title: string; content: string; actionUrl?: string }>;
+}): EmailTemplate {
   const { name, notifications } = params;
-  const itemsHtml = notifications.map(n =>
-    `<div style="padding:12px 0;border-bottom:1px solid #eee;">
+  const itemsHtml = notifications
+    .map(
+      (n) =>
+        `<div style="padding:12px 0;border-bottom:1px solid #eee;">
       <p style="margin:0;font-size:14px;font-weight:500;color:#1a1a1a;">${n.title}</p>
       <p style="margin:4px 0 0;font-size:13px;color:#666;">${n.content}</p>
       ${n.actionUrl ? `<a href="${n.actionUrl}" style="font-size:13px;color:#0d9488;">查看详情 →</a>` : ''}
     </div>`
-  ).join('');
+    )
+    .join('');
 
   return {
     subject: `你有 ${notifications.length} 条新通知`,
-    html: baseHtml(`${notifications.length} 条新通知`, `
+    html: baseHtml(
+      `${notifications.length} 条新通知`,
+      `
       <p style="color:#333;font-size:15px;line-height:1.6;">你好 ${name}，以下是你的最新通知：</p>
       ${itemsHtml}
-    `),
-    text: `你好 ${name}，\n\n你有 ${notifications.length} 条新通知：\n\n` +
-      notifications.map(n => `- ${n.title}: ${n.content}`).join('\n'),
+    `
+    ),
+    text:
+      `你好 ${name}，\n\n你有 ${notifications.length} 条新通知：\n\n` +
+      notifications.map((n) => `- ${n.title}: ${n.content}`).join('\n')
   };
 }

@@ -5,7 +5,7 @@ import {
   getCoreRowModel,
   flexRender,
   type ColumnDef,
-  type RowData,
+  type RowData
 } from '@tanstack/react-table';
 import { EmptyState } from './EmptyState';
 import { ErrorState } from './ErrorState';
@@ -56,7 +56,7 @@ export function DataTable<TData, TValue>({
   onRetry,
   toolbar,
   pagination: _pagination,
-  className,
+  className
 }: DataTableProps<TData, TValue>) {
   const showLoading = isLoading ?? loading;
   // pagination will be used when server-side pagination is wired in M2+
@@ -64,7 +64,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
+    getCoreRowModel: getCoreRowModel()
   });
 
   if (showLoading) {
@@ -89,7 +89,11 @@ export function DataTable<TData, TValue>({
     return (
       <div className={className}>
         {toolbar}
-        <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
+        <EmptyState
+          title={emptyTitle}
+          description={emptyDescription}
+          action={emptyAction}
+        />
       </div>
     );
   }
@@ -107,12 +111,17 @@ export function DataTable<TData, TValue>({
                     key={header.id}
                     className={cn(
                       'px-4 py-3 text-left text-sm font-medium text-muted-foreground',
-                      header.column.columnDef.meta?.headerClassName as string | undefined,
+                      header.column.columnDef.meta?.headerClassName as
+                        | string
+                        | undefined
                     )}
                   >
                     {header.isPlaceholder
                       ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                   </th>
                 ))}
               </tr>
@@ -120,13 +129,18 @@ export function DataTable<TData, TValue>({
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+              <tr
+                key={row.id}
+                className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+              >
                 {row.getVisibleCells().map((cell) => (
                   <td
                     key={cell.id}
                     className={cn(
                       'px-4 py-3 text-sm',
-                      cell.column.columnDef.meta?.cellClassName as string | undefined,
+                      cell.column.columnDef.meta?.cellClassName as
+                        | string
+                        | undefined
                     )}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

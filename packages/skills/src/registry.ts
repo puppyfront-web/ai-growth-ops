@@ -25,8 +25,8 @@ export function discoverSkills(definitionsDir: string): void {
   if (!existsSync(definitionsDir)) return;
 
   const dirs = readdirSync(definitionsDir, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => d.name);
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
 
   for (const dir of dirs) {
     const schemaDir = resolve(definitionsDir, dir, 'schema');
@@ -42,7 +42,7 @@ export function discoverSkills(definitionsDir: string): void {
         version: '1.0.0',
         description: inputSchema.description || `${dir} skill`,
         inputSchema,
-        outputSchema,
+        outputSchema
       });
     }
   }

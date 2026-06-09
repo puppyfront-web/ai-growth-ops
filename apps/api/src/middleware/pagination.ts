@@ -18,7 +18,10 @@ export interface PaginatedResult<T> {
  */
 export function parsePagination(url: URL): PaginationParams {
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
-  const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize')) || 20));
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Number(url.searchParams.get('pageSize')) || 20)
+  );
   return { page, pageSize };
 }
 
@@ -34,10 +37,12 @@ export function parsePagination(url: URL): PaginationParams {
  *     { createdAt: 'desc' }
  *   );
  */
-export async function paginate<T extends {
-  findMany(args: any): Promise<any[]>;
-  count(args: any): Promise<number>;
-}>(
+export async function paginate<
+  T extends {
+    findMany(args: Record<string, unknown>): Promise<unknown[]>;
+    count(args: Record<string, unknown>): Promise<number>;
+  }
+>(
   model: T,
   where: Record<string, unknown>,
   pagination: PaginationParams,
@@ -52,9 +57,9 @@ export async function paginate<T extends {
       orderBy,
       skip,
       take: pagination.pageSize,
-      ...(include ? { include } : {}),
+      ...(include ? { include } : {})
     }),
-    model.count({ where }),
+    model.count({ where })
   ]);
 
   return {
@@ -62,6 +67,6 @@ export async function paginate<T extends {
     total,
     page: pagination.page,
     pageSize: pagination.pageSize,
-    totalPages: Math.ceil(total / pagination.pageSize),
+    totalPages: Math.ceil(total / pagination.pageSize)
   };
 }

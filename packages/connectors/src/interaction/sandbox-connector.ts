@@ -8,7 +8,7 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 import { randomUUID } from 'crypto';
 
@@ -16,7 +16,7 @@ export class SandboxInteractionConnector implements InteractionConnector {
   readonly platform;
   private config: InteractionConnectorConfig;
 
-  constructor(platform: any, config: InteractionConnectorConfig) {
+  constructor(platform: string, config: InteractionConnectorConfig) {
     this.platform = platform;
     this.config = config;
   }
@@ -35,7 +35,7 @@ export class SandboxInteractionConnector implements InteractionConnector {
       autoReplyAllowed: true,
       requiresHumanReviewForMessageReply: false,
       requiresHumanReviewForLeadLevelA: false,
-      supportedModes: ['sandbox', 'recorded'],
+      supportedModes: ['sandbox', 'recorded']
     };
   }
 
@@ -52,7 +52,7 @@ export class SandboxInteractionConnector implements InteractionConnector {
         replyCount: Math.floor(Math.random() * 5),
         publishedAt: new Date(Date.now() - i * 3600000).toISOString(),
         sourceContentId: input.sourceContentId || 'sandbox_content',
-        sourceContentTitle: '沙箱测试内容',
+        sourceContentTitle: '沙箱测试内容'
       });
     }
     return comments;
@@ -68,23 +68,23 @@ export class SandboxInteractionConnector implements InteractionConnector {
         userNickname: `沙箱用户${i + 1}`,
         content: this.getMockMessage(i),
         type: 'text',
-        publishedAt: new Date(Date.now() - i * 1800000).toISOString(),
+        publishedAt: new Date(Date.now() - i * 1800000).toISOString()
       });
     }
     return messages;
   }
 
-  async replyComment(input: ReplyCommentInput): Promise<ReplyResult> {
+  async replyComment(_input: ReplyCommentInput): Promise<ReplyResult> {
     return {
       success: true,
-      externalReplyId: `sandbox_reply_${randomUUID().slice(0, 8)}`,
+      externalReplyId: `sandbox_reply_${randomUUID().slice(0, 8)}`
     };
   }
 
-  async replyMessage(input: ReplyMessageInput): Promise<ReplyResult> {
+  async replyMessage(_input: ReplyMessageInput): Promise<ReplyResult> {
     return {
       success: true,
-      externalReplyId: `sandbox_msg_reply_${randomUUID().slice(0, 8)}`,
+      externalReplyId: `sandbox_msg_reply_${randomUUID().slice(0, 8)}`
     };
   }
 
@@ -99,7 +99,7 @@ export class SandboxInteractionConnector implements InteractionConnector {
       '能介绍一下你们的解决方案吗？',
       '有用过的人来分享一下体验吗？',
       '我想了解一下具体价格',
-      '这个适合我们这种小企业吗？',
+      '这个适合我们这种小企业吗？'
     ];
     return templates[index % templates.length];
   }
@@ -110,7 +110,7 @@ export class SandboxInteractionConnector implements InteractionConnector {
       '请问价格是多少？',
       '能发一份详细方案给我吗？',
       '我们公司有20人左右，适合用什么方案？',
-      '谢谢，我先了解一下',
+      '谢谢，我先了解一下'
     ];
     return templates[index % templates.length];
   }

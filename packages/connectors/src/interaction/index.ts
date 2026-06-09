@@ -13,7 +13,7 @@ export type {
   PlatformMessage,
   ReplyResult,
   MarkHandledInput,
-  MarkHandledResult,
+  MarkHandledResult
 } from './types.js';
 export { SandboxInteractionConnector } from './sandbox-connector.js';
 export { DisabledInteractionConnector } from './disabled-connector.js';
@@ -25,5 +25,10 @@ export { WechatOfficialConnector } from './wechat-official-connector.js';
 export { WechatChannelsConnector } from './wechat-channels-connector.js';
 export { BaijiahaoConnector } from './baijiahao-connector.js';
 export { ZhihuConnector } from './zhihu-connector.js';
-export { registerConnector, getConnector, getOrCreateConnector, listConnectors } from './registry.js';
+export {
+  registerConnector,
+  getConnector,
+  getOrCreateConnector,
+  listConnectors
+} from './registry.js';
 export { BrowserAssistClient } from './browser-assist-client.js';

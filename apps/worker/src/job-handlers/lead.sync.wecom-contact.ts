@@ -4,12 +4,16 @@ import { createDatabaseClient } from '@ai-growth-ops/database';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import { syncLeadToSink } from '@ai-growth-ops/lead-sinks';
 
-export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promise<void> {
+export async function handleLeadSyncWeComContact(
+  job: Job<LeadSyncInput>
+): Promise<void> {
   const { leadId, sinkConfigId } = job.data;
   const db: DatabaseClient = createDatabaseClient();
 
   try {
-    const lead = await db.lead.findFirst({ where: { id: leadId, deletedAt: null } });
+    const lead = await db.lead.findFirst({
+      where: { id: leadId, deletedAt: null }
+    });
     if (!lead) {
       job.log(`Lead ${leadId} not found, skipping`);
       return;
@@ -18,11 +22,18 @@ export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promi
     // Get sink config (scoped to org to prevent cross-tenant data leakage)
     const sinkConfig = sinkConfigId
       ? await db.leadSinkConfig.findFirst({ where: { id: sinkConfigId } })
-      : await db.leadSinkConfig.findFirst({ where: { sinkType: 'wecom', organizationId: lead.organizationId ?? undefined } });
+      : await db.leadSinkConfig.findFirst({
+          where: {
+            sinkType: 'wecom',
+            organizationId: lead.organizationId ?? undefined
+          }
+        });
 
     if (!sinkConfig) {
       await db.lead.update({ where: { id: leadId }, data: { status: 'NEW' } });
-      throw new Error('No WeCom sink config found. Please configure the integration first.');
+      throw new Error(
+        'No WeCom sink config found. Please configure the integration first.'
+      );
     }
 
     const configObj = sinkConfig.config as Record<string, unknown>;
@@ -30,28 +41,32 @@ export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promi
     // Update lead status to SYNCING
     await db.lead.update({
       where: { id: leadId },
-      data: { status: 'SYNCING' },
+      data: { status: 'SYNCING' }
     });
 
     // Call WeCom contact sink
-    const result = await syncLeadToSink({
-      id: lead.id,
-      sourcePlatform: lead.sourcePlatform,
-      externalUserName: lead.externalUserName || undefined,
-      level: lead.level,
-      intent: lead.intent || undefined,
-      summary: lead.summary || undefined,
-      confidence: lead.confidence || undefined,
-      tags: lead.tags,
-      assignedTo: lead.assignedTo || undefined,
-      nextAction: lead.nextAction || undefined,
-      riskLevel: lead.riskLevel || undefined,
-      createdAt: lead.createdAt,
-    }, 'wecom', {
-      corpId: configObj.corpId as string,
-      secret: configObj.secret as string,
-      agentId: configObj.agentId as string,
-    });
+    const result = await syncLeadToSink(
+      {
+        id: lead.id,
+        sourcePlatform: lead.sourcePlatform,
+        externalUserName: lead.externalUserName || undefined,
+        level: lead.level,
+        intent: lead.intent || undefined,
+        summary: lead.summary || undefined,
+        confidence: lead.confidence || undefined,
+        tags: lead.tags,
+        assignedTo: lead.assignedTo || undefined,
+        nextAction: lead.nextAction || undefined,
+        riskLevel: lead.riskLevel || undefined,
+        createdAt: lead.createdAt
+      },
+      'wecom',
+      {
+        corpId: configObj.corpId as string,
+        secret: configObj.secret as string,
+        agentId: configObj.agentId as string
+      }
+    );
 
     // Update external mapping
     await db.leadExternalMapping.upsert({
@@ -59,9 +74,12 @@ export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promi
       create: {
         leadId,
         sinkType: 'wecom',
-        externalId: result.externalId || `wecom-${leadId.slice(0, 8)}`,
+        externalId: result.externalId || `wecom-${leadId.slice(0, 8)}`
       },
-      update: { syncedAt: new Date(), externalId: result.externalId || undefined },
+      update: {
+        syncedAt: new Date(),
+        externalId: result.externalId || undefined
+      }
     });
 
     // Log sync result
@@ -71,20 +89,24 @@ export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promi
         sinkType: 'wecom',
         operation: 'upsert_lead',
         status: result.success ? 'success' : 'failed',
-        error: result.errorMessage,
-      },
+        error: result.errorMessage
+      }
     });
 
     // Update lead status — revert to NEW on failure so it's not stuck in SYNCING
     await db.lead.update({
       where: { id: leadId },
-      data: { status: result.success ? 'SYNCED' : 'NEW' },
+      data: { status: result.success ? 'SYNCED' : 'NEW' }
     });
 
-    job.log(`WeCom sync for lead ${leadId}: ${result.success ? 'success' : 'failed'}`);
+    job.log(
+      `WeCom sync for lead ${leadId}: ${result.success ? 'success' : 'failed'}`
+    );
   } catch (error) {
     // Revert status so the lead can be retried
-    await db.lead.update({ where: { id: leadId }, data: { status: 'NEW' } }).catch(() => {});
+    await db.lead
+      .update({ where: { id: leadId }, data: { status: 'NEW' } })
+      .catch(() => {});
     throw error;
   } finally {
     await db.$disconnect();

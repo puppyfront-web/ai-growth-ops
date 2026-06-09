@@ -1,7 +1,10 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContentFromOpportunity, listOpportunities } from '@/lib/api/research';
+import {
+  createContentFromOpportunity,
+  listOpportunities
+} from '@/lib/api/research';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { PlatformBadge } from '@/components/shared/StatusBadge';
@@ -11,15 +14,27 @@ import { useState } from 'react';
 
 import type { Platform } from '@/types/enums';
 
-const priorityStyles: Record<string, string> = { high: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800', medium: 'bg-yellow-50 text-yellow-700 border-yellow-200', low: 'bg-gray-50 text-gray-600 border-gray-200' };
-const priorityLabels: Record<string, string> = { high: '高优先', medium: '中优先', low: '低优先' };
+const priorityStyles: Record<string, string> = {
+  high: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+  medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  low: 'bg-gray-50 text-gray-600 border-gray-200'
+};
+const priorityLabels: Record<string, string> = {
+  high: '高优先',
+  medium: '中优先',
+  low: '低优先'
+};
 
 export default function OpportunitiesPage() {
   const qc = useQueryClient();
   const [createdId, setCreatedId] = useState<string | null>(null);
-  const { data, isLoading } = useQuery({ queryKey: ['content-opportunities'], queryFn: listOpportunities });
+  const { data, isLoading } = useQuery({
+    queryKey: ['content-opportunities'],
+    queryFn: listOpportunities
+  });
   const createMutation = useMutation({
-    mutationFn: (opportunityId: string) => createContentFromOpportunity(opportunityId),
+    mutationFn: (opportunityId: string) =>
+      createContentFromOpportunity(opportunityId),
     onSuccess: (result) => {
       setCreatedId(result.contentItemId);
       qc.invalidateQueries({ queryKey: ['content-items'] });
@@ -35,7 +50,9 @@ export default function OpportunitiesPage() {
       {createdId && (
         <div className="mb-4 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-4 text-sm text-emerald-700">
           已生成内容。
-          <Link href="/content" className="ml-2 font-medium underline">前往内容列表查看</Link>
+          <Link href="/content" className="ml-2 font-medium underline">
+            前往内容列表查看
+          </Link>
         </div>
       )}
       <div className="space-y-4">
@@ -44,10 +61,21 @@ export default function OpportunitiesPage() {
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="font-semibold">{opp.title}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{opp.description}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {opp.description}
+                </p>
                 <div className="mt-2 flex items-center gap-2">
-                  {opp.priority && <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${priorityStyles[opp.priority] ?? ''}`}>{priorityLabels[opp.priority] ?? opp.priority}</span>}
-                  {Array.isArray(opp.platforms) && (opp.platforms as Platform[]).map((p) => <PlatformBadge key={p} platform={p} />)}
+                  {opp.priority && (
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${priorityStyles[opp.priority] ?? ''}`}
+                    >
+                      {priorityLabels[opp.priority] ?? opp.priority}
+                    </span>
+                  )}
+                  {Array.isArray(opp.platforms) &&
+                    (opp.platforms as Platform[]).map((p) => (
+                      <PlatformBadge key={p} platform={p} />
+                    ))}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -58,7 +86,9 @@ export default function OpportunitiesPage() {
                 >
                   {createMutation.isPending ? '生成中...' : '生成内容'}
                 </button>
-                <button className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent">忽略</button>
+                <button className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent">
+                  忽略
+                </button>
               </div>
             </div>
           </div>

@@ -17,8 +17,8 @@ export async function handleCampaignCheckSchedule(_job: Job): Promise<void> {
     where: {
       status: 'active',
       nextRunAt: { lte: now },
-      deletedAt: null,
-    },
+      deletedAt: null
+    }
   });
 
   if (campaigns.length === 0) return;
@@ -31,10 +31,13 @@ export async function handleCampaignCheckSchedule(_job: Job): Promise<void> {
   for (const campaign of campaigns) {
     try {
       // Check maxPostsTotal limit
-      if (campaign.maxPostsTotal && campaign.publishedCount >= campaign.maxPostsTotal) {
+      if (
+        campaign.maxPostsTotal &&
+        campaign.publishedCount >= campaign.maxPostsTotal
+      ) {
         await db.campaign.update({
           where: { id: campaign.id },
-          data: { status: 'completed', finishedAt: new Date() },
+          data: { status: 'completed', finishedAt: new Date() }
         });
         continue;
       }
@@ -44,28 +47,37 @@ export async function handleCampaignCheckSchedule(_job: Job): Promise<void> {
         data: {
           campaignId: campaign.id,
           status: 'pending',
-          scheduledAt: now,
-        },
+          scheduledAt: now
+        }
       });
 
       // Enqueue execution
-      await campaignQueue.add(QUEUE_NAMES.CAMPAIGN_EXECUTE, {
-        campaignRunId: run.id,
-      }, {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 10000 },
-      });
+      await campaignQueue.add(
+        QUEUE_NAMES.CAMPAIGN_EXECUTE,
+        {
+          campaignRunId: run.id
+        },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 10000 }
+        }
+      );
 
       // Compute next run time
-      const nextRun = computeNextRunAt(campaign.scheduleConfig as Record<string, unknown> | null);
+      const nextRun = computeNextRunAt(
+        campaign.scheduleConfig as Record<string, unknown> | null
+      );
       await db.campaign.update({
         where: { id: campaign.id },
-        data: { nextRunAt: nextRun },
+        data: { nextRunAt: nextRun }
       });
 
       enqueued++;
     } catch (err) {
-      console.error(`[campaign-scheduler] Failed for campaign ${campaign.id}:`, err);
+      console.error(
+        `[campaign-scheduler] Failed for campaign ${campaign.id}:`,
+        err
+      );
     }
   }
 
@@ -84,8 +96,18 @@ function computeNextRunAt(config: Record<string, unknown> | null): Date {
   const [hours, minutes] = time.split(':').map(Number);
 
   if (days.length > 0) {
-    const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-    const targetDays = days.map(d => dayMap[d.toLowerCase()] ?? -1).filter(d => d >= 0);
+    const dayMap: Record<string, number> = {
+      sun: 0,
+      mon: 1,
+      tue: 2,
+      wed: 3,
+      thu: 4,
+      fri: 5,
+      sat: 6
+    };
+    const targetDays = days
+      .map((d) => dayMap[d.toLowerCase()] ?? -1)
+      .filter((d) => d >= 0);
     const now = new Date();
     const today = now.getDay();
 
@@ -94,7 +116,10 @@ function computeNextRunAt(config: Record<string, unknown> | null): Date {
       let diff = td - today;
       if (diff < 0) diff += 7;
       if (diff === 0) {
-        if (now.getHours() > hours || (now.getHours() === hours && now.getMinutes() >= minutes)) {
+        if (
+          now.getHours() > hours ||
+          (now.getHours() === hours && now.getMinutes() >= minutes)
+        ) {
           diff = 7;
         }
       }

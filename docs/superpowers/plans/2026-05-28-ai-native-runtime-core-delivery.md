@@ -13,6 +13,7 @@
 ### Task 1: Scaffold the runtime-core app and shared contracts
 
 **Files:**
+
 - Create: `apps/runtime-core/package.json`
 - Create: `apps/runtime-core/tsconfig.json`
 - Create: `apps/runtime-core/src/index.ts`
@@ -95,10 +96,10 @@ export const CAPABILITIES = {
   LEAD_EXTRACT: 'lead.extract',
   AUTH_CHECK: 'auth.check',
   AUTH_LOGIN: 'auth.login',
-  SKILL_HEALTHCHECK: 'skill.healthcheck',
+  SKILL_HEALTHCHECK: 'skill.healthcheck'
 } as const;
 
-export type CapabilityName = typeof CAPABILITIES[keyof typeof CAPABILITIES];
+export type CapabilityName = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
 ```
 
 `packages/shared-types/src/index.ts`
@@ -133,6 +134,7 @@ Update `tsconfig.base.json` paths with:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run:
+
 - `pnpm vitest run tests/unit/runtime-core/runtime-core-structure.test.ts`
 - `pnpm --filter @ai-growth-ops/runtime-core typecheck`
 
@@ -148,6 +150,7 @@ git commit -m "feat: scaffold runtime core workspace"
 ### Task 2: Add capability registry and skill manifest support
 
 **Files:**
+
 - Create: `apps/runtime-core/src/registry/types.ts`
 - Create: `apps/runtime-core/src/registry/skill-manifest.ts`
 - Create: `apps/runtime-core/src/registry/capability-registry.ts`
@@ -226,15 +229,21 @@ export class CapabilityRegistry {
     return this.skills;
   }
 
-  resolve(capability: CapabilityName, context: SkillContext): SkillManifestRecord | null {
+  resolve(
+    capability: CapabilityName,
+    context: SkillContext
+  ): SkillManifestRecord | null {
     return (
       this.skills.find((skill) => {
         if (!skill.enabled || !skill.healthy) return false;
         if (!skill.capabilities.includes(capability)) return false;
         if (!skill.contexts?.length) return true;
         return skill.contexts.some((candidate) => {
-          const platformMatches = !candidate.platform || candidate.platform === context.platform;
-          const contentTypeMatches = !candidate.contentType || candidate.contentType === context.contentType;
+          const platformMatches =
+            !candidate.platform || candidate.platform === context.platform;
+          const contentTypeMatches =
+            !candidate.contentType ||
+            candidate.contentType === context.contentType;
           return platformMatches && contentTypeMatches;
         });
       }) ?? null
@@ -260,6 +269,7 @@ export class CapabilityRegistry {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run:
+
 - `pnpm vitest run tests/unit/runtime-core/capability-registry.test.ts`
 - `pnpm --filter @ai-growth-ops/runtime-core typecheck`
 
@@ -275,6 +285,7 @@ git commit -m "feat: add capability registry for installable skills"
 ### Task 3: Add the OpenClaw runtime adapter and skill lifecycle workflow
 
 **Files:**
+
 - Create: `apps/runtime-core/src/runtime-adapters/types.ts`
 - Create: `apps/runtime-core/src/runtime-adapters/openclaw-adapter.ts`
 - Create: `apps/runtime-core/src/tools/registry-tools.ts`
@@ -345,8 +356,8 @@ export class OpenClawAdapter implements RuntimeAdapter {
       status: 'success',
       output: {
         skillId: input.skillId,
-        accepted: true,
-      },
+        accepted: true
+      }
     };
   }
 
@@ -374,8 +385,8 @@ export function createSkillLifecycleGraph() {
       action: null,
       source: null,
       skillId: null,
-      status: null,
-    },
+      status: null
+    }
   });
 }
 ```
@@ -398,6 +409,7 @@ export async function runSkillLifecycle(input: {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run:
+
 - `pnpm vitest run tests/unit/runtime-core/skill-lifecycle-graph.test.ts`
 - `pnpm --filter @ai-growth-ops/runtime-core typecheck`
 
@@ -413,6 +425,7 @@ git commit -m "feat: add openclaw adapter and skill lifecycle workflow"
 ### Task 4: Build the supervisor graph and multi-platform publish workflow
 
 **Files:**
+
 - Create: `apps/runtime-core/src/agents/supervisor-agent.ts`
 - Create: `apps/runtime-core/src/graphs/supervisor-graph.ts`
 - Create: `apps/runtime-core/src/graphs/publish-graph.ts`
@@ -462,7 +475,9 @@ Expected: FAIL because the runtime request dispatcher and publish workflow do no
 ```ts
 import type { RuntimeRequest } from '@ai-growth-ops/shared-types';
 
-export function selectWorkflow(request: RuntimeRequest): 'publish' | 'interaction' | 'lead' | 'skill.lifecycle' {
+export function selectWorkflow(
+  request: RuntimeRequest
+): 'publish' | 'interaction' | 'lead' | 'skill.lifecycle' {
   if (request.intent === 'publish') return 'publish';
   if (request.intent === 'skill.lifecycle') return 'skill.lifecycle';
   if (request.intent === 'lead.extract') return 'lead';
@@ -489,20 +504,25 @@ export async function runPublishWorkflow(input: {
       capabilities: ['publish.video'],
       contexts: [{ platform: 'douyin' }],
       enabled: true,
-      healthy: true,
-    },
+      healthy: true
+    }
   ]);
 
   const results = input.platforms.map((platform) => ({
     platform,
-    skillId: registry.resolve('publish.video', { platform })?.skillId ?? 'missing',
-    status: registry.resolve('publish.video', { platform }) ? 'success' : 'failed',
+    skillId:
+      registry.resolve('publish.video', { platform })?.skillId ?? 'missing',
+    status: registry.resolve('publish.video', { platform })
+      ? 'success'
+      : 'failed'
   }));
 
   return {
     workflow: 'publish' as const,
-    status: results.every((item) => item.status === 'success') ? 'success' : 'failed',
-    results,
+    status: results.every((item) => item.status === 'success')
+      ? 'success'
+      : 'failed',
+    results
   };
 }
 ```
@@ -532,6 +552,7 @@ export async function runRuntimeRequest(request: RuntimeRequest) {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run:
+
 - `pnpm vitest run tests/unit/runtime-core/publish-workflow.test.ts`
 - `pnpm --filter @ai-growth-ops/runtime-core typecheck`
 
@@ -547,6 +568,7 @@ git commit -m "feat: add supervisor and publish workflows"
 ### Task 5: Add interaction ops and lead mining workflows
 
 **Files:**
+
 - Create: `apps/runtime-core/src/graphs/interaction-ops-graph.ts`
 - Create: `apps/runtime-core/src/graphs/lead-mining-graph.ts`
 - Create: `apps/runtime-core/src/workflows/run-interaction-ops.ts`
@@ -600,6 +622,7 @@ describe('lead mining workflow', () => {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run:
+
 - `pnpm vitest run tests/unit/runtime-core/interaction-ops.test.ts`
 - `pnpm vitest run tests/unit/runtime-core/lead-mining.test.ts`
 
@@ -620,15 +643,15 @@ export async function runInteractionOps(input: {
       {
         platform: input.platform,
         interactionType: input.interactionType,
-        content: '想了解合作方式',
-      },
+        content: '想了解合作方式'
+      }
     ],
     replySuggestions: [
       {
         text: '可以先说说你的产品和投放目标，我帮你判断最适合的合作方式。',
-        confidence: 0.88,
-      },
-    ],
+        confidence: 0.88
+      }
+    ]
   };
 }
 ```
@@ -645,8 +668,8 @@ export async function runLeadMining(input: {
       platform: item.platform,
       summary: item.content,
       level: item.confidence >= 0.9 ? 'A' : 'B',
-      nextAction: 'follow_up',
-    })),
+      nextAction: 'follow_up'
+    }))
   };
 }
 ```
@@ -654,6 +677,7 @@ export async function runLeadMining(input: {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run:
+
 - `pnpm vitest run tests/unit/runtime-core/interaction-ops.test.ts`
 - `pnpm vitest run tests/unit/runtime-core/lead-mining.test.ts`
 - `pnpm --filter @ai-growth-ops/runtime-core typecheck`
@@ -670,6 +694,7 @@ git commit -m "feat: add interaction ops and lead mining workflows"
 ### Task 6: Add a delivery-grade CLI and OpenClaw smoke verification
 
 **Files:**
+
 - Modify: `apps/runtime-core/src/entrypoints/cli.ts`
 - Create: `apps/runtime-core/src/server/health.ts`
 - Create: `apps/runtime-core/src/storage/run-store.ts`
@@ -688,7 +713,11 @@ import { execa } from 'execa';
 
 describe('runtime core smoke', () => {
   it('lists skills and runs a publish request through the CLI', async () => {
-    const skills = await execa('pnpm', ['tsx', 'apps/runtime-core/src/entrypoints/cli.ts', 'skills:list']);
+    const skills = await execa('pnpm', [
+      'tsx',
+      'apps/runtime-core/src/entrypoints/cli.ts',
+      'skills:list'
+    ]);
     expect(skills.stdout).toContain('douyin-upload');
 
     const publish = await execa('pnpm', [
@@ -722,7 +751,9 @@ import { runRuntimeRequest } from '../workflows/run-runtime-request';
 const [command, ...args] = process.argv.slice(2);
 
 if (command === 'skills:list') {
-  console.log(JSON.stringify([{ skillId: 'douyin-upload', capability: 'publish.video' }]));
+  console.log(
+    JSON.stringify([{ skillId: 'douyin-upload', capability: 'publish.video' }])
+  );
   process.exit(0);
 }
 
@@ -732,8 +763,8 @@ if (command === 'run') {
     intent: 'publish' as const,
     payload: {
       platforms: ['douyin'],
-      content: 'hello',
-    },
+      content: 'hello'
+    }
   };
   const result = await runRuntimeRequest(payload);
   console.log(JSON.stringify(result));
@@ -755,6 +786,7 @@ Update `README.md` with a short delivery section:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run:
+
 - `pnpm vitest run tests/integration/runtime-core/openclaw-smoke.test.ts`
 - `pnpm vitest run tests/unit/runtime-core`
 - `pnpm --filter @ai-growth-ops/runtime-core typecheck`
@@ -771,6 +803,7 @@ git commit -m "feat: add runtime core cli smoke verification"
 ### Task 7: Final delivery verification and cutover notes
 
 **Files:**
+
 - Create: `docs/delivery/2026-05-29-openclaw-runtime-core-checklist.md`
 - Modify: `docs/superpowers/specs/2026-05-28-ai-native-runtime-core-design.md`
 - Test: `tests/integration/runtime-core/openclaw-smoke.test.ts`
@@ -814,6 +847,7 @@ Update the spec delivery section with a note that this checklist is the handoff 
 - [ ] **Step 4: Run final verification**
 
 Run:
+
 - `test -f docs/delivery/2026-05-29-openclaw-runtime-core-checklist.md`
 - `pnpm vitest run tests/integration/runtime-core/openclaw-smoke.test.ts`
 

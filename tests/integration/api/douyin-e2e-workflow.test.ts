@@ -12,22 +12,31 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Server } from 'node:http';
-import { createDatabaseClient, resetDatabase, seedDatabase } from '@ai-growth-ops/database';
+import {
+  createDatabaseClient,
+  resetDatabase,
+  seedDatabase
+} from '@ai-growth-ops/database';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import { encryptToken } from '@ai-growth-ops/providers';
 import { createApiServer } from '../../../apps/api/src';
-import type { InteractionSyncCommentsInput, InteractionSyncMessagesInput } from '../../../apps/worker/src/job-types';
+import type {
+  InteractionSyncCommentsInput,
+  InteractionSyncMessagesInput
+} from '../../../apps/worker/src/job-types';
 import { handleInteractionSyncComments } from '../../../apps/worker/src/job-handlers/interaction.sync-comments';
 import { handleInteractionSyncMessages } from '../../../apps/worker/src/job-handlers/interaction.sync-messages';
 
 // ── Mock skill runner to skip real AI calls (fail fast → rule fallback) ──
 vi.mock('@ai-growth-ops/skills', async (importOriginal) => {
-  const actual = await importOriginal() as Record<string, unknown>;
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     DefaultSkillRunner: class {
-      run = vi.fn().mockRejectedValue(new Error('No AI API key in test environment'));
-    },
+      run = vi
+        .fn()
+        .mockRejectedValue(new Error('No AI API key in test environment'));
+    }
   };
 });
 
@@ -36,7 +45,7 @@ vi.mock('@ai-growth-ops/lead-sinks', () => ({
   syncLeadToSink: vi.fn().mockResolvedValue({
     success: true,
     externalId: 'mock-ext-001',
-    externalUrl: 'https://mock.feishu.cn/record/mock-ext-001',
+    externalUrl: 'https://mock.feishu.cn/record/mock-ext-001'
   }),
   registerSink: vi.fn(),
   registerNotifySink: vi.fn(),
@@ -47,7 +56,7 @@ vi.mock('@ai-growth-ops/lead-sinks', () => ({
   FeishuBitableSink: class {},
   FeishuBotSink: class {},
   WeComContactSink: class {},
-  WeComAppMessageSink: class {},
+  WeComAppMessageSink: class {}
 }));
 
 // ── Shared test state ──────────────────────────────────────────────
@@ -88,9 +97,9 @@ async function post(path: string, body?: unknown) {
     method: 'POST',
     headers: {
       ...(body ? { 'content-type': 'application/json' } : {}),
-      ...authHeaders(),
+      ...authHeaders()
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   return { status: res.status, body: await res.json() };
 }
@@ -99,7 +108,7 @@ async function patch(path: string, body?: unknown) {
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json', ...authHeaders() },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   return { status: res.status, body: await res.json() };
 }
@@ -112,19 +121,32 @@ beforeAll(async () => {
   await seedDatabase(db);
 
   // 2. Create org + membership for seeded admin
-  const admin = await db.user.findFirstOrThrow({ where: { email: 'admin@ai-growth-ops.local' } });
+  const admin = await db.user.findFirstOrThrow({
+    where: { email: 'admin@ai-growth-ops.local' }
+  });
   adminId = admin.id;
   const org = await db.organization.create({
-    data: { name: 'E2E Test Org', slug: `e2e-org-${Date.now()}`, status: 'active' },
+    data: {
+      name: 'E2E Test Org',
+      slug: `e2e-org-${Date.now()}`,
+      status: 'active'
+    }
   });
   await db.organizationMember.create({
-    data: { organizationId: org.id, userId: admin.id, role: 'owner', status: 'active' },
+    data: {
+      organizationId: org.id,
+      userId: admin.id,
+      role: 'owner',
+      status: 'active'
+    }
   });
   orgId = org.id;
 
   // 3. Start API server
   apiServer = createApiServer({ db }) as Server;
-  await new Promise<void>((resolve) => apiServer.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) =>
+    apiServer.listen(0, '127.0.0.1', resolve)
+  );
   const apiAddr = apiServer.address() as { address: string; port: number };
   baseUrl = `http://${apiAddr.address}:${apiAddr.port}`;
 
@@ -132,9 +154,12 @@ beforeAll(async () => {
   const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@ai-growth-ops.local', password: 'changeme123' }),
+    body: JSON.stringify({
+      email: 'admin@ai-growth-ops.local',
+      password: 'changeme123'
+    })
   });
-  const loginBody = await loginRes.json() as { token: string };
+  const loginBody = (await loginRes.json()) as { token: string };
   authToken = loginBody.token;
 }, 30_000);
 
@@ -149,7 +174,6 @@ afterAll(async () => {
 // ══════════════════════════════════════════════════════════════════════
 
 describe('Douyin AI Native E2E Workflow', () => {
-
   // ── Phase 1: 登录 + 账号准备 ──────────────────────────────────────
 
   it('Phase 1: 登录 + 创建抖音账号 + 模拟扫码登录', async () => {
@@ -163,9 +187,11 @@ describe('Douyin AI Native E2E Workflow', () => {
         name: 'E2E 抖音测试账号',
         mode: 'browser_assist',
         status: 'active',
-        cookieRef: encryptToken('sessionid=e2e-dy-sid-123; sid_tt=e2e-dy-tt-456; csrf_session_id=e2e-csrf-789'),
-        authType: 'cookie',
-      },
+        cookieRef: encryptToken(
+          'sessionid=e2e-dy-sid-123; sid_tt=e2e-dy-tt-456; csrf_session_id=e2e-csrf-789'
+        ),
+        authType: 'cookie'
+      }
     });
     accountId = account.id;
     expect(account.platform).toBe('douyin');
@@ -180,7 +206,7 @@ describe('Douyin AI Native E2E Workflow', () => {
     const { status: ciStatus, body: item } = await post('/api/content-items', {
       type: 'text_image',
       title: 'AI 获客实战：如何用内容营销实现自动化线索增长',
-      body: '本文分享如何利用 AI 驱动的内容营销策略，在抖音、小红书等平台实现自动化的线索获取和转化...',
+      body: '本文分享如何利用 AI 驱动的内容营销策略，在抖音、小红书等平台实现自动化的线索获取和转化...'
     });
     expect(ciStatus).toBe(201);
     contentItemId = item.id;
@@ -196,8 +222,8 @@ describe('Douyin AI Native E2E Workflow', () => {
         title: 'AI 获客实战：如何用内容营销实现自动化线索增长',
         body: '抖音版本：本文分享如何利用 AI 驱动的内容营销策略，实现自动化线索获取和转化。',
         tags: ['AI获客', '内容营销', '抖音运营'],
-        complianceStatus: 'approved',
-      },
+        complianceStatus: 'approved'
+      }
     });
     variantId = variant.id;
 
@@ -207,7 +233,7 @@ describe('Douyin AI Native E2E Workflow', () => {
       contentVariantId: variantId,
       platformAccountId: accountId,
       platform: 'douyin',
-      contentType: 'text_image',
+      contentType: 'text_image'
     });
     expect(pjStatus).toBe(201);
     publishJobId = job.id;
@@ -216,15 +242,15 @@ describe('Douyin AI Native E2E Workflow', () => {
     // This tests the state machine: DRAFT → RUNNING → PUBLISHED
     await db.publishJob.update({
       where: { id: publishJobId },
-      data: { status: 'RUNNING', startedAt: new Date() },
+      data: { status: 'RUNNING', startedAt: new Date() }
     });
     await db.publishAttempt.create({
       data: {
         publishJobId,
         attemptNo: 1,
         status: 'running',
-        startedAt: new Date(),
-      },
+        startedAt: new Date()
+      }
     });
 
     // Mark as published
@@ -234,12 +260,14 @@ describe('Douyin AI Native E2E Workflow', () => {
         status: 'PUBLISHED',
         finishedAt: new Date(),
         externalPostId: 'mock-dy-published-001',
-        externalUrl: 'https://www.douyin.com/video/mock-dy-published-001',
-      },
+        externalUrl: 'https://www.douyin.com/video/mock-dy-published-001'
+      }
     });
 
     // Verify via API
-    const { status: getStatus, body: verified } = await get(`/api/publish-jobs/${publishJobId}`);
+    const { status: getStatus, body: verified } = await get(
+      `/api/publish-jobs/${publishJobId}`
+    );
     expect(getStatus).toBe(200);
     expect(verified.status).toBe('PUBLISHED');
     expect(verified.externalPostId).toBe('mock-dy-published-001');
@@ -255,8 +283,8 @@ describe('Douyin AI Native E2E Workflow', () => {
         platformAccountId: accountId,
         syncType: 'comments',
         mode: 'sandbox',
-        status: 'queued',
-      },
+        status: 'queued'
+      }
     });
     const messageSyncJob = await db.interactionSyncJob.create({
       data: {
@@ -264,8 +292,8 @@ describe('Douyin AI Native E2E Workflow', () => {
         platformAccountId: accountId,
         syncType: 'messages',
         mode: 'sandbox',
-        status: 'queued',
-      },
+        status: 'queued'
+      }
     });
 
     // ── Sync comments via worker handler directly ──
@@ -277,14 +305,16 @@ describe('Douyin AI Native E2E Workflow', () => {
         platform: 'douyin',
         mode: 'sandbox',
         syncJobId: commentSyncJob.id,
-        limit: 10,
+        limit: 10
       } as InteractionSyncCommentsInput,
       log: () => {},
-      progress: () => {},
-    } as any);
+      progress: () => {}
+    } as unknown);
 
     // Verify comment sync completed
-    const commentSync = await db.interactionSyncJob.findFirst({ where: { id: commentSyncJob.id } });
+    const commentSync = await db.interactionSyncJob.findFirst({
+      where: { id: commentSyncJob.id }
+    });
     expect(commentSync!.status).toBe('completed');
     expect(commentSync!.fetchedCount).toBeGreaterThan(0);
 
@@ -296,21 +326,23 @@ describe('Douyin AI Native E2E Workflow', () => {
         platform: 'douyin',
         mode: 'sandbox',
         syncJobId: messageSyncJob.id,
-        limit: 10,
+        limit: 10
       } as InteractionSyncMessagesInput,
       log: () => {},
-      progress: () => {},
-    } as any);
+      progress: () => {}
+    } as unknown);
 
     // Verify message sync completed
-    const messageSync = await db.interactionSyncJob.findFirst({ where: { id: messageSyncJob.id } });
+    const messageSync = await db.interactionSyncJob.findFirst({
+      where: { id: messageSyncJob.id }
+    });
     expect(messageSync!.status).toBe('completed');
     expect(messageSync!.fetchedCount).toBeGreaterThan(0);
 
     // ── Verify interactions were created with classifications ──
     const allInteractions = await db.interaction.findMany({
       where: { platformAccountId: accountId },
-      include: { classification: true, replySuggestions: true },
+      include: { classification: true, replySuggestions: true }
     });
 
     // Sandbox returns 10 comments + 5 messages = 15 interactions
@@ -330,13 +362,15 @@ describe('Douyin AI Native E2E Workflow', () => {
     // "我想了解一下具体价格" → price_inquiry (A)
     // "请问价格是多少？" → price_inquiry (A)
     const aLevel = classified.filter(
-      (i) => (i.classification as any)?.leadLevel === 'A',
+      (i) =>
+        (i.classification as Record<string, unknown> | undefined)?.leadLevel ===
+        'A'
     );
     expect(aLevel.length).toBeGreaterThanOrEqual(2);
 
     // Verify reply suggestions generated (rule-based fallback)
     const withReplies = allInteractions.filter(
-      (i) => i.replySuggestions && i.replySuggestions.length > 0,
+      (i) => i.replySuggestions && i.replySuggestions.length > 0
     );
     expect(withReplies.length).toBeGreaterThan(0);
   }, 30_000); // 30s timeout for worker handlers
@@ -347,46 +381,62 @@ describe('Douyin AI Native E2E Workflow', () => {
     // Get interactions with classifications
     const interactions = await db.interaction.findMany({
       where: { platformAccountId: accountId, type: 'comment' },
-      include: { classification: true },
+      include: { classification: true }
     });
 
     // Pick an A-level comment (price_inquiry) for lead conversion
     const aLevelComment = interactions.find(
-      (i) => (i.classification as any)?.leadLevel === 'A',
+      (i) =>
+        (i.classification as Record<string, unknown> | undefined)?.leadLevel ===
+        'A'
     );
     expect(aLevelComment).toBeDefined();
     const targetId = aLevelComment!.id;
 
     // 4a. Classify via API — should return existing or updated classification
-    const { status: clsStatus } = await post(`/api/interactions/${targetId}/classify`);
+    const { status: clsStatus } = await post(
+      `/api/interactions/${targetId}/classify`
+    );
     expect(clsStatus).toBe(200);
 
     // 4b. Suggest reply via API
-    const { status: srStatus, body: suggestions } = await post(`/api/interactions/${targetId}/suggest-reply`);
+    const { status: srStatus, body: suggestions } = await post(
+      `/api/interactions/${targetId}/suggest-reply`
+    );
     expect(srStatus).toBe(200);
     expect(Array.isArray(suggestions)).toBe(true);
 
     // 4c. Reply with low risk
-    const replyText = Array.isArray(suggestions) && suggestions[0]?.content
-      ? suggestions[0].content
-      : '您好，感谢咨询！请问方便留下联系方式吗？';
-    const { status: replyStatus } = await post(`/api/interactions/${targetId}/reply`, {
-      content: replyText,
-      riskLevel: 'low',
-    });
+    const replyText =
+      Array.isArray(suggestions) && suggestions[0]?.content
+        ? suggestions[0].content
+        : '您好，感谢咨询！请问方便留下联系方式吗？';
+    const { status: replyStatus } = await post(
+      `/api/interactions/${targetId}/reply`,
+      {
+        content: replyText,
+        riskLevel: 'low'
+      }
+    );
     // May succeed (200) or get blocked (403) depending on pipeline
     expect([200, 403]).toContain(replyStatus);
 
     if (replyStatus === 200) {
-      const replied = await db.interaction.findFirst({ where: { id: targetId } });
+      const replied = await db.interaction.findFirst({
+        where: { id: targetId }
+      });
       expect(replied!.status).toBe('REPLIED');
     }
 
     // 4d. Convert to lead
-    const { status: clStatus, body: lead } = await post(`/api/interactions/${targetId}/convert-to-lead`);
+    const { status: clStatus, body: lead } = await post(
+      `/api/interactions/${targetId}/convert-to-lead`
+    );
     if (clStatus === 201) {
-      leadId = (lead as any).id;
-      expect(['A', 'B', 'C']).toContain((lead as any).level);
+      leadId = (lead as Record<string, unknown>).id as string;
+      expect(['A', 'B', 'C']).toContain(
+        (lead as Record<string, unknown>).level
+      );
     }
 
     // Fallback: create lead directly if convert-to-lead didn't work
@@ -402,8 +452,8 @@ describe('Douyin AI Native E2E Workflow', () => {
           level: 'A',
           intent: 'price_inquiry',
           summary: '用户询问价格并希望预约',
-          confidence: 0.88,
-        },
+          confidence: 0.88
+        }
       });
       leadId = newLead.id;
     }
@@ -419,15 +469,22 @@ describe('Douyin AI Native E2E Workflow', () => {
     // 5a. List leads via API
     const { status: listStatus, body: leadsBody } = await get('/api/leads');
     expect(listStatus).toBe(200);
-    const leads = Array.isArray(leadsBody) ? leadsBody : (leadsBody as any)?.items ?? (leadsBody as any)?.data ?? [];
+    const leads = Array.isArray(leadsBody)
+      ? leadsBody
+      : ((leadsBody as Record<string, unknown>)?.items ??
+        (leadsBody as Record<string, unknown>)?.data ??
+        []);
     expect(leads.length).toBeGreaterThan(0);
 
     // 5b. Assign lead
-    const { status: assignStatus, body: assigned } = await patch(`/api/leads/${leadId}/assign`, {
-      assignedTo: adminId,
-    });
+    const { status: assignStatus, body: assigned } = await patch(
+      `/api/leads/${leadId}/assign`,
+      {
+        assignedTo: adminId
+      }
+    );
     expect(assignStatus).toBe(200);
-    expect((assigned as any).assignedTo).toBe(adminId);
+    expect((assigned as Record<string, unknown>).assignedTo).toBe(adminId);
 
     // 5c. Create lead sink configs
     await db.leadSinkConfig.upsert({
@@ -437,9 +494,14 @@ describe('Douyin AI Native E2E Workflow', () => {
         organizationId: orgId,
         userId: adminId,
         sinkType: 'lark',
-        config: { appId: 'mock', appSecret: 'mock', appToken: 'mock', tableId: 'mock' },
+        config: {
+          appId: 'mock',
+          appSecret: 'mock',
+          appToken: 'mock',
+          tableId: 'mock'
+        }
       },
-      update: {},
+      update: {}
     });
     await db.leadSinkConfig.upsert({
       where: { id: `e2e-wecom-${orgId}` },
@@ -448,25 +510,30 @@ describe('Douyin AI Native E2E Workflow', () => {
         organizationId: orgId,
         userId: adminId,
         sinkType: 'wecom',
-        config: { corpId: 'mock', secret: 'mock', agentId: 'mock' },
+        config: { corpId: 'mock', secret: 'mock', agentId: 'mock' }
       },
-      update: {},
+      update: {}
     });
 
     // 5d. Sync to Feishu (mocked — no real HTTP calls)
-    const { status: fStatus, body: fResult } = await post(`/api/leads/${leadId}/sync-feishu`);
+    const { status: fStatus, body: fResult } = await post(
+      `/api/leads/${leadId}/sync-feishu`
+    );
     expect(fStatus).toBe(200);
-    expect((fResult as any).success).toBe(true);
+    expect((fResult as Record<string, unknown>).success).toBe(true);
 
     // 5e. Sync to WeCom (mocked)
-    const { status: wStatus, body: wResult } = await post(`/api/leads/${leadId}/sync-wecom`);
+    const { status: wStatus, body: wResult } = await post(
+      `/api/leads/${leadId}/sync-wecom`
+    );
     expect(wStatus).toBe(200);
-    expect((wResult as any).success).toBe(true);
+    expect((wResult as Record<string, unknown>).success).toBe(true);
 
     // 5f. Verify lead has external mappings and sync logs
     const { body: finalLead } = await get(`/api/leads/${leadId}`);
-    const mappings = (finalLead as any).externalMappings ?? [];
-    const syncLogs = (finalLead as any).syncLogs ?? [];
+    const mappings =
+      (finalLead as Record<string, unknown>).externalMappings ?? [];
+    const syncLogs = (finalLead as Record<string, unknown>).syncLogs ?? [];
     expect(mappings.length).toBeGreaterThanOrEqual(1);
     expect(syncLogs.length).toBeGreaterThanOrEqual(1);
   });
@@ -483,9 +550,14 @@ describe('Douyin AI Native E2E Workflow', () => {
     expect(Number(a.totalLeads ?? 0)).toBeGreaterThanOrEqual(1);
 
     // Verify interaction list API
-    const { status: iStatus, body: interactions } = await get('/api/interactions');
+    const { status: iStatus, body: interactions } =
+      await get('/api/interactions');
     expect(iStatus).toBe(200);
-    const list = Array.isArray(interactions) ? interactions : (interactions as any)?.items ?? (interactions as any)?.data ?? [];
+    const list = Array.isArray(interactions)
+      ? interactions
+      : ((interactions as Record<string, unknown>)?.items ??
+        (interactions as Record<string, unknown>)?.data ??
+        []);
     expect(list.length).toBeGreaterThan(0);
   });
 
@@ -501,17 +573,23 @@ describe('Douyin AI Native E2E Workflow', () => {
       classificationCount,
       suggestionCount,
       leadCount,
-      syncLogCount,
+      syncLogCount
     ] = await Promise.all([
       db.platformAccount.count({ where: { organizationId: orgId } }),
-      db.contentItem.count({ where: { organizationId: orgId, deletedAt: null } }),
-      db.publishJob.count({ where: { organizationId: orgId, deletedAt: null } }),
-      db.publishJob.count({ where: { organizationId: orgId, status: 'PUBLISHED' } }),
+      db.contentItem.count({
+        where: { organizationId: orgId, deletedAt: null }
+      }),
+      db.publishJob.count({
+        where: { organizationId: orgId, deletedAt: null }
+      }),
+      db.publishJob.count({
+        where: { organizationId: orgId, status: 'PUBLISHED' }
+      }),
       db.interaction.count({ where: { organizationId: orgId } }),
       db.interactionClassification.count(),
       db.replySuggestion.count(),
       db.lead.count({ where: { organizationId: orgId, deletedAt: null } }),
-      db.leadSinkSyncLog.count(),
+      db.leadSinkSyncLog.count()
     ]);
 
     console.log('\n══════════════════════════════════════════════════');
@@ -519,7 +597,9 @@ describe('Douyin AI Native E2E Workflow', () => {
     console.log('══════════════════════════════════════════════════');
     console.log(`  ✅ 账号:          ${accountCount} (douyin, browser_assist)`);
     console.log(`  ✅ 内容:          ${contentCount} 个内容项`);
-    console.log(`  ✅ 发布任务:      ${publishCount} 个 (${publishedCount} 已发布)`);
+    console.log(
+      `  ✅ 发布任务:      ${publishCount} 个 (${publishedCount} 已发布)`
+    );
     console.log(`  ✅ 互动:          ${interactionCount} 条 (评论 + 私信)`);
     console.log(`  ✅ 分类结果:      ${classificationCount} 条`);
     console.log(`  ✅ 回复建议:      ${suggestionCount} 条`);

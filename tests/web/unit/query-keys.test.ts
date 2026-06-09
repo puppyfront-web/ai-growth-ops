@@ -7,11 +7,19 @@ describe('queryKeys', () => {
   });
 
   it('generates consistent key for content item with id', () => {
-    expect(queryKeys.content.item('abc-123')).toEqual(['content', 'item', 'abc-123']);
+    expect(queryKeys.content.item('abc-123')).toEqual([
+      'content',
+      'item',
+      'abc-123'
+    ]);
   });
 
   it('generates consistent key for lead activities', () => {
-    expect(queryKeys.leads.activities('lead-1')).toEqual(['leads', 'lead-1', 'activities']);
+    expect(queryKeys.leads.activities('lead-1')).toEqual([
+      'leads',
+      'lead-1',
+      'activities'
+    ]);
   });
 
   it('generates consistent key for auth', () => {
@@ -19,6 +27,10 @@ describe('queryKeys', () => {
   });
 
   it('generates consistent key for publish job', () => {
-    expect(queryKeys.publish.job('job-42')).toEqual(['publish', 'job', 'job-42']);
+    expect(queryKeys.publish.job('job-42')).toEqual([
+      'publish',
+      'job',
+      'job-42'
+    ]);
   });
 });

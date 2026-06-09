@@ -9,7 +9,7 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult,
+  ReplyResult
 } from './types.js';
 import { platformPost } from './http-client.js';
 
@@ -72,7 +72,12 @@ export class WechatChannelsConnector implements InteractionConnector {
       autoReplyAllowed: false,
       requiresHumanReviewForMessageReply: true,
       requiresHumanReviewForLeadLevelA: true,
-      supportedModes: ['official_api', 'browser_assist', 'manual_import', 'sandbox'],
+      supportedModes: [
+        'official_api',
+        'browser_assist',
+        'manual_import',
+        'sandbox'
+      ]
     };
   }
 
@@ -94,7 +99,7 @@ export class WechatChannelsConnector implements InteractionConnector {
     const result = await platformPost<WechatChannelsCommentListResponse>(url, {
       feed_id: sourceContentId,
       cursor: cursor ?? '0',
-      limit: count,
+      limit: count
     });
 
     if (!result.success || !result.data) {
@@ -115,7 +120,7 @@ export class WechatChannelsConnector implements InteractionConnector {
       likeCount: c.like_count,
       publishedAt: new Date(c.create_time * 1000).toISOString(),
       sourceContentId,
-      rawPayload: c as unknown as Record<string, unknown>,
+      rawPayload: c as unknown as Record<string, unknown>
     }));
   }
 
@@ -136,7 +141,7 @@ export class WechatChannelsConnector implements InteractionConnector {
     const result = await platformPost<WechatChannelsMessageListResponse>(url, {
       finder_username: platformAccountId,
       limit: count,
-      cursor: cursor ?? '',
+      cursor: cursor ?? ''
     });
 
     if (!result.success || !result.data) {
@@ -154,9 +159,11 @@ export class WechatChannelsConnector implements InteractionConnector {
       externalUserId: m.sender?.openid ?? '',
       userNickname: m.sender?.nickname ?? '',
       content: m.content,
-      type: (m.msg_type === 'text' ? 'text' : 'other') as PlatformMessage['type'],
+      type: (m.msg_type === 'text'
+        ? 'text'
+        : 'other') as PlatformMessage['type'],
       publishedAt: new Date(m.create_time * 1000).toISOString(),
-      rawPayload: m as unknown as Record<string, unknown>,
+      rawPayload: m as unknown as Record<string, unknown>
     }));
   }
 
@@ -165,37 +172,50 @@ export class WechatChannelsConnector implements InteractionConnector {
     return {
       success: false,
       errorCode: 'UNSUPPORTED',
-      errorMessage: 'WeChat Channels does not support comment replies via API',
+      errorMessage: 'WeChat Channels does not support comment replies via API'
     };
   }
 
   async replyMessage(input: ReplyMessageInput): Promise<ReplyResult> {
     const accessToken = this.config.accessToken;
     if (!accessToken) {
-      return { success: false, errorCode: 'NO_ACCESS_TOKEN', errorMessage: 'WeChat access_token is not configured' };
+      return {
+        success: false,
+        errorCode: 'NO_ACCESS_TOKEN',
+        errorMessage: 'WeChat access_token is not configured'
+      };
     }
 
     const { platformAccountId, messageText } = input;
     if (!platformAccountId) {
-      return { success: false, errorCode: 'MISSING_ACCOUNT_ID', errorMessage: 'platformAccountId (finder_username) is required' };
+      return {
+        success: false,
+        errorCode: 'MISSING_ACCOUNT_ID',
+        errorMessage: 'platformAccountId (finder_username) is required'
+      };
     }
 
     const url = `https://api.weixin.qq.com/channels/finder/contact/message/send?access_token=${accessToken}`;
     const result = await platformPost<WechatChannelsCommonResponse>(url, {
       finder_username: platformAccountId,
       content: messageText,
-      msg_type: 'text',
+      msg_type: 'text'
     });
 
     if (!result.success || !result.data) {
-      return { success: false, errorCode: 'HTTP_ERROR', errorMessage: result.errorMessage ?? 'HTTP request failed' };
+      return {
+        success: false,
+        errorCode: 'HTTP_ERROR',
+        errorMessage: result.errorMessage ?? 'HTTP request failed'
+      };
     }
 
     if (result.data.errcode !== 0) {
       return {
         success: false,
         errorCode: String(result.data.errcode),
-        errorMessage: result.data.errmsg ?? 'WeChat Channels API returned an error',
+        errorMessage:
+          result.data.errmsg ?? 'WeChat Channels API returned an error'
       };
     }
 
