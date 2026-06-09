@@ -878,14 +878,53 @@ const routes: Route[] = [
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const item = await ctx.db.contentItem.findFirst({ where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null } });
       if (!item) return sendJson(res, 404, { error: 'Not found' });
+
+      let passed = true;
+      let issues: Array<{ rule: string; message: string; severity: string }> = [];
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      let suggestedFixes: Array<{ issue: string; suggestion: string }> | null = null;
+      let aiChecked = false;
+
+      // Attempt AI-powered compliance check
+      try {
+        const skillResult = await runSkillSafely<{
+          passed: boolean;
+          issues?: Array<{ rule: string; message: string; severity: string }>;
+          riskLevel?: 'low' | 'medium' | 'high';
+          suggestedFixes?: Array<{ issue: string; suggestion: string }>;
+        }>('compliance-check', {
+          title: item.title,
+          body: item.body,
+          contentType: item.type,
+        });
+
+        if (skillResult?.status === 'success' && skillResult.output) {
+          const out = skillResult.output;
+          passed = out.passed ?? true;
+          issues = out.issues ?? [];
+          riskLevel = out.riskLevel ?? (issues.length > 0 ? 'medium' : 'low');
+          suggestedFixes = out.suggestedFixes ?? null;
+          aiChecked = true;
+        }
+      } catch {
+        // Graceful degradation: basic pass
+      }
+
+      if (!aiChecked) {
+        issues = [{ rule: 'ai_unavailable', message: 'AI compliance check unavailable; manual review recommended', severity: 'info' }];
+      }
+
       const result = await ctx.db.skillRun.create({
         data: {
           organizationId: orgCtx.organization.id,
-          userId: item.userId, skillName: 'compliance_check', status: 'success',
-          input: { contentItemId: item.id }, output: { passed: true, issues: [] },
+          userId: item.userId,
+          skillName: 'compliance_check',
+          status: aiChecked ? 'success' : 'failed',
+          input: { contentItemId: item.id },
+          output: { passed, issues, riskLevel, suggestedFixes, aiChecked },
         }
       });
-      sendJson(res, 200, { skillRunId: result.id, passed: true, issues: [] });
+      sendJson(res, 200, { skillRunId: result.id, passed, riskLevel, issues, suggestedFixes, aiChecked });
     }
   },
   {
@@ -1764,7 +1803,11 @@ const routes: Route[] = [
         where: { id: ctx.params.id, organizationId: orgCtx.organization.id, deletedAt: null }
       });
       if (!interaction) return sendJson(res, 200, []);
-      sendJson(res, 200, []);
+      const suggestions = await ctx.db.replySuggestion.findMany({
+        where: { interactionId: ctx.params.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      sendJson(res, 200, suggestions);
     }
   },
   {
@@ -1803,13 +1846,13 @@ const routes: Route[] = [
         });
       }
 
-      // Create ReplyAttempt record
+      // Create ReplyAttempt record (pending — worker will update on delivery)
       await ctx.db.replyAttempt.create({
         data: {
           replySuggestionId: (body.replySuggestionId as string) ?? '',
-          platform: String((body.platform as string) ?? 'unknown'),
-          providerMode: 'api',
-          status: 'sent',
+          platform: interaction.platform,
+          providerMode: 'browser_assist',
+          status: 'pending',
         }
       }).catch(() => { /* replyAttempt table may not exist yet */ });
 
@@ -1821,15 +1864,33 @@ const routes: Route[] = [
           action: 'update',
           entity: 'interaction',
           entityId: ctx.params.id,
-          changes: { before: { status: interaction.status }, after: { status: 'REPLIED', replyContent: String(body.content ?? '').slice(0, 200) } } as never,
+          changes: { before: { status: interaction.status }, after: { status: 'REPLY_SUGGESTED', replyContent: String(body.content ?? '').slice(0, 200) } } as never,
         }
       }).catch(() => { /* auditLog table may not exist */ });
 
-      const item = await ctx.db.interaction.update({
+      // Mark interaction as SENDING while the worker delivers the reply
+      await ctx.db.interaction.update({
         where: { id: ctx.params.id },
-        data: { status: 'REPLIED', metadata: { replyContent: String(body.content ?? ''), riskLevel, needReview } as any }
+        data: { status: 'REPLY_SUGGESTED', metadata: { replyContent: String(body.content ?? ''), riskLevel, needReview, sending: true } as any }
       });
-      sendJson(res, 200, item);
+
+      // Enqueue delivery job for the worker
+      try {
+        const { Queue } = await import('bullmq');
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+        const queue = new Queue('interaction.manual-reply', { connection: { url: redisUrl } });
+        await queue.add('interaction.manual-reply', {
+          interactionId: interaction.id,
+          replyContent: String(body.content ?? ''),
+          replySuggestionId: (body.replySuggestionId as string) ?? '',
+        }, { attempts: 2, backoff: { type: 'exponential', delay: 5000 } });
+        await queue.close();
+      } catch (queueErr) {
+        // If enqueue fails, still return accepted — the reply is recorded
+        console.error('[reply] Failed to enqueue delivery job:', queueErr instanceof Error ? queueErr.message : String(queueErr));
+      }
+
+      sendJson(res, 202, { status: 'sending', interactionId: interaction.id });
     }
   },
   {
@@ -3823,7 +3884,7 @@ const routes: Route[] = [
             cookie,
             keyword,
             topN: topNVideos,
-            headed: true,
+            headed: typeof body.headed === 'boolean' ? body.headed : false,
             commentScrollRounds,
             maxCommentsPerVideo,
           }),

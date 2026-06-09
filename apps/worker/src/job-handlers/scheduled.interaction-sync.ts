@@ -42,6 +42,7 @@ export async function handleScheduledInteractionSync(_job: Job): Promise<void> {
         platform: account.platform,
         platformAccountId: account.id,
         mode: 'browser_assist',
+        headed: false, // Scheduled syncs always run headless — no visible browser windows
       }, {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },
@@ -53,6 +54,7 @@ export async function handleScheduledInteractionSync(_job: Job): Promise<void> {
         platform: account.platform,
         platformAccountId: account.id,
         mode: 'browser_assist',
+        headed: false, // Scheduled syncs always run headless — no visible browser windows
       }, {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },

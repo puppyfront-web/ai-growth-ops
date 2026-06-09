@@ -56,7 +56,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
         limit: input.limit,
         headed: input.headed ?? this.headed,
       }),
-    });
+    }, 180_000);
     const payload = await resp.json() as Array<Record<string, unknown>> | Record<string, unknown>;
     if (!resp.ok || !Array.isArray(payload)) {
       const detail =
@@ -91,7 +91,7 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
         limit: input.limit,
         headed: input.headed ?? this.headed,
       }),
-    });
+    }, 180_000);
     const payload = await resp.json() as Array<Record<string, unknown>> | Record<string, unknown>;
     if (!resp.ok || !Array.isArray(payload)) {
       const detail =

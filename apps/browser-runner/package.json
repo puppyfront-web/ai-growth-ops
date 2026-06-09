@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@ai-growth-ops/shared": "workspace:*",
-    "playwright": "^1.52.0"
+    "playwright": "^1.52.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
 }

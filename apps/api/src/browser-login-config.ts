@@ -16,3 +16,16 @@ export function getLoginUrl(platform: string): string {
 export function getBrowserRunnerUrl(): string {
   return process.env.BROWSER_RUNNER_URL ?? 'http://localhost:3200';
 }
+
+/**
+ * Fetch with AbortController timeout so stalled connections to browser-runner don't hang.
+ */
+export function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 10_000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}

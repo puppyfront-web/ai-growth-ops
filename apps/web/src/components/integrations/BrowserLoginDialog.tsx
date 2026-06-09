@@ -58,6 +58,12 @@ export function BrowserLoginDialog({ accountId, platform, open, onClose }: Brows
           sessionActiveRef.current = false;
           setState('logged_in');
           qc.invalidateQueries({ queryKey: ['platform-accounts'] });
+          // Auto-close dialog after a short delay so user sees the success state
+          setTimeout(() => {
+            setState('idle');
+            setError(null);
+            onClose();
+          }, 1500);
         } else if (status.status === 'expired') {
           cleanup();
           sessionActiveRef.current = false;
@@ -138,6 +144,11 @@ export function BrowserLoginDialog({ accountId, platform, open, onClose }: Brows
     return () => {
       cancelled = true;
       cleanup();
+      // Cancel the browser session if component unmounts mid-flow
+      if (sessionActiveRef.current) {
+        sessionActiveRef.current = false;
+        cancelBrowserLogin(accountId).catch(() => {});
+      }
     };
   }, [open, accountId, cleanup, startPolling]);
 

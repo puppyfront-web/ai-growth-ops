@@ -126,7 +126,7 @@ const SEARCH_API_PATTERNS: Record<string, string[]> = {
 };
 
 const SEARCH_PAGE_URLS: Record<string, (keyword: string) => string> = {
-  douyin: (keyword) => `https://www.douyin.com/search/${encodeURIComponent(keyword)}`,
+  douyin: (keyword) => `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=video`,
   xiaohongshu: (keyword) => `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keyword)}&source=web_search_result_notes`,
 };
 
@@ -207,8 +207,6 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
   }
 
   const topN = body.topN ?? 3;
-  const searchPatterns = SEARCH_API_PATTERNS[body.platform] ?? [];
-  const commentPatterns = COMMENT_API_PATTERNS[body.platform] ?? [];
   const searchUrl = SEARCH_PAGE_URLS[body.platform]?.(body.keyword);
   if (!searchUrl) {
     sendJson(res, 400, { error: `No search URL for platform: ${body.platform}` });
@@ -220,38 +218,49 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     session = await createSession(body.cookie, searchUrl, body.headed);
     const { page } = session;
 
-    // ── Phase 1: Search → extract top N content IDs ──────────────
-    const searchResults: SearchResultItem[] = [];
-    const searchTasks: Promise<void>[] = [];
+    // Pre-visit douyin.com homepage to establish session + dismiss popups
+    if (body.platform === 'douyin') {
+      try {
+        await page.goto('https://www.douyin.com/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForTimeout(2000);
+        await dismissDouyinPopups(page);
+      } catch { /* non-fatal */ }
+    }
 
-    const searchListener = (response: import('playwright').Response) => {
-      const url = response.url();
-      if (!searchPatterns.some((p) => url.includes(p))) return;
-      const task = (async () => {
-        try {
-          const json = await response.json() as Record<string, unknown>;
-          const results = extractSearchResults(body.platform, json);
-          searchResults.push(...results);
-        } catch { /* non-JSON, skip */ }
-      })();
-      searchTasks.push(task);
-    };
-    page.on('response', searchListener);
-
+    // ── Phase 1: Search → extract video links from DOM ──────────
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(4000);
+
+    // Check for CAPTCHA on search page
+    const captchaDetected = await detectCaptcha(page);
+    if (captchaDetected) {
+      console.log('[prospecting] CAPTCHA detected, waiting for resolution...');
+      await page.waitForTimeout(5000);
+      const stillBlocked = await detectCaptcha(page);
+      if (stillBlocked) {
+        sendJson(res, 200, {
+          keyword: body.keyword,
+          results: [],
+          message: '搜索页面出现验证码，请在浏览器中手动完成验证后重试',
+          captchaRequired: true,
+        });
+        return;
+      }
+    }
+
     await humanLikeScroll(page, 5);
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
 
-    page.off('response', searchListener);
-    await Promise.allSettled(searchTasks);
-
+    // Extract search results from DOM
+    const searchResults = await extractSearchResultsFromDOM(page, body.platform);
     const topResults = searchResults.slice(0, topN);
+
     if (topResults.length === 0) {
-      sendJson(res, 200, { keyword: body.keyword, results: [], message: 'No search results found' });
+      sendJson(res, 200, { keyword: body.keyword, results: [], message: 'No search results found on page' });
       return;
     }
 
-    // ── Phase 2: For each result, fetch comments ─────────────────
+    // ── Phase 2: For each result, fetch comments via DOM scraping ─
     const allResults: Array<{
       contentId: string;
       title: string;
@@ -260,7 +269,6 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     }> = [];
 
     for (const result of topResults) {
-      // Determine the content page URL
       let contentUrl: string;
       if (body.platform === 'douyin') {
         contentUrl = `https://www.douyin.com/video/${result.contentId}`;
@@ -268,42 +276,38 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
         contentUrl = xhsNotePublicUrl(result.contentId);
       }
 
-      const captured: Array<Record<string, unknown>> = [];
-      const commentTasks: Promise<void>[] = [];
-
-      const commentListener = (response: import('playwright').Response) => {
-        const url = response.url();
-        if (!commentPatterns.some((p) => url.includes(p))) return;
-        const task = (async () => {
-          try {
-            const json = await response.json() as Record<string, unknown>;
-            const items = extractCommentList(body.platform, json, result.contentId);
-            captured.push(...items);
-          } catch { /* non-JSON, skip */ }
-        })();
-        commentTasks.push(task);
-      };
-      page.on('response', commentListener);
-
       try {
         await page.goto(contentUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        // Human-like scroll to load comment section (more rounds = deeper comments)
-        const scrollRounds = body.commentScrollRounds ?? 8;
+        await page.waitForTimeout(4000);
+        await dismissDouyinPopups(page);
+
+        // Scroll the page to load comments (move mouse to right side first for video pages)
+        await page.mouse.move(900, 500);
+        await page.waitForTimeout(300);
+        const scrollRounds = body.commentScrollRounds ?? 10;
         await humanLikeScroll(page, scrollRounds);
-      } catch {
+
+        // Extract comments from DOM
+        const comments = await extractCommentsFromDOM(page, body.platform, result.contentId);
+        console.log('[prospecting] Video', result.contentId, '-', comments.length, 'comments extracted');
+        const maxPerVideo = body.maxCommentsPerVideo ?? 50;
+
+        allResults.push({
+          contentId: result.contentId,
+          title: result.title,
+          author: result.author,
+          comments: dedupeByKey(comments, (c) => String(c.externalCommentId ?? '')).slice(0, maxPerVideo),
+        });
+      } catch (err) {
         // Navigation failed for this content — skip
+        console.log('[prospecting] Video', result.contentId, 'failed:', err instanceof Error ? err.message : String(err));
+        allResults.push({
+          contentId: result.contentId,
+          title: result.title,
+          author: result.author,
+          comments: [],
+        });
       }
-
-      page.off('response', commentListener);
-      await Promise.allSettled(commentTasks);
-
-      const maxPerVideo = body.maxCommentsPerVideo ?? 50;
-      allResults.push({
-        contentId: result.contentId,
-        title: result.title,
-        author: result.author,
-        comments: dedupeByKey(captured, (c) => String(c.externalCommentId ?? '')).slice(0, maxPerVideo),
-      });
     }
 
     sendJson(res, 200, { keyword: body.keyword, results: allResults });
@@ -317,6 +321,149 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     await session?.close();
   }
 };
+
+// ── DOM-based extraction helpers ──────────────────────────────
+
+/** Dismiss common Douyin popups (login, verification overlays). */
+async function dismissDouyinPopups(page: import('playwright').Page): Promise<void> {
+  await page.evaluate(() => {
+    document.querySelectorAll('[class*=mask], [id*=dialog], [id*=verify], [id*=trust]').forEach(m => {
+      if (m instanceof HTMLElement) m.style.display = 'none';
+    });
+  });
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(500);
+}
+
+/** Detect if a CAPTCHA/verification is blocking the page. */
+async function detectCaptcha(page: import('playwright').Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const text = document.body.innerText;
+    return text.includes('请完成下列验证') || text.includes('拖动完成上方拼图') || text.includes('请完成安全验证');
+  });
+}
+
+/** Extract search result videos from the rendered DOM. */
+async function extractSearchResultsFromDOM(
+  page: import('playwright').Page,
+  platform: string,
+): Promise<SearchResultItem[]> {
+  if (platform === 'douyin') {
+    return page.evaluate(() => {
+      const container = document.getElementById('search-result-container');
+      if (!container) return [];
+      // Match both /video/ID and /note/ID patterns
+      const links = container.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"], a[href*="/note/"]');
+      const seen = new Set<string>();
+      const results: Array<{ contentId: string; title: string; author: string }> = [];
+
+      links.forEach((a) => {
+        const href = a.href;
+        const match = href.match(/\/(?:video|note)\/(\d+)/);
+        if (!match || seen.has(match[1])) return;
+        seen.add(match[1]);
+
+        const card = (a.closest('div') || a) as HTMLElement;
+        const text = card.innerText || '';
+        const lines = text.split('\n').filter((l: string) => l.trim());
+
+        // Find the title (longest meaningful line) and author (starts with @)
+        const author = (lines.find((l: string) => l.startsWith('@')) || '').replace('@', '');
+        const title = lines.find((l: string) => l.length > 5 && !l.match(/^\d{2}:\d{2}$/)) || '';
+
+        results.push({
+          contentId: match[1],
+          title,
+          author,
+        });
+      });
+      return results;
+    });
+  }
+
+  // Fallback for other platforms (XHS etc.) — not yet implemented
+  return [];
+}
+
+/** UI-noise filter patterns for comment extraction. */
+const COMMENT_NOISE_PATTERNS = [
+  '分享', '回复', '展开', '收起', '删除', '点赞',
+  '留下你的精彩评论', '全部评论', '精选', '推荐',
+  '客户端', '充钻石', '...', '…', '作者', '粉丝',
+];
+
+/** Check if a string is likely UI noise rather than a real comment. */
+function isUINoise(text: string): boolean {
+  return COMMENT_NOISE_PATTERNS.some((p) => text === p) || /^\d+$/.test(text) || /^[\d.]+万?$/.test(text);
+}
+
+/** Extract comments from the video page DOM. */
+async function extractCommentsFromDOM(
+  page: import('playwright').Page,
+  platform: string,
+  sourceContentId: string,
+): Promise<Array<Record<string, unknown>>> {
+  if (platform === 'douyin') {
+    return page.evaluate((args: { noisePatterns: string[]; contentId: string }) => {
+      const { noisePatterns, contentId } = args;
+      const userLinks = document.querySelectorAll<HTMLAnchorElement>('a[href*="/user/"]');
+      const results: Array<Record<string, unknown>> = [];
+      const seen = new Set<string>();
+
+      for (const link of userLinks) {
+        const href = link.getAttribute('href') || '';
+        if (!href.includes('/user/')) continue;
+
+        // Walk up the DOM tree to find the comment container
+        let el: HTMLElement | null = link;
+        for (let i = 0; i < 6; i++) {
+          el = el?.parentElement as HTMLElement | null;
+          if (!el) break;
+          const text = el.innerText || '';
+          const lines = text.split('\n').filter((l: string) => l.trim());
+
+          // A proper comment has: username + content + metadata (3+ lines)
+          if (lines.length < 3 || lines.length > 12) continue;
+
+          const username = lines[0]?.trim() || '';
+          const contentLine = lines.slice(1).find((l: string) => {
+            const trimmed = l.trim();
+            return trimmed.length >= 3 &&
+              trimmed !== username &&
+              !noisePatterns.some((p: string) => trimmed === p) &&
+              trimmed.length < 300 &&
+              !/^\d+\s*(分享|回复|展开|收起|删除|点赞)/.test(trimmed) &&
+              !/^[\d.]+万?$/.test(trimmed) &&
+              !/^\d+$/.test(trimmed);
+          });
+
+          if (!contentLine || !username || username.length > 30) continue;
+          if (noisePatterns.some((p: string) => username === p)) continue;
+
+          const key = username + contentLine.slice(0, 20);
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          // Get time info
+          const timeLine = lines.find((l: string) => /前|天|小时|分钟|秒/.test(l));
+
+          results.push({
+            externalCommentId: `dom-${href.slice(-10)}-${key.replace(/\s/g, '').slice(0, 8)}`,
+            userNickname: username,
+            content: contentLine.trim().slice(0, 300),
+            publishedAt: timeLine || '',
+            sourceContentId: contentId,
+          });
+          break; // Found the right container level
+        }
+      }
+
+      return results;
+    }, { noisePatterns: COMMENT_NOISE_PATTERNS, contentId: sourceContentId });
+  }
+
+  return [];
+}
 
 // ── Reply selectors per platform ──────────────────────────────────
 

@@ -38,8 +38,18 @@ export async function handleInteractionSyncComments(
       where: { id: platformAccountId },
     });
 
-    const cookie = account?.cookieRef ? decryptToken(account.cookieRef) : undefined;
-    const accessToken = account?.accessTokenEncrypted
+    if (!account) {
+      if (syncJobId) {
+        await db.interactionSyncJob.update({
+          where: { id: syncJobId },
+          data: { status: 'failed', errorMessage: `PlatformAccount not found: ${platformAccountId}`, finishedAt: new Date() },
+        });
+      }
+      return;
+    }
+
+    const cookie = account.cookieRef ? decryptToken(account.cookieRef) : undefined;
+    const accessToken = account.accessTokenEncrypted
       ? decryptToken(account.accessTokenEncrypted)
       : undefined;
 
@@ -77,22 +87,32 @@ export async function handleInteractionSyncComments(
         continue;
       }
 
-      // Create interaction record
-      const interaction = await db.interaction.create({
-        data: {
-          userId,
-          organizationId: account?.organizationId || '',
-          externalInteractionId: comment.externalCommentId,
-          platformAccountId,
-          platform: platform as any,
-          type: 'comment',
-          status: 'NEW',
-          content: comment.content,
-          externalUserId: comment.externalUserId,
-          externalUserName: comment.userNickname,
-          rawPayload: (comment.rawPayload as any) ?? undefined,
-        },
-      });
+      // Create interaction record — catch concurrent race on unique constraint
+      let interaction;
+      try {
+        interaction = await db.interaction.create({
+          data: {
+            userId,
+            organizationId: account.organizationId,
+            externalInteractionId: comment.externalCommentId,
+            platformAccountId,
+            platform: platform as any,
+            type: 'comment',
+            status: 'NEW',
+            content: comment.content,
+            externalUserId: comment.externalUserId,
+            externalUserName: comment.userNickname,
+            rawPayload: (comment.rawPayload as any) ?? undefined,
+          },
+        });
+      } catch (err: any) {
+        // Unique constraint violation — another worker beat us; treat as duplicate
+        if (err?.code === 'P2002') {
+          skippedCount++;
+          continue;
+        }
+        throw err;
+      }
       newCount++;
 
       // Inline classify + reply suggestion
@@ -134,6 +154,6 @@ export async function handleInteractionSyncComments(
     }
     throw err;
   } finally {
-    
+    await db.$disconnect();
   }
 }

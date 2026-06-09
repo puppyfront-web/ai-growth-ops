@@ -1,13 +1,15 @@
 import { apiGet, apiPost } from './client';
 import type { Interaction, Conversation, ReplySuggestion } from '@/types/interaction';
 
-export function listInteractions(filters?: { status?: string; platform?: string; type?: string }): Promise<Interaction[]> {
+export async function listInteractions(filters?: { status?: string; platform?: string; type?: string }): Promise<Interaction[]> {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.platform) params.set('platform', filters.platform);
   if (filters?.type) params.set('type', filters.type);
   const qs = params.toString();
-  return apiGet<Interaction[]>(`/api/interactions${qs ? `?${qs}` : ''}`);
+  const res = await apiGet<{ items: Interaction[]; total: number }>(`/api/interactions${qs ? `?${qs}` : ''}`);
+  // API returns paginated { items, total, ... } — extract the array
+  return Array.isArray(res) ? res : (res.items ?? []);
 }
 
 export function getConversation(id: string): Promise<Conversation> {

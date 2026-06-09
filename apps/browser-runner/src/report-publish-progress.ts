@@ -17,6 +17,7 @@ export async function reportPublishProgress(
     await fetch(`${apiUrl}/api/publish-jobs/${publishJobId}/progress`, {
       method: 'POST',
       headers,
+      signal: AbortSignal.timeout(5_000), // 5s timeout — progress reports must not block
       body: JSON.stringify({ stage, message }),
     });
   } catch {

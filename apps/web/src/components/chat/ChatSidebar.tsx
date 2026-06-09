@@ -50,10 +50,11 @@ export function ChatSidebar({ activeThreadId, onSelectThread, onNewThread }: Cha
       </div>
       <div className="border-t p-3">
         <a
-          href="/dashboard"
+          href="/chat"
+          onClick={(e) => { e.preventDefault(); onNewThread(); }}
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent/50"
         >
-          📊 Dashboard
+          ✨ 新对话
         </a>
       </div>
     </div>

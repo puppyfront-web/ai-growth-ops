@@ -33,7 +33,7 @@ export const DOUYIN_AUTH_COOKIE_NAMES = [
   'sessionid_ss',
 ] as const;
 
-const DOUYIN_POST_LOGIN_URL_PATTERNS = [
+export const DOUYIN_POST_LOGIN_URL_PATTERNS = [
   '/creator-micro/',
   '/content',
   '/home',
@@ -172,15 +172,61 @@ async function finalizeLogin(
 }
 
 /**
+ * Check whether the Douyin login form is present and fully rendered.
+ *
+ * The login UI loads dynamically — we need multiple signals to avoid false
+ * negatives when the page hasn't finished hydrating.  Signals:
+ *   1. Login card container exists (`douyin_login_new_class` / `douyin-login-new-id`)
+ *   2. "扫码登录" tab text is visible
+ *   3. QR code canvas / image is present inside the card
+ *   4. Alternative login tabs ("验证码登录", "密码登录") are visible
+ */
+async function isDouyinLoginFormReady(page: Page): Promise<boolean> {
+  // Quick structural check — login card container
+  const loginCard = page.locator(
+    '[class*="douyin_login"], [id*="douyin-login"], [class*="login-card"]',
+  ).first();
+  const cardCount = await loginCard.count();
+  if (cardCount === 0) return false;
+
+  // The login UI is considered "ready" when EITHER:
+  // a) The QR tab text is visible, OR
+  // b) An alternative login tab is visible (验证码登录 / 密码登录)
+  const qrTabVis = await page
+    .getByText('扫码登录', { exact: true })
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (qrTabVis) return true;
+
+  const altTabVis = await page
+    .locator('text=验证码登录')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (altTabVis) return true;
+
+  const pwdTabVis = await page
+    .locator('text=密码登录')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (pwdTabVis) return true;
+
+  return false;
+}
+
+/**
  * Douyin login detector.
  *
  * Primary: session cookies present (fast path).
- * Fallback: page navigated away from login UI — try to collect cookies anyway;
+ * Fallback: login UI has disappeared AND page shows post-login URL —
  *           `finalizeLogin` will reject if sessionid is still missing.
  */
 async function detectDouyinLogin(page: Page): Promise<LoginDetectionResult> {
   const contextCookies = await page.context().cookies();
 
+  // Fast path: auth cookies already set
   if (
     hasCookieNamed(contextCookies, 'sessionid') ||
     hasCookieNamed(contextCookies, 'sid_tt')
@@ -192,22 +238,16 @@ async function detectDouyinLogin(page: Page): Promise<LoginDetectionResult> {
     return { loggedIn: false, cookies: '' };
   }
 
-  const scanVis = await page
-    .getByText('扫码登录', { exact: true })
-    .first()
-    .isVisible()
-    .catch(() => false);
-  const phoneVis = await page
-    .getByText('手机号登录', { exact: true })
-    .first()
-    .isVisible()
-    .catch(() => false);
-  const loginUiGone = !scanVis && !phoneVis;
-  const urlLoggedIn = anyPageUrlMatches(page, DOUYIN_POST_LOGIN_URL_PATTERNS);
+  // If login form is still visible → user hasn't scanned yet
+  const loginReady = await isDouyinLoginFormReady(page);
+  if (loginReady) {
+    return { loggedIn: false, cookies: '' };
+  }
 
-  if (loginUiGone || urlLoggedIn) {
-    // Login UI is gone or page navigated post-login.
-    // Cookies may still be propagating; attempt collection and require sessionid.
+  // Login UI gone — user may have scanned QR.
+  // Only consider "logged in" if page also navigated to a post-login URL.
+  const urlLoggedIn = anyPageUrlMatches(page, DOUYIN_POST_LOGIN_URL_PATTERNS);
+  if (urlLoggedIn) {
     return finalizeLogin(page, ['sessionid']);
   }
 

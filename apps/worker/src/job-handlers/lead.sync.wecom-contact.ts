@@ -15,12 +15,17 @@ export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promi
       return;
     }
 
-    // Get sink config
+    // Get sink config (scoped to org to prevent cross-tenant data leakage)
     const sinkConfig = sinkConfigId
       ? await db.leadSinkConfig.findFirst({ where: { id: sinkConfigId } })
-      : await db.leadSinkConfig.findFirst({ where: { sinkType: 'wecom' } });
+      : await db.leadSinkConfig.findFirst({ where: { sinkType: 'wecom', organizationId: lead.organizationId ?? undefined } });
 
-    const configObj = (sinkConfig?.config as Record<string, unknown>) || {};
+    if (!sinkConfig) {
+      await db.lead.update({ where: { id: leadId }, data: { status: 'NEW' } });
+      throw new Error('No WeCom sink config found. Please configure the integration first.');
+    }
+
+    const configObj = sinkConfig.config as Record<string, unknown>;
 
     // Update lead status to SYNCING
     await db.lead.update({
@@ -70,14 +75,18 @@ export async function handleLeadSyncWeComContact(job: Job<LeadSyncInput>): Promi
       },
     });
 
-    // Update lead status
+    // Update lead status — revert to NEW on failure so it's not stuck in SYNCING
     await db.lead.update({
       where: { id: leadId },
-      data: { status: result.success ? 'SYNCED' : 'SYNCING' },
+      data: { status: result.success ? 'SYNCED' : 'NEW' },
     });
 
     job.log(`WeCom sync for lead ${leadId}: ${result.success ? 'success' : 'failed'}`);
+  } catch (error) {
+    // Revert status so the lead can be retried
+    await db.lead.update({ where: { id: leadId }, data: { status: 'NEW' } }).catch(() => {});
+    throw error;
   } finally {
-    
+    await db.$disconnect();
   }
 }

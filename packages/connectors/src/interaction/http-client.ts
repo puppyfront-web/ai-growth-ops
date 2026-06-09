@@ -27,6 +27,17 @@ export async function platformGet<T>(
   try {
     const res = await fetchWithTimeout(url, { method: 'GET', headers });
     const json = await res.json();
+    if (!res.ok) {
+      const detail =
+        (json as Record<string, unknown>)?.details as string | undefined ||
+        (json as Record<string, unknown>)?.error as string | undefined ||
+        `Request failed with HTTP ${res.status}`;
+      return {
+        success: false,
+        data: json as T,
+        errorMessage: detail,
+      };
+    }
     return { success: true, data: json as T };
   } catch (err) {
     return {
@@ -41,14 +52,26 @@ export async function platformPost<T>(
   url: string,
   body: unknown,
   headers: Record<string, string> = {},
+  timeoutMs = 60_000,
 ): Promise<PlatformResponse<T>> {
   try {
     const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
-    });
+    }, timeoutMs);
     const json = await res.json();
+    if (!res.ok) {
+      const detail =
+        (json as Record<string, unknown>)?.details as string | undefined ||
+        (json as Record<string, unknown>)?.error as string | undefined ||
+        `Request failed with HTTP ${res.status}`;
+      return {
+        success: false,
+        data: json as T,
+        errorMessage: detail,
+      };
+    }
     return { success: true, data: json as T };
   } catch (err) {
     return {

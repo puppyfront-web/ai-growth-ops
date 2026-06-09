@@ -114,6 +114,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk) => chunks.push(chunk));
+    req.on('error', () => resolve(null));
     req.on('end', () => {
       if (chunks.length === 0) return resolve(null);
       try {

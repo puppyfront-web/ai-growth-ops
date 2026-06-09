@@ -75,18 +75,20 @@ export function ChatPanel({ threadId: initialThreadId, onThreadIdChange }: ChatP
   );
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-[calc(100vh-7rem)] -m-6">
       <ChatSidebar
         activeThreadId={activeThreadId}
         onSelectThread={handleSelectThread}
         onNewThread={handleNewThread}
       />
-      <div className="flex flex-1 flex-col">
-        {messages.length === 0 ? (
-          <QuickActions onSelect={handleSend} />
-        ) : (
-          <MessageList messages={messages} />
-        )}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
+          {messages.length === 0 ? (
+            <QuickActions onSelect={handleSend} />
+          ) : (
+            <MessageList messages={messages} />
+          )}
+        </div>
         <ChatInput onSend={handleSend} isLoading={isLoading} />
       </div>
     </div>

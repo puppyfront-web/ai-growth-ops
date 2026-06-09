@@ -29,6 +29,7 @@ export const QUEUE_NAMES = {
   CAMPAIGN_EXECUTE: 'campaign.execute',
   CAMPAIGN_CHECK_SCHEDULE: 'campaign.check-schedule',
   INTERACTION_AUTO_REPLY: 'interaction.auto-reply',
+  INTERACTION_MANUAL_REPLY: 'interaction.manual-reply',
   SCHEDULED_INTERACTION_SYNC: 'scheduled.interaction-sync',
   WORKFLOW_EXECUTE: 'workflow.execute',
 } as const;

@@ -47,7 +47,7 @@ export class BrowserAssistClient {
       limit: limit || 50,
       cursor,
       headed,
-    });
+    }, {}, 180_000);
     return requireArrayResponse(result, 'comments');
   }
 
@@ -64,7 +64,7 @@ export class BrowserAssistClient {
       limit: limit || 50,
       cursor,
       headed,
-    });
+    }, {}, 180_000);
     return requireArrayResponse(result, 'messages');
   }
 
@@ -125,7 +125,7 @@ export class BrowserAssistClient {
       keyword,
       topN,
       headed,
-    });
+    }, {}, 180_000);
     if (!result.success) {
       const detail = (result.data as Record<string, unknown>)?.details || result.errorMessage || 'search-and-fetch failed';
       throw new Error(String(detail));

@@ -37,8 +37,18 @@ export async function handleInteractionSyncMessages(
       where: { id: platformAccountId },
     });
 
-    const cookie = account?.cookieRef ? decryptToken(account.cookieRef) : undefined;
-    const accessToken = account?.accessTokenEncrypted
+    if (!account) {
+      if (syncJobId) {
+        await db.interactionSyncJob.update({
+          where: { id: syncJobId },
+          data: { status: 'failed', errorMessage: `PlatformAccount not found: ${platformAccountId}`, finishedAt: new Date() },
+        });
+      }
+      return;
+    }
+
+    const cookie = account.cookieRef ? decryptToken(account.cookieRef) : undefined;
+    const accessToken = account.accessTokenEncrypted
       ? decryptToken(account.accessTokenEncrypted)
       : undefined;
 
@@ -74,21 +84,32 @@ export async function handleInteractionSyncMessages(
         continue;
       }
 
-      const interaction = await db.interaction.create({
-        data: {
-          userId,
-          organizationId: account?.organizationId || '',
-          externalInteractionId: message.externalMessageId,
-          platformAccountId,
-          platform: platform as any,
-          type: 'message',
-          status: 'NEW',
-          content: message.content,
-          externalUserId: message.externalUserId,
-          externalUserName: message.userNickname,
-          rawPayload: (message.rawPayload as any) ?? undefined,
-        },
-      });
+      // Create interaction record — catch concurrent race on unique constraint
+      let interaction;
+      try {
+        interaction = await db.interaction.create({
+          data: {
+            userId,
+            organizationId: account.organizationId,
+            externalInteractionId: message.externalMessageId,
+            platformAccountId,
+            platform: platform as any,
+            type: 'message',
+            status: 'NEW',
+            content: message.content,
+            externalUserId: message.externalUserId,
+            externalUserName: message.userNickname,
+            rawPayload: (message.rawPayload as any) ?? undefined,
+          },
+        });
+      } catch (err: any) {
+        // Unique constraint violation — another worker beat us; treat as duplicate
+        if (err?.code === 'P2002') {
+          skippedCount++;
+          continue;
+        }
+        throw err;
+      }
       newCount++;
 
       // Inline classify + reply suggestion
@@ -129,6 +150,6 @@ export async function handleInteractionSyncMessages(
     }
     throw err;
   } finally {
-    
+    await db.$disconnect();
   }
 }

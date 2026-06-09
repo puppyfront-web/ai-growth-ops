@@ -1,4 +1,9 @@
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+
+// Apply stealth evasion once at module load
+chromium.use(StealthPlugin());
 
 export function parseCookieHeader(cookie: string): Array<{ name: string; value: string; domain: string; path: string }> {
   return cookie

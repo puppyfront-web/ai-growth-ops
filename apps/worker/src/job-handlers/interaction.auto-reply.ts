@@ -73,10 +73,10 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
       body: JSON.stringify({
         platform: interaction.platform,
         cookie,
-        interactionId: interaction.externalInteractionId,
+        externalCommentId: interaction.externalInteractionId,
         externalUserId: interaction.externalUserId,
         replyText: suggestion.suggestedText,
-        contentId: (interaction.rawPayload as any)?.sourceContentId,
+        sourceContentId: (interaction.rawPayload as any)?.sourceContentId,
       }),
       signal: AbortSignal.timeout(30000),
     });
