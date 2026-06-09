@@ -7,12 +7,19 @@ import { buildOperationalContext } from './context-builder';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 /** Call backend API with auth context (server-side) */
-async function apiCall(path: string, options: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
+async function apiCall(
+  path: string,
+  options: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  } = {}
+) {
   const { method = 'GET', body, headers = {} } = options;
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: { 'content-type': 'application/json', ...headers },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -22,60 +29,95 @@ async function apiCall(path: string, options: { method?: string; body?: unknown;
 }
 
 async function fetchUserContext(token: string, orgId: string) {
-  const headers = { authorization: `Bearer ${token}`, 'x-organization-id': orgId };
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${token}`,
+    'x-organization-id': orgId,
+    'content-type': 'application/json'
+  };
+
   const [userRes, accountsRes] = await Promise.all([
-    fetch(`${API_BASE}/api/auth/me`, { headers: { ...headers, 'content-type': 'application/json' } }),
-    fetch(`${API_BASE}/api/accounts`, { headers: { ...headers, 'content-type': 'application/json' } }),
+    fetch(`${API_BASE}/api/auth/me`, { headers }),
+    fetch(`${API_BASE}/api/accounts`, { headers })
   ]);
-  const user = await userRes.json();
-  const accounts = await accountsRes.json();
-  return { user, accounts: Array.isArray(accounts) ? accounts : [] };
+
+  // Gracefully handle API failures — return defaults instead of crashing
+  let user: Record<string, unknown> = {};
+  if (userRes.ok) {
+    user = await userRes.json().catch(() => ({}));
+  } else {
+    console.error(`[chat] /api/auth/me returned ${userRes.status}`);
+  }
+
+  let accounts: unknown[] = [];
+  if (accountsRes.ok) {
+    const raw = await accountsRes.json().catch(() => []);
+    accounts = Array.isArray(raw) ? raw : [];
+  } else {
+    console.error(`[chat] /api/accounts returned ${accountsRes.status}`);
+  }
+
+  return { user, accounts };
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  // ── Input validation ───────────────────────────────────────────
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: '无效的请求体' }), { status: 400 });
+  }
+
   const { messages: newMessages, threadId: existingThreadId, token, organizationId } = body;
 
   if (!token || !organizationId) {
     return new Response(JSON.stringify({ error: '未登录' }), { status: 401 });
   }
 
-  const authHeaders = {
+  if (!Array.isArray(newMessages) || newMessages.length === 0) {
+    return new Response(JSON.stringify({ error: '消息不能为空' }), { status: 400 });
+  }
+
+  const authHeaders: Record<string, string> = {
     'content-type': 'application/json',
     authorization: `Bearer ${token}`,
-    'x-organization-id': organizationId,
+    'x-organization-id': String(organizationId)
   };
 
-  // Load or create thread (call backend API directly with auth headers)
-  let threadId = existingThreadId;
+  // ── Thread management ──────────────────────────────────────────
+  let threadId = existingThreadId as string | undefined;
   if (!threadId) {
     const thread = await apiCall('/api/chat/threads', {
       method: 'POST',
       body: {},
-      headers: authHeaders,
+      headers: authHeaders
     });
     threadId = (thread as { id: string }).id;
   }
 
-  // Fetch user context for system prompt
-  const { user, accounts } = await fetchUserContext(token, organizationId);
+  // ── Build system prompt (single /api/accounts fetch) ───────────
+  const { user, accounts } = await fetchUserContext(String(token), String(organizationId));
+
+  const userName = String((user as Record<string, unknown>)?.name || (user as Record<string, unknown>)?.email || '用户');
+  const orgName = String(((user as Record<string, unknown>)?.organization as Record<string, unknown>)?.name || organizationId);
+
   const basePrompt = buildSystemPrompt({
-    userName: user.name || user.email,
-    orgName: user.organization?.name || organizationId,
-    platforms: accounts,
-    today: new Date().toISOString(),
+    userName,
+    orgName,
+    platforms: accounts as Array<{ id: string; platform: string; name: string; status: string; mode: string }>,
+    today: new Date().toISOString()
   });
 
-  // Build dynamic operational context (suggestions, preferences, campaigns)
-  const operationalContext = await buildOperationalContext(API_BASE, authHeaders);
+  // Pass pre-fetched accounts to context builder to avoid duplicate fetch
+  const operationalContext = await buildOperationalContext(
+    API_BASE,
+    authHeaders,
+    accounts
+  );
   const systemPrompt = basePrompt + operationalContext;
 
-  // useChat sends the full conversation as newMessages — use it directly.
-  // Backend history is only used for persistence (onFinish), not for LLM context,
-  // to avoid doubling messages in the LLM prompt.
-
-  // Create tools with auth context
-  const tools = createTools({ token, orgId: organizationId });
+  // ── LLM call ───────────────────────────────────────────────────
+  const tools = createTools({ token: String(token), orgId: String(organizationId) });
 
   const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const model = anthropic('claude-sonnet-4-6-20250514');
@@ -87,35 +129,45 @@ export async function POST(req: Request) {
     tools,
     stopWhen: stepCountIs(10),
     onFinish: async ({ response }) => {
-      // Persist user message + assistant response to backend
+      // Persist messages in parallel instead of serial
       try {
-        const lastUserMsg = newMessages[newMessages.length - 1];
+        const persistJobs: Promise<unknown>[] = [];
+
+        const lastUserMsg = (newMessages as Array<Record<string, unknown>>)[newMessages.length - 1];
         if (lastUserMsg) {
-          await apiCall(`/api/chat/threads/${threadId}/messages`, {
-            method: 'POST',
-            body: { role: lastUserMsg.role, content: lastUserMsg.content },
-            headers: authHeaders,
-          });
+          persistJobs.push(
+            apiCall(`/api/chat/threads/${threadId}/messages`, {
+              method: 'POST',
+              body: { role: lastUserMsg.role, content: lastUserMsg.content },
+              headers: authHeaders
+            })
+          );
         }
-        // Extract text from response messages
+
         for (const msg of response.messages) {
           if (msg.role === 'assistant') {
-            const text = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-            await apiCall(`/api/chat/threads/${threadId}/messages`, {
-              method: 'POST',
-              body: { role: 'assistant', content: text },
-              headers: authHeaders,
-            });
+            const text =
+              typeof msg.content === 'string'
+                ? msg.content
+                : JSON.stringify(msg.content);
+            persistJobs.push(
+              apiCall(`/api/chat/threads/${threadId}/messages`, {
+                method: 'POST',
+                body: { role: 'assistant', content: text },
+                headers: authHeaders
+              })
+            );
           }
         }
+
+        await Promise.allSettled(persistJobs);
       } catch (err) {
         console.error('[chat] Failed to persist messages:', err);
       }
-    },
+    }
   });
 
   // Return SSE stream with threadId in header
-  // Use toUIMessageStreamResponse for assistant-ui compatibility (includes tool call parts)
   const response = result.toUIMessageStreamResponse();
   response.headers.set('X-Thread-Id', threadId);
   return response;

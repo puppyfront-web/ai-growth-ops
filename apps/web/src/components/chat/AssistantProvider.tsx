@@ -1,11 +1,44 @@
 'use client';
 
 import { useChatRuntime, AssistantChatTransport } from '@assistant-ui/react-ai-sdk';
-import { AssistantRuntimeProvider } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useThreadListItem } from '@assistant-ui/react';
 import { Thread } from '@/components/assistant-ui/thread';
 import { ToolUIRegistry } from '@/components/chat/tool-renderers';
 import { authToken, currentOrg } from '@/lib/api/client';
-import { type ReactNode, useEffect, useState } from 'react';
+import { Component, type ReactNode, useEffect, useRef, useState } from 'react';
+
+// ─── Error Boundary ──────────────────────────────────────────────
+
+class ChatErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  state = { hasError: false, error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
+          <p className="text-lg font-medium">聊天组件加载出错</p>
+          <p className="text-sm">{this.state.error?.message}</p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+          >
+            重试
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ─── Public Component ────────────────────────────────────────────
 
 interface AssistantProviderProps {
   threadId?: string;
@@ -15,18 +48,14 @@ interface AssistantProviderProps {
 /**
  * Provider that bridges assistant-ui with our /api/chat route.
  *
- * Auth (token + orgId) is injected into each request body so the server
- * can authenticate the user and persist messages to the backend.
+ * Auth (token + orgId) is read from localStorage on each request via
+ * a function body, so it stays fresh across login/org switches.
  */
 export function AssistantProvider({ threadId, onThreadIdChange }: AssistantProviderProps) {
   const [mounted, setMounted] = useState(false);
-  const [token, setToken] = useState('');
-  const [orgId, setOrgId] = useState('');
 
   // Wait for client-side mount to access localStorage
   useEffect(() => {
-    setToken(authToken.get() || '');
-    setOrgId(currentOrg.get() || '');
     setMounted(true);
   }, []);
 
@@ -39,34 +68,35 @@ export function AssistantProvider({ threadId, onThreadIdChange }: AssistantProvi
   }
 
   return (
-    <AssistantProviderInner
-      threadId={threadId}
-      token={token}
-      orgId={orgId}
-      onThreadIdChange={onThreadIdChange}
-    />
+    <ChatErrorBoundary>
+      <AssistantProviderInner threadId={threadId} onThreadIdChange={onThreadIdChange} />
+    </ChatErrorBoundary>
   );
 }
 
+// ─── Inner Provider ──────────────────────────────────────────────
+
 function AssistantProviderInner({
   threadId,
-  token,
-  orgId,
   onThreadIdChange,
 }: {
   threadId?: string;
-  token: string;
-  orgId: string;
   onThreadIdChange?: (threadId: string | undefined) => void;
 }) {
+  // Use a function for `body` so token/orgId are re-read from localStorage
+  // on every request — stays fresh across login/logout/org switches.
+  // threadId is captured via ref so the function always sees the latest value.
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
+
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
       api: '/api/chat',
-      body: {
-        threadId: threadId || undefined,
-        token,
-        organizationId: orgId,
-      },
+      body: () => ({
+        threadId: threadIdRef.current || undefined,
+        token: authToken.get() || '',
+        organizationId: currentOrg.get() || '',
+      }),
     }),
   });
 
@@ -79,14 +109,28 @@ function AssistantProviderInner({
   );
 }
 
+// ─── ThreadId Sync ────────────────────────────────────────────────
+
 /**
- * Syncs the threadId from the chat runtime back to the parent.
- * This allows the URL to update to /chat/[threadId] after the first message.
+ * Watches the runtime's thread list item for a remoteId (assigned by
+ * the server via X-Thread-Id header) and calls onThreadIdChange so
+ * the parent page can update the URL to /chat/[threadId].
  */
-function ThreadIdSync({ onThreadIdChange }: { onThreadIdChange?: (threadId: string | undefined) => void }) {
-  // The runtime creates the thread on first message, but the threadId
-  // comes back in the X-Thread-Id response header which useChat handles.
-  // We could use runtime thread switching here if needed, but for now
-  // the ThreadWelcome/Composer flow doesn't need URL sync.
+function ThreadIdSync({
+  onThreadIdChange,
+}: {
+  onThreadIdChange?: (threadId: string | undefined) => void;
+}) {
+  const { remoteId } = useThreadListItem();
+
+  const prevRemoteIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (remoteId && remoteId !== prevRemoteIdRef.current) {
+      prevRemoteIdRef.current = remoteId;
+      onThreadIdChange?.(remoteId);
+    }
+  }, [remoteId, onThreadIdChange]);
+
   return null;
 }
