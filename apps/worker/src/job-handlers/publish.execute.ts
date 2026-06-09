@@ -232,6 +232,9 @@ async function executeBrowserAssistPublish(
   },
 ): Promise<{ success: boolean; externalPostId?: string; externalUrl?: string; errorMessage?: string }> {
   const runnerUrl = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
+  const runnerSecret = process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+  const runnerAuthHeaders: Record<string, string> = { 'content-type': 'application/json' };
+  if (runnerSecret) runnerAuthHeaders['authorization'] = `Bearer ${runnerSecret}`;
 
   try {
     // Get decrypted cookie from account
@@ -243,7 +246,7 @@ async function executeBrowserAssistPublish(
 
     const resp = await fetch(`${runnerUrl}/assist/publish`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: runnerAuthHeaders,
       signal: AbortSignal.timeout(5 * 60_000), // 5 min timeout for video uploads etc.
       body: JSON.stringify({
         publishJobId: params.publishJobId,

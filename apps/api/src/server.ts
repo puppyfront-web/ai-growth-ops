@@ -80,6 +80,33 @@ function isLoginRateLimited(ip: string): boolean {
   return entry.count > LOGIN_RATE_LIMIT;
 }
 
+// ── General-purpose rate limiter for expensive API operations ──────────
+interface RateBucket { count: number; resetAt: number }
+const apiBuckets = new Map<string, RateBucket>();
+
+/**
+ * Check if an action is rate-limited for a given key.
+ * Returns true if the action should be blocked.
+ */
+export function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = apiBuckets.get(key);
+  if (!entry || now > entry.resetAt) {
+    apiBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+  entry.count++;
+  return entry.count > maxRequests;
+}
+
+// Cleanup stale buckets every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of apiBuckets) {
+    if (now > v.resetAt) apiBuckets.delete(k);
+  }
+}, 300_000);
+
 export function createApiServer(options: ApiServerOptions = {}): Server {
   initSkills();
   const db = options.db ?? createDatabaseClient();

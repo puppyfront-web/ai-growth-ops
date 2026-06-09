@@ -7,6 +7,7 @@ import type { Job } from 'bullmq';
 import type { InteractionSyncMessagesInput } from '../job-types.js';
 import { prepareMessagesForSync } from './interaction-sync-utils.js';
 import { classifyAndSuggestReply } from './interaction-pipeline.js';
+import { isTransientError } from '../worker.js';
 
 export async function handleInteractionSyncMessages(
   job: Job<InteractionSyncMessagesInput>
@@ -138,15 +139,16 @@ export async function handleInteractionSyncMessages(
       `Synced ${messages.length}/${fetchedMessages.length} messages after today-filter: ${newCount} new, ${skippedCount} duplicates`
     );
   } catch (err) {
+    const transient = isTransientError(err);
     if (syncJobId) {
       await db.interactionSyncJob.update({
         where: { id: syncJobId },
         data: {
-          status: 'failed',
-          finishedAt: new Date(),
+          status: transient ? 'pending' : 'failed',
+          finishedAt: transient ? undefined : new Date(),
           errorMessage: err instanceof Error ? err.message : String(err),
         },
-      });
+      }).catch(() => {}); // DB may be down too
     }
     throw err;
   } finally {

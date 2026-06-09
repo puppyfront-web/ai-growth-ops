@@ -1,9 +1,33 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { sessionManager } from './session-manager';
 import { getPlatformLoginConfig, getSupportedPlatforms } from './platform-configs';
 import { createHealthSnapshot } from '@ai-growth-ops/shared';
 import { assistRoutes } from './assist-routes.js';
 import { publishAssistRoutes } from './publish-routes.js';
+
+// ── Shared-secret authentication ──────────────────────────────────
+// Browser-runner is an internal service. All non-health endpoints
+// require the caller to send an `Authorization: Bearer <SECRET>` header
+// matching the BROWSER_RUNNER_SECRET env var (or falling back to
+// TOKEN_ENCRYPTION_KEY for convenience in dev).
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+
+function safeEqual(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
+
+function isAuthorized(req: IncomingMessage): boolean {
+  if (!RUNNER_SECRET) return true; // No secret configured — allow all (dev mode)
+  const auth = req.headers.authorization ?? '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  return safeEqual(token, RUNNER_SECRET);
+}
 
 export type RouteHandler = (
   req: IncomingMessage,
@@ -132,6 +156,12 @@ export async function routeRequest(req: IncomingMessage, res: ServerResponse): P
 
   if (!result) {
     sendJson(res, 404, { error: 'Not found' });
+    return;
+  }
+
+  // Health endpoint is public; everything else requires the shared secret
+  if (url.pathname !== '/health' && !isAuthorized(req)) {
+    sendJson(res, 401, { error: 'Unauthorized' });
     return;
   }
 

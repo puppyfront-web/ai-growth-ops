@@ -19,7 +19,7 @@ import { applyPublishProgress, isPublishProgressAuthorized } from './publish-pro
 import { getBrowserRunnerUrl, fetchWithTimeout } from './browser-login-config';
 import { setSession, getSessionId, clearSession, markPending, clearPending } from './browser-login-session';
 import { hashPassword, verifyPassword, createToken, getAuthenticatedUser, getOrganizationContext } from './auth.js';
-import { isLoginRateLimited } from './server.js';
+import { isLoginRateLimited, isRateLimited } from './server.js';
 import { parsePagination, paginate } from './middleware/pagination.js';
 import { validateBody } from './middleware/validate.js';
 import { hasPermission, hasAnyPermission } from './middleware/rbac.js';
@@ -266,6 +266,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (isRateLimited(`research:${orgCtx.organization.id}`, 5, 60_000)) return sendJson(res, 429, { error: '调研操作过于频繁，请稍后再试' });
       try {
         const result = await executeResearchTaskSync(ctx.db, ctx.params.id, orgCtx.user.id);
         sendJson(res, 200, {
@@ -793,6 +794,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (isRateLimited(`ai-gen:${orgCtx.organization.id}`, 10, 60_000)) return sendJson(res, 429, { error: 'AI 生成操作过于频繁，请稍后再试' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body?.topic) return sendJson(res, 400, { error: '缺少 topic 参数' });
 
@@ -1344,6 +1346,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (isRateLimited(`media-gen:${orgCtx.organization.id}`, 15, 60_000)) return sendJson(res, 429, { error: '图片生成操作过于频繁，请稍后再试' });
       const body = ctx.body as Record<string, unknown>;
       const prompt = String(body.prompt ?? '');
       const generationType = String(body.generationType ?? 'image');
@@ -1547,6 +1550,8 @@ const routes: Route[] = [
     pattern: '/api/publish-jobs/batch',
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (isRateLimited(`publish:${orgCtx.organization.id}`, 10, 60_000)) return sendJson(res, 429, { error: '发布操作过于频繁，请稍后再试' });
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const bodyResult = validateBody(batchPublishSchema, ctx.body);
       if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
@@ -2170,6 +2175,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (isRateLimited(`sync:${orgCtx.organization.id}`, 20, 60_000)) return sendJson(res, 429, { error: '同步操作过于频繁，请稍后再试' });
       const body = ctx.body as Record<string, unknown>;
       const platform = String(body.platform ?? '');
       const platformAccountId = String(body.platformAccountId ?? '');
@@ -2212,13 +2218,13 @@ const routes: Route[] = [
 
       if (syncType === 'comments' || syncType === 'all') {
         const queue = new Queue('interaction.sync_comments', { connection });
-        await queue.add('sync-comments', { ...commonPayload, sourceContentId, limit: 50 });
+        await queue.add('sync-comments', { ...commonPayload, sourceContentId, limit: 50 }, { attempts: 3, backoff: { type: 'exponential', delay: 10000 } });
         queued.push('comments');
       }
 
       if (syncType === 'messages' || syncType === 'all') {
         const queue = new Queue('interaction.sync_messages', { connection });
-        await queue.add('sync-messages', { ...commonPayload, limit: 50 });
+        await queue.add('sync-messages', { ...commonPayload, limit: 50 }, { attempts: 3, backoff: { type: 'exponential', delay: 10000 } });
         queued.push('messages');
       }
 
@@ -3844,6 +3850,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (isRateLimited(`prospecting:${orgCtx.organization.id}`, 10, 60_000)) return sendJson(res, 429, { error: '搜索操作过于频繁，请稍后再试' });
 
       const body = (ctx.body ?? {}) as Record<string, unknown>;
       const keyword = String(body.keyword ?? '');
@@ -4406,8 +4413,11 @@ export async function routeRequest(
   // API versioning: strip /v1/ prefix so /api/v1/content → /api/content
   url.pathname = url.pathname.replace(/^\/api\/v\d+\//, '/api/');
 
-  // Serve static uploads (with path traversal protection)
+  // Serve static uploads (auth required + path traversal protection)
   if (method === 'GET' && url.pathname.startsWith('/uploads/')) {
+    // Require authentication — only logged-in users can access uploaded files
+    const authUser = getAuthenticatedUser(request);
+    if (!authUser) { res.writeHead(401); res.end('Unauthorized'); return; }
     const requestedFile = url.pathname.slice('/uploads/'.length);
     const filePath = join(UPLOADS_DIR, requestedFile);
     // Prevent path traversal: resolved path must be within UPLOADS_DIR

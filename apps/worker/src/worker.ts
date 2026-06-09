@@ -3,9 +3,30 @@ import { getQueue, QUEUE_NAMES, QueueName } from './queue.js';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
+// Transient errors that should trigger a retry rather than permanent failure
+const TRANSIENT_ERROR_MESSAGES = [
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'connect ETIMEDOUT',
+  'Connection terminated',
+  'Connection refused',
+  'Can\'t reach database server',
+  'P1001', // Prisma: Can't reach database
+  'P1002', // Prisma: Database timeout
+  'P1008', // Prisma: Operations timed out
+  'P1017', // Prisma: Server closed connection
+];
+
+export function isTransientError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return TRANSIENT_ERROR_MESSAGES.some(t => msg.includes(t));
+}
+
 const workerOptions: WorkerOptions = {
   connection: { url: REDIS_URL },
   concurrency: 5,
+  lockDuration: 120_000, // 2 min — long enough for browser operations
 };
 
 const workers: Worker[] = [];

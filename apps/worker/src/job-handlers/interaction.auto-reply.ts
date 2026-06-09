@@ -13,6 +13,13 @@ import { createLogger } from '@ai-growth-ops/observability';
 const logger = createLogger('auto-reply');
 
 const BROWSER_RUNNER_URL = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+
+function runnerHeaders(): Record<string, string> {
+  const h: Record<string, string> = { 'content-type': 'application/json' };
+  if (RUNNER_SECRET) h['authorization'] = `Bearer ${RUNNER_SECRET}`;
+  return h;
+}
 
 interface AutoReplyJobData {
   interactionId: string;
@@ -69,7 +76,7 @@ export async function handleInteractionAutoReply(job: Job<AutoReplyJobData>): Pr
 
     const response = await fetch(`${BROWSER_RUNNER_URL}${endpoint}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: runnerHeaders(),
       body: JSON.stringify({
         platform: interaction.platform,
         cookie,

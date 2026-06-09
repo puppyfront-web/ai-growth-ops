@@ -5,6 +5,9 @@ export interface PlatformResponse<T> {
   errorMessage?: string;
 }
 
+/** Shared secret for authenticating with the browser-runner service. */
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+
 /** Fetch with AbortController timeout so stalled connections don't hang forever. */
 export async function fetchWithTimeout(
   url: string,
@@ -14,7 +17,13 @@ export async function fetchWithTimeout(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    // Inject browser-runner auth header when calling the runner service
+    const isRunnerUrl = url.includes('localhost:3200') || url.includes(process.env.BROWSER_RUNNER_URL || '__none__');
+    const headers = new Headers(init.headers);
+    if (isRunnerUrl && RUNNER_SECRET && !headers.has('authorization')) {
+      headers.set('authorization', `Bearer ${RUNNER_SECRET}`);
+    }
+    return await fetch(url, { ...init, headers, signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }
