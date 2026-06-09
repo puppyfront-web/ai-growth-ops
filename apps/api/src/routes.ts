@@ -5,7 +5,7 @@ import { join, extname, resolve, sep } from 'node:path';
 import Busboy from 'busboy';
 
 import type { DatabaseClient } from '@ai-growth-ops/database';
-import { encryptToken, decryptToken, getPlatformProvider, getSupportedAuthTypes } from '@ai-growth-ops/providers';
+import { encryptToken, decryptToken, getPlatformProvider } from '@ai-growth-ops/providers';
 import { DefaultSkillRunner } from '@ai-growth-ops/skills';
 import type { SkillRunResult } from '@ai-growth-ops/skills';
 import { taskRoutes } from './routes-tasks.js';
@@ -24,7 +24,7 @@ import { parsePagination, paginate } from './middleware/pagination.js';
 import { validateBody } from './middleware/validate.js';
 import { hasPermission, hasAnyPermission } from './middleware/rbac.js';
 import { createResearchTaskSchema } from './schemas/research.js';
-import { createContentItemSchema, updateContentItemSchema, createContentVariantSchema, updateContentVariantSchema, batchGenerateVariantsSchema } from './schemas/content.js';
+import { createContentItemSchema, updateContentItemSchema, updateContentVariantSchema, batchGenerateVariantsSchema } from './schemas/content.js';
 import { createPublishJobSchema, batchPublishSchema } from './schemas/publish.js';
 import { updateLeadSchema } from './schemas/leads.js';
 import { createCampaignSchema, updateCampaignSchema } from './schemas/campaign.js';
@@ -371,24 +371,55 @@ const routes: Route[] = [
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const opp = await ctx.db.contentOpportunity.findFirst({
-        where: { id: ctx.params.id, researchTask: { organizationId: orgCtx.organization.id } }
+        where: { id: ctx.params.id, researchTask: { organizationId: orgCtx.organization.id } },
+        include: { researchTask: { select: { keywords: true } } },
       });
       if (!opp) return sendJson(res, 404, { error: 'Not found' });
-      const projectId = await getOrCreateDefaultProject(ctx.db, orgCtx.user.id, orgCtx.organization.id);
-      const item = await ctx.db.contentItem.create({
-        data: {
-          organizationId: orgCtx.organization.id,
+
+      // Use AI to generate content from the opportunity (reuse content-writing skill)
+      try {
+        const { generateContentWithMedia } = await import('./services/content-media-generation.js');
+        const researchKeywords = Array.isArray((opp.researchTask as Record<string, unknown>)?.keywords)
+          ? (opp.researchTask as Record<string, unknown>).keywords as string[]
+          : [opp.title];
+        const result = await generateContentWithMedia(ctx.db, {
+          topic: opp.title,
+          contentType: 'text_image',
+          keywords: researchKeywords,
+          brandTone: '专业、友好',
+          orgId: orgCtx.organization.id,
           userId: orgCtx.user.id,
-          projectId,
-          type: 'text_image',
-          title: opp.title,
-          body: opp.description ?? '',
-          status: 'draft',
-          sourceType: 'opportunity',
-          sourceResearchTaskId: opp.researchTaskId
-        }
-      });
-      sendJson(res, 201, { contentItemId: item.id });
+        });
+
+        // Mark as sourced from opportunity
+        await ctx.db.contentItem.update({
+          where: { id: result.contentItem.id },
+          data: {
+            sourceType: 'opportunity',
+            sourceResearchTaskId: opp.researchTaskId,
+          },
+        });
+
+        sendJson(res, 201, { contentItemId: result.contentItem.id, generated: true });
+      } catch (err) {
+        // Fallback: create empty draft
+        console.error('[research] AI content generation failed, creating empty draft:', err);
+        const projectId = await getOrCreateDefaultProject(ctx.db, orgCtx.user.id, orgCtx.organization.id);
+        const item = await ctx.db.contentItem.create({
+          data: {
+            organizationId: orgCtx.organization.id,
+            userId: orgCtx.user.id,
+            projectId,
+            type: 'text_image',
+            title: opp.title,
+            body: opp.description ?? '',
+            status: 'draft',
+            sourceType: 'opportunity',
+            sourceResearchTaskId: opp.researchTaskId,
+          },
+        });
+        sendJson(res, 201, { contentItemId: item.id, generated: false });
+      }
     }
   },
 
@@ -400,7 +431,7 @@ const routes: Route[] = [
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const status = ctx.url.searchParams.get('status') || undefined;
-      const where: any = { organizationId: orgCtx.organization.id, deletedAt: null };
+      const where: Record<string, unknown> = { organizationId: orgCtx.organization.id, deletedAt: null };
       if (status) where.status = status;
       const result = await paginate(ctx.db.campaign, where, parsePagination(ctx.url), { createdAt: 'desc' }, { _count: { select: { runs: true } } });
       sendJson(res, 200, result);
@@ -428,7 +459,7 @@ const routes: Route[] = [
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       if (!hasPermission(orgCtx.memberRole, 'content:create')) return sendJson(res, 403, { error: '权限不足' });
-      const bodyResult = validateBody(createCampaignSchema as any, ctx.body);
+      const bodyResult = validateBody(createCampaignSchema as never, ctx.body);
       if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
       const body = bodyResult.data as Record<string, unknown>;
       const campaign = await ctx.db.campaign.create({
@@ -438,10 +469,10 @@ const routes: Route[] = [
           name: String(body.name),
           description: body.description as string | undefined,
           status: 'draft',
-          platforms: body.platforms as any,
+          platforms: body.platforms as never,
           contentType: String(body.contentType ?? 'text_image'),
-          scheduleConfig: body.scheduleConfig as any,
-          topicConfig: body.topicConfig as any,
+          scheduleConfig: body.scheduleConfig as never,
+          topicConfig: body.topicConfig as never,
           autoPublish: body.autoPublish as boolean,
           autoCompliance: body.autoCompliance as boolean,
           maxPostsTotal: body.maxPostsTotal as number | undefined,
@@ -458,10 +489,10 @@ const routes: Route[] = [
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       if (!hasPermission(orgCtx.memberRole, 'content:edit')) return sendJson(res, 403, { error: '权限不足' });
       const { id } = ctx.params;
-      const bodyResult = validateBody(updateCampaignSchema as any, ctx.body);
+      const bodyResult = validateBody(updateCampaignSchema as never, ctx.body);
       if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
       const body = bodyResult.data as Record<string, unknown>;
-      const data: any = {};
+      const data: Record<string, unknown> = {};
       if (body.name != null) data.name = String(body.name);
       if (body.description != null) data.description = String(body.description);
       if (body.platforms != null) data.platforms = body.platforms;
@@ -490,7 +521,7 @@ const routes: Route[] = [
       if (!campaign) return sendJson(res, 404, { error: '活动不存在' });
       // Compute first nextRunAt
       const scheduleConfig = campaign.scheduleConfig as Record<string, unknown> | null;
-      let nextRunAt = new Date();
+      const nextRunAt = new Date();
       if (scheduleConfig?.time) {
         const [h, m] = (scheduleConfig.time as string).split(':').map(Number);
         nextRunAt.setHours(h, m, 0, 0);
@@ -596,8 +627,8 @@ const routes: Route[] = [
           name: String(body.name),
           description: String(body.description || ''),
           status: 'draft',
-          steps: body.steps as any,
-          triggerConfig: body.triggerConfig as any || {},
+          steps: body.steps as never,
+          triggerConfig: body.triggerConfig as never || {},
         },
       });
       sendJson(res, 201, workflow);
@@ -611,7 +642,7 @@ const routes: Route[] = [
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
-      const data: any = {};
+      const data: Record<string, unknown> = {};
       if (body.name != null) data.name = String(body.name);
       if (body.description != null) data.description = String(body.description);
       if (body.steps != null) data.steps = body.steps;
@@ -689,8 +720,8 @@ const routes: Route[] = [
           name: String(body.name || template.name),
           description: template.description,
           status: 'draft',
-          steps: template.steps as any,
-          triggerConfig: body.triggerConfig as any || {},
+          steps: template.steps as never,
+          triggerConfig: body.triggerConfig as never || {},
         },
       });
       sendJson(res, 201, workflow);
@@ -777,7 +808,7 @@ const routes: Route[] = [
           organizationId: orgCtx.organization.id,
           userId: orgCtx.user.id,
           projectId,
-          type: String(body.type ?? 'text_image') as any,
+          type: String(body.type ?? 'text_image') as never,
           title: String(body.title ?? ''),
           body: String(body.body ?? ''),
           status: 'draft',
@@ -839,8 +870,8 @@ const routes: Route[] = [
         data: {
           ...(body.title != null && { title: String(body.title) }),
           ...(body.body != null && { body: String(body.body) }),
-          ...(body.status != null && { status: String(body.status) as any }),
-          ...(body.type != null && { type: String(body.type) as any }),
+          ...(body.status != null && { status: String(body.status) as never }),
+          ...(body.type != null && { type: String(body.type) as never }),
           metadata: {
             ...existingMeta,
             ...(nextMediaAssetIds != null && { mediaAssetIds: nextMediaAssetIds }),
@@ -851,7 +882,7 @@ const routes: Route[] = [
       if (Array.isArray(nextMediaAssetIds) && nextMediaAssetIds.length > 0) {
         await ctx.db.contentVariant.updateMany({
           where: { contentItemId: ctx.params.id, deletedAt: null },
-          data: { mediaAssetIds: nextMediaAssetIds as any },
+          data: { mediaAssetIds: nextMediaAssetIds as never },
         });
       }
 
@@ -962,7 +993,7 @@ const routes: Route[] = [
         select: { platform: true }
       });
       const existingPlatforms = new Set(existing.map((v) => v.platform));
-      const toCreate = platforms.filter((p: string) => !existingPlatforms.has(p as any));
+      const toCreate = platforms.filter((p: string) => !existingPlatforms.has(p as never));
 
       // Attempt AI-powered platform-specific rewrite for each platform
       const variants = await Promise.all(
@@ -1007,10 +1038,10 @@ const routes: Route[] = [
               contentType: contentItem.type as 'text_image',
               title,
               body: bodyText,
-              tags: tags as any,
+              tags: tags as never,
               cta,
               complianceStatus: 'approved',
-              ...(itemMediaAssetIds.length > 0 && { mediaAssetIds: itemMediaAssetIds as any }),
+              ...(itemMediaAssetIds.length > 0 && { mediaAssetIds: itemMediaAssetIds as never }),
             }
           });
         })
@@ -1035,7 +1066,7 @@ const routes: Route[] = [
           data: {
             ...(body.title !== undefined && { title: body.title }),
             ...(body.body !== undefined && { body: body.body }),
-            ...(body.tags !== undefined && { tags: body.tags as any }),
+            ...(body.tags !== undefined && { tags: body.tags as never }),
           }
         });
         sendJson(res, 200, variant);
@@ -1098,8 +1129,8 @@ const routes: Route[] = [
           contentVariantId: variant.id,
           status: passed ? 'passed' : 'failed',
           riskLevel,
-          issues: issues as any,
-          suggestedFixes: suggestedFixes as any,
+          issues: issues as never,
+          suggestedFixes: suggestedFixes as never,
         }
       });
 
@@ -1308,10 +1339,10 @@ const routes: Route[] = [
             fileName: String(body.fileName ?? 'untitled'),
             fileType: String(body.fileType ?? 'application/octet-stream'),
             fileSize: body.fileSize as number | undefined,
-            sourceType: String(body.sourceType ?? 'uploaded') as any,
+            sourceType: String(body.sourceType ?? 'uploaded') as never,
             sourceUrl: (body.sourceUrl ?? body.storageUrl) as string | undefined,
             reviewStatus: 'pending_review',
-            metadata: ((body.metadata as Record<string, unknown>) ?? {}) as any,
+            metadata: ((body.metadata as Record<string, unknown>) ?? {}) as never,
           }
         });
         sendJson(res, 201, item);
@@ -1333,7 +1364,7 @@ const routes: Route[] = [
       const item = await ctx.db.mediaAsset.update({
         where: { id: ctx.params.id },
         data: {
-          reviewStatus: String(body.status ?? 'approved') as any,
+          reviewStatus: String(body.status ?? 'approved') as never,
           metadata: { ...existingMeta, reviewNote: body.note ?? null }
         }
       });
@@ -1399,15 +1430,16 @@ const routes: Route[] = [
           return sendJson(res, 502, { error: '图片生成失败，请检查 AI 配置' });
         }
 
-        const genResult = await genResponse.json() as any;
-        const imageData = genResult.data?.[0];
+        const genResult = await genResponse.json() as Record<string, unknown>;
+        const resultData = genResult.data as Array<Record<string, unknown>> | undefined;
+        const imageData = resultData?.[0];
         if (!imageData) return sendJson(res, 502, { error: '生成结果为空' });
 
         // Save generated image to uploads
         const imageBuffer = imageData.b64_json
-          ? Buffer.from(imageData.b64_json, 'base64')
+          ? Buffer.from(imageData.b64_json as string, 'base64')
           : null;
-        const imageUrl = imageData.url ?? null;
+        const imageUrl = (imageData.url as string) ?? null;
 
         if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true });
         const savedName = `${randomUUID()}.png`;
@@ -1439,21 +1471,21 @@ const routes: Route[] = [
             reviewStatus: 'pending_review',
             generationProvider: `${genProvider}/${model}`,
             generationPromptHash: promptHash,
-            costEstimate: genResult.usage?.total_tokens ? genResult.usage.total_tokens * 0.00004 : 0.04,
+            costEstimate: (genResult.usage as Record<string, number> | undefined)?.total_tokens ? (genResult.usage as Record<string, number>).total_tokens * 0.00004 : 0.04,
             metadata: {
               prompt,
               generationType,
               style,
               size,
-              revisedPrompt: imageData.revised_prompt ?? null,
-            } as any,
+              revisedPrompt: (imageData.revised_prompt as string) ?? null,
+            } as never,
           },
         });
 
         sendJson(res, 201, asset);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Media generation error:', err);
-        sendJson(res, 500, { error: '素材生成失败: ' + (err.message ?? '未知错误') });
+        sendJson(res, 500, { error: '素材生成失败: ' + (err instanceof Error ? err.message : '未知错误') });
       }
     }
   },
@@ -1521,7 +1553,7 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const bodyResult = validateBody(createPublishJobSchema as any, ctx.body);
+      const bodyResult = validateBody(createPublishJobSchema as never, ctx.body);
       if (!bodyResult.success) return sendJson(res, 400, { error: '输入验证失败', errors: bodyResult.errors });
       const body = bodyResult.data as Record<string, unknown>;
       const account = await ctx.db.platformAccount.findFirst({
@@ -1771,7 +1803,7 @@ const routes: Route[] = [
   {
     method: 'POST',
     pattern: '/api/publish/execute',
-    handler: async (req, res, ctx) => {
+    handler: async (_req, res, _ctx) => {
       sendJson(res, 400, { error: '此接口已停用，请使用 /api/publish-jobs 创建发布任务' });
     }
   },
@@ -1876,7 +1908,7 @@ const routes: Route[] = [
       // Mark interaction as SENDING while the worker delivers the reply
       await ctx.db.interaction.update({
         where: { id: ctx.params.id },
-        data: { status: 'REPLY_SUGGESTED', metadata: { replyContent: String(body.content ?? ''), riskLevel, needReview, sending: true } as any }
+        data: { status: 'REPLY_SUGGESTED', metadata: { replyContent: String(body.content ?? ''), riskLevel, needReview, sending: true } as never }
       });
 
       // Enqueue delivery job for the worker
@@ -2142,7 +2174,7 @@ const routes: Route[] = [
         where: { id: ctx.params.id },
         include: { interaction: { select: { organizationId: true } } },
       });
-      if (!suggestion || (suggestion as any).interaction?.organizationId !== orgCtx.organization.id) {
+      if (!suggestion || (suggestion as { interaction?: { organizationId: string } }).interaction?.organizationId !== orgCtx.organization.id) {
         return sendJson(res, 404, { error: 'Not found' });
       }
       const action = String(body.action || '');
@@ -2317,7 +2349,7 @@ const routes: Route[] = [
           status: 'NEW',
           intent: body.intent as string | undefined,
           summary: body.summary as string | undefined,
-          tags: body.tags as any,
+          tags: body.tags as never,
         }
       });
       sendJson(res, 201, lead);
@@ -2375,7 +2407,7 @@ const routes: Route[] = [
       const item = await ctx.db.lead.update({
         where: { id: ctx.params.id },
         data: {
-          ...(body.status != null && { status: String(body.status) as any }),
+          ...(body.status != null && { status: String(body.status) as never }),
           ...(body.level != null && { level: String(body.level) as 'A' }),
           ...(body.assignedTo != null && { assignedTo: String(body.assignedTo) }),
           ...(body.nextAction != null && { nextAction: String(body.nextAction) }),
@@ -3051,7 +3083,7 @@ const routes: Route[] = [
         const updated = await ctx.db.leadSinkConfig.update({
           where: { id: existing.id },
           data: {
-            config: body as any,
+            config: body as never,
             enabled: body.enabled != null ? Boolean(body.enabled) : existing.enabled
           }
         });
@@ -3062,7 +3094,7 @@ const routes: Route[] = [
             organizationId: orgCtx.organization.id,
           userId: orgCtx.user.id,
             sinkType: 'lark',
-            config: body as any,
+            config: body as never,
             enabled: body.enabled != null ? Boolean(body.enabled) : true
           }
         });
@@ -3103,7 +3135,7 @@ const routes: Route[] = [
         const updated = await ctx.db.leadSinkConfig.update({
           where: { id: existing.id },
           data: {
-            config: body as any,
+            config: body as never,
             enabled: body.enabled != null ? Boolean(body.enabled) : existing.enabled
           }
         });
@@ -3114,7 +3146,7 @@ const routes: Route[] = [
             organizationId: orgCtx.organization.id,
           userId: orgCtx.user.id,
             sinkType: 'wecom',
-            config: body as any,
+            config: body as never,
             enabled: body.enabled != null ? Boolean(body.enabled) : true
           }
         });
@@ -3193,8 +3225,8 @@ const routes: Route[] = [
 
       await ctx.db.appConfig.upsert({
         where: { userId_key: { userId: orgCtx.user.id, key: 'ai_config' } },
-        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'ai_config', value: configValue as any },
-        update: { value: configValue as any },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'ai_config', value: configValue as never },
+        update: { value: configValue as never },
       });
 
       sendJson(res, 200, { ok: true, updated: true });
@@ -3282,8 +3314,8 @@ const routes: Route[] = [
 
       await ctx.db.appConfig.upsert({
         where: { userId_key: { userId: orgCtx.user.id, key: 'compliance_config' } },
-        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'compliance_config', value: body as any },
-        update: { value: body as any },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'compliance_config', value: body as never },
+        update: { value: body as never },
       });
 
       sendJson(res, 200, { ok: true, updated: true });
@@ -3332,8 +3364,8 @@ const routes: Route[] = [
 
       await ctx.db.appConfig.upsert({
         where: { userId_key: { userId: orgCtx.user.id, key: 'auto_reply_config' } },
-        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'auto_reply_config', value: body as any },
-        update: { value: body as any },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'auto_reply_config', value: body as never },
+        update: { value: body as never },
       });
 
       sendJson(res, 200, { ok: true, updated: true });
@@ -3376,8 +3408,8 @@ const routes: Route[] = [
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
       await ctx.db.appConfig.upsert({
         where: { userId_key: { userId: orgCtx.user.id, key: 'storage_config' } },
-        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'storage_config', value: body as any },
-        update: { value: body as any },
+        create: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: 'storage_config', value: body as never },
+        update: { value: body as never },
       });
       sendJson(res, 200, { ok: true, updated: true });
     }
@@ -3542,7 +3574,7 @@ const routes: Route[] = [
       const webhookId = `webhook_${Date.now()}`;
       const value = { url: body.url, events: body.events, status: 'active' };
       const created = await ctx.db.appConfig.create({
-        data: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: webhookId, value: value as any },
+        data: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: webhookId, value: value as never },
       });
       sendJson(res, 201, { id: created.id, ...value, createdAt: created.createdAt });
     }
@@ -3644,7 +3676,7 @@ const routes: Route[] = [
 
       const reportId = `report_${Date.now()}`;
       const created = await ctx.db.appConfig.create({
-        data: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: reportId, value: reportValue as any },
+        data: { userId: orgCtx.user.id, organizationId: orgCtx.organization.id, key: reportId, value: reportValue as never },
       });
       sendJson(res, 201, { id: created.id, ...reportValue, createdAt: created.createdAt });
     }
@@ -3865,7 +3897,7 @@ const routes: Route[] = [
       const account = await ctx.db.platformAccount.findFirst({
         where: {
           organizationId: orgCtx.organization.id,
-          platform: platform as any,
+          platform: platform as never,
           mode: 'browser_assist',
           status: 'active',
           deletedAt: null,
@@ -3928,7 +3960,7 @@ const routes: Route[] = [
                   data: {
                     organizationId: orgCtx.organization.id,
                     userId: orgCtx.user.id,
-                    platform: platform as any,
+                    platform: platform as never,
                     platformAccountId: account.id,
                     externalInteractionId: externalId,
                     externalUserId: String(comment.externalUserId ?? ''),
@@ -3970,18 +4002,18 @@ const routes: Route[] = [
                   data: {
                     organizationId: orgCtx.organization.id,
                     userId: orgCtx.user.id,
-                    sourcePlatform: platform as any,
+                    sourcePlatform: platform as never,
                     sourceAccountId: account.id,
                     sourceInteractionId: interaction.id,
                     externalUserId: String(comment.externalUserId ?? ''),
                     externalUserName: String(comment.userNickname ?? ''),
-                    level: classification.leadLevel as any,
+                    level: classification.leadLevel as never,
                     intent: classification.intent,
                     confidence: classification.confidence,
                     summary: content.slice(0, 200),
                   },
                 }).catch(() => {});
-              } catch (e) {
+              } catch {
                 // Skip duplicate interactions
               }
 
@@ -4149,7 +4181,7 @@ const routes: Route[] = [
       if (existing) {
         const updated = await ctx.db.appConfig.update({
           where: { id: existing.id },
-          data: { value: body as any },
+          data: { value: body as never },
         });
         sendJson(res, 200, updated.value);
       } else {
@@ -4158,7 +4190,7 @@ const routes: Route[] = [
             organizationId: orgCtx.organization.id,
             userId: orgCtx.user.id,
             key: 'agent_user_preferences',
-            value: body as any,
+            value: body as never,
           },
         });
         sendJson(res, 201, created.value);
