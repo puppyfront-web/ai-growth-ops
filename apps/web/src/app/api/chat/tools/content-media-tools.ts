@@ -8,7 +8,7 @@ export function createContentMediaTools(auth: AuthContext) {
   return {
     generate_content_with_media: tool({
       description: '一键生成内容并自动配图。调用AI生成文案，同时生成配图素材，创建完整的内容条目。',
-      parameters: z.object({
+      inputSchema: z.object({
         topic: z.string().describe('内容主题'),
         contentType: z.enum(['text_image', 'video', 'article']).optional().default('text_image'),
         keywords: z.array(z.string()).optional().describe('关键词'),

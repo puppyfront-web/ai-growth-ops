@@ -7,7 +7,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const listAccounts = tool({
     description: '列出用户已连接的所有平台账号及其状态',
-    parameters: z.object({}),
+    inputSchema: z.object({}),
     execute: async () => {
       const accounts = await apiCall('/api/accounts');
       return { accounts };
@@ -16,7 +16,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const checkCookieStatus = tool({
     description: '检查指定平台账号的 cookie 是否有效',
-    parameters: z.object({
+    inputSchema: z.object({
       accountId: z.string().optional().describe('账号 ID，不传则检查所有账号'),
     }),
     execute: async ({ accountId }) => {
@@ -39,7 +39,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const loginAccount = tool({
     description: '启动浏览器 QR 码登录流程。打开浏览器窗口供用户扫码登录。返回后需要轮询 check_login_status 确认登录完成。',
-    parameters: z.object({
+    inputSchema: z.object({
       accountId: z.string().describe('要登录的平台账号 ID'),
     }),
     execute: async ({ accountId }) => {
@@ -51,7 +51,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const checkLoginStatus = tool({
     description: '查询浏览器登录状态。登录启动后轮询此接口，直到返回 logged_in 或 expired。',
-    parameters: z.object({
+    inputSchema: z.object({
       accountId: z.string().describe('平台账号 ID'),
     }),
     execute: async ({ accountId }) => {
@@ -61,7 +61,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const createPublishJob = tool({
     description: '从已批准的内容变体创建发布任务。变体必须先通过合规检查并批准。',
-    parameters: z.object({
+    inputSchema: z.object({
       variantId: z.string().describe('已批准的变体 ID'),
       scheduledAt: z.string().optional().describe('定时发布时间，ISO 格式。不传则立即发布'),
     }),
@@ -75,7 +75,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const executePublish = tool({
     description: '通过浏览器自动化执行发布任务。启动 browser-runner 自动发布内容到平台。',
-    parameters: z.object({
+    inputSchema: z.object({
       jobId: z.string().describe('发布任务 ID'),
     }),
     execute: async ({ jobId }) => {
@@ -87,7 +87,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const checkPublishStatus = tool({
     description: '查看发布任务状态，包括发布尝试和进度详情。',
-    parameters: z.object({
+    inputSchema: z.object({
       jobId: z.string().describe('发布任务 ID'),
     }),
     execute: async ({ jobId }) => {
@@ -97,7 +97,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const retryPublish = tool({
     description: '重试失败的发布任务。最多重试 3 次。',
-    parameters: z.object({
+    inputSchema: z.object({
       jobId: z.string().describe('发布任务 ID'),
     }),
     execute: async ({ jobId }) => {
@@ -109,7 +109,7 @@ export function createPublishTools(auth: AuthContext) {
 
   const publishContent = tool({
     description: '将内容批量发布到指定平台（快捷方式）。自动匹配已连接的平台账号并创建发布任务。',
-    parameters: z.object({
+    inputSchema: z.object({
       contentId: z.string().describe('要发布的内容 ID'),
       platforms: z.array(z.string()).describe('目标平台列表，如 ["douyin", "xiaohongshu"]'),
       scheduledAt: z.string().optional().describe('定时发布时间，ISO 格式'),

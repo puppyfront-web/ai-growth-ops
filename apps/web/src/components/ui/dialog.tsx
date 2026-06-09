@@ -39,14 +39,15 @@ function Dialog({ open: controlledOpen, onOpenChange, defaultOpen = false, child
 }
 
 /* ---------- Trigger ---------- */
-function DialogTrigger({ children, asChild = false }: { children: React.ReactNode; asChild?: boolean }) {
+function DialogTrigger({ children, asChild = false, className }: { children: React.ReactNode; asChild?: boolean; className?: string }) {
   const { setOpen } = React.useContext(DialogContext);
   if (asChild && React.isValidElement(children)) {
     return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
       onClick: () => setOpen(true),
+      className: cn((children.props as Record<string, unknown>)?.className as string | undefined, className),
     });
   }
-  return <button onClick={() => setOpen(true)}>{children}</button>;
+  return <button onClick={() => setOpen(true)} className={className}>{children}</button>;
 }
 
 /* ---------- Overlay ---------- */

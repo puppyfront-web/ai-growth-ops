@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { AuthContext } from './_shared';
-import { listPlanTemplates, getPlanTemplate } from '../plan-templates';
+import { listPlanTemplates } from '../plan-templates';
 
 export function createAgentTools(auth: AuthContext) {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
@@ -29,7 +29,7 @@ export function createAgentTools(auth: AuthContext) {
     // ── Proactive Suggestions ─────────────────────────────────────
     get_proactive_suggestions: tool({
       description: '获取基于当前运营数据的主动建议。在对话开始时或用户问"我该做什么"时调用。',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         const result = await apiCall('/api/agent/suggestions');
         return result;
@@ -39,7 +39,7 @@ export function createAgentTools(auth: AuthContext) {
     // ── User Preferences ──────────────────────────────────────────
     get_my_preferences: tool({
       description: '获取用户的运营偏好设置（常用平台、内容风格、品牌调性等）。',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         return await apiCall('/api/settings/agent-preferences');
       },
@@ -47,7 +47,7 @@ export function createAgentTools(auth: AuthContext) {
 
     remember_preference: tool({
       description: '记住用户的一个偏好设置。用户说"记住..."、"以后都用..."、"我喜欢..."时调用。',
-      parameters: z.object({
+      inputSchema: z.object({
         key: z.enum([
           'preferredPlatforms',
           'defaultContentType',
@@ -70,7 +70,7 @@ export function createAgentTools(auth: AuthContext) {
     // ── Plan Templates ────────────────────────────────────────────
     list_plan_templates: tool({
       description: '列出可用的多步骤执行计划模板。用户要求执行完整流程时先展示可选模板。',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         return { templates: listPlanTemplates() };
       },
@@ -79,7 +79,7 @@ export function createAgentTools(auth: AuthContext) {
     // ── Execute Plan ──────────────────────────────────────────────
     execute_plan: tool({
       description: '执行多步骤运营计划。用户要求"帮我从创作到发布全搞定"、"执行完整闭环"等复合任务时使用。你可以直接定义步骤或从模板加载。',
-      parameters: z.object({
+      inputSchema: z.object({
         planName: z.string().describe('计划名称'),
         steps: z.array(z.object({
           toolName: z.string().describe('要调用的工具名'),

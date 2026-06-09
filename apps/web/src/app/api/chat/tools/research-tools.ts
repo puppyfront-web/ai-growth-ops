@@ -7,7 +7,7 @@ export function createResearchTools(auth: AuthContext) {
 
   const runResearch = tool({
     description: '创建并执行调研任务。跨平台搜索关键词，生成洞察和内容机会。可能需要 30 秒以上完成。',
-    parameters: z.object({
+    inputSchema: z.object({
       keywords: z.array(z.string()).describe('调研关键词列表'),
       platforms: z.array(z.string()).optional().describe('调研平台列表，如 ["douyin","xiaohongshu"]'),
       type: z.string().optional().describe('调研类型，默认 keyword_search'),
@@ -35,7 +35,7 @@ export function createResearchTools(auth: AuthContext) {
 
   const getResearchInsights = tool({
     description: '查看调研洞察和内容机会。可查看指定任务的详细结果，或所有任务的洞察汇总。',
-    parameters: z.object({
+    inputSchema: z.object({
       taskId: z.string().optional().describe('指定任务 ID。不传则返回所有洞察汇总'),
     }),
     execute: async ({ taskId }) => {
@@ -52,7 +52,7 @@ export function createResearchTools(auth: AuthContext) {
 
   const listLeads = tool({
     description: '查看线索列表。支持按等级和状态筛选。',
-    parameters: z.object({
+    inputSchema: z.object({
       level: z.enum(['A', 'B', 'C', 'D']).optional().describe('线索等级筛选'),
       status: z.string().optional().describe('状态筛选'),
       page: z.number().optional().describe('页码'),
@@ -71,7 +71,7 @@ export function createResearchTools(auth: AuthContext) {
 
   const syncLeadToFeishu = tool({
     description: '将线索同步到飞书多维表格。需要先配置飞书集成。',
-    parameters: z.object({
+    inputSchema: z.object({
       leadId: z.string().describe('线索 ID'),
     }),
     execute: async ({ leadId }) => {
@@ -83,7 +83,7 @@ export function createResearchTools(auth: AuthContext) {
 
   const syncLeadToWecom = tool({
     description: '将线索同步到企业微信通讯录。需要先配置企业微信集成。',
-    parameters: z.object({
+    inputSchema: z.object({
       leadId: z.string().describe('线索 ID'),
     }),
     execute: async ({ leadId }) => {
@@ -95,7 +95,7 @@ export function createResearchTools(auth: AuthContext) {
 
   const getAnalytics = tool({
     description: '查看数据分析概览，包括内容表现、互动数据、线索转化等关键指标。',
-    parameters: z.object({
+    inputSchema: z.object({
       period: z.string().optional().describe('时间范围：7d | 30d | 90d，默认 30d'),
     }),
     execute: async ({ period }) => {
@@ -115,7 +115,7 @@ export function createResearchTools(auth: AuthContext) {
     get_analytics: getAnalytics,
     get_engagement_metrics: tool({
       description: '查看互动参与度分析。包括各平台互动量、回复率、线索转化率、分类置信度等。',
-      parameters: z.object({
+      inputSchema: z.object({
         days: z.number().optional().default(7).describe('统计天数，默认7天'),
       }),
       execute: async ({ days }) => {
@@ -124,7 +124,7 @@ export function createResearchTools(auth: AuthContext) {
     }),
     get_content_performance: tool({
       description: '查看各内容的运营表现排名。按互动量、线索数、回复数综合评分。',
-      parameters: z.object({
+      inputSchema: z.object({
         days: z.number().optional().default(30).describe('统计天数，默认30天'),
       }),
       execute: async ({ days }) => {

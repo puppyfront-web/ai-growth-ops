@@ -9,7 +9,7 @@ export function createCampaignTools(auth: AuthContext) {
   return {
     create_campaign: tool({
       description: '创建内容运营活动。可设置主题、平台、发布频率等。活动激活后会自动生成内容并发布。',
-      parameters: z.object({
+      inputSchema: z.object({
         name: z.string().describe('活动名称'),
         platforms: z.array(z.string()).describe('目标平台列表，如 ["douyin", "xiaohongshu"]'),
         topic: z.string().describe('内容主题'),
@@ -48,7 +48,7 @@ export function createCampaignTools(auth: AuthContext) {
 
     list_campaigns: tool({
       description: '列出所有内容运营活动。可按状态筛选。',
-      parameters: z.object({
+      inputSchema: z.object({
         status: z.string().optional().describe('筛选状态：draft/active/paused/completed'),
         page: z.number().optional().default(1),
         limit: z.number().optional().default(10),
@@ -64,7 +64,7 @@ export function createCampaignTools(auth: AuthContext) {
 
     get_campaign_detail: tool({
       description: '查看运营活动详情，包括执行历史和状态。',
-      parameters: z.object({
+      inputSchema: z.object({
         campaignId: z.string().describe('活动ID'),
       }),
       execute: async ({ campaignId }) => {
@@ -74,7 +74,7 @@ export function createCampaignTools(auth: AuthContext) {
 
     start_campaign: tool({
       description: '启动运营活动。活动将按照设定的频率自动生成和发布内容。',
-      parameters: z.object({
+      inputSchema: z.object({
         campaignId: z.string().describe('活动ID'),
       }),
       execute: async ({ campaignId }) => {
@@ -84,7 +84,7 @@ export function createCampaignTools(auth: AuthContext) {
 
     pause_campaign: tool({
       description: '暂停运营活动。已排队的执行会继续完成。',
-      parameters: z.object({
+      inputSchema: z.object({
         campaignId: z.string().describe('活动ID'),
       }),
       execute: async ({ campaignId }) => {
@@ -94,7 +94,7 @@ export function createCampaignTools(auth: AuthContext) {
 
     trigger_campaign_run: tool({
       description: '立即触发一次运营活动执行，不等待定时计划。',
-      parameters: z.object({
+      inputSchema: z.object({
         campaignId: z.string().describe('活动ID'),
       }),
       execute: async ({ campaignId }) => {
