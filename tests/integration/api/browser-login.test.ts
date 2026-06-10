@@ -8,39 +8,21 @@ import {
 } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import { createApiServer } from '../../../apps/api/src';
+import { getTestAuth, createAuthFetch, type TestAuthContext } from '../../setup/test-auth';
 
 let apiServer: Server;
 let baseUrl: string;
 const db = createDatabaseClient();
 
 // Auth state
-let authToken = '';
-let _orgId = '';
+let auth: TestAuthContext;
+let api: ReturnType<typeof createAuthFetch>;
 
 // Mock browser-runner server
 let mockRunner: Server;
 let mockRunnerUrl: string;
 let mockSessionState: 'waiting' | 'logged_in' | 'expired' | 'error' = 'waiting';
 let mockCookies = '';
-
-async function get(path: string) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    headers: { authorization: `Bearer ${authToken}` }
-  });
-  return { status: res.status, body: await res.json() };
-}
-
-async function post(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      ...(body ? { 'content-type': 'application/json' } : {}),
-      authorization: `Bearer ${authToken}`
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  return { status: res.status, body: await res.json() };
-}
 
 beforeAll(async () => {
   // 1. Start mock browser-runner
@@ -90,28 +72,15 @@ beforeAll(async () => {
 
   process.env.BROWSER_RUNNER_URL = mockRunnerUrl;
 
-  // 2. Reset DB & seed admin user
+  // 2. Reset DB & seed admin user (seed creates a default org + membership)
   await resetDatabase(db);
   await seedDatabase(db);
 
-  // 3. Create organization + membership for seeded admin
   const admin = await db.user.findFirstOrThrow({
     where: { email: 'admin@ai-growth-ops.local' }
   });
-  const org = await db.organization.create({
-    data: { name: 'Test Org', slug: `test-org-${Date.now()}`, status: 'active' }
-  });
-  await db.organizationMember.create({
-    data: {
-      organizationId: org.id,
-      userId: admin.id,
-      role: 'owner',
-      status: 'active'
-    }
-  });
-  _orgId = org.id;
 
-  // 4. Start API server
+  // 3. Start API server
   apiServer = createApiServer({ db }) as Server;
   await new Promise<void>((resolve) =>
     apiServer.listen(0, '127.0.0.1', resolve)
@@ -119,19 +88,11 @@ beforeAll(async () => {
   const apiAddr = apiServer.address() as { address: string; port: number };
   baseUrl = `http://${apiAddr.address}:${apiAddr.port}`;
 
-  // 5. Login to get auth token
-  const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      email: 'admin@ai-growth-ops.local',
-      password: 'changeme123'
-    })
-  });
-  const loginBody = (await loginRes.json()) as { token: string };
-  authToken = loginBody.token;
+  // 4. Get authenticated context (resolves the seeded default org)
+  auth = await getTestAuth(db, baseUrl);
+  api = createAuthFetch(baseUrl, auth);
 
-  // 6. Create platform accounts (one per platform, with null cookieRef)
+  // 5. Create platform accounts in the seeded org (one per platform)
   const platforms = [
     'douyin',
     'xiaohongshu',
@@ -143,7 +104,7 @@ beforeAll(async () => {
   for (const platform of platforms) {
     await db.platformAccount.create({
       data: {
-        organizationId: org.id,
+        organizationId: auth.orgId,
         userId: admin.id,
         platform: platform as 'douyin',
         name: `${platform}-test-account`,
@@ -180,7 +141,7 @@ describe('Browser Login Flow — all platforms', () => {
       let accountId: string;
 
       it(`finds seed ${platform} account`, async () => {
-        const { body } = await get('/api/accounts');
+        const { body } = await api.get('/api/accounts');
         const accounts = body as Record<string, unknown>[];
         const account = accounts.find(
           (a: Record<string, unknown>) => a.platform === platform
@@ -192,7 +153,7 @@ describe('Browser Login Flow — all platforms', () => {
 
       it('starts a browser login session', async () => {
         mockSessionState = 'waiting';
-        const { status, body } = await post(
+        const { status, body } = await api.post(
           `/api/accounts/${accountId}/browser-login/start`
         );
         expect(status).toBe(200);
@@ -201,7 +162,7 @@ describe('Browser Login Flow — all platforms', () => {
       });
 
       it('returns waiting_scan while not logged in', async () => {
-        const { status, body } = await get(
+        const { status, body } = await api.get(
           `/api/accounts/${accountId}/browser-login/status`
         );
         expect(status).toBe(200);
@@ -212,7 +173,7 @@ describe('Browser Login Flow — all platforms', () => {
         mockSessionState = 'logged_in';
         mockCookies = platformCookieSamples[platform];
 
-        const { body } = await get(
+        const { body } = await api.get(
           `/api/accounts/${accountId}/browser-login/status`
         );
         expect(body.status).toBe('logged_in');
@@ -235,9 +196,9 @@ describe('Browser Login Flow — all platforms', () => {
 
       it('cancels a login session', async () => {
         mockSessionState = 'waiting';
-        await post(`/api/accounts/${accountId}/browser-login/start`);
+        await api.post(`/api/accounts/${accountId}/browser-login/start`);
 
-        const { status, body } = await post(
+        const { status, body } = await api.post(
           `/api/accounts/${accountId}/browser-login/cancel`
         );
         expect(status).toBe(200);
@@ -249,7 +210,7 @@ describe('Browser Login Flow — all platforms', () => {
 
 describe('Browser Login — error handling', () => {
   it('returns 404 for non-existent account', async () => {
-    const { status } = await post(
+    const { status } = await api.post(
       '/api/accounts/nonexistent/browser-login/start'
     );
     expect(status).toBe(404);
@@ -257,12 +218,12 @@ describe('Browser Login — error handling', () => {
 
   it('handles browser-runner being unreachable', async () => {
     process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
-    const { body } = await get('/api/accounts');
+    const { body } = await api.get('/api/accounts');
     const accounts = body as Record<string, unknown>[];
     const dy = accounts.find(
       (a: Record<string, unknown>) => a.platform === 'douyin'
     ) as Record<string, unknown>;
-    const { status, body: resBody } = await post(
+    const { status, body: resBody } = await api.post(
       `/api/accounts/${dy.id}/browser-login/start`
     );
     expect(status).toBe(502);
@@ -276,7 +237,7 @@ describe('Browser Login — error handling', () => {
 
 describe('Browser Login — concurrent start protection', () => {
   it('rejects duplicate start requests for the same account with 409', async () => {
-    const { body } = await get('/api/accounts');
+    const { body } = await api.get('/api/accounts');
     const accounts = body as Record<string, unknown>[];
     const dy = accounts.find(
       (a: Record<string, unknown>) => a.platform === 'douyin'
@@ -307,8 +268,8 @@ describe('Browser Login — concurrent start protection', () => {
 
     // Fire two concurrent start requests
     const [res1, res2] = await Promise.all([
-      post(`/api/accounts/${dy.id}/browser-login/start`),
-      post(`/api/accounts/${dy.id}/browser-login/start`)
+      api.post(`/api/accounts/${dy.id}/browser-login/start`),
+      api.post(`/api/accounts/${dy.id}/browser-login/start`)
     ]);
 
     const statuses = [res1.status, res2.status].sort();
@@ -327,24 +288,24 @@ describe('Browser Login — concurrent start protection', () => {
   });
 
   it('allows start after previous session completes', async () => {
-    const { body } = await get('/api/accounts');
+    const { body } = await api.get('/api/accounts');
     const accounts = body as Record<string, unknown>[];
     const xhs = accounts.find(
       (a: Record<string, unknown>) => a.platform === 'xiaohongshu'
     ) as Record<string, unknown>;
 
     // First start — should succeed
-    const res1 = await post(`/api/accounts/${xhs.id}/browser-login/start`);
+    const res1 = await api.post(`/api/accounts/${xhs.id}/browser-login/start`);
     expect(res1.status).toBe(200);
 
     // Cancel the session
-    const cancelRes = await post(
+    const cancelRes = await api.post(
       `/api/accounts/${xhs.id}/browser-login/cancel`
     );
     expect(cancelRes.status).toBe(200);
 
     // Second start after cancel — should also succeed
-    const res2 = await post(`/api/accounts/${xhs.id}/browser-login/start`);
+    const res2 = await api.post(`/api/accounts/${xhs.id}/browser-login/start`);
     expect(res2.status).toBe(200);
   });
 });
@@ -352,13 +313,13 @@ describe('Browser Login — concurrent start protection', () => {
 describe('Browser Login — timeout and error detail', () => {
   it('error message contains runner URL and non-empty detail', async () => {
     process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
-    const { body } = await get('/api/accounts');
+    const { body } = await api.get('/api/accounts');
     const accounts = body as Record<string, unknown>[];
     const dy = accounts.find(
       (a: Record<string, unknown>) => a.platform === 'douyin'
     ) as Record<string, unknown>;
 
-    const { body: resBody } = await post(
+    const { body: resBody } = await api.post(
       `/api/accounts/${dy.id}/browser-login/start`
     );
 
@@ -374,14 +335,14 @@ describe('Browser Login — timeout and error detail', () => {
   });
 
   it('status endpoint returns 200 with error for missing session', async () => {
-    const { body } = await get('/api/accounts');
+    const { body } = await api.get('/api/accounts');
     const accounts = body as Record<string, unknown>[];
     const bh = accounts.find(
       (a: Record<string, unknown>) => a.platform === 'baijiahao'
     ) as Record<string, unknown>;
 
     // Poll status without starting a session — should return error gracefully
-    const { status, body: resBody } = await get(
+    const { status, body: resBody } = await api.get(
       `/api/accounts/${bh.id}/browser-login/status`
     );
     expect(status).toBe(200);

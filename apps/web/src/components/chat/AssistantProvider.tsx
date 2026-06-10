@@ -7,6 +7,40 @@ import { ToolUIRegistry } from '@/components/chat/tool-renderers';
 import { authToken, currentOrg } from '@/lib/api/client';
 import { Component, type ReactNode, useEffect, useRef, useState } from 'react';
 
+// ─── Custom fetch wrapper ─────────────────────────────────────────
+// Intercepts non-SSE responses (e.g. HTML error pages from Next.js)
+// and converts them to structured error messages that the chat UI
+// can display gracefully instead of showing raw HTML.
+
+const HTML_DETECT_RE = /^\s*<!DOCTYPE|^\s*<html/i;
+
+const safeFetch: typeof globalThis.fetch = async (input, init) => {
+  const res = await globalThis.fetch(input, init);
+  const contentType = res.headers.get('content-type') || '';
+
+  // If the response is HTML instead of SSE/JSON, replace the body
+  // with a structured error so the chat never shows raw HTML.
+  if (
+    !contentType.includes('text/event-stream') &&
+    !contentType.includes('application/json') &&
+    res.ok === false
+  ) {
+    const text = await res.text();
+    if (HTML_DETECT_RE.test(text)) {
+      return new Response(
+        JSON.stringify({ error: '聊天服务暂时不可用，请稍后重试' }),
+        {
+          status: res.status,
+          statusText: res.statusText,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+  }
+
+  return res;
+};
+
 // ─── Error Boundary ──────────────────────────────────────────────
 
 class ChatErrorBoundary extends Component<
@@ -92,6 +126,7 @@ function AssistantProviderInner({
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
       api: '/api/chat',
+      fetch: safeFetch,
       body: () => ({
         threadId: threadIdRef.current || undefined,
         token: authToken.get() || '',

@@ -6,31 +6,12 @@ import {
   seedDatabase
 } from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
+import { getTestAuth, createAuthFetch } from '../../setup/test-auth';
 
 let server: Server;
 let baseUrl: string;
-let authToken: string;
+let api: ReturnType<typeof createAuthFetch>;
 const db = createDatabaseClient();
-
-async function post(path: string, body?: unknown) {
-  const headers: Record<string, string> = {};
-  if (body) headers['content-type'] = 'application/json';
-  if (authToken) headers.authorization = `Bearer ${authToken}`;
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
-
-  let responseBody: unknown = null;
-  try {
-    responseBody = await res.json();
-  } catch {
-    responseBody = null;
-  }
-
-  return { status: res.status, body: responseBody };
-}
 
 beforeAll(async () => {
   await resetDatabase(db);
@@ -39,17 +20,8 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const addr = server.address()!;
   baseUrl = `http://${(addr as Record<string, unknown>).address}:${(addr as Record<string, unknown>).port}`;
-
-  const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      email: 'admin@ai-growth-ops.local',
-      password: 'changeme123'
-    })
-  });
-  const loginBody = await loginRes.json();
-  authToken = loginBody.token;
+  const auth = await getTestAuth(db, baseUrl);
+  api = createAuthFetch(baseUrl, auth);
 });
 
 afterAll(async () => {
@@ -62,8 +34,12 @@ describe('Interaction Sync API', () => {
     const admin = await db.user.findFirstOrThrow({
       where: { email: 'admin@ai-growth-ops.local' }
     });
+    const member = await db.organizationMember.findFirstOrThrow({
+      where: { userId: admin.id, status: 'active' }
+    });
     const account = await db.platformAccount.create({
       data: {
+        organizationId: member.organizationId,
         userId: admin.id,
         platform: 'douyin',
         name: 'Interaction Sync Test Account',
@@ -73,7 +49,7 @@ describe('Interaction Sync API', () => {
     });
 
     const beforeCount = await db.interactionSyncJob.count();
-    const { status, body } = await post('/api/interactions/sync', {
+    const { status, body } = await api.post('/api/interactions/sync', {
       platform: account.platform,
       platformAccountId: account.id,
       mode: account.mode,

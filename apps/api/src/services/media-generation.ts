@@ -118,7 +118,7 @@ export async function generateMediaAsset(
         style,
         size,
         revisedPrompt: (imageData.revised_prompt as string) ?? null
-      } as Record<string, unknown>
+      } as any
     }
   });
 

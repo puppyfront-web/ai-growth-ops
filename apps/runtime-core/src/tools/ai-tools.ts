@@ -2,11 +2,11 @@
  * AI-powered classification and reply suggestion with graceful
  * fallback to rule-based logic when the LLM is unavailable.
  *
- * Uses @ai-growth-ops/skills DefaultSkillRunner with the built-in
+ * Uses @ai-growth-ops/skills shared skill runner with the built-in
  * lead-classification and reply-suggestion skill definitions.
  */
 
-import { DefaultSkillRunner, initSkills } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import {
   classifyByRules,
   generateRuleBasedReply,
@@ -14,23 +14,6 @@ import {
   type ClassificationResult,
   type ReplySuggestionResult
 } from './rule-classifier.js';
-
-// ── Lazy singleton skill runner ────────────────────────────────────
-
-let _runner: DefaultSkillRunner | null = null;
-
-export function getSkillRunner(): DefaultSkillRunner {
-  if (!_runner) {
-    initSkills();
-    _runner = new DefaultSkillRunner();
-  }
-  return _runner;
-}
-
-/** Reset the singleton (for testing only). */
-export function resetSkillRunner(): void {
-  _runner = null;
-}
 
 // ── Classification ─────────────────────────────────────────────────
 
@@ -45,7 +28,7 @@ export async function runClassification(
   input: ClassificationInput
 ): Promise<{ result: ClassificationResult; source: 'llm' | 'rules' }> {
   try {
-    const runner = getSkillRunner();
+    const runner = getSharedSkillRunner();
     const skillResult = await runner.run<
       ClassificationInput,
       ClassificationResult
@@ -90,7 +73,7 @@ export async function runReplySuggestion(
   input: ReplySuggestionInput
 ): Promise<{ result: ReplySuggestionResult; source: 'llm' | 'rules' } | null> {
   try {
-    const runner = getSkillRunner();
+    const runner = getSharedSkillRunner();
     const skillResult = await runner.run<
       Record<string, unknown>,
       Record<string, unknown>

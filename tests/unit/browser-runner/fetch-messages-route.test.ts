@@ -23,6 +23,12 @@ afterEach(() => {
 
 describe('/assist/fetch-messages', () => {
   it('returns a structured 502 error when message collection fails', async () => {
+    // Clear the runner secret so auth is not required in test
+    const origSecret = process.env.BROWSER_RUNNER_SECRET;
+    const origTokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+    delete process.env.BROWSER_RUNNER_SECRET;
+    delete process.env.TOKEN_ENCRYPTION_KEY;
+
     vi.doMock('../../../apps/browser-runner/src/browser-session.js', () => ({
       createStealthSession: vi
         .fn()
@@ -51,6 +57,8 @@ describe('/assist/fetch-messages', () => {
       await new Promise<void>((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve()))
       );
+      if (origSecret) process.env.BROWSER_RUNNER_SECRET = origSecret;
+      if (origTokenKey) process.env.TOKEN_ENCRYPTION_KEY = origTokenKey;
     }
   });
 });

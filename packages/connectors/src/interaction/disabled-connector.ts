@@ -4,13 +4,14 @@ import type {
   InteractionConnectorConfig,
   PlatformComment,
   PlatformMessage,
-  ReplyResult
+  ReplyResult,
+  PlatformCode
 } from './types.js';
 
 export class DisabledInteractionConnector implements InteractionConnector {
-  readonly platform;
+  readonly platform: PlatformCode;
 
-  constructor(platform: string, _config?: InteractionConnectorConfig) {
+  constructor(platform: PlatformCode, _config?: InteractionConnectorConfig) {
     this.platform = platform;
   }
 

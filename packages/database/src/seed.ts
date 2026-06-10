@@ -29,7 +29,7 @@ export async function seedDatabase(db: DatabaseClient): Promise<void> {
   }
 
   const passwordHash = hashPassword(INITIAL_ADMIN_PASSWORD);
-  await db.user.create({
+  const user = await db.user.create({
     data: {
       email: INITIAL_ADMIN_EMAIL,
       name: INITIAL_ADMIN_NAME,
@@ -39,7 +39,27 @@ export async function seedDatabase(db: DatabaseClient): Promise<void> {
     }
   });
 
+  // Create a default organization for the seeded user
+  const orgSlug = `admin-workspace-${randomBytes(4).toString('hex')}`;
+  const org = await db.organization.create({
+    data: {
+      name: `${INITIAL_ADMIN_NAME}的工作空间`,
+      slug: orgSlug,
+      status: 'active',
+      metadata: { isDefault: true }
+    }
+  });
+  await db.organizationMember.create({
+    data: {
+      organizationId: org.id,
+      userId: user.id,
+      role: 'owner',
+      status: 'active'
+    }
+  });
+
   console.log(`[seed] Created admin user: ${INITIAL_ADMIN_EMAIL}`);
   console.log(`[seed] Default password: ${INITIAL_ADMIN_PASSWORD}`);
+  console.log(`[seed] Default organization: ${org.id}`);
   console.log(`[seed] ⚠️  Change the password immediately after first login.`);
 }

@@ -1,4 +1,5 @@
 export { DefaultSkillRunner } from './runner.js';
+export type { SkillRunAdvancedOptions } from './runner.js';
 export {
   registerSkill,
   getSkill,
@@ -6,6 +7,15 @@ export {
   skillExists,
   discoverSkills
 } from './registry.js';
+export {
+  getSharedSkillRunner,
+  resetSharedSkillRunner
+} from './runner-factory.js';
+export {
+  skillToToolSpec,
+  allSkillsToToolSpecs,
+  createSkillToolCallHandler
+} from './skill-to-tool.js';
 export type {
   SkillRunner,
   SkillDefinition,

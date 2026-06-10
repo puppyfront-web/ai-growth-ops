@@ -427,13 +427,13 @@ export async function runCli(
       }
     }
 
+    const typedLeads = leads as Record<string, unknown>[];
     const filtered = levelFilter
-      ? leads.filter(
-          (l: Record<string, unknown>) =>
-            (l.classification as Record<string, unknown> | undefined)
-              ?.leadLevel === levelFilter
-        )
-      : leads;
+      ? typedLeads.filter((l) => {
+          const cls = l.classification as Record<string, unknown> | undefined;
+          return cls?.leadLevel === levelFilter;
+        })
+      : typedLeads;
 
     console.log(JSON.stringify(filtered.slice(0, limit)));
     return;
@@ -463,7 +463,8 @@ export async function runCli(
           };
           if (entry.leads) {
             for (const l of entry.leads) {
-              const level = l.classification?.leadLevel as keyof typeof totals;
+              const cls = l.classification as Record<string, unknown> | undefined;
+              const level = cls?.leadLevel as keyof typeof totals;
               if (level && level in totals) totals[level]++;
             }
           }

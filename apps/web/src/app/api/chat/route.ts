@@ -60,22 +60,52 @@ async function fetchUserContext(token: string, orgId: string) {
 }
 
 export async function POST(req: Request) {
+  try {
+    return await handleChat(req);
+  } catch (err) {
+    // Catch-all: never let Next.js return an HTML error page.
+    // This prevents the chat UI from displaying raw HTML to the user.
+    const message =
+      err instanceof Error ? err.message : '聊天服务暂时不可用，请稍后重试';
+    console.error('[chat] Unhandled error:', message);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' }
+    });
+  }
+}
+
+async function handleChat(req: Request) {
   // ── Input validation ───────────────────────────────────────────
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: '无效的请求体' }), { status: 400 });
+    return new Response(JSON.stringify({ error: '无效的请求体' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' }
+    });
   }
 
-  const { messages: newMessages, threadId: existingThreadId, token, organizationId } = body;
+  const {
+    messages: newMessages,
+    threadId: existingThreadId,
+    token,
+    organizationId
+  } = body;
 
   if (!token || !organizationId) {
-    return new Response(JSON.stringify({ error: '未登录' }), { status: 401 });
+    return new Response(JSON.stringify({ error: '未登录' }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' }
+    });
   }
 
   if (!Array.isArray(newMessages) || newMessages.length === 0) {
-    return new Response(JSON.stringify({ error: '消息不能为空' }), { status: 400 });
+    return new Response(JSON.stringify({ error: '消息不能为空' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' }
+    });
   }
 
   const authHeaders: Record<string, string> = {
@@ -96,15 +126,31 @@ export async function POST(req: Request) {
   }
 
   // ── Build system prompt (single /api/accounts fetch) ───────────
-  const { user, accounts } = await fetchUserContext(String(token), String(organizationId));
+  const { user, accounts } = await fetchUserContext(
+    String(token),
+    String(organizationId)
+  );
 
-  const userName = String((user as Record<string, unknown>)?.name || (user as Record<string, unknown>)?.email || '用户');
-  const orgName = String(((user as Record<string, unknown>)?.organization as Record<string, unknown>)?.name || organizationId);
+  const userName = String(
+    (user as Record<string, unknown>)?.name ||
+      (user as Record<string, unknown>)?.email ||
+      '用户'
+  );
+  const orgName = String(
+    ((user as Record<string, unknown>)?.organization as Record<string, unknown>)
+      ?.name || organizationId
+  );
 
   const basePrompt = buildSystemPrompt({
     userName,
     orgName,
-    platforms: accounts as Array<{ id: string; platform: string; name: string; status: string; mode: string }>,
+    platforms: accounts as Array<{
+      id: string;
+      platform: string;
+      name: string;
+      status: string;
+      mode: string;
+    }>,
     today: new Date().toISOString()
   });
 
@@ -117,9 +163,14 @@ export async function POST(req: Request) {
   const systemPrompt = basePrompt + operationalContext;
 
   // ── LLM call ───────────────────────────────────────────────────
-  const tools = createTools({ token: String(token), orgId: String(organizationId) });
+  const tools = createTools({
+    token: String(token),
+    orgId: String(organizationId)
+  });
 
-  const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = createAnthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY
+  });
   const model = anthropic('claude-sonnet-4-6-20250514');
 
   const result = streamText({
@@ -133,12 +184,17 @@ export async function POST(req: Request) {
       try {
         const persistJobs: Promise<unknown>[] = [];
 
-        const lastUserMsg = (newMessages as Array<Record<string, unknown>>)[newMessages.length - 1];
+        const lastUserMsg = (newMessages as Array<Record<string, unknown>>)[
+          newMessages.length - 1
+        ];
         if (lastUserMsg) {
           persistJobs.push(
             apiCall(`/api/chat/threads/${threadId}/messages`, {
               method: 'POST',
-              body: { role: lastUserMsg.role, content: lastUserMsg.content },
+              body: {
+                role: lastUserMsg.role,
+                content: lastUserMsg.content
+              },
               headers: authHeaders
             })
           );

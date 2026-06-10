@@ -69,7 +69,7 @@ export const analyticsRoutes: Array<{
           entityType: body.entityType ? String(body.entityType) : null,
           entityId: body.entityId ? String(body.entityId) : null,
           value: body.value ? Number(body.value) : null,
-          metadata: (body.metadata as Record<string, unknown>) || null,
+          metadata: (body.metadata ?? null) as any,
           occurredAt: body.occurredAt
             ? new Date(body.occurredAt as string)
             : new Date()
@@ -99,7 +99,7 @@ export async function trackEvent(
       entityType: data.entityType || null,
       entityId: data.entityId || null,
       value: data.value || null,
-      metadata: (data.metadata || null) as Record<string, unknown>,
+      metadata: (data.metadata || null) as any,
       occurredAt: new Date()
     }
   });

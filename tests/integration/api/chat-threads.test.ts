@@ -6,49 +6,14 @@ import {
   seedDatabase
 } from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
+import { getTestAuth, createAuthFetch, type TestAuthContext } from '../../setup/test-auth';
 
 const db = createDatabaseClient();
 
 let apiServer: Server;
 let baseUrl: string;
-let authToken = '';
-let orgId = '';
-
-async function post(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      ...(body ? { 'content-type': 'application/json' } : {}),
-      authorization: `Bearer ${authToken}`,
-      'x-organization-id': orgId
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  return { status: res.status, body: await res.json() };
-}
-
-async function get(path: string) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    headers: {
-      authorization: `Bearer ${authToken}`,
-      'x-organization-id': orgId
-    }
-  });
-  return { status: res.status, body: await res.json() };
-}
-
-async function patch(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'PATCH',
-    headers: {
-      ...(body ? { 'content-type': 'application/json' } : {}),
-      authorization: `Bearer ${authToken}`,
-      'x-organization-id': orgId
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  return { status: res.status, body: await res.json() };
-}
+let auth: TestAuthContext;
+let api: ReturnType<typeof createAuthFetch>;
 
 beforeAll(async () => {
   // Reset DB & seed admin user
@@ -74,7 +39,6 @@ beforeAll(async () => {
       status: 'active'
     }
   });
-  orgId = org.id;
 
   // Start API server on random port
   apiServer = createApiServer({ db }) as Server;
@@ -84,17 +48,9 @@ beforeAll(async () => {
   const addr = apiServer.address() as { address: string; port: number };
   baseUrl = `http://${addr.address}:${addr.port}`;
 
-  // Login to get token
-  const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      email: 'admin@ai-growth-ops.local',
-      password: 'changeme123'
-    })
-  });
-  const loginBody = (await loginRes.json()) as { token: string };
-  authToken = loginBody.token;
+  // Get authenticated context
+  auth = await getTestAuth(db, baseUrl);
+  api = createAuthFetch(baseUrl, auth);
 });
 
 afterAll(async () => {
@@ -106,7 +62,7 @@ describe('Chat Thread CRUD', () => {
   let threadId: string;
 
   it('creates a thread', async () => {
-    const { status, body } = await post('/api/chat/threads', {});
+    const { status, body } = await api.post('/api/chat/threads', {});
     expect(status).toBe(201);
     expect(body.id).toBeDefined();
     expect(body.status).toBe('active');
@@ -115,7 +71,7 @@ describe('Chat Thread CRUD', () => {
   });
 
   it('creates a thread with title', async () => {
-    const { status, body } = await post('/api/chat/threads', {
+    const { status, body } = await api.post('/api/chat/threads', {
       title: '测试标题'
     });
     expect(status).toBe(201);
@@ -123,14 +79,14 @@ describe('Chat Thread CRUD', () => {
   });
 
   it('lists threads', async () => {
-    const { status, body } = await get('/api/chat/threads');
+    const { status, body } = await api.get('/api/chat/threads');
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBeGreaterThanOrEqual(2);
   });
 
   it('gets a thread with messages', async () => {
-    const { status, body } = await get(`/api/chat/threads/${threadId}`);
+    const { status, body } = await api.get(`/api/chat/threads/${threadId}`);
     expect(status).toBe(200);
     expect(body.id).toBe(threadId);
     expect(Array.isArray(body.messages)).toBe(true);
@@ -138,7 +94,7 @@ describe('Chat Thread CRUD', () => {
   });
 
   it('adds a message to a thread', async () => {
-    const { status, body } = await post(
+    const { status, body } = await api.post(
       `/api/chat/threads/${threadId}/messages`,
       {
         role: 'user',
@@ -151,20 +107,27 @@ describe('Chat Thread CRUD', () => {
   });
 
   it('auto-generates title from first user message', async () => {
-    const { body } = await get(`/api/chat/threads/${threadId}`);
+    const { body } = await api.get(`/api/chat/threads/${threadId}`);
     expect(body.title).toBe('帮我发布到抖音');
   });
 
   it('updates thread status', async () => {
-    const { status, body } = await patch(`/api/chat/threads/${threadId}`, {
-      status: 'archived'
+    // createAuthFetch doesn't provide patch — use fetch directly with auth headers
+    const res = await fetch(`${baseUrl}/api/chat/threads/${threadId}`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        ...auth.headers
+      },
+      body: JSON.stringify({ status: 'archived' })
     });
-    expect(status).toBe(200);
-    expect(body.status).toBe('archived');
+    const respBody = await res.json();
+    expect(res.status).toBe(200);
+    expect(respBody.status).toBe('archived');
   });
 
   it('returns 404 for non-existent thread', async () => {
-    const { status } = await get('/api/chat/threads/nonexistent');
+    const { status } = await api.get('/api/chat/threads/nonexistent');
     expect(status).toBe(404);
   });
 

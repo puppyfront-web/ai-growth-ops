@@ -5,7 +5,11 @@ import type {
   ResearchTask
 } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
-import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner } from '@ai-growth-ops/skills';
+import {
+  analyzeContentThemes,
+  analyzeCommentSentiment
+} from '@ai-growth-ops/shared';
 import { fetchWithTimeout } from './browser-login-config.js';
 
 type TaskSnapshot = ResearchTask & {
@@ -183,7 +187,7 @@ export async function executeResearchTaskSync(
           publishedAt: post.publishedAt
             ? new Date(post.publishedAt as string)
             : undefined,
-          metadata: post.metadata as Record<string, unknown>
+          metadata: post.metadata as any
         }
       });
     }
@@ -201,7 +205,7 @@ export async function executeResearchTaskSync(
           externalUserName: comment.externalUserName as string | undefined,
           content: String(comment.content ?? comment.text ?? ''),
           likeCount: comment.likeCount as number | undefined,
-          metadata: comment.metadata as Record<string, unknown>
+          metadata: comment.metadata as any
         }
       });
     }
@@ -321,7 +325,7 @@ async function createInsightsAndOpportunities(
   // Try AI insight generation first
   try {
     console.log('[research] Generating AI insights...');
-    const runner = new DefaultSkillRunner();
+    const runner = getSharedSkillRunner();
     const result = await runner.run({
       skillName: 'research-insight',
       input: {
@@ -361,7 +365,7 @@ async function createInsightsAndOpportunities(
             type: def.type,
             title: def.title,
             summary: items.slice(0, 3).map(String).join('；'),
-            data: def.data as Record<string, unknown>
+            data: def.data as any
           }
         });
       }
@@ -462,7 +466,7 @@ async function createInsightsAndOpportunitiesFallback(
         type: insight.type,
         title: insight.title,
         summary: insight.summary,
-        data: insight.data as Record<string, unknown>
+        data: insight.data as any
       }
     });
   }
@@ -501,115 +505,6 @@ async function createInsightsAndOpportunitiesFallback(
   }
 }
 
-function analyzeContentThemes(
-  posts: Array<{
-    title?: string;
-    content?: string;
-    likeCount?: number;
-    commentCount?: number;
-  }>
-) {
-  const themeMap = new Map<
-    string,
-    { count: number; totalEngagement: number }
-  >();
-  const keywords = [
-    'AI',
-    '获客',
-    '营销',
-    '自动化',
-    '内容',
-    '运营',
-    '增长',
-    '私域',
-    '投放',
-    '转化',
-    '品牌',
-    '直播',
-    '短视频',
-    '小红书',
-    '抖音',
-    '美白',
-    '精华',
-    '护肤',
-    '种草'
-  ];
-
-  for (const post of posts) {
-    const text = `${post.title || ''} ${post.content || ''}`;
-    const engagement = (post.likeCount || 0) + (post.commentCount || 0);
-    for (const keyword of keywords) {
-      if (!text.includes(keyword)) continue;
-      const existing = themeMap.get(keyword) || {
-        count: 0,
-        totalEngagement: 0
-      };
-      existing.count += 1;
-      existing.totalEngagement += engagement;
-      themeMap.set(keyword, existing);
-    }
-  }
-
-  return Array.from(themeMap.entries())
-    .map(([theme, stats]) => ({
-      theme,
-      count: stats.count,
-      avgEngagement: Math.round(
-        stats.totalEngagement / Math.max(stats.count, 1)
-      )
-    }))
-    .sort((left, right) => right.avgEngagement - left.avgEngagement);
-}
-
-function analyzeCommentSentiment(comments: Array<{ content: string }>) {
-  const positiveWords = [
-    '好',
-    '棒',
-    '赞',
-    '有用',
-    '学到了',
-    '不错',
-    '收藏',
-    '分享',
-    '厉害',
-    '推荐'
-  ];
-  const negativeWords = [
-    '差',
-    '骗',
-    '假',
-    '差评',
-    '失望',
-    '垃圾',
-    '坑',
-    '不行',
-    '退'
-  ];
-
-  let positive = 0;
-  let negative = 0;
-  let neutral = 0;
-
-  for (const comment of comments) {
-    const hasPositive = positiveWords.some((word) =>
-      comment.content.includes(word)
-    );
-    const hasNegative = negativeWords.some((word) =>
-      comment.content.includes(word)
-    );
-    if (hasPositive && !hasNegative) positive += 1;
-    else if (hasNegative && !hasPositive) negative += 1;
-    else neutral += 1;
-  }
-
-  const total = Math.max(comments.length, 1);
-  return {
-    positive: Math.round((positive / total) * 100),
-    neutral: Math.round((neutral / total) * 100),
-    negative: Math.round((negative / total) * 100),
-    topKeywords: ['价格咨询', '方案需求', '案例参考']
-  };
-}
 
 export class ResearchExecutionError extends Error {
   constructor(

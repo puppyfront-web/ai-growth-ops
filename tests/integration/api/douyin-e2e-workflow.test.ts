@@ -20,6 +20,7 @@ import {
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import { encryptToken } from '@ai-growth-ops/providers';
 import { createApiServer } from '../../../apps/api/src';
+import { getTestAuth, createAuthFetch, type TestAuthContext } from '../../setup/test-auth';
 import type {
   InteractionSyncCommentsInput,
   InteractionSyncMessagesInput
@@ -30,12 +31,14 @@ import { handleInteractionSyncMessages } from '../../../apps/worker/src/job-hand
 // ── Mock skill runner to skip real AI calls (fail fast → rule fallback) ──
 vi.mock('@ai-growth-ops/skills', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
+  const mockRun = vi
+    .fn()
+    .mockRejectedValue(new Error('No AI API key in test environment'));
   return {
     ...actual,
+    getSharedSkillRunner: () => ({ run: mockRun }),
     DefaultSkillRunner: class {
-      run = vi
-        .fn()
-        .mockRejectedValue(new Error('No AI API key in test environment'));
+      run = mockRun;
     }
   };
 });
@@ -66,8 +69,7 @@ let baseUrl: string;
 const db: DatabaseClient = createDatabaseClient();
 
 // Auth
-let authToken = '';
-let orgId = '';
+let auth: TestAuthContext;
 let adminId = '';
 
 // Account
@@ -80,38 +82,6 @@ let publishJobId = '';
 
 // Lead
 let leadId = '';
-
-// ── HTTP helpers ───────────────────────────────────────────────────
-
-function authHeaders(): Record<string, string> {
-  return { authorization: `Bearer ${authToken}`, 'x-organization-id': orgId };
-}
-
-async function get(path: string) {
-  const res = await fetch(`${baseUrl}${path}`, { headers: authHeaders() });
-  return { status: res.status, body: await res.json() };
-}
-
-async function post(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      ...(body ? { 'content-type': 'application/json' } : {}),
-      ...authHeaders()
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  return { status: res.status, body: await res.json() };
-}
-
-async function patch(path: string, body?: unknown) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json', ...authHeaders() },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  return { status: res.status, body: await res.json() };
-}
 
 // ── Setup ──────────────────────────────────────────────────────────
 
@@ -140,7 +110,6 @@ beforeAll(async () => {
       status: 'active'
     }
   });
-  orgId = org.id;
 
   // 3. Start API server
   apiServer = createApiServer({ db }) as Server;
@@ -150,17 +119,8 @@ beforeAll(async () => {
   const apiAddr = apiServer.address() as { address: string; port: number };
   baseUrl = `http://${apiAddr.address}:${apiAddr.port}`;
 
-  // 4. Login to get JWT
-  const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      email: 'admin@ai-growth-ops.local',
-      password: 'changeme123'
-    })
-  });
-  const loginBody = (await loginRes.json()) as { token: string };
-  authToken = loginBody.token;
+  // 4. Get authenticated context
+  auth = await getTestAuth(db, baseUrl);
 }, 30_000);
 
 afterAll(async () => {
@@ -168,6 +128,24 @@ afterAll(async () => {
   await db.$disconnect();
   vi.restoreAllMocks();
 });
+
+// Helper: create authenticated fetch helpers for this file
+function getApi() {
+  return createAuthFetch(baseUrl, auth);
+}
+
+// Helper: PATCH (not provided by createAuthFetch)
+async function apiPatch(path: string, body?: unknown) {
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'PATCH',
+    headers: {
+      ...(body ? { 'content-type': 'application/json' } : {}),
+      ...auth.headers
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return { status: res.status, body: await res.json() };
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // Douyin AI Native E2E Workflow
@@ -181,7 +159,7 @@ describe('Douyin AI Native E2E Workflow', () => {
     // (API route validates mode against ProviderMode enum — 'browser_assist' is valid)
     const account = await db.platformAccount.create({
       data: {
-        organizationId: orgId,
+        organizationId: auth.orgId,
         userId: adminId,
         platform: 'douyin',
         name: 'E2E 抖音测试账号',
@@ -202,8 +180,10 @@ describe('Douyin AI Native E2E Workflow', () => {
   // ── Phase 2: 内容创建 + 发布 ────────────────────────────────────
 
   it('Phase 2: 创建内容 + 发布到抖音', async () => {
+    const api = getApi();
+
     // Create content item via API
-    const { status: ciStatus, body: item } = await post('/api/content-items', {
+    const { status: ciStatus, body: item } = await api.post('/api/content-items', {
       type: 'text_image',
       title: 'AI 获客实战：如何用内容营销实现自动化线索增长',
       body: '本文分享如何利用 AI 驱动的内容营销策略，在抖音、小红书等平台实现自动化的线索获取和转化...'
@@ -216,7 +196,7 @@ describe('Douyin AI Native E2E Workflow', () => {
       data: {
         contentItemId,
         userId: adminId,
-        organizationId: orgId,
+        organizationId: auth.orgId,
         platform: 'douyin',
         contentType: 'text_image',
         title: 'AI 获客实战：如何用内容营销实现自动化线索增长',
@@ -228,7 +208,7 @@ describe('Douyin AI Native E2E Workflow', () => {
     variantId = variant.id;
 
     // Create publish job via API
-    const { status: pjStatus, body: job } = await post('/api/publish-jobs', {
+    const { status: pjStatus, body: job } = await api.post('/api/publish-jobs', {
       contentItemId,
       contentVariantId: variantId,
       platformAccountId: accountId,
@@ -265,7 +245,7 @@ describe('Douyin AI Native E2E Workflow', () => {
     });
 
     // Verify via API
-    const { status: getStatus, body: verified } = await get(
+    const { status: getStatus, body: verified } = await api.get(
       `/api/publish-jobs/${publishJobId}`
     );
     expect(getStatus).toBe(200);
@@ -378,6 +358,8 @@ describe('Douyin AI Native E2E Workflow', () => {
   // ── Phase 4: 互动处理（分类 → 回复 → 转线索）──────────────────
 
   it('Phase 4: 对互动进行分类、回复、转化为线索', async () => {
+    const api = getApi();
+
     // Get interactions with classifications
     const interactions = await db.interaction.findMany({
       where: { platformAccountId: accountId, type: 'comment' },
@@ -394,13 +376,13 @@ describe('Douyin AI Native E2E Workflow', () => {
     const targetId = aLevelComment!.id;
 
     // 4a. Classify via API — should return existing or updated classification
-    const { status: clsStatus } = await post(
+    const { status: clsStatus } = await api.post(
       `/api/interactions/${targetId}/classify`
     );
     expect(clsStatus).toBe(200);
 
     // 4b. Suggest reply via API
-    const { status: srStatus, body: suggestions } = await post(
+    const { status: srStatus, body: suggestions } = await api.post(
       `/api/interactions/${targetId}/suggest-reply`
     );
     expect(srStatus).toBe(200);
@@ -411,15 +393,15 @@ describe('Douyin AI Native E2E Workflow', () => {
       Array.isArray(suggestions) && suggestions[0]?.content
         ? suggestions[0].content
         : '您好，感谢咨询！请问方便留下联系方式吗？';
-    const { status: replyStatus } = await post(
+    const { status: replyStatus } = await api.post(
       `/api/interactions/${targetId}/reply`,
       {
         content: replyText,
         riskLevel: 'low'
       }
     );
-    // May succeed (200) or get blocked (403) depending on pipeline
-    expect([200, 403]).toContain(replyStatus);
+    // May succeed (200), get queued (202), or get blocked (403) depending on pipeline
+    expect([200, 202, 403]).toContain(replyStatus);
 
     if (replyStatus === 200) {
       const replied = await db.interaction.findFirst({
@@ -429,7 +411,7 @@ describe('Douyin AI Native E2E Workflow', () => {
     }
 
     // 4d. Convert to lead
-    const { status: clStatus, body: lead } = await post(
+    const { status: clStatus, body: lead } = await api.post(
       `/api/interactions/${targetId}/convert-to-lead`
     );
     if (clStatus === 201) {
@@ -444,7 +426,7 @@ describe('Douyin AI Native E2E Workflow', () => {
       const newLead = await db.lead.create({
         data: {
           userId: adminId,
-          organizationId: orgId,
+          organizationId: auth.orgId,
           sourcePlatform: 'douyin',
           sourceAccountId: accountId,
           externalUserId: 'sandbox_user_0',
@@ -464,10 +446,12 @@ describe('Douyin AI Native E2E Workflow', () => {
   // ── Phase 5: 线索管理 + 同步 ────────────────────────────────────
 
   it('Phase 5: 线索分配 + 同步到飞书/企微', async () => {
+    const api = getApi();
+
     expect(leadId).toBeTruthy();
 
     // 5a. List leads via API
-    const { status: listStatus, body: leadsBody } = await get('/api/leads');
+    const { status: listStatus, body: leadsBody } = await api.get('/api/leads');
     expect(listStatus).toBe(200);
     const leads = Array.isArray(leadsBody)
       ? leadsBody
@@ -477,7 +461,7 @@ describe('Douyin AI Native E2E Workflow', () => {
     expect(leads.length).toBeGreaterThan(0);
 
     // 5b. Assign lead
-    const { status: assignStatus, body: assigned } = await patch(
+    const { status: assignStatus, body: assigned } = await apiPatch(
       `/api/leads/${leadId}/assign`,
       {
         assignedTo: adminId
@@ -488,10 +472,10 @@ describe('Douyin AI Native E2E Workflow', () => {
 
     // 5c. Create lead sink configs
     await db.leadSinkConfig.upsert({
-      where: { id: `e2e-feishu-${orgId}` },
+      where: { id: `e2e-feishu-${auth.orgId}` },
       create: {
-        id: `e2e-feishu-${orgId}`,
-        organizationId: orgId,
+        id: `e2e-feishu-${auth.orgId}`,
+        organizationId: auth.orgId,
         userId: adminId,
         sinkType: 'lark',
         config: {
@@ -504,10 +488,10 @@ describe('Douyin AI Native E2E Workflow', () => {
       update: {}
     });
     await db.leadSinkConfig.upsert({
-      where: { id: `e2e-wecom-${orgId}` },
+      where: { id: `e2e-wecom-${auth.orgId}` },
       create: {
-        id: `e2e-wecom-${orgId}`,
-        organizationId: orgId,
+        id: `e2e-wecom-${auth.orgId}`,
+        organizationId: auth.orgId,
         userId: adminId,
         sinkType: 'wecom',
         config: { corpId: 'mock', secret: 'mock', agentId: 'mock' }
@@ -516,21 +500,21 @@ describe('Douyin AI Native E2E Workflow', () => {
     });
 
     // 5d. Sync to Feishu (mocked — no real HTTP calls)
-    const { status: fStatus, body: fResult } = await post(
+    const { status: fStatus, body: fResult } = await api.post(
       `/api/leads/${leadId}/sync-feishu`
     );
     expect(fStatus).toBe(200);
     expect((fResult as Record<string, unknown>).success).toBe(true);
 
     // 5e. Sync to WeCom (mocked)
-    const { status: wStatus, body: wResult } = await post(
+    const { status: wStatus, body: wResult } = await api.post(
       `/api/leads/${leadId}/sync-wecom`
     );
     expect(wStatus).toBe(200);
     expect((wResult as Record<string, unknown>).success).toBe(true);
 
     // 5f. Verify lead has external mappings and sync logs
-    const { body: finalLead } = await get(`/api/leads/${leadId}`);
+    const { body: finalLead } = await api.get(`/api/leads/${leadId}`);
     const mappings =
       (finalLead as Record<string, unknown>).externalMappings ?? [];
     const syncLogs = (finalLead as Record<string, unknown>).syncLogs ?? [];
@@ -541,7 +525,9 @@ describe('Douyin AI Native E2E Workflow', () => {
   // ── Phase 6: 分析验证 ───────────────────────────────────────────
 
   it('Phase 6: 分析数据验证', async () => {
-    const { status, body } = await get('/api/analytics/overview');
+    const api = getApi();
+
+    const { status, body } = await api.get('/api/analytics/overview');
     expect(status).toBe(200);
 
     const a = body as Record<string, unknown>;
@@ -551,7 +537,7 @@ describe('Douyin AI Native E2E Workflow', () => {
 
     // Verify interaction list API
     const { status: iStatus, body: interactions } =
-      await get('/api/interactions');
+      await api.get('/api/interactions');
     expect(iStatus).toBe(200);
     const list = Array.isArray(interactions)
       ? interactions
@@ -575,20 +561,20 @@ describe('Douyin AI Native E2E Workflow', () => {
       leadCount,
       syncLogCount
     ] = await Promise.all([
-      db.platformAccount.count({ where: { organizationId: orgId } }),
+      db.platformAccount.count({ where: { organizationId: auth.orgId } }),
       db.contentItem.count({
-        where: { organizationId: orgId, deletedAt: null }
+        where: { organizationId: auth.orgId, deletedAt: null }
       }),
       db.publishJob.count({
-        where: { organizationId: orgId, deletedAt: null }
+        where: { organizationId: auth.orgId, deletedAt: null }
       }),
       db.publishJob.count({
-        where: { organizationId: orgId, status: 'PUBLISHED' }
+        where: { organizationId: auth.orgId, status: 'PUBLISHED' }
       }),
-      db.interaction.count({ where: { organizationId: orgId } }),
+      db.interaction.count({ where: { organizationId: auth.orgId } }),
       db.interactionClassification.count(),
       db.replySuggestion.count(),
-      db.lead.count({ where: { organizationId: orgId, deletedAt: null } }),
+      db.lead.count({ where: { organizationId: auth.orgId, deletedAt: null } }),
       db.leadSinkSyncLog.count()
     ]);
 

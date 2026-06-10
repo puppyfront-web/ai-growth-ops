@@ -8,7 +8,7 @@
  */
 
 import type { DatabaseClient } from '@ai-growth-ops/database';
-import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import type {
   ClassificationResult,
   ReplySuggestionResult
@@ -29,12 +29,6 @@ const VALID_REPLY_TYPES = [
   'complaint_response',
   'manual_only'
 ] as const;
-
-let _skillRunner: DefaultSkillRunner | null = null;
-function getSkillRunner(): DefaultSkillRunner {
-  if (!_skillRunner) _skillRunner = new DefaultSkillRunner();
-  return _skillRunner;
-}
 
 /**
  * Classify an interaction and optionally generate a reply suggestion.
@@ -57,7 +51,7 @@ export async function classifyAndSuggestReply(
       data: { status: 'CLASSIFYING' }
     });
 
-    const runner = getSkillRunner();
+    const runner = getSharedSkillRunner();
     const result = await runner.run({
       skillName: 'lead-classification',
       input: { platform, interactionType, content }
@@ -117,7 +111,7 @@ export async function classifyAndSuggestReply(
     let reply: ReplySuggestionResult | null = null;
 
     try {
-      const runner = getSkillRunner();
+      const runner = getSharedSkillRunner();
       const result = await runner.run<
         Record<string, unknown>,
         Record<string, unknown>

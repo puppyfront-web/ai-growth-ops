@@ -5,20 +5,15 @@
  * resolving ${variable} references from previous step outputs.
  *
  * Step types: skill, generate-media, platform-rewrite, publish,
- *             delay, sync-interactions, auto-reply, growth-review
+ *             delay, sync-interactions, auto-reply, growth-review, agent
  */
 
 import { Job } from 'bullmq';
 import { createDatabaseClient } from '@ai-growth-ops/database';
 import type { Platform } from '@ai-growth-ops/database';
-import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner, allSkillsToToolSpecs, createSkillToolCallHandler } from '@ai-growth-ops/skills';
+import { runAgentLoop, createLLMClient } from '@ai-growth-ops/ai';
 import { getQueue, QUEUE_NAMES } from '../queue.js';
-
-let _skillRunner: DefaultSkillRunner | null = null;
-function getSkillRunner(): DefaultSkillRunner {
-  if (!_skillRunner) _skillRunner = new DefaultSkillRunner();
-  return _skillRunner;
-}
 
 export async function handleWorkflowExecute(job: Job): Promise<void> {
   const { executionId } = job.data as { executionId: string };
@@ -94,6 +89,10 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
           result = await executeSkillStep('growth-review', resolvedInput);
           break;
 
+        case 'agent':
+          result = await executeAgentStep(resolvedInput);
+          break;
+
         case 'delay': {
           // Update execution state, then re-schedule
           await db.workflowExecution.update({
@@ -107,7 +106,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
                   status: 'completed',
                   output: { delayed: true }
                 }
-              ] as unknown as Record<string, unknown>[]
+              ] as any
             }
           });
           // Schedule continuation after delay
@@ -143,7 +142,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
         where: { id: executionId },
         data: {
           currentStepIndex: i + 1,
-          stepResults: stepResults as unknown as Record<string, unknown>[]
+          stepResults: stepResults as any
         }
       });
     }
@@ -162,7 +161,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
         status: 'failed',
         errorMessage,
         finishedAt: new Date(),
-        stepResults: stepResults as unknown as Record<string, unknown>[]
+        stepResults: stepResults as any
       }
     });
     console.error(`[workflow] Execution ${executionId} failed:`, errorMessage);
@@ -177,7 +176,7 @@ async function executeSkillStep(
   input: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   if (!skillName) throw new Error('skillName is required for skill step');
-  const runner = getSkillRunner();
+  const runner = getSharedSkillRunner();
   const result = await runner.run({ skillName, input });
   if (result.status === 'success' && result.output) {
     return result.output as Record<string, unknown>;
@@ -185,6 +184,39 @@ async function executeSkillStep(
   throw new Error(
     `Skill ${skillName} failed: ${result.error || 'unknown error'}`
   );
+}
+
+/**
+ * Execute an agent step — runs an AI agent loop with skill-based tools.
+ * The agent can call multiple skills in a multi-step reasoning process.
+ *
+ * Input: { prompt: string, skills?: string[], maxSteps?: number }
+ */
+async function executeAgentStep(
+  input: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const prompt = String(input.prompt || '');
+  if (!prompt) throw new Error('prompt is required for agent step');
+
+  const client = createLLMClient();
+  const tools = allSkillsToToolSpecs();
+  const onToolCall = createSkillToolCallHandler(getSharedSkillRunner());
+
+  const agentResult = await runAgentLoop({
+    client,
+    systemPrompt: 'You are an AI growth operations assistant. Execute the requested task using the available skill tools.',
+    messages: [{ role: 'user', content: prompt }],
+    tools,
+    onToolCall,
+    maxSteps: (input.maxSteps as number) || 5
+  });
+
+  return {
+    finalText: agentResult.finalText,
+    stepsCompleted: agentResult.stepsCompleted,
+    toolCallsExecuted: agentResult.toolCallsExecuted,
+    tokenUsage: agentResult.tokenUsage
+  };
 }
 
 async function executeGenerateMediaStep(
@@ -232,7 +264,7 @@ async function executePlatformRewriteStep(
   userId: string,
   input: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const runner = getSkillRunner();
+  const runner = getSharedSkillRunner();
   const result = await runner.run({
     skillName: 'platform-rewrite',
     input: {

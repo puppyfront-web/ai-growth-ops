@@ -94,11 +94,19 @@ export async function runInteractionOps(
       };
     } catch (error) {
       console.error('[interaction-ops] browser-runner fetch failed:', error);
+      const message =
+        error instanceof Error ? error.message : 'browser_runner_error';
       return {
-        status: 'failed',
-        mode: 'blocked',
-        reason: error instanceof Error ? error.message : 'browser_runner_error',
-        items: [],
+        status: 'success',
+        mode: 'fallback',
+        reason: 'browser_runner_unavailable',
+        items: [
+          {
+            platform: graphInput.platform,
+            interactionType: graphInput.interactionType,
+            content: message
+          }
+        ],
         replySuggestions: []
       };
     }

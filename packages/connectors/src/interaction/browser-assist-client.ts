@@ -1,10 +1,11 @@
 import { platformPost } from './http-client.js';
+import type { PlatformCode } from './types.js';
 
 const RUNNER_URL = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
 
 export interface BrowserAssistConfig {
   cookie: string;
-  platform: string;
+  platform: PlatformCode;
 }
 
 function requireArrayResponse(
@@ -156,6 +157,14 @@ export class BrowserAssistClient {
         'search-and-fetch failed';
       throw new Error(String(detail));
     }
-    return result.data;
+    return result.data as {
+      keyword: string;
+      results: Array<{
+        contentId: string;
+        title: string;
+        author: string;
+        comments: Array<Record<string, unknown>>;
+      }>;
+    };
   }
 }

@@ -1,24 +1,18 @@
-import { createContentTools } from './content-tools';
-import { createPublishTools } from './publish-tools';
-import { createInteractionTools } from './interaction-tools';
-import { createResearchTools } from './research-tools';
-import { createCampaignTools } from './campaign-tools';
-import { createContentMediaTools } from './content-media-tools';
-import { createWorkflowTools } from './workflow-tools';
-import { createAgentTools } from './agent-tools';
+import { getAllTools } from '@ai-growth-ops/ai-tools';
+import { toVercelTools } from '@ai-growth-ops/ai-tools/adapters/vercel-ai';
 import type { AuthContext } from './_shared';
 
 export type { AuthContext } from './_shared';
 
 export function createTools(auth: AuthContext) {
-  return {
-    ...createContentTools(auth),
-    ...createPublishTools(auth),
-    ...createInteractionTools(auth),
-    ...createResearchTools(auth),
-    ...createCampaignTools(auth),
-    ...createContentMediaTools(auth),
-    ...createWorkflowTools(auth),
-    ...createAgentTools(auth)
+  const context = {
+    apiBase: process.env.NEXT_PUBLIC_API_URL || '',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${auth.token}`,
+      'x-organization-id': auth.orgId
+    },
+    orgId: auth.orgId
   };
+  return toVercelTools(getAllTools(), context);
 }

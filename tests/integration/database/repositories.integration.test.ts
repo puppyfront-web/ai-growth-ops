@@ -26,6 +26,8 @@ describe('database repositories integration', () => {
     const found = await repositories.users.getById(user.id);
 
     expect(found?.email).toBe(user.email);
+
+    await db.$disconnect();
   });
 
   it('creates, updates, lists, and soft deletes core records', async () => {
@@ -33,13 +35,30 @@ describe('database repositories integration', () => {
     const repositories = createRepositories(db);
     const suffix = randomUUID();
 
+    // Create user + org (schema now requires organizationId on most entities)
     const user = await repositories.users.create({
       email: `crud-${suffix}@example.com`,
       name: 'CRUD User'
     });
+    const org = await db.organization.create({
+      data: {
+        name: `Test Org ${suffix}`,
+        slug: `test-org-${suffix}`,
+        status: 'active'
+      }
+    });
+    await db.organizationMember.create({
+      data: {
+        organizationId: org.id,
+        userId: user.id,
+        role: 'owner',
+        status: 'active'
+      }
+    });
 
     const account = await repositories.platformAccounts.create({
       userId: user.id,
+      organizationId: org.id,
       platform: 'xiaohongshu',
       name: `xhs-${suffix}`,
       mode: 'manual_confirm'
@@ -47,12 +66,14 @@ describe('database repositories integration', () => {
 
     const project = await repositories.contentProjects.create({
       userId: user.id,
+      organizationId: org.id,
       title: 'Launch Plan',
       description: 'Initial launch content'
     });
 
     const contentItem = await repositories.contentItems.create({
       userId: user.id,
+      organizationId: org.id,
       projectId: project.id,
       type: 'text_image',
       title: 'Launch Post',
@@ -61,6 +82,7 @@ describe('database repositories integration', () => {
 
     const variant = await repositories.contentVariants.create({
       userId: user.id,
+      organizationId: org.id,
       contentItemId: contentItem.id,
       platform: 'xiaohongshu',
       contentType: 'text_image',
@@ -70,6 +92,7 @@ describe('database repositories integration', () => {
 
     const publishJob = await repositories.publishJobs.create({
       userId: user.id,
+      organizationId: org.id,
       contentVariantId: variant.id,
       platformAccountId: account.id,
       platform: 'xiaohongshu',
@@ -79,6 +102,7 @@ describe('database repositories integration', () => {
 
     const interaction = await repositories.interactions.create({
       userId: user.id,
+      organizationId: org.id,
       platformAccountId: account.id,
       platform: 'xiaohongshu',
       publishJobId: publishJob.id,
@@ -91,6 +115,7 @@ describe('database repositories integration', () => {
 
     const lead = await repositories.leads.create({
       userId: user.id,
+      organizationId: org.id,
       sourcePlatform: 'xiaohongshu',
       sourceAccountId: account.id,
       sourceInteractionId: interaction.id,
@@ -102,6 +127,7 @@ describe('database repositories integration', () => {
 
     const researchTask = await repositories.researchTasks.create({
       userId: user.id,
+      organizationId: org.id,
       type: 'keyword_discovery',
       status: 'QUEUED',
       provider: 'mock'
@@ -130,19 +156,30 @@ describe('database repositories integration', () => {
       user.id
     );
     expect(activeProjects).toHaveLength(0);
+
+    await db.$disconnect();
   });
 
   it('rejects duplicate platform interactions for the same account', async () => {
     const db = createDatabaseClient();
     const repositories = createRepositories(db);
+    const suffix = randomUUID();
 
     const user = await repositories.users.create({
       email: `platform-${randomUUID()}@example.com`,
       name: 'Platform User'
     });
+    const org = await db.organization.create({
+      data: {
+        name: `Platform Org ${suffix}`,
+        slug: `platform-org-${suffix}`,
+        status: 'active'
+      }
+    });
 
     const account = await repositories.platformAccounts.create({
       userId: user.id,
+      organizationId: org.id,
       platform: 'douyin',
       name: `douyin-${randomUUID()}`,
       mode: 'manual_confirm'
@@ -150,6 +187,7 @@ describe('database repositories integration', () => {
 
     await repositories.interactions.create({
       userId: user.id,
+      organizationId: org.id,
       platformAccountId: account.id,
       platform: 'douyin',
       externalInteractionId: 'interaction-001',
@@ -162,6 +200,7 @@ describe('database repositories integration', () => {
     await expect(
       repositories.interactions.create({
         userId: user.id,
+        organizationId: org.id,
         platformAccountId: account.id,
         platform: 'douyin',
         externalInteractionId: 'interaction-001',
@@ -171,26 +210,30 @@ describe('database repositories integration', () => {
         content: '重复评论'
       })
     ).rejects.toThrow();
+
+    await db.$disconnect();
   });
 
-  it('seeds six platform accounts for the demo user', async () => {
+  it('seeds admin user with default organization', async () => {
     const db = createDatabaseClient();
     const repositories = createRepositories(db);
 
     await seedDatabase(db);
 
-    const demoUser = await repositories.users.getByEmail(
-      'customer-demo@ai-growth-ops.local'
+    const adminUser = await repositories.users.getByEmail(
+      'admin@ai-growth-ops.local'
     );
-    expect(demoUser).not.toBeNull();
+    expect(adminUser).not.toBeNull();
+    expect(adminUser!.role).toBe('admin');
 
-    const accounts = await repositories.platformAccounts.listActiveByUser(
-      demoUser!.id
-    );
+    // Verify default organization was created
+    const memberships = await db.organizationMember.findMany({
+      where: { userId: adminUser!.id, status: 'active' },
+      include: { organization: true }
+    });
+    expect(memberships.length).toBeGreaterThanOrEqual(1);
+    expect(memberships[0].role).toBe('owner');
 
-    expect(accounts).toHaveLength(6);
-    expect(accounts.every((account) => account.mode === 'manual_confirm')).toBe(
-      true
-    );
+    await db.$disconnect();
   });
 });

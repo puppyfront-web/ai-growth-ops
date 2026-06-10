@@ -35,7 +35,17 @@ export async function resetDatabase(
     db.contentItem.deleteMany(),
     db.contentProject.deleteMany(),
     db.platformCapability.deleteMany(),
+    db.chatMessage.deleteMany(),
+    db.chatThread.deleteMany(),
+    db.notification.deleteMany(),
+    db.appConfig.deleteMany(),
+    db.organizationInvitation.deleteMany(),
+    db.organizationMember.deleteMany(),
+    db.campaign.deleteMany(),
+    db.campaignRun.deleteMany(),
+    db.workflow.deleteMany(),
     db.platformAccount.deleteMany(),
-    db.user.deleteMany()
+    db.user.deleteMany(),
+    db.organization.deleteMany()
   ]);
 }

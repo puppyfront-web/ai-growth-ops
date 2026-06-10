@@ -28,6 +28,27 @@ export default defineConfig({
       ),
       '@ai-growth-ops/email': fileURLToPath(
         new URL('./packages/email/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/ai': fileURLToPath(
+        new URL('./packages/ai/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/ai-tools': fileURLToPath(
+        new URL('./packages/ai-tools/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/ai-tools/adapters/vercel-ai': fileURLToPath(
+        new URL('./packages/ai-tools/src/adapters/vercel-ai.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/ai-tools/adapters/raw-sdk': fileURLToPath(
+        new URL('./packages/ai-tools/src/adapters/raw-sdk.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/ai-tools/plan-templates': fileURLToPath(
+        new URL('./packages/ai-tools/src/plan-templates.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/lead-sinks': fileURLToPath(
+        new URL('./packages/lead-sinks/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/shared-types': fileURLToPath(
+        new URL('./packages/shared-types/src/index.ts', import.meta.url)
       )
     }
   },

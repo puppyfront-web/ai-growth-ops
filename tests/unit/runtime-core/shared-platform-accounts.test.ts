@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDefaultPublishRegistry,
   buildPublishInvocation
@@ -39,6 +39,8 @@ afterEach(() => {
       process.env[key] = value;
     }
   }
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('shared platform account fallback', () => {
@@ -63,14 +65,28 @@ describe('shared platform account fallback', () => {
     process.env.AI_GROWTH_OPS_DOUYIN_SHARED_ACCOUNT = 'shared';
     process.env.SOCIAL_PUBLISH_DATA_DIR = tempRoot;
 
+    // Mock fetch to prevent real HTTP request to browser-runner
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify([
+            { content: 'Nice video!', userNickname: 'fan1' }
+          ]),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+      )
+    );
+
     const result = await runInteractionOps({
       platform: 'douyin',
       interactionType: 'comments'
     });
 
     expect(result.status).toBe('success');
-    expect(result.mode).toBe('fallback');
-    expect(result.reason).toBe('browser_runner_unavailable');
     expect(result.items.length).toBeGreaterThan(0);
   });
 

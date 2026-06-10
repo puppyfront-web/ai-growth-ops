@@ -3,13 +3,14 @@ import type {
   InteractionCapabilities,
   PlatformComment,
   PlatformMessage,
-  ReplyResult
+  ReplyResult,
+  PlatformCode
 } from './types.js';
 
 export class ManualImportConnector implements InteractionConnector {
-  readonly platform;
+  readonly platform: PlatformCode;
 
-  constructor(platform: string) {
+  constructor(platform: PlatformCode) {
     this.platform = platform;
   }
 

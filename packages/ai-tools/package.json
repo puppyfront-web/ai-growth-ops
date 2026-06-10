@@ -1,0 +1,44 @@
+{
+  "name": "@ai-growth-ops/ai-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./adapters/vercel-ai": {
+      "import": "./dist/adapters/vercel-ai.js",
+      "types": "./dist/adapters/vercel-ai.d.ts"
+    },
+    "./adapters/raw-sdk": {
+      "import": "./dist/adapters/raw-sdk.js",
+      "types": "./dist/adapters/raw-sdk.d.ts"
+    },
+    "./plan-templates": {
+      "import": "./dist/plan-templates.js",
+      "types": "./dist/plan-templates.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-growth-ops/ai": "workspace:*",
+    "ai": "^6.0.198",
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.23.0"
+  },
+  "peerDependencies": {
+    "@ai-sdk/anthropic": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/anthropic": {
+      "optional": true
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import type { DatabaseClient } from '@ai-growth-ops/database';
-import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import { generateMediaAsset } from './media-generation.js';
 
 // NOTE: The route handler for POST /api/content-items/generate-with-media needs to be
@@ -33,7 +33,7 @@ export async function generateContentWithMedia(
   } = options;
 
   // Step 1: Generate content via content-writing skill
-  const runner = new DefaultSkillRunner();
+  const runner = getSharedSkillRunner();
   const contentResult = await runner.run({
     skillName: 'content-writing',
     input: { topic, contentType, keywords, brandTone }
@@ -113,7 +113,7 @@ export async function generateContentWithMedia(
       body,
       sourceType: 'ai_generated',
       status: 'draft',
-      metadata: { mediaAssetIds }
+      metadata: { mediaAssetIds: mediaAssetIds as string[] }
     },
     include: { contentVariants: true }
   });

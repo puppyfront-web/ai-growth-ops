@@ -8,15 +8,16 @@ import type {
   PlatformMessage,
   ReplyCommentInput,
   ReplyMessageInput,
-  ReplyResult
+  ReplyResult,
+  PlatformCode
 } from './types.js';
 import { randomUUID } from 'crypto';
 
 export class SandboxInteractionConnector implements InteractionConnector {
-  readonly platform;
+  readonly platform: PlatformCode;
   private config: InteractionConnectorConfig;
 
-  constructor(platform: string, config: InteractionConnectorConfig) {
+  constructor(platform: PlatformCode, config: InteractionConnectorConfig) {
     this.platform = platform;
     this.config = config;
   }

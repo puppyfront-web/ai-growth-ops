@@ -9,15 +9,16 @@ import type {
   DeleteContentInput,
   DeleteContentResult,
   UploadMediaInput,
-  UploadMediaResult
+  UploadMediaResult,
+  PlatformCode
 } from './types.js';
 import { randomUUID } from 'crypto';
 
 export class SandboxPublishConnector implements PublishConnector {
-  readonly platform;
+  readonly platform: PlatformCode;
   private config: PublishConnectorConfig;
 
-  constructor(platform: string, config: PublishConnectorConfig) {
+  constructor(platform: PlatformCode, config: PublishConnectorConfig) {
     this.platform = platform;
     this.config = config;
   }

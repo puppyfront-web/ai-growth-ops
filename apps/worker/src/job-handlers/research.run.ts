@@ -3,7 +3,7 @@ import type { ResearchRunInput } from '../job-types.js';
 import { createDatabaseClient } from '@ai-growth-ops/database';
 import type { DatabaseClient, Platform } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
-import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 
 const RUNNER_URL = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
 const RUNNER_SECRET =
@@ -166,7 +166,7 @@ export async function handleResearchRun(
 
     // ── Phase 3: Generate AI insights ────────────────────────────────
     try {
-      const runner = new DefaultSkillRunner();
+      const runner = getSharedSkillRunner();
       const result = await runner.run({
         skillName: 'research-insight',
         input: {

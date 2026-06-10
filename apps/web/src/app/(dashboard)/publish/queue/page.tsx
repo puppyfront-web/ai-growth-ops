@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { PlatformBadge } from '@/components/shared/PlatformBadge';
 import {
   publishStatusLabels,
   publishModeLabels,

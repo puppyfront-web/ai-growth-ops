@@ -3,14 +3,15 @@ import type {
   PublishCapabilities,
   PublishConnectorConfig,
   PublishContentInput,
-  PublishContentResult
+  PublishContentResult,
+  PlatformCode
 } from './types.js';
 
 export class DisabledPublishConnector implements PublishConnector {
-  readonly platform;
+  readonly platform: PlatformCode;
 
   constructor(
-    platform: string,
+    platform: PlatformCode,
     private config: PublishConnectorConfig
   ) {
     this.platform = platform;

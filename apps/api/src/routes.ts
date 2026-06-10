@@ -15,7 +15,7 @@ import {
   decryptToken,
   getPlatformProvider
 } from '@ai-growth-ops/providers';
-import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import type { SkillRunResult } from '@ai-growth-ops/skills';
 import { taskRoutes } from './routes-tasks.js';
 import { notificationRoutes } from './routes-notifications.js';
@@ -69,19 +69,14 @@ import {
 } from './research-executor.js';
 import { classifyByRules, generateRuleBasedReply } from './rule-classifier.js';
 
-// ── AI Skill Runner (lazy singleton) ────────────────────────────────
-let _skillRunner: DefaultSkillRunner | null = null;
-function getSkillRunner(): DefaultSkillRunner {
-  if (!_skillRunner) _skillRunner = new DefaultSkillRunner();
-  return _skillRunner;
-}
+// ── AI Skill Runner ────────────────────────────────────────────────
 
 async function runSkillSafely<T>(
   skillName: string,
   input: unknown
 ): Promise<SkillRunResult<T> | null> {
   try {
-    const runner = getSkillRunner();
+    const runner = getSharedSkillRunner();
     return await runner.run({ skillName, input: input as never });
   } catch {
     return null;
@@ -5622,7 +5617,7 @@ export async function routeRequest(
   // Serve static uploads (auth required + path traversal protection)
   if (method === 'GET' && url.pathname.startsWith('/uploads/')) {
     // Require authentication — only logged-in users can access uploaded files
-    const authUser = getAuthenticatedUser(request);
+    const authUser = await getAuthenticatedUser(req, db);
     if (!authUser) {
       res.writeHead(401);
       res.end('Unauthorized');

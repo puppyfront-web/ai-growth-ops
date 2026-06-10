@@ -23,8 +23,8 @@ export class LocalCliAdapter implements RuntimeAdapter {
       return {
         status: 'success',
         output: {
-          stdout: result.stdout.trim(),
-          stderr: result.stderr.trim()
+          stdout: (result.stdout ?? '').trim(),
+          stderr: (result.stderr ?? '').trim()
         }
       };
     }
@@ -32,12 +32,12 @@ export class LocalCliAdapter implements RuntimeAdapter {
     return {
       status: 'failed',
       error:
-        result.stderr.trim() ||
-        result.stdout.trim() ||
+        (result.stderr ?? '').trim() ||
+        (result.stdout ?? '').trim() ||
         `exit code ${result.status ?? 1}`,
       output: {
-        stdout: result.stdout.trim(),
-        stderr: result.stderr.trim()
+        stdout: (result.stdout ?? '').trim(),
+        stderr: (result.stderr ?? '').trim()
       }
     };
   }

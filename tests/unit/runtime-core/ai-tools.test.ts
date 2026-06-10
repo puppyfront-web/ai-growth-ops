@@ -6,8 +6,6 @@ const mockRunClassification = vi.fn();
 const mockRunReplySuggestion = vi.fn();
 
 vi.mock('../../../apps/runtime-core/src/tools/ai-tools.js', () => ({
-  getSkillRunner: vi.fn(),
-  resetSkillRunner: vi.fn(),
   runClassification: (...args: unknown[]) => mockRunClassification(...args),
   runReplySuggestion: (...args: unknown[]) => mockRunReplySuggestion(...args)
 }));

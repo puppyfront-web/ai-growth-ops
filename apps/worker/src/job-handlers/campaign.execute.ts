@@ -7,14 +7,8 @@
 
 import { Job } from 'bullmq';
 import { createDatabaseClient } from '@ai-growth-ops/database';
-import { DefaultSkillRunner } from '@ai-growth-ops/skills';
+import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import { getQueue, QUEUE_NAMES } from '../queue.js';
-
-let _skillRunner: DefaultSkillRunner | null = null;
-function getSkillRunner(): DefaultSkillRunner {
-  if (!_skillRunner) _skillRunner = new DefaultSkillRunner();
-  return _skillRunner;
-}
 
 export async function handleCampaignExecute(job: Job): Promise<void> {
   const { campaignRunId } = job.data as { campaignRunId: string };
@@ -33,7 +27,7 @@ export async function handleCampaignExecute(job: Job): Promise<void> {
   try {
     // Step 1: Generate content
     await updateRun(db, run.id, 'generating_content');
-    const contentResult = await getSkillRunner().run({
+    const contentResult = await getSharedSkillRunner().run({
       skillName: 'content-writing',
       input: {
         topic: topicConfig.topic || 'general',
@@ -87,7 +81,7 @@ export async function handleCampaignExecute(job: Job): Promise<void> {
     const platforms = (campaign.platforms as string[]) || [];
     for (const platform of platforms) {
       try {
-        const rewriteResult = await getSkillRunner().run({
+        const rewriteResult = await getSharedSkillRunner().run({
           skillName: 'platform-rewrite',
           input: {
             sourceTitle: title,
@@ -141,7 +135,7 @@ export async function handleCampaignExecute(job: Job): Promise<void> {
 
       for (const variant of variants) {
         try {
-          const complianceResult = await getSkillRunner().run({
+          const complianceResult = await getSharedSkillRunner().run({
             skillName: 'compliance-check',
             input: {
               title: variant.title,
