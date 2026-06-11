@@ -8,9 +8,11 @@ import { useRouter } from 'next/navigation';
 export default function ThreadPage({
   params
 }: {
-  params: Promise<{ threadId: string }>;
+  params: { threadId: string } | Promise<{ threadId: string }>;
 }) {
-  const { threadId } = use(params);
+  // Next.js 14 client components may pass params as either a plain object or Promise
+  const resolved = params instanceof Promise ? use(params) : params;
+  const { threadId } = resolved;
   const router = useRouter();
 
   return (

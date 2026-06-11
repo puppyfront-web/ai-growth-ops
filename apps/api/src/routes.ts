@@ -4118,6 +4118,32 @@ const routes: Route[] = [
       });
     }
   },
+  // Internal endpoint: returns the actual apiKey for server-side use (chat route).
+  // Not exposed to the browser — only called from the Next.js server.
+  {
+    method: 'GET',
+    pattern: '/api/settings/ai/internal',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+
+      const savedConfig = await ctx.db.appConfig.findUnique({
+        where: { userId_key: { userId: orgCtx.user.id, key: 'ai_config' } }
+      });
+      const saved = savedConfig?.value as Record<string, unknown> | null;
+
+      sendJson(res, 200, {
+        provider:
+          (saved?.provider as string) ?? process.env.AI_PROVIDER ?? 'openai',
+        apiKey:
+          (saved?.apiKey as string) ?? process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY ?? '',
+        baseUrl:
+          (saved?.baseUrl as string) ?? process.env.AI_BASE_URL ?? '',
+        model:
+          (saved?.model as string) ?? process.env.AI_MODEL ?? 'gpt-4o'
+      });
+    }
+  },
   {
     method: 'PUT',
     pattern: '/api/settings/ai',

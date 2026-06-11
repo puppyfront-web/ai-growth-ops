@@ -1,8 +1,26 @@
-import { streamText, stepCountIs } from 'ai';
+import { streamText, stepCountIs, type ModelMessage, type LanguageModel } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createTools } from './tools/index';
 import { buildSystemPrompt } from './system-prompt';
 import { buildOperationalContext } from './context-builder';
+
+/**
+ * Normalize messages from the client into ModelMessage[] format.
+ * assistant-ui may send extra fields (id, createdAt, status, etc.)
+ * that Vercel AI SDK's schema validation rejects.
+ */
+function normalizeMessages(raw: unknown[]): ModelMessage[] {
+  return raw.map((msg: unknown) => {
+    const m = msg as Record<string, unknown>;
+    const role = String(m.role);
+    const content = typeof m.content === 'string'
+      ? m.content
+      : Array.isArray(m.content)
+        ? m.content
+        : String(m.content ?? '');
+    return { role, content } as ModelMessage;
+  });
+}
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -168,15 +186,72 @@ async function handleChat(req: Request) {
     orgId: String(organizationId)
   });
 
-  const anthropic = createAnthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  });
-  const model = anthropic('claude-sonnet-4-6-20250514');
+  // Read AI config from backend — use the internal endpoint that returns the actual apiKey.
+  // The public GET /api/settings/ai masks the key for browser safety.
+  let aiConfig: { provider: string; apiKey: string; baseUrl: string; model: string };
+  try {
+    const configRes = await fetch(`${API_BASE}/api/settings/ai/internal`, {
+      headers: authHeaders
+    });
+    if (configRes.ok) {
+      const configBody = await configRes.json() as Record<string, unknown>;
+      aiConfig = {
+        provider: (configBody.provider as string) || 'openai',
+        apiKey: (configBody.apiKey as string) || '',
+        baseUrl: (configBody.baseUrl as string) || '',
+        model: (configBody.model as string) || 'gpt-4o'
+      };
+    } else {
+      // Fallback to public endpoint (won't have apiKey) + env vars
+      const fallbackRes = await fetch(`${API_BASE}/api/settings/ai`, {
+        headers: authHeaders
+      });
+      const fallbackBody = fallbackRes.ok
+        ? (await fallbackRes.json() as Record<string, unknown>)
+        : {};
+      aiConfig = {
+        provider: (fallbackBody.provider as string) || process.env.AI_PROVIDER || 'openai',
+        apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
+        baseUrl: (fallbackBody.baseUrl as string) || process.env.AI_BASE_URL || '',
+        model: (fallbackBody.model as string) || process.env.AI_MODEL || 'gpt-4o'
+      };
+    }
+  } catch {
+    aiConfig = {
+      provider: process.env.AI_PROVIDER || 'openai',
+      apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
+      baseUrl: process.env.AI_BASE_URL || '',
+      model: process.env.AI_MODEL || 'gpt-4o'
+    };
+  }
+
+  if (!aiConfig.apiKey) {
+    return new Response(
+      JSON.stringify({ error: '请先在「设置 > AI」中配置 API Key' }),
+      { status: 400, headers: { 'content-type': 'application/json' } }
+    );
+  }
+
+  let model: LanguageModel;
+  if (aiConfig.provider === 'anthropic') {
+    const anthropic = createAnthropic({
+      apiKey: aiConfig.apiKey,
+      ...(aiConfig.baseUrl ? { baseURL: aiConfig.baseUrl } : {})
+    });
+    model = anthropic(aiConfig.model || 'claude-sonnet-4-6-20250514');
+  } else {
+    const { createOpenAI } = await import('@ai-sdk/openai');
+    const openai = createOpenAI({
+      apiKey: aiConfig.apiKey,
+      ...(aiConfig.baseUrl ? { baseURL: aiConfig.baseUrl } : {})
+    });
+    model = openai(aiConfig.model || 'gpt-4o');
+  }
 
   const result = streamText({
     model,
     system: systemPrompt,
-    messages: newMessages,
+    messages: normalizeMessages(newMessages),
     tools,
     stopWhen: stepCountIs(10),
     onFinish: async ({ response }) => {
