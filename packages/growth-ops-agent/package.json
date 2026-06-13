@@ -1,0 +1,20 @@
+{
+  "name": "@ai-growth-ops/growth-ops-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "growth-ops-agent": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@ai-growth-ops/capability-schema": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -2,6 +2,7 @@ export const CAPABILITIES = {
   PUBLISH_VIDEO: 'publish.video',
   PUBLISH_ARTICLE: 'publish.article',
   PUBLISH_NOTE: 'publish.note',
+  LIST_VIDEOS: 'content.list_videos',
   FETCH_COMMENTS: 'interaction.fetch_comments',
   FETCH_MESSAGES: 'interaction.fetch_messages',
   REPLY_COMMENT: 'interaction.reply_comment',

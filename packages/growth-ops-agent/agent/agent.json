@@ -1,0 +1,36 @@
+{
+  "name": "growth-ops-operator",
+  "version": "0.1.0",
+  "description": "Portable daily-growth operations agent for Chinese public-content platforms (Douyin first). Drives a real authenticated creator account via MCP tools: content stats, public prospecting, human-gated reply & publish.",
+  "skillId": "growth-ops-operator",
+  "runtime": "local_cli",
+  "entrypoint": "agent/SKILL.md",
+  "capabilities": [
+    "auth.login",
+    "auth.check",
+    "content.list_videos",
+    "interaction.fetch_comments",
+    "interaction.fetch_messages",
+    "interaction.reply_comment",
+    "interaction.reply_message",
+    "lead.extract",
+    "publish.video"
+  ],
+  "contexts": [{ "platform": "douyin" }],
+  "enabled": true,
+  "healthy": true,
+  "metadata": {
+    "commandPlatform": "douyin",
+    "executionMode": "browser_runner"
+  },
+  "mcp": {
+    "serverName": "growth-ops-agent",
+    "command": "node",
+    "args": ["packages/growth-ops-agent/dist/index.js"],
+    "env": {
+      "BROWSER_RUNNER_URL": "http://localhost:3200",
+      "BROWSER_RUNNER_SECRET": "<BROWSER_RUNNER_SECRET or TOKEN_ENCRYPTION_KEY from .env>",
+      "GROWTH_OPS_COOKIE_FILE": "<optional: path to a cookie file for headless/test runs>"
+    }
+  }
+}

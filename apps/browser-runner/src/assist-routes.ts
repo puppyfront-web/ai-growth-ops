@@ -1702,9 +1702,132 @@ const handleReplyMessage: RouteHandler = async (_req, res, ctx) => {
   }
 };
 
+// ── /assist/list-videos ───────────────────────────────────────────
+// Creator content-manage work_list → normalized videos with REAL statistics.
+// This is the reliable creator-side data path (public comment/DM pages are rotted).
+
+interface ListVideosBody {
+  platform: string;
+  cookie: string;
+  limit?: number;
+  headed?: boolean;
+}
+
+const LIST_VIDEOS_PAGE_URLS: Record<string, string> = {
+  douyin: 'https://creator.douyin.com/creator-micro/content/manage'
+};
+
+const WORK_LIST_API_PATTERNS = ['work_list', '/item/list', '/creator/item/list'];
+
+function douyinVideoPublishedAt(item: Record<string, unknown>): string {
+  const raw = (item.create_time ?? item.publish_time ?? item.createTime) as
+    | number
+    | string
+    | null;
+  if (raw == null || raw === '') return '';
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return n > 1e12 ? new Date(n).toISOString() : new Date(n * 1000).toISOString();
+}
+
+function normalizeDouyinVideo(it: Record<string, any>) {
+  const stat = (it.statistics ?? {}) as Record<string, any>;
+  const video = (it.video ?? {}) as Record<string, any>;
+  const cover =
+    (it.item_cover as any)?.url_list ||
+    (video.cover as any)?.url_list ||
+    (it.cover as any)?.url_list;
+  return {
+    itemId: String(it.item_id ?? it.aweme_id ?? it.video_id ?? it.id ?? ''),
+    desc: String(it.desc ?? it.item_title ?? it.title ?? ''),
+    publishedAt: douyinVideoPublishedAt(it),
+    statistics: {
+      playCount: Number(stat.play_count ?? stat.play ?? 0) || 0,
+      diggCount: Number(stat.digg_count ?? 0) || 0,
+      commentCount: Number(stat.comment_count ?? 0) || 0,
+      shareCount: Number(stat.share_count ?? 0) || 0
+    },
+    coverUrl: Array.isArray(cover) ? String(cover[0] ?? '') : ''
+  };
+}
+
+const handleListVideos: RouteHandler = async (_req, res, ctx) => {
+  const body = ctx.body as ListVideosBody | null;
+  if (!body?.platform || !body?.cookie) {
+    sendJson(res, 400, { error: 'Missing platform or cookie' });
+    return;
+  }
+  const targetUrl = LIST_VIDEOS_PAGE_URLS[body.platform];
+  if (!targetUrl) {
+    sendJson(res, 400, {
+      error: `Unsupported platform for listing videos: ${body.platform}`
+    });
+    return;
+  }
+  const limit = Math.max(1, Math.min(body.limit ?? 50, 100));
+
+  let session: Awaited<ReturnType<typeof createSession>> | null = null;
+  try {
+    session = await createSession(body.cookie, targetUrl, body.headed);
+    const { page } = session;
+
+    let workList: Record<string, any> | null = null;
+    page.on('response', async (response) => {
+      try {
+        const url = response.url();
+        if (!WORK_LIST_API_PATTERNS.some((p) => url.includes(p))) return;
+        const ct = response.headers()['content-type'] || '';
+        if (!ct.includes('json')) return;
+        workList = (await response.json()) as Record<string, any>;
+      } catch {
+        /* noop */
+      }
+    });
+
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(4000);
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.wheel(0, 900);
+      await page.waitForTimeout(800);
+    }
+    await page.waitForTimeout(1500);
+
+    // workList is reassigned only inside an async response callback, so CFA
+    // narrows it to `null` here — a cast widens it back to the union so the
+    // Array.isArray branch doesn't collapse it to `never`.
+    const wl = workList as Record<string, any> | null;
+    const list: any[] = Array.isArray(wl?.aweme_list)
+      ? wl.aweme_list
+      : Array.isArray(wl?.items)
+        ? wl.items
+        : [];
+    const videos = list
+      .filter((it): it is Record<string, any> => !!it && typeof it === 'object')
+      .map((it) =>
+        body.platform === 'douyin' ? normalizeDouyinVideo(it) : it
+      )
+      .slice(0, limit);
+
+    sendJson(res, 200, videos);
+  } catch (error) {
+    sendJson(res, 502, {
+      error: 'Failed to list videos',
+      errorCode: 'ASSIST_LIST_VIDEOS_FAILED',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  } finally {
+    await session?.close();
+  }
+};
+
 // ── Exported route array ──────────────────────────────────────────
 
 export const assistRoutes: Route[] = [
+  {
+    method: 'POST',
+    pattern: '/assist/list-videos',
+    handler: handleListVideos
+  },
   {
     method: 'POST',
     pattern: '/assist/fetch-comments',
