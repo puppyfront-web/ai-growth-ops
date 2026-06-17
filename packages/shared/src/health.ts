@@ -4,9 +4,7 @@ export type AppName =
   | 'web'
   | 'api'
   | 'worker'
-  | 'provider-gateway'
-  | 'browser-runner'
-  | 'research-runner';
+  | 'browser-runner';
 
 export interface AppHealthSnapshot {
   name: AppName;

@@ -7,8 +7,6 @@ describe('workspace package structure', () => {
     expect(workspacePackageNames).toEqual([
       '@ai-growth-ops/api',
       '@ai-growth-ops/browser-runner',
-      '@ai-growth-ops/provider-gateway',
-      '@ai-growth-ops/research-runner',
       '@ai-growth-ops/web',
       '@ai-growth-ops/worker',
       '@ai-growth-ops/ai',

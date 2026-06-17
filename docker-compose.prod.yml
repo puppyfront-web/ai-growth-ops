@@ -60,31 +60,6 @@ services:
       - '${BROWSER_RUNNER_PORT:-3200}:3200'
     env_file: .env
 
-  provider-gateway:
-    build:
-      context: .
-      dockerfile: apps/provider-gateway/Dockerfile
-    container_name: ai-growth-ops-provider-gateway
-    restart: unless-stopped
-    ports:
-      - '${PROVIDER_GATEWAY_PORT:-3300}:3300'
-    env_file: .env
-
-  research-runner:
-    build:
-      context: .
-      dockerfile: apps/research-runner/Dockerfile
-    container_name: ai-growth-ops-research-runner
-    restart: unless-stopped
-    ports:
-      - '${RESEARCH_RUNNER_PORT:-3400}:3400'
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_growth_ops}
-
   postgres:
     image: postgres:16-alpine
     container_name: ai-growth-ops-postgres

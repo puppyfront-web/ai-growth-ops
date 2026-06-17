@@ -46,7 +46,7 @@ describe('Full Main Flow (API level)', () => {
 
     // Run task — returns { task, posts, comments, insights, opportunities }
     const { status: runStatus, body: running } = await api.post(`/api/research-tasks/${task.id}/run`);
-    // Research execution may fail without research-runner service; accept both outcomes
+    // Research execution may fail without browser-runner/cookie; accept both outcomes
     if (runStatus !== 200) return;
     expect(running.task?.status).toBeDefined();
 

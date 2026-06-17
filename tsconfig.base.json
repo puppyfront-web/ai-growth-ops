@@ -18,7 +18,6 @@
       "@ai-growth-ops/shared-types": ["packages/shared-types/src/index.ts"],
       "@ai-growth-ops/api": ["apps/api/src/index.ts"],
       "@ai-growth-ops/web": ["apps/web/src/index.ts"],
-      "@ai-growth-ops/runtime-core": ["apps/runtime-core/src/index.ts"],
       "@ai-growth-ops/ai": ["packages/ai/src/index.ts"],
       "@ai-growth-ops/capability-schema": [
         "packages/capability-schema/src/index.ts"

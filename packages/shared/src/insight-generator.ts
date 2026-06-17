@@ -133,7 +133,7 @@ export function buildRuleBasedInsights(
     }
   }
 
-  // ── FAQ opportunity from comments (from research-runner version) ────────
+  // ── FAQ opportunity from comments ──────────────────────────────────────
   const questionComments = input.comments.filter(
     (c) =>
       c.content.includes('?') ||

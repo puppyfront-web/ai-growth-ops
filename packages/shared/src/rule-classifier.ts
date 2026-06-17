@@ -1,6 +1,6 @@
 /**
  * Rule-based classification and reply suggestion fallbacks.
- * Shared between API routes, worker pipeline, and runtime-core tools.
+ * Shared between API routes and the worker pipeline.
  *
  * Used when the LLM skill runner is unavailable
  * (no API key, network error, invalid response).
