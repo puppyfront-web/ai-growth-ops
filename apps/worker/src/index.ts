@@ -41,6 +41,7 @@ import { handleInteractionAutoReply } from './job-handlers/interaction.auto-repl
 import { handleInteractionManualReply } from './job-handlers/interaction.manual-reply.js';
 import { handleScheduledInteractionSync } from './job-handlers/scheduled.interaction-sync.js';
 import { handleWorkflowExecute } from './job-handlers/workflow.execute.js';
+import { handleAgentRun } from './job-handlers/agent.run.js';
 import {
   startScheduler,
   SCHEDULED_QUEUE,
@@ -66,6 +67,7 @@ const realHandlers: Record<
   [QUEUE_NAMES.INTERACTION_MANUAL_REPLY]: handleInteractionManualReply,
   [QUEUE_NAMES.SCHEDULED_INTERACTION_SYNC]: handleScheduledInteractionSync,
   [QUEUE_NAMES.WORKFLOW_EXECUTE]: handleWorkflowExecute,
+  [QUEUE_NAMES.AGENT_RUN]: handleAgentRun,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
   [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule
 };

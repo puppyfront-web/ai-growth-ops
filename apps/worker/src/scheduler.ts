@@ -53,4 +53,17 @@ export async function startScheduler(): Promise<void> {
     }
   );
   logger.info('Interaction sync scheduler started — sync runs every 30min');
+
+  // Daily agent run — enqueues an AgentRun for the default admin/org every 24h.
+  // Per-org enable + custom cron is a follow-up; first slice is single-tenant daily.
+  const agentRunQueue = getQueue(QUEUE_NAMES.AGENT_RUN);
+  await agentRunQueue.add(
+    QUEUE_NAMES.AGENT_RUN,
+    { task: 'daily-agent-run', triggeredAt: new Date().toISOString() },
+    {
+      repeat: { every: 86_400_000 }, // 24 hours
+      jobId: 'agent-daily-run-repeat'
+    }
+  );
+  logger.info('Agent run scheduler started — daily agent run every 24h');
 }
