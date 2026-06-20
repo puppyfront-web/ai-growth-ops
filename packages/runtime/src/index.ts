@@ -11,3 +11,6 @@ export { getToolsForAgent, inferMutate } from './tool-access.js';
 
 export { runDomainAgent } from './agent-loop.js';
 export type { RunDomainAgentParams, DomainAgentResult } from './agent-loop.js';
+
+// First-slice domain agents + runtime tool registration (content / publish).
+export * from './agents/index.js';
