@@ -1000,6 +1000,7 @@ model AgentRun {
   output         Json?
   error          String?
   traceId        String?
+  tokensUsed     Int?
   startedAt      DateTime?
   finishedAt     DateTime?
   createdAt      DateTime  @default(now())
