@@ -10,7 +10,8 @@ export const workspacePackageNames = [
   '@ai-growth-ops/observability',
   '@ai-growth-ops/providers',
   '@ai-growth-ops/shared',
-  '@ai-growth-ops/skills'
+  '@ai-growth-ops/skills',
+  '@ai-growth-ops/runtime'
 ] as const;
 
 export type WorkspacePackageName = (typeof workspacePackageNames)[number];

@@ -1,0 +1,21 @@
+{
+  "name": "@ai-growth-ops/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-growth-ops/ai": "workspace:*",
+    "@ai-growth-ops/ai-tools": "workspace:*",
+    "@ai-growth-ops/capability-schema": "workspace:*",
+    "@ai-growth-ops/database": "workspace:*",
+    "@ai-growth-ops/observability": "workspace:*",
+    "@ai-growth-ops/skills": "workspace:*",
+    "zod": "^3.23.0"
+  }
+}

@@ -49,6 +49,9 @@ export default defineConfig({
       ),
       '@ai-growth-ops/shared-types': fileURLToPath(
         new URL('./packages/shared-types/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/runtime': fileURLToPath(
+        new URL('./packages/runtime/src/index.ts', import.meta.url)
       )
     }
   },

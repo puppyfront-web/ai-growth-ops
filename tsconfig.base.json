@@ -27,7 +27,8 @@
       "@ai-growth-ops/lead-sinks": ["packages/lead-sinks/src/index.ts"],
       "@ai-growth-ops/observability": ["packages/observability/src/index.ts"],
       "@ai-growth-ops/providers": ["packages/providers/src/index.ts"],
-      "@ai-growth-ops/skills": ["packages/skills/src/index.ts"]
+      "@ai-growth-ops/skills": ["packages/skills/src/index.ts"],
+      "@ai-growth-ops/runtime": ["packages/runtime/src/index.ts"]
     }
   }
 }
