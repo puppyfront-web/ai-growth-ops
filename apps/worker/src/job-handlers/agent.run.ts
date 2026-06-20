@@ -7,23 +7,11 @@ import {
   createConfirmationGate,
   createWorkingMemory,
   createPreferencesStore,
-  contentAgent,
-  publishAgent,
-  AGENT_FOR_NODE,
   type AgentDefinition,
   type LoopNode,
   type NodeResult,
   type SupervisorState
 } from '@ai-growth-ops/runtime';
-
-const AGENT_REGISTRY: Record<string, AgentDefinition> = {
-  content: contentAgent,
-  publish: publishAgent
-};
-// AGENT_REGISTRY + AGENT_FOR_NODE wire the supervisor's per-node agent dispatch into the
-// domain-agent runner. They're referenced indirectly so future agents only need to register here.
-void AGENT_REGISTRY;
-void AGENT_FOR_NODE;
 
 export interface AgentRunJobPayload {
   runId?: string;
