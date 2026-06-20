@@ -14,3 +14,6 @@ export type { RunDomainAgentParams, DomainAgentResult } from './agent-loop.js';
 
 // First-slice domain agents + runtime tool registration (content / publish).
 export * from './agents/index.js';
+
+// Supervisor state machine (5-node fixed loop + transitions + dispatch).
+export * from './supervisor/index.js';
