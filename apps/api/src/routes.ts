@@ -10,6 +10,7 @@ import { join, extname, resolve, sep } from 'node:path';
 import Busboy from 'busboy';
 
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import { createLogger } from '@ai-growth-ops/observability';
 import {
   encryptToken,
   decryptToken,
@@ -102,6 +103,8 @@ interface Route {
   pattern: string;
   handler: RouteHandler;
 }
+
+const routeLogger = createLogger('api');
 
 const routes: Route[] = [
   // ── Health ──────────────────────────────────────────────────────
@@ -5348,6 +5351,85 @@ const routes: Route[] = [
         });
         sendJson(res, 201, created.value);
       }
+    }
+  },
+  // ── Agent Runs (Workbench trigger + query) ─────────────────────
+  {
+    method: 'POST',
+    pattern: '/api/agent/runs',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = (ctx.body ?? {}) as {
+        autonomyLevel?: string;
+        dryRun?: boolean;
+      };
+      const autonomy = body.autonomyLevel ?? 'L2_AUTOPILOT_LIGHT';
+      // Always persist the AgentRun first — enqueue is best-effort so the
+      // trigger stays testable without Redis, and the daily scheduler /
+      // manual re-trigger recover any run that failed to enqueue.
+      const run = await ctx.db.agentRun.create({
+        data: {
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
+          agentName: autonomy,
+          status: 'pending',
+          input: { dryRun: body.dryRun ?? false }
+        }
+      });
+      let queued = false;
+      try {
+        const { Queue } = await import('bullmq');
+        const redisUrl =
+          process.env.REDIS_URL || 'redis://localhost:6379';
+        const queue = new Queue('agent.run', {
+          connection: { url: redisUrl }
+        });
+        try {
+          await queue.add(
+            'agent-run',
+            { runId: run.id },
+            {
+              attempts: 2,
+              backoff: { type: 'exponential', delay: 10_000 }
+            }
+          );
+          queued = true;
+        } finally {
+          await queue.close();
+        }
+      } catch (err) {
+        routeLogger.warn('agent.run enqueue failed (best-effort)', {
+          runId: run.id,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+      sendJson(res, 200, { runId: run.id, queued });
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/agent/runs/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const run = await ctx.db.agentRun.findFirst({
+        where: {
+          id: ctx.params.id,
+          organizationId: orgCtx.organization.id
+        }
+      });
+      if (!run) return sendJson(res, 404, { error: 'run not found' });
+      const state = (run.output ?? {}) as Record<string, unknown>;
+      sendJson(res, 200, {
+        id: run.id,
+        status: run.status,
+        currentNode: state.currentNode ?? null,
+        nodeResults: state.nodeResults ?? {},
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        error: run.error
+      });
     }
   }
 ];
