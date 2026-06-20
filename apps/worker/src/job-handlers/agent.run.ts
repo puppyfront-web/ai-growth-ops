@@ -10,6 +10,7 @@ import {
   type AgentDefinition,
   type LoopNode,
   type NodeResult,
+  type PreferenceDomain,
   type SupervisorState,
   type LLMClient
 } from '@ai-growth-ops/runtime';
@@ -103,7 +104,10 @@ export async function handleAgentRun(
         summary: `每日运营复盘：\n${summaries}`
       };
     }
-    const prefs = await preferences.forDomain(run.userId, agent.domain as any);
+    const prefs = await preferences.forDomain(
+      run.userId,
+      agent.domain as PreferenceDomain
+    );
     const result = await runDomainAgent({
       agent,
       userId: run.userId,
@@ -114,7 +118,9 @@ export async function handleAgentRun(
       dryRun:
         autonomyLevel === 'L1_COPILOT'
           ? false
-          : (run.input as any)?.dryRun ?? false,
+          : ((run.input as Record<string, unknown> | null)?.dryRun as
+              | boolean
+              | undefined) ?? false,
       workingMemory,
       preferences: prefs,
       confirmationGate: gate,
@@ -159,7 +165,7 @@ export async function handleAgentRun(
       state = await supervisor.runNode(state);
       await db.agentRun.update({
         where: { id: runId },
-        data: { output: state as any, status: mapStatus(state.status) }
+        data: { output: state as unknown as never, status: mapStatus(state.status) }
       });
     }
     await db.agentRun.update({

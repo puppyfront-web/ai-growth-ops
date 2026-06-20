@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { FIRST_SLICE_NODES, LEGAL_TRANSITIONS, AGENT_FOR_NODE, advance } from '@ai-growth-ops/runtime';
-import type { NodeResult, SupervisorState } from '@ai-growth-ops/runtime';
+import { FIRST_SLICE_NODES, AGENT_FOR_NODE, advance } from '@ai-growth-ops/runtime';
+import type { LoopNode, NodeResult, SupervisorState } from '@ai-growth-ops/runtime';
 
-function state(node: any): SupervisorState {
+function state(node: LoopNode): SupervisorState {
   return {
     runId: 'r', userId: 'u', orgId: 'o', autonomyLevel: 'L2_AUTOPILOT_LIGHT', dryRun: false,
     currentNode: node,
@@ -10,7 +10,7 @@ function state(node: any): SupervisorState {
     startedAt: '2026-06-18T00:00:00.000Z', status: 'running'
   };
 }
-function done(node: any): NodeResult { return { node, outcome: 'done' }; }
+function done(node: LoopNode): NodeResult { return { node, outcome: 'done' }; }
 
 describe('loop nodes (first slice)', () => {
   it('defines the 5-node fixed loop', () => {

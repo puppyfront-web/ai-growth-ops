@@ -1,11 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Job } from 'bullmq';
 import {
   createDatabaseClient,
   resetDatabase,
   seedDatabase,
   type DatabaseClient
 } from '@ai-growth-ops/database';
-import { handleAgentRun } from '../../../apps/worker/src/job-handlers/agent.run';
+import {
+  handleAgentRun,
+  type AgentRunJobPayload
+} from '../../../apps/worker/src/job-handlers/agent.run';
 import type { LLMClient, LLMToolResponse } from '@ai-growth-ops/ai';
 
 /**
@@ -99,7 +103,7 @@ describe('content→publish loop (dry-run, integration)', () => {
 
   it('runs all 5 nodes to completion, exercises the dry-run gate, and aggregates REVIEW', async () => {
     await handleAgentRun(
-      { data: { runId } } as any,
+      { data: { runId } } as unknown as Job<AgentRunJobPayload>,
       db,
       createStubLLM()
     );

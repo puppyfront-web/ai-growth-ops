@@ -1,9 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import type {
-  AutonomyLevel, RiskLevel, GateDecision, GateInput, ConfirmationGate,
-  WorkingMemory, UserPreferences, PreferenceDomain, PreferencesStore,
-  AgentDefinition, LoopNode, NodeOutcome, NodeResult, SupervisorState, ToolDomain, Mutate
+  AutonomyLevel, GateDecision, LoopNode, SupervisorState
 } from '@ai-growth-ops/runtime';
+
+// Compile-time check that the rest of the public type surface is exported
+// from the runtime barrel. These types are exercised by behaviour in other
+// test files (loop-nodes, supervisor, agent-loop); this tuple pins the
+// exports so accidental removal of one surfaces as a type error here.
+type _RuntimeTypeSurface = [
+  import('@ai-growth-ops/runtime').RiskLevel,
+  import('@ai-growth-ops/runtime').GateInput,
+  import('@ai-growth-ops/runtime').ConfirmationGate,
+  import('@ai-growth-ops/runtime').WorkingMemory,
+  import('@ai-growth-ops/runtime').UserPreferences,
+  import('@ai-growth-ops/runtime').PreferenceDomain,
+  import('@ai-growth-ops/runtime').PreferencesStore,
+  import('@ai-growth-ops/runtime').AgentDefinition,
+  import('@ai-growth-ops/runtime').NodeOutcome,
+  import('@ai-growth-ops/runtime').NodeResult,
+  import('@ai-growth-ops/runtime').ToolDomain,
+  import('@ai-growth-ops/runtime').Mutate
+];
 
 describe('runtime kernel contracts', () => {
   it('autonomy levels cover the three tiers', () => {

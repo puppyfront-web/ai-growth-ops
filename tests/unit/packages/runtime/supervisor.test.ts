@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createSupervisor } from '@ai-growth-ops/runtime';
-import type { NodeResult, SupervisorState } from '@ai-growth-ops/runtime';
+import type { LoopNode, NodeResult, SupervisorState } from '@ai-growth-ops/runtime';
 
-function initState(node: any): SupervisorState {
+function initState(node: LoopNode): SupervisorState {
   return {
     runId: 'r', userId: 'u', orgId: 'o', autonomyLevel: 'L2_AUTOPILOT_LIGHT', dryRun: true,
     currentNode: node,

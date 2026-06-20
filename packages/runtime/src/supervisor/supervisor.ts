@@ -1,6 +1,5 @@
 import type {
-  AgentDefinition, AutonomyLevel, ConfirmationGate, LoopNode, NodeResult,
-  PreferencesStore, SupervisorState, UserPreferences, WorkingMemory
+  AgentDefinition, LoopNode, NodeResult, SupervisorState
 } from '../types.js';
 import { AGENT_FOR_NODE, advance } from './loop-nodes.js';
 
