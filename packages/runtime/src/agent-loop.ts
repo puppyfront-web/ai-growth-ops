@@ -68,6 +68,19 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
   const escalatedItems: DomainAgentResult['escalatedItems'] = [];
   let toolCallsExecuted = 0;
 
+  // Idempotency cache keyed by ToolCall.id. The upstream `runAgentLoop`
+  // (packages/ai/src/agent-runner.ts) double-dispatches `onToolCall`: the
+  // real LLM clients execute the call inside `chatWithTools` via the
+  // `onToolCall` passed at agent-runner.ts:74, AND runAgentLoop calls
+  // `config.onToolCall(tc)` again at agent-runner.ts:105 to harvest the
+  // ToolResult for its messages array. Without this cache, every call
+  // would execute the tool twice (publish twice!), double
+  // `toolCallsExecuted`, and duplicate `escalatedItems`. The cache makes
+  // the second invocation return the same ToolResult without re-execution,
+  // re-counting, or re-escalation. Pre-existing packages/ai bug, noted
+  // for a separate fix.
+  const toolCallCache = new Map<string, ToolResult>();
+
   // Working memory is keyed by scope; nodeName is the per-node scope available
   // in this layer (Task 9's worker will pass the supervisor run's nodeName).
   const memorySnapshot = await params.workingMemory.all(params.nodeName);
@@ -82,6 +95,13 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
   const messages: LLMMessage[] = [{ role: 'user', content: params.task }];
 
   const onToolCall = async (call: ToolCall): Promise<ToolResult> => {
+    // Idempotency: if this exact call has been served before (because
+    // runAgentLoop double-dispatches), return the cached ToolResult without
+    // re-executing the tool, re-incrementing toolCallsExecuted, or
+    // re-pushing to escalatedItems.
+    const cached = toolCallCache.get(call.id);
+    if (cached) return cached;
+
     const { __risk = 'low', __confidence = 0.8, ...input } = (call.arguments ?? {}) as Record<string, unknown>;
     const risk = __risk as RiskLevel;
     const confidence = Number(__confidence);
@@ -97,6 +117,7 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
       dryRun: params.dryRun
     });
 
+    let result: ToolResult;
     if (!decision.allowed) {
       // Escalated (autonomy-tier rejection) items are surfaced to the caller;
       // plain dry-run simulations are returned as blocked ToolResults but not
@@ -104,7 +125,7 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
       if (decision.escalated) {
         escalatedItems.push({ toolName: call.name, input, risk });
       }
-      return {
+      result = {
         toolCallId: call.id,
         output: {
           blocked: true,
@@ -113,20 +134,24 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
           simulatedOutput: decision.simulatedOutput
         }
       };
+    } else {
+      const tool = getTool(call.name);
+      if (!tool) {
+        result = { toolCallId: call.id, output: { error: `tool not found: ${call.name}` } };
+      } else {
+        toolCallsExecuted++;
+        const output = await tool.execute(input, {
+          apiBase: '',
+          headers: {},
+          orgId: params.orgId,
+          userId: params.userId
+        });
+        result = { toolCallId: call.id, output };
+      }
     }
 
-    const tool = getTool(call.name);
-    if (!tool) {
-      return { toolCallId: call.id, output: { error: `tool not found: ${call.name}` } };
-    }
-    toolCallsExecuted++;
-    const result = await tool.execute(input, {
-      apiBase: '',
-      headers: {},
-      orgId: params.orgId,
-      userId: params.userId
-    });
-    return { toolCallId: call.id, output: result };
+    toolCallCache.set(call.id, result);
+    return result;
   };
 
   const agentResult = await runAgentLoop({
