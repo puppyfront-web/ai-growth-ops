@@ -10,7 +10,8 @@ import {
   type AgentDefinition,
   type LoopNode,
   type NodeResult,
-  type SupervisorState
+  type SupervisorState,
+  type LLMClient
 } from '@ai-growth-ops/runtime';
 
 export interface AgentRunJobPayload {
@@ -43,7 +44,14 @@ function mapStatus(s: SupervisorState['status']): string {
 
 export async function handleAgentRun(
   job: Job<AgentRunJobPayload>,
-  dbOverride?: DatabaseClient
+  dbOverride?: DatabaseClient,
+  /**
+   * Test seam: inject a (typically stub) LLMClient so the full
+   * handler → supervisor → domain-agent → gate → persistence loop can be
+   * exercised deterministically without a real LLM. Production callers leave
+   * this undefined; `runDomainAgent` then falls back to `createLLMClient()`.
+   */
+  llmClientOverride?: LLMClient
 ): Promise<void> {
   const db = dbOverride ?? createDatabaseClient();
 
@@ -110,6 +118,7 @@ export async function handleAgentRun(
       workingMemory,
       preferences: prefs,
       confirmationGate: gate,
+      llmClient: llmClientOverride,
       maxSteps: 8
     });
     const outcome = result.escalatedItems.length > 0 ? 'need_input' : 'done';
