@@ -74,7 +74,10 @@ export async function handleAgentRun(
         userId: admin.id,
         agentName: 'L2_AUTOPILOT_LIGHT',
         status: 'pending',
-        input: { dryRun: false }
+        // First cut supports dry-run only — real runs need second-cut
+        // platform-cookie injection into tool inputs. Daily scheduler
+        // therefore always produces dry-run runs.
+        input: { dryRun: true }
       }
     });
     runId = created.id;
@@ -83,10 +86,49 @@ export async function handleAgentRun(
   const run = await db.agentRun.findUnique({ where: { id: runId } });
   if (!run) throw new Error(`AgentRun ${runId} not found`);
 
+  // ── Re-entry guard (BullMQ retry safety) ──────────────────────────
+  // BullMQ retries the same job on throw. The per-invocation `call.id`
+  // cache does not survive across handler invocations, so a retry would
+  // re-enter at INIT and re-execute every node — including PUBLISH, which
+  // risks a double-publish. Gate the retry here, BEFORE initialising any
+  // state or the loop.
+  if (run.status === 'success') {
+    // Already completed (duplicate delivery). Idempotent no-op.
+    return;
+  }
+  if (run.status === 'failed') {
+    const priorOutput = (run.output as Record<string, unknown> | null) ?? null;
+    const nodeResults = (priorOutput?.nodeResults as
+      | Record<string, unknown>
+      | undefined) ?? undefined;
+    // If PUBLISH already produced a result, re-running risks a duplicate
+    // external write. Mark for manual review and STOP the retry loop —
+    // return WITHOUT throwing (throwing would trigger another BullMQ retry
+    // and re-enter this guard, looping indefinitely).
+    if (nodeResults && typeof nodeResults.PUBLISH !== 'undefined') {
+      await db.agentRun.update({
+        where: { id: runId },
+        data: {
+          error:
+            'aborted retry: run already reached PUBLISH, manual review required'
+        }
+      });
+      return;
+    }
+    // Otherwise (failed without PUBLISH) → safe to re-init from INIT; no
+    // write tool has executed yet. Fall through.
+  }
+
   const autonomyLevel = autonomyFromRun(run);
   const gate = createConfirmationGate();
   const workingMemory = createWorkingMemory();
   const preferences = createPreferencesStore(db, run.organizationId);
+
+  // Accumulated token usage across all domain-node results for this run.
+  // REVIEW/supervisor produces no tokens, so it does not contribute. This is
+  // flushed into AgentRun.tokensUsed on the terminal update (the same update
+  // that sets `finishedAt`).
+  let tokensUsedTotal = 0;
 
   const buildRunNode = (state: SupervisorState) => async (
     _s: SupervisorState,
@@ -127,6 +169,7 @@ export async function handleAgentRun(
       llmClient: llmClientOverride,
       maxSteps: 8
     });
+    tokensUsedTotal += result.tokenUsage.totalTokens;
     const outcome = result.escalatedItems.length > 0 ? 'need_input' : 'done';
     return {
       node,
@@ -173,7 +216,10 @@ export async function handleAgentRun(
       data: {
         status: mapStatus(state.status),
         // A paused run is awaiting human input — not finished.
-        finishedAt: state.status === 'paused' ? undefined : new Date()
+        finishedAt: state.status === 'paused' ? undefined : new Date(),
+        // Persist accumulated token usage across all domain nodes
+        // (REVIEW/supervisor contributes none).
+        tokensUsed: tokensUsedTotal
       }
     });
   } catch (err) {
