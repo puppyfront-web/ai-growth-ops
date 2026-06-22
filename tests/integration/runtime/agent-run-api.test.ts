@@ -82,4 +82,42 @@ describe('agent run API (integration)', () => {
     });
     expect(res.status).toBe(401);
   });
+
+  // ── I1: autonomyLevel validation ───────────────────────────────
+  // First cut allows L1_COPILOT and L2_AUTOPILOT_LIGHT only; L3 is a
+  // future goal and unknown values are rejected.
+  it('POST /api/agent/runs rejects L3_FULL_AUTOPILOT with 400', async () => {
+    const { status, body } = await api.post('/api/agent/runs', {
+      autonomyLevel: 'L3_FULL_AUTOPILOT',
+      dryRun: true
+    });
+    expect(status).toBe(400);
+    expect(typeof body.error).toBe('string');
+  });
+
+  it('POST /api/agent/runs rejects an unknown autonomyLevel with 400', async () => {
+    const { status, body } = await api.post('/api/agent/runs', {
+      autonomyLevel: 'GARBAGE',
+      dryRun: true
+    });
+    expect(status).toBe(400);
+    expect(typeof body.error).toBe('string');
+  });
+
+  it('POST /api/agent/runs without autonomyLevel defaults to L2 and returns 200', async () => {
+    const { status, body } = await api.post('/api/agent/runs', {
+      dryRun: true
+    });
+    expect(status).toBe(200);
+    expect(body.runId).toBeTruthy();
+  });
+
+  it('POST /api/agent/runs with L2_AUTOPILOT_LIGHT returns 200', async () => {
+    const { status, body } = await api.post('/api/agent/runs', {
+      autonomyLevel: 'L2_AUTOPILOT_LIGHT',
+      dryRun: true
+    });
+    expect(status).toBe(200);
+    expect(body.runId).toBeTruthy();
+  });
 });

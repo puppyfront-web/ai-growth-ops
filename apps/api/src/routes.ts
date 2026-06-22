@@ -5364,7 +5364,26 @@ const routes: Route[] = [
         autonomyLevel?: string;
         dryRun?: boolean;
       };
-      const autonomy = body.autonomyLevel ?? 'L2_AUTOPILOT_LIGHT';
+      // First cut: only L1 and L2 are available. L3_FULL_AUTOPILOT is a
+      // future goal (per spec), not a first-cut lever. Reject unknown /
+      // non-string values with 400.
+      const ALLOWED_AUTONOMY = new Set([
+        'L1_COPILOT',
+        'L2_AUTOPILOT_LIGHT'
+      ]);
+      const autonomy =
+        body.autonomyLevel === undefined
+          ? 'L2_AUTOPILOT_LIGHT'
+          : body.autonomyLevel;
+      if (
+        typeof autonomy !== 'string' ||
+        !ALLOWED_AUTONOMY.has(autonomy)
+      ) {
+        return sendJson(res, 400, {
+          error:
+            'invalid autonomyLevel: first cut allows L1_COPILOT or L2_AUTOPILOT_LIGHT only'
+        });
+      }
       // Always persist the AgentRun first — enqueue is best-effort so the
       // trigger stays testable without Redis, and the daily scheduler /
       // manual re-trigger recover any run that failed to enqueue.
