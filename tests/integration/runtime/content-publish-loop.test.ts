@@ -130,5 +130,14 @@ describe('content→publish loop (dry-run, integration)', () => {
     // REVIEW node aggregates the prior node summaries — confirm it captured them.
     const review = state.nodeResults?.REVIEW;
     expect(review?.summary).toBeTruthy();
+
+    // I2: tokensUsed must be populated on the terminal update. The stub
+    // returns totalTokens:2 per chatWithTools call; 4 domain nodes
+    // (INIT/METRICS/CONTENT/PUBLISH — REVIEW is the supervisor and
+    // contributes none) each consume >=1 call → run.tokensUsed must be
+    // a positive integer.
+    expect(run?.tokensUsed).not.toBeNull();
+    expect(typeof run?.tokensUsed).toBe('number');
+    expect((run?.tokensUsed as number) > 0).toBe(true);
   }, 60_000);
 });
