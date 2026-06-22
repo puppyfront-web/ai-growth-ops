@@ -9,7 +9,7 @@ export * from './memory/index.js';
 
 export { getToolsForAgent, inferMutate } from './tool-access.js';
 
-export { runDomainAgent } from './agent-loop.js';
+export { runDomainAgent, scrubSensitiveOutput } from './agent-loop.js';
 export type { RunDomainAgentParams, DomainAgentResult } from './agent-loop.js';
 // Re-exported so callers (e.g. the worker handler's test seam) can type the
 // optional `llmClient` injection point without taking a direct dep on `@ai-growth-ops/ai`.

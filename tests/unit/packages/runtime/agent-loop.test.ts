@@ -3,7 +3,8 @@ import { z } from 'zod';
 import {
   runDomainAgent,
   createConfirmationGate,
-  createWorkingMemory
+  createWorkingMemory,
+  scrubSensitiveOutput
 } from '@ai-growth-ops/runtime';
 import type { AgentDefinition, ConfirmationGate, GateDecision, GateInput } from '@ai-growth-ops/runtime';
 import type { LLMClient, LLMToolResponse, ToolCall, ToolResult } from '@ai-growth-ops/ai';
@@ -306,5 +307,154 @@ describe('runDomainAgent', () => {
     expect(executeSpy.mock.calls[0][0]).not.toHaveProperty('__risk');
     expect(executeSpy.mock.calls[0][0]).not.toHaveProperty('__confidence');
     expect(result.toolCallsExecuted).toBe(1);
+  });
+});
+
+describe('scrubSensitiveOutput (M2)', () => {
+  it('redacts values of sensitive keys at the top level', () => {
+    const out = scrubSensitiveOutput({
+      cookies: 'abc123',
+      loggedIn: true,
+      user: 'alice'
+    });
+    expect(out).toEqual({
+      cookies: '[redacted]',
+      loggedIn: true,
+      user: 'alice'
+    });
+  });
+
+  it('matches token/password/secret/authorization/apikey case-insensitively', () => {
+    const out = scrubSensitiveOutput({
+      Token: 't',
+      PASSWORD: 'p',
+      ApiKey: 'k',
+      authorization: 'Bearer xyz',
+      sessionSecret: 's',
+      visible: 1
+    });
+    expect(out).toEqual({
+      Token: '[redacted]',
+      PASSWORD: '[redacted]',
+      ApiKey: '[redacted]',
+      authorization: '[redacted]',
+      sessionSecret: '[redacted]',
+      visible: 1
+    });
+  });
+
+  it('recurses into nested objects and arrays', () => {
+    const out = scrubSensitiveOutput({
+      meta: { cookie: 'c', ok: true },
+      list: [{ token: 't1' }, { keep: 'k' }],
+      primitive: 42
+    });
+    expect(out).toEqual({
+      meta: { cookie: '[redacted]', ok: true },
+      list: [{ token: '[redacted]' }, { keep: 'k' }],
+      primitive: 42
+    });
+  });
+
+  it('returns primitives and null as-is', () => {
+    expect(scrubSensitiveOutput('hello')).toBe('hello');
+    expect(scrubSensitiveOutput(7)).toBe(7);
+    expect(scrubSensitiveOutput(null)).toBeNull();
+    expect(scrubSensitiveOutput(undefined)).toBeUndefined();
+  });
+
+  it('does not mutate the input (returns a new structure for plain objects)', () => {
+    const input = { cookies: 'abc', x: 1 };
+    const out = scrubSensitiveOutput(input);
+    expect(out).not.toBe(input);
+    expect(input.cookies).toBe('abc'); // untouched
+    expect(out.cookies).toBe('[redacted]');
+  });
+});
+
+describe('runDomainAgent output scrubbing (M2 integration)', () => {
+  beforeEach(() => {
+    clearRegistry();
+  });
+  afterEach(() => {
+    clearRegistry();
+    vi.restoreAllMocks();
+  });
+
+  it('scrubs sensitive keys from the ToolResult.output passed back to the LLM (allowed-execution path)', async () => {
+    // A fake tool that returns a payload mimicking auth.login — raw cookies.
+    const leakingTool = vi.fn().mockResolvedValue({
+      cookies: 'session=abc123; path=/',
+      loggedIn: true,
+      userId: 'u-42'
+    });
+    registerTool({
+      name: 'auth.login',
+      description: 'logs in and returns cookies',
+      inputSchema: z.object({ username: z.string() }).passthrough(),
+      execute: leakingTool
+    });
+
+    // Capture the ToolResult returned by onToolCall to assert what the LLM sees.
+    let captured: ToolResult | undefined;
+    const captureClient: LLMClient = {
+      ...stubClient([
+        { id: 'call_leak', name: 'auth.login', arguments: { username: 'alice' } }
+      ]),
+      chatWithTools: async (
+        _m: unknown,
+        options?: { onToolCall?: (call: ToolCall) => Promise<ToolResult> }
+      ): Promise<LLMToolResponse> => {
+        if (options?.onToolCall) {
+          for (const c of [
+            { id: 'call_leak', name: 'auth.login', arguments: { username: 'alice' } }
+          ]) {
+            captured = await options.onToolCall(c);
+          }
+        }
+        return {
+          text: 'logged in',
+          model: 'stub',
+          provider: 'openai',
+          tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          finishReason: 'stop',
+          latencyMs: 1,
+          toolCalls: []
+        };
+      }
+    };
+
+    const leakingAgent: AgentDefinition = {
+      name: 'auth',
+      domain: 'publish',
+      description: 'auth',
+      systemPromptBuilder: (ctx) => `auth agent node=${ctx.nodeName}`,
+      allowedTools: ['auth.login'],
+      mutateInference: { 'auth.login': 'Write' as const }
+    };
+
+    await runDomainAgent({
+      agent: leakingAgent,
+      userId: 'u',
+      orgId: 'o',
+      nodeName: 'INIT',
+      task: 'login',
+      autonomyLevel: 'L3_FULL_AUTOPILOT', // writes auto-allowed
+      dryRun: false,
+      workingMemory: createWorkingMemory(),
+      preferences: {},
+      confirmationGate: createConfirmationGate(),
+      llmClient: captureClient,
+      maxSteps: 3
+    });
+
+    expect(leakingTool).toHaveBeenCalledTimes(1);
+    // The ToolResult fed back to the LLM must have cookies redacted but
+    // non-sensitive values preserved.
+    expect(captured?.output).toMatchObject({
+      cookies: '[redacted]',
+      loggedIn: true,
+      userId: 'u-42'
+    });
   });
 });

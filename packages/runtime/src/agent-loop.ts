@@ -49,6 +49,48 @@ function toToolSpec(tools: ToolDefinition[]): ToolSpec[] {
   });
 }
 
+const SENSITIVE_KEY_RE = /cookie|token|password|secret|authorization|apikey/i;
+
+/**
+ * Scrub sensitive values from a tool output BEFORE it is returned as a
+ * ToolResult and fed back into the LLM message stream. Replaces the value
+ * of any object key matching `SENSITIVE_KEY_RE` with `'[redacted]'`.
+ *
+ * Why: `runAgentLoop` feeds each `ToolResult.output` back to the LLM as a
+ * message; tools like `auth.login` return raw `cookies`, which must never
+ * leak into the model's context. Scrubbing affects ONLY what the LLM sees —
+ * the raw tool execution (and any persistence it did) has already happened
+ * by the time this runs. `escalatedItems[].input` (not output) is left
+ * untouched.
+ *
+ * Non-object / null / undefined values are returned as-is (nothing to scan).
+ * Recurses into plain object values and arrays of plain objects. Does not
+ * clone class instances other than plain `{}` / `[]`.
+ */
+export function scrubSensitiveOutput<T>(output: T): T {
+  return scrubImpl(output) as T;
+}
+
+function scrubImpl(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(scrubImpl);
+  }
+  // Only scrub plain objects (and plain-object-like). Skip class instances
+  // that may carry methods, to avoid surprise re-shaping.
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== null && proto !== Object.prototype) {
+    return value;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = SENSITIVE_KEY_RE.test(k) ? '[redacted]' : scrubImpl(v);
+  }
+  return out;
+}
+
 /**
  * Convert a domain agent (Task 7) into a gated `runAgentLoop` invocation.
  *
@@ -127,12 +169,16 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
       }
       result = {
         toolCallId: call.id,
-        output: {
+        // Scrub sensitive keys consistently on BOTH paths so a tool that
+        // echoes its input (e.g. auth.login under dry-run reflecting the
+        // attempted credentials back via simulatedOutput) cannot leak
+        // cookies/tokens/secrets into the LLM message stream.
+        output: scrubSensitiveOutput({
           blocked: true,
           escalated: decision.escalated,
           reason: decision.reason,
           simulatedOutput: decision.simulatedOutput
-        }
+        })
       };
     } else {
       const tool = getTool(call.name);
@@ -146,7 +192,7 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
           orgId: params.orgId,
           userId: params.userId
         });
-        result = { toolCallId: call.id, output };
+        result = { toolCallId: call.id, output: scrubSensitiveOutput(output) };
       }
     }
 
