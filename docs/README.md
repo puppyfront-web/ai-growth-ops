@@ -17,12 +17,23 @@ AI Growth Ops 是一个 AI 原生的全域内容营销运营平台，帮助 SMB 
                    │   Worker    │
                    └──────┬──────┘
                           │
-              ┌───────────┼───────────┐
-              ▼           ▼           ▼
-        Browser      Provider    Research
-        Runner       Gateway     Runner
-        (:3200)      (:3300)     (:3400)
+                          ▼
+                    Browser Runner
+                       (:3200)
 ```
+
+> **Agent runtime — first-cut execution boundary.** The unified agent runtime
+> (`packages/runtime` + `apps/worker/src/job-handlers/agent.run.ts` +
+> `POST /api/agent/runs`) supports **dry-run execution only** in this cut. The
+> daily scheduler always creates runs with `input.dryRun = true`, and
+> `POST /api/agent/runs` accepts only `L1_COPILOT` and `L2_AUTOPILOT_LIGHT`
+> (`L3_FULL_AUTOPILOT` is rejected with `400` — it is a future goal). The API
+> still accepts `dryRun:false`, but **real (non-dry-run) runs are NOT functional
+> in this cut**: they will fail at the tool-execution boundary (e.g. the
+> `PUBLISH` node) because the second-cut platform-cookie injection that loads
+> decrypted credentials into tool inputs is not yet wired. Use `dryRun:true`
+> for all previews / tests. See
+> [`docs/superpowers/runbooks/agent-runtime-runbook.md`](./superpowers/runbooks/agent-runtime-runbook.md) §4 for the full semantics.
 
 ### 技术栈
 
@@ -46,9 +57,6 @@ apps/
   web/              — Next.js 前端
   worker/           — BullMQ 异步任务处理器
   browser-runner/   — Playwright 浏览器自动化服务
-  provider-gateway/ — 平台 API 代理网关
-  research-runner/  — 调研任务执行服务
-  runtime-core/     — AI 运行时核心
 
 packages/
   database/         — Prisma schema + 数据库客户端

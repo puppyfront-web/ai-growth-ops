@@ -7,8 +7,20 @@ behavior, and common troubleshooting.
 
 > Scope: **first cut** — content → publish loop (`contentAgent`, `publishAgent`,
 > supervisor), L0 working memory + L1 preferences, `ConfirmationGate` at L2 by
-> default, dry-run safe mode. MCP adapter, more agents, and memory L2+ are
-> **second cut** and not covered here.
+> default, **dry-run execution only**. MCP adapter, real (non-dry-run) writes,
+> more agents, and memory L2+ are **second cut** and not covered here.
+
+> **First-cut execution boundary (read this first):** the first cut supports
+> **dry-run execution only**. The daily scheduler always creates runs with
+> `input.dryRun = true`, and the only `autonomyLevel` values accepted by
+> `POST /api/agent/runs` are `L1_COPILOT` and `L2_AUTOPILOT_LIGHT` (L3 is a
+> future goal). The POST API still accepts `dryRun:false`, but a real
+> (non-dry-run) run **will fail at the tool-execution boundary** (e.g. at the
+> `PUBLISH` node, where platform-publish tools need authenticated cookies):
+> the second-cut platform-cookie injection that loads decrypted credentials
+> into tool inputs is not wired in this cut. To validate the loop wiring
+> end-to-end, always trigger with `dryRun:true` (or omit it — the daily run
+> defaults to dry-run).
 
 ---
 
@@ -74,7 +86,8 @@ Notes:
 The daily scheduler (`apps/worker/src/scheduler.ts`) creates runs as the user
 identified by `ADMIN_EMAIL` (default `admin@ai-growth-ops.local`). That user
 **and** an organization must exist — the handler throws if either is missing
-(seed first).
+(seed first). The daily run is always created with `input.dryRun = true`
+(first cut: dry-run execution only — see §4.2).
 
 ---
 
@@ -103,8 +116,8 @@ Body:
 
 | Field            | Type      | Default              | Values                                            |
 |------------------|-----------|----------------------|---------------------------------------------------|
-| `autonomyLevel`  | string?   | `L2_AUTOPILOT_LIGHT` | `L1_COPILOT` \| `L2_AUTOPILOT_LIGHT` \| `L3_FULL_AUTOPILOT` |
-| `dryRun`         | boolean?  | `false`              | see §4                                            |
+| `autonomyLevel`  | string?   | `L2_AUTOPILOT_LIGHT` | `L1_COPILOT` \| `L2_AUTOPILOT_LIGHT` (first cut). `L3_FULL_AUTOPILOT` and any unknown value → `400`. |
+| `dryRun`         | boolean?  | `false`              | see §4. **First cut is dry-run-only** — `false` will fail at the tool-execution boundary until second-cut platform-cookie injection lands. |
 
 Response: `200 { runId: string, queued: boolean }`.
 
@@ -156,7 +169,7 @@ Applies to **write** tools only (reads always execute):
 |----------------------|------------------------------------------------------------------------------|
 | `L1_COPILOT`         | Escalate **all** writes → run `paused`, awaits human approval.               |
 | `L2_AUTOPILOT_LIGHT` | Auto-approve only if `risk==='low' && confidence>=0.7`; else escalate. **Default.** |
-| `L3_FULL_AUTOPILOT`  | Allow all writes (still bounded by the gate's risk/confidence logging).      |
+| `L3_FULL_AUTOPILOT`  | Allow all writes (still bounded by the gate's risk/confidence logging). **NOT accepted by the first-cut API** — `POST /api/agent/runs` returns `400` for this value. L3 is a future goal. |
 
 `risk` and `confidence` come from each agent's `__risk` / `__confidence` tool
 metadata — the gate makes the final hard decision and never trusts the agent's
@@ -164,10 +177,18 @@ own "should I run this" judgment.
 
 ### 4.2 Dry-run semantics (read this carefully)
 
+> **First cut: dry-run only.** The daily scheduler always creates runs with
+> `input.dryRun = true`. The POST API still accepts `dryRun:false`, but **a
+> real (non-dry-run) run will fail at the tool-execution boundary** in this
+> cut — e.g. the `PUBLISH` node's platform-publish tools require authenticated
+> cookies that the second-cut platform-cookie injection layer (not yet built)
+> would load into tool inputs. Until that lands, treat `dryRun:true` as the
+> only functional mode and use it for all previews / tests.
+
 Dry-run is set in the POST body (`dryRun: true`) and stored on
 `AgentRun.input`. **What it does depends on the autonomy level:**
 
-- **At L2 / L3** (`dryRun: true`):
+- **At L2** (`dryRun: true`):
   The gate blocks **every** tool call — reads **and** writes — as *simulated*
   (`allowed:false, escalated:false, simulatedOutput`). Nothing executes, no side
   effects, no network calls to the browser-runner. The loop still walks all five
@@ -181,14 +202,15 @@ Dry-run is set in the POST body (`dryRun: true`) and stored on
   not "simulate." So `dryRun:true` at L1 does **not** turn reads into simulations;
   it just means "and also block writes via escalation."
 
-Summary table:
+Summary table (first cut; L3 is not accepted by the API — listed for
+forward-compatibility reference only):
 
 | `autonomyLevel` | `dryRun` | Reads       | Writes                                  | Run completes?     |
 |-----------------|----------|-------------|-----------------------------------------|--------------------|
 | L1_COPILOT      | any      | execute     | escalate → `paused`                     | pauses on 1st write |
-| L2 / L3         | `true`   | **simulated** | **simulated**                         | yes (`success`)    |
-| L2              | `false`  | execute     | gate decision (auto or escalate)         | depends on gate    |
-| L3              | `false`  | execute     | auto-execute                            | yes                |
+| L2              | `true`   | **simulated** | **simulated**                         | yes (`success`)    |
+| L2              | `false`  | execute     | gate decision (auto or escalate) — **but real writes will fail at the tool-execution boundary in this cut (no cookie injection)** | fails at PUBLISH |
+| L3_FULL_AUTOPILOT | any    | —           | —                                       | **rejected by API (`400`) in first cut** |
 
 ### 4.3 State is persisted & queryable, not hot-resumable
 
