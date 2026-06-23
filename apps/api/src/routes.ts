@@ -5440,6 +5440,7 @@ const routes: Route[] = [
       });
       if (!run) return sendJson(res, 404, { error: 'run not found' });
       const state = (run.output ?? {}) as Record<string, unknown>;
+      const input = (run.input ?? {}) as Record<string, unknown>;
       sendJson(res, 200, {
         id: run.id,
         status: run.status,
@@ -5447,8 +5448,92 @@ const routes: Route[] = [
         nodeResults: state.nodeResults ?? {},
         startedAt: run.startedAt,
         finishedAt: run.finishedAt,
+        tokensUsed: run.tokensUsed ?? 0,
+        dryRun: input.dryRun === true,
+        metadata: run.metadata ?? {},
         error: run.error
       });
+    }
+  },
+  // List recent runs (cockpit history). Latest first, org-scoped.
+  {
+    method: 'GET',
+    pattern: '/api/agent/runs',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const runs = await ctx.db.agentRun.findMany({
+        where: { organizationId: orgCtx.organization.id },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          finishedAt: true,
+          createdAt: true,
+          tokensUsed: true,
+          input: true,
+          output: true,
+          error: true
+        }
+      });
+      const items = runs.map((r) => {
+        const state = (r.output ?? {}) as Record<string, unknown>;
+        const nodeResults = (state.nodeResults ?? {}) as Record<
+          string,
+          { escalatedItems?: unknown[] }
+        >;
+        const escalationCount = Object.values(nodeResults).reduce(
+          (acc, nr) => acc + (nr?.escalatedItems?.length ?? 0),
+          0
+        );
+        const input = (r.input ?? {}) as Record<string, unknown>;
+        return {
+          id: r.id,
+          status: r.status,
+          currentNode: state.currentNode ?? null,
+          startedAt: r.startedAt,
+          finishedAt: r.finishedAt,
+          createdAt: r.createdAt,
+          tokensUsed: r.tokensUsed ?? 0,
+          dryRun: input.dryRun === true,
+          escalationCount,
+          error: r.error
+        };
+      });
+      sendJson(res, 200, { items });
+    }
+  },
+  // Acknowledge escalated items on a run (cockpit "标记已处理").
+  // Persists the acknowledgement in run.metadata. NOTE: this does NOT auto-resume
+  // a paused run — re-enqueuing with correct node semantics is a deferred worker
+  // change. For now the action records the operator's decision visibly.
+  {
+    method: 'PATCH',
+    pattern: '/api/agent/runs/:id/acknowledge',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const run = await ctx.db.agentRun.findFirst({
+        where: {
+          id: ctx.params.id,
+          organizationId: orgCtx.organization.id
+        },
+        select: { id: true, metadata: true }
+      });
+      if (!run) return sendJson(res, 404, { error: 'run not found' });
+      const meta = ((run.metadata as Record<string, unknown> | null) ?? {}) as Record<
+        string,
+        unknown
+      >;
+      await ctx.db.agentRun.update({
+        where: { id: run.id },
+        data: {
+          metadata: { ...meta, acknowledgedAt: new Date().toISOString(), acknowledgedBy: orgCtx.user.id }
+        }
+      });
+      sendJson(res, 200, { id: run.id, acknowledged: true });
     }
   }
 ];
