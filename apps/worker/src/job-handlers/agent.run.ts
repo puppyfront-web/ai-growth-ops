@@ -137,6 +137,29 @@ export async function handleAgentRun(
   // that sets `finishedAt`).
   let tokensUsedTotal = 0;
 
+  // ── Auto-resume detection ─────────────────────────────────────────
+  // Computed before buildRunNode so the closure can read `approvals`. A PAUSED
+  // run reaches this handler ONLY via the cockpit "批准并续跑" action
+  // (POST /api/agent/runs/:id/approve), which writes metadata.approvals and
+  // re-enqueues this job. A paused job returns normally (no throw), so BullMQ
+  // never auto-retries it — seeing `paused` here always means an explicit
+  // resume: restore prior state, continue from the paused node, and let the
+  // approved tools unlock the gate (see runDomainAgent `approvedTools`).
+  const resuming = run.status === 'paused';
+  const priorOutput = (run.output ?? null) as Record<string, unknown> | null;
+  const runMetadata = (run.metadata ?? {}) as Record<string, unknown>;
+  const approvals = (runMetadata.approvals as
+    | Array<{ node: string; toolName: string }>
+    | undefined) ?? [];
+  const inputDryRun =
+    ((run.input as Record<string, unknown> | null)?.dryRun as
+      | boolean
+      | undefined) ?? false;
+  if (resuming) {
+    // Carry forward tokens already consumed before the pause.
+    tokensUsedTotal = run.tokensUsed ?? 0;
+  }
+
   const buildRunNode = (state: SupervisorState) => async (
     _s: SupervisorState,
     agent: AgentDefinition | 'supervisor',
@@ -157,6 +180,11 @@ export async function handleAgentRun(
       run.userId,
       agent.domain as PreferenceDomain
     );
+    // On a resume, the operator approved specific tools for this node — pass
+    // them so the gate unlocks those (previously-escalated) calls.
+    const approvedTools = new Set(
+      approvals.filter((a) => a.node === node).map((a) => a.toolName)
+    );
     const result = await runDomainAgent({
       agent,
       userId: run.userId,
@@ -167,13 +195,12 @@ export async function handleAgentRun(
       dryRun:
         autonomyLevel === 'L1_COPILOT'
           ? false
-          : ((run.input as Record<string, unknown> | null)?.dryRun as
-              | boolean
-              | undefined) ?? false,
+          : inputDryRun,
       workingMemory,
       preferences: prefs,
       confirmationGate: gate,
       credentials,
+      approvedTools,
       llmClient: llmClientOverride,
       maxSteps: 8
     });
@@ -187,26 +214,53 @@ export async function handleAgentRun(
     };
   };
 
-  let state: SupervisorState = {
-    runId,
-    userId: run.userId,
-    orgId: run.organizationId,
-    autonomyLevel,
-    dryRun: false,
-    currentNode: 'INIT',
-    nodeResults: {
-      INIT: undefined,
-      METRICS: undefined,
-      CONTENT: undefined,
-      PUBLISH: undefined,
-      REVIEW: undefined
-    },
-    startedAt: new Date().toISOString(),
-    status: 'running'
-  };
+  // ── Auto-resume detection ─────────────────────────────────────────
+  // (block above, before buildRunNode) — restore prior state on resume.
+
+  let state: SupervisorState;
+  if (resuming && priorOutput?.nodeResults) {
+    state = {
+      runId,
+      userId: run.userId,
+      orgId: run.organizationId,
+      autonomyLevel,
+      dryRun: inputDryRun,
+      // currentNode stays at the pause point — the loop re-executes that
+      // node (now with approvedTools), overwriting its need_input result.
+      currentNode:
+        (priorOutput.currentNode as LoopNode | undefined) ?? 'INIT',
+      nodeResults: priorOutput.nodeResults as SupervisorState['nodeResults'],
+      // Preserve the original run start time across the resume.
+      startedAt:
+        (priorOutput.startedAt as string | undefined) ??
+        new Date().toISOString(),
+      status: 'running'
+    };
+  } else {
+    state = {
+      runId,
+      userId: run.userId,
+      orgId: run.organizationId,
+      autonomyLevel,
+      dryRun: inputDryRun,
+      currentNode: 'INIT',
+      nodeResults: {
+        INIT: undefined,
+        METRICS: undefined,
+        CONTENT: undefined,
+        PUBLISH: undefined,
+        REVIEW: undefined
+      },
+      startedAt: new Date().toISOString(),
+      status: 'running'
+    };
+  }
   await db.agentRun.update({
     where: { id: runId },
-    data: { status: 'running', startedAt: new Date() }
+    // On resume, keep the original startedAt; only flip status back to running.
+    data: resuming
+      ? { status: 'running' }
+      : { status: 'running', startedAt: new Date() }
   });
 
   try {

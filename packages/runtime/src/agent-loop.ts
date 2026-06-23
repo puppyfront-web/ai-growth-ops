@@ -34,6 +34,15 @@ export interface RunDomainAgentParams {
    * the host-mode executor in packages/runtime-mcp so both paths share one contract.
    */
   credentials?: CredentialResolver;
+  /**
+   * Human-approved tool names for an auto-resume of a PAUSED run. When the gate
+   * rejects a call (autonomy-tier escalation) but the operator has explicitly
+   * approved that tool for this node, the call is allowed to execute. This is
+   * the bridge that lets a paused run continue after the cockpit "批准并续跑"
+   * action. Never overrides dry-run simulation (approvals only arise on real
+   * runs, and even defensively we refuse to execute under dryRun).
+   */
+  approvedTools?: Set<string>;
   /** default 8 */
   maxSteps?: number;
 }
@@ -166,8 +175,17 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
       dryRun: params.dryRun
     });
 
+    // Auto-resume: an operator explicitly approved this tool for the current
+    // node via the cockpit. Override an autonomy-tier rejection so a paused
+    // run can proceed. NEVER overrides dry-run — defensive guard ensures a
+    // real tool never executes under dryRun even if approvals were somehow set.
+    const humanApproved =
+      !params.dryRun &&
+      !decision.allowed &&
+      params.approvedTools?.has(call.name) === true;
+
     let result: ToolResult;
-    if (!decision.allowed) {
+    if (!decision.allowed && !humanApproved) {
       // Escalated (autonomy-tier rejection) items are surfaced to the caller;
       // plain dry-run simulations are returned as blocked ToolResults but not
       // recorded as escalations.

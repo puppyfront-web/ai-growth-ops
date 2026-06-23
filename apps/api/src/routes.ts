@@ -5505,13 +5505,14 @@ const routes: Route[] = [
       sendJson(res, 200, { items });
     }
   },
-  // Acknowledge escalated items on a run (cockpit "标记已处理").
-  // Persists the acknowledgement in run.metadata. NOTE: this does NOT auto-resume
-  // a paused run — re-enqueuing with correct node semantics is a deferred worker
-  // change. For now the action records the operator's decision visibly.
+  // Approve escalated items AND auto-resume a paused run (cockpit "批准并续跑").
+  // Collects every escalated {node, toolName} from the run's nodeResults, writes
+  // them to metadata.approvals, then re-enqueues the agent.run job. The worker
+  // sees the PAUSED run, restores its state, and re-executes the paused node
+  // with these tools unlocked (see runDomainAgent `approvedTools`).
   {
-    method: 'PATCH',
-    pattern: '/api/agent/runs/:id/acknowledge',
+    method: 'POST',
+    pattern: '/api/agent/runs/:id/approve',
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
@@ -5520,9 +5521,31 @@ const routes: Route[] = [
           id: ctx.params.id,
           organizationId: orgCtx.organization.id
         },
-        select: { id: true, metadata: true }
+        select: { id: true, status: true, output: true, metadata: true }
       });
       if (!run) return sendJson(res, 404, { error: 'run not found' });
+      if (run.status !== 'paused') {
+        return sendJson(res, 409, {
+          error: `只能批准并续跑已暂停的运行（当前状态：${run.status}）`
+        });
+      }
+      const state = (run.output ?? {}) as Record<string, unknown>;
+      const nodeResults = (state.nodeResults ?? {}) as Record<
+        string,
+        { escalatedItems?: Array<{ toolName: string }> }
+      >;
+      // De-dup {node, toolName} pairs.
+      const seen = new Set<string>();
+      const approvals: Array<{ node: string; toolName: string }> = [];
+      for (const [node, nr] of Object.entries(nodeResults)) {
+        for (const e of nr?.escalatedItems ?? []) {
+          const key = `${node}:${e.toolName}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            approvals.push({ node, toolName: e.toolName });
+          }
+        }
+      }
       const meta = ((run.metadata as Record<string, unknown> | null) ?? {}) as Record<
         string,
         unknown
@@ -5530,10 +5553,38 @@ const routes: Route[] = [
       await ctx.db.agentRun.update({
         where: { id: run.id },
         data: {
-          metadata: { ...meta, acknowledgedAt: new Date().toISOString(), acknowledgedBy: orgCtx.user.id }
+          metadata: {
+            ...meta,
+            approvals,
+            resumeRequestedAt: new Date().toISOString(),
+            resumeRequestedBy: orgCtx.user.id
+          }
         }
       });
-      sendJson(res, 200, { id: run.id, acknowledged: true });
+
+      // Best-effort re-enqueue (mirrors POST /api/agent/runs trigger).
+      let queued = false;
+      try {
+        const { Queue } = await import('bullmq');
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+        const queue = new Queue('agent.run', { connection: { url: redisUrl } });
+        try {
+          await queue.add(
+            'agent-run',
+            { runId: run.id },
+            { attempts: 2, backoff: { type: 'exponential', delay: 10_000 } }
+          );
+          queued = true;
+        } finally {
+          await queue.close();
+        }
+      } catch (err) {
+        routeLogger.warn('agent.run resume enqueue failed (best-effort)', {
+          runId: run.id,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+      sendJson(res, 200, { id: run.id, approvals, queued });
     }
   }
 ];
