@@ -14,6 +14,8 @@ import {
   type SupervisorState,
   type LLMClient
 } from '@ai-growth-ops/runtime';
+import { createDbCredentialResolver } from '../credentials.js';
+import { publishDailyReport } from '../notifications.js';
 
 export interface AgentRunJobPayload {
   runId?: string;
@@ -74,10 +76,11 @@ export async function handleAgentRun(
         userId: admin.id,
         agentName: 'L2_AUTOPILOT_LIGHT',
         status: 'pending',
-        // First cut supports dry-run only — real runs need second-cut
-        // platform-cookie injection into tool inputs. Daily scheduler
-        // therefore always produces dry-run runs.
-        input: { dryRun: true }
+        // Server-side cookie injection is now wired (createDbCredentialResolver),
+        // so real publishing is *possible* — but dry-run remains the SAFE DEFAULT.
+        // Set AGENT_DAILY_DRY_RUN=false to opt into real publishing once a valid
+        // decrypted cookie is resolvable for the target platform.
+        input: { dryRun: process.env.AGENT_DAILY_DRY_RUN !== 'false' }
       }
     });
     runId = created.id;
@@ -123,6 +126,10 @@ export async function handleAgentRun(
   const gate = createConfirmationGate();
   const workingMemory = createWorkingMemory();
   const preferences = createPreferencesStore(db, run.organizationId);
+  // Server-side cookie resolver: injects the decrypted platform cookie into
+  // write tools at execute time so daily runs are no longer locked to dry-run.
+  // The cookie never enters the LLM context — see runtime CredentialResolver.
+  const credentials = createDbCredentialResolver(db);
 
   // Accumulated token usage across all domain-node results for this run.
   // REVIEW/supervisor produces no tokens, so it does not contribute. This is
@@ -166,6 +173,7 @@ export async function handleAgentRun(
       workingMemory,
       preferences: prefs,
       confirmationGate: gate,
+      credentials,
       llmClient: llmClientOverride,
       maxSteps: 8
     });
@@ -222,6 +230,22 @@ export async function handleAgentRun(
         tokensUsed: tokensUsedTotal
       }
     });
+
+    // Daily report: only after a completed run. Paused (awaiting human input)
+    // and failed runs do not publish a daily report. Delivery must never fail
+    // the run — wrap in a catch and swallow, logging the error.
+    if (state.status === 'completed') {
+      try {
+        await publishDailyReport(state, db, {
+          feishuWebhookUrl: process.env.FEISHU_DAILY_REPORT_WEBHOOK
+        });
+      } catch (reportErr) {
+        console.error(
+          `[agent.run] daily report delivery failed for ${runId}:`,
+          reportErr
+        );
+      }
+    }
   } catch (err) {
     await db.agentRun.update({
       where: { id: runId },
