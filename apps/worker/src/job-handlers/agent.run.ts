@@ -56,7 +56,17 @@ export async function handleAgentRun(
    */
   llmClientOverride?: LLMClient
 ): Promise<void> {
-  const db = dbOverride ?? createDatabaseClient();
+  // BullMQ calls job processors as (job, token) where `token` is a string
+  // (the job id used for concurrency control). The test-only `dbOverride`
+  // occupies that same 2nd positional slot, so a non-client value (the BullMQ
+  // token) must NOT be honored as a client — otherwise `db = token` (a string)
+  // and `db.agentRun` crashes with "Cannot read properties of undefined
+  // (reading 'findUnique')" on every production agent.run. Only a genuine
+  // DatabaseClient (test injection) short-circuits createDatabaseClient().
+  const db =
+    dbOverride && typeof dbOverride === 'object' && 'agentRun' in dbOverride
+      ? dbOverride
+      : createDatabaseClient();
 
   // Resolve runId: explicit (manual API) or create one for the daily scheduled run.
   let runId = job.data.runId;
