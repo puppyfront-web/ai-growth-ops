@@ -87,7 +87,7 @@ describe('tool-executor credential injection + output scrub', () => {
       description: 'test spy',
       inputSchema: z.object({ platform: z.string(), cookie: z.string().optional() }),
       execute: async (args: { platform: string; cookie?: string }) => ({
-        gotCookie: !!args.cookie,
+        injected: !!args.cookie,
         deep: { cookie: args.cookie ?? null }
       })
     };
@@ -112,7 +112,7 @@ describe('tool-executor credential injection + output scrub', () => {
     const res = await exec.execute('r1', 'content.list_videos', { platform: 'douyin' }); // host sends NO cookie
 
     expect(seen).toEqual({ userId: 'u', orgId: 'o' }); // resolver called with run's user/org
-    expect((res.output as { gotCookie: boolean }).gotCookie).toBe(true); // cookie reached the tool
+    expect((res.output as { injected: boolean }).injected).toBe(true); // cookie reached the tool
     expect(JSON.stringify(res.output)).not.toContain('server-cookie'); // scrubbed before return
   });
 });
