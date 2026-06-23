@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Redirect hidden sections
   if (!isPublic && isHiddenSection) {
     if (typeof window !== 'undefined') {
-      router.replace('/dashboard');
+      router.replace('/cockpit');
     }
     return null;
   }

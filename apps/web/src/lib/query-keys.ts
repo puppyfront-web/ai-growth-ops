@@ -66,6 +66,10 @@ export const queryKeys = {
   notifications: {
     all: ['notifications'] as const
   },
+  agent: {
+    runs: ['agent', 'runs'] as const,
+    run: (id: string) => ['agent', 'run', id] as const
+  },
   audit: {
     logs: ['audit', 'logs'] as const
   },
