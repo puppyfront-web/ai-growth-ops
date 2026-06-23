@@ -2063,7 +2063,7 @@ describe('content→publish loop (dry-run, integration)', () => {
       data: {
         organizationId: org!.id,
         userId: admin!.id,
-        agentName: 'L1_COPILOT',  // L1 → every write escalated → loop still completes (REVIEW done)
+        agentName: 'L2_AUTOPILOT_LIGHT',  // L2 + dryRun:true → gate simulates ALL tool calls (reads+writes) as blocked-but-NOT-escalated → escalatedItems empty → outcome 'done' every node → loop completes all 5 nodes with no real side effects
         status: 'pending',
         input: { dryRun: true }
       }
@@ -2084,7 +2084,7 @@ describe('content→publish loop (dry-run, integration)', () => {
   }, 120_000);
 });
 ```
-> 注：此测试需要真实 LLM（env OPENAI_API_KEY/ANTHROPIC_API_KEY）+ browser-runner（content.list_videos 在 METRICS 调它）。CI 环境：用 env stub LLM client（`LLM_PROVIDER` 指向 mock）或跳过（`it.skipIf(!process.env.OPENAI_API_KEY)`）。第一刀验收：本地手跑通过即视为闭环成立。
+> 注：dry-run 模式下 gate 拦截所有 tool call（读+写都返回 `simulatedOutput`、不执行、不 escalate），所以 5 节点全部 `outcome='done'`、闭环走完、无真实副作用、**不需要 browser-runner**。但仍需真实 LLM（agent 要跑 LLM loop 决定调哪些 tool）：env `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`，否则 `it.skipIf(!process.env.OPENAI_API_KEY)` 跳过。第一刀验收：本地手跑通过即视为闭环成立。（注意：若用 L1，每次写都会 escalate→`need_input`→loop pause，不会走完 5 节点——所以必须用 L2+dryRun 才能验证完整闭环。）
 
 - [ ] **Step 2: 跑测试**
 
