@@ -68,6 +68,12 @@ export function getAgentRun(id: string): Promise<AgentRun> {
   return apiGet(`/api/agent/runs/${id}`);
 }
 
-export function acknowledgeRun(id: string): Promise<{ id: string; acknowledged: boolean }> {
-  return apiPatch(`/api/agent/runs/${id}/acknowledge`);
+export function approveAndResumeRun(
+  id: string
+): Promise<{
+  id: string;
+  approvals: Array<{ node: string; toolName: string }>;
+  queued: boolean;
+}> {
+  return apiPost(`/api/agent/runs/${id}/approve`);
 }

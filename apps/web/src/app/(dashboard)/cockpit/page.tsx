@@ -6,7 +6,7 @@ import {
   listAgentRuns,
   getAgentRun,
   triggerAgentRun,
-  acknowledgeRun,
+  approveAndResumeRun,
   type AgentRunSummary,
   type RunStatus
 } from '@/lib/api/agent';
@@ -120,17 +120,20 @@ export default function CockpitPage() {
     onError: () => toast.error('发起失败，请重试')
   });
 
-  const ackMut = useMutation({
-    mutationFn: (id: string) => acknowledgeRun(id),
-    onSuccess: () => {
-      toast.success('已标记处理');
+  const approveMut = useMutation({
+    mutationFn: (id: string) => approveAndResumeRun(id),
+    onSuccess: (data) => {
+      toast.success(
+        data.queued ? '已批准并续跑，运行已恢复' : '已批准，但恢复入队失败（请重试）'
+      );
+      // Refresh both the detail (status flips to running) and the list.
       if (selectedId) qc.invalidateQueries({ queryKey: queryKeys.agent.run(selectedId) });
+      qc.invalidateQueries({ queryKey: queryKeys.agent.runs });
     },
-    onError: () => toast.error('标记失败')
+    onError: () => toast.error('批准失败，请重试')
   });
 
   const run = runQuery.data;
-  const acknowledged = !!(run?.metadata?.acknowledgedAt);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -268,9 +271,9 @@ export default function CockpitPage() {
               <EscalationList
                 runId={run.id}
                 nodeResults={run.nodeResults}
-                acknowledged={acknowledged}
-                onAcknowledge={(id) => ackMut.mutate(id)}
-                acknowledging={ackMut.isPending}
+                runStatus={run.status}
+                onApprove={(id) => approveMut.mutate(id)}
+                approving={approveMut.isPending}
               />
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">暂无运行。</p>

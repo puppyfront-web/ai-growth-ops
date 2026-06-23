@@ -25,15 +25,15 @@ function preview(input: unknown): string {
 export function EscalationList({
   runId,
   nodeResults,
-  acknowledged,
-  onAcknowledge,
-  acknowledging
+  runStatus,
+  onApprove,
+  approving
 }: {
   runId: string;
   nodeResults: Partial<Record<NodeName, NodeResult>>;
-  acknowledged: boolean;
-  onAcknowledge: (runId: string) => void;
-  acknowledging: boolean;
+  runStatus: 'pending' | 'running' | 'success' | 'failed' | 'paused';
+  onApprove: (runId: string) => void;
+  approving: boolean;
 }) {
   const items = NODE_ORDER.flatMap((node) => {
     const r = nodeResults[node];
@@ -76,24 +76,26 @@ export function EscalationList({
         </div>
       ))}
 
-      <div className="flex items-center gap-3 pt-1">
-        {acknowledged ? (
-          <span className="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-            <CheckCircle2 className="h-4 w-4" /> 已标记处理
-          </span>
+      <div className="flex flex-wrap items-center gap-3 pt-1">
+        {runStatus === 'paused' ? (
+          <>
+            <Button
+              size="sm"
+              disabled={approving}
+              onClick={() => onApprove(runId)}
+            >
+              {approving ? '批准中…' : '批准并续跑'}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              批准后运行从当前节点恢复，已批准的写操作将被放行执行。
+            </span>
+          </>
         ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={acknowledging}
-            onClick={() => onAcknowledge(runId)}
-          >
-            {acknowledging ? '处理中…' : '标记本运行已处理'}
-          </Button>
+          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            运行状态：{runStatus}（升级项已随续跑处理或无需操作）
+          </span>
         )}
-        <span className="text-xs text-muted-foreground">
-          标记后该运行不再计入待办。自动恢复执行为规划中的能力，暂不在此操作触发。
-        </span>
       </div>
     </div>
   );
