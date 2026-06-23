@@ -5,8 +5,11 @@ import type {
   AutonomyLevel,
   WorkingMemory,
   PreferencesStore,
-  ConfirmationGate
+  ConfirmationGate,
+  CredentialResolver
 } from '@ai-growth-ops/runtime';
+
+export type { CredentialResolver };
 
 /** A packaged node handed to the host to execute. */
 export interface NodeDirective {
@@ -26,10 +29,6 @@ export interface NodeDirective {
 export interface RunStore {
   get(runId: string): Promise<SupervisorState | undefined>;
   set(runId: string, state: SupervisorState): Promise<void>;
-}
-
-export interface CredentialResolver {
-  getCookie(userId: string, orgId: string, platform: string): Promise<string | undefined>;
 }
 
 export interface StartRunInput {
