@@ -8,6 +8,7 @@ import type {
   AgentSystemPromptContext,
   AutonomyLevel,
   ConfirmationGate,
+  CredentialResolver,
   RiskLevel,
   UserPreferences,
   WorkingMemory
@@ -27,6 +28,12 @@ export interface RunDomainAgentParams {
   confirmationGate: ConfirmationGate;
   /** injected for testing; defaults to createLLMClient() */
   llmClient?: LLMClient;
+  /**
+   * Server-side credential injection. When provided, cookies are resolved here and
+   * injected into tool inputs before execute — they never come from the LLM. Mirrors
+   * the host-mode executor in packages/runtime-mcp so both paths share one contract.
+   */
+  credentials?: CredentialResolver;
   /** default 8 */
   maxSteps?: number;
 }
@@ -186,7 +193,17 @@ export async function runDomainAgent(params: RunDomainAgentParams): Promise<Doma
         result = { toolCallId: call.id, output: { error: `tool not found: ${call.name}` } };
       } else {
         toolCallsExecuted++;
-        const output = await tool.execute(input, {
+        // Server-side credential injection: cookie resolved from CredentialResolver,
+        // never from the LLM. Mirrors the runtime-mcp executor.
+        let execInput = input;
+        if (params.credentials) {
+          const platform = typeof input.platform === 'string' ? input.platform : undefined;
+          if (platform) {
+            const cookie = await params.credentials.getCookie(params.userId, params.orgId, platform);
+            if (cookie) execInput = { ...input, cookie };
+          }
+        }
+        const output = await tool.execute(execInput, {
           apiBase: '',
           headers: {},
           orgId: params.orgId,

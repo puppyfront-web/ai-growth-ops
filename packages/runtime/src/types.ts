@@ -53,6 +53,14 @@ export interface PreferencesStore {
   forDomain(userId: string, domain: PreferenceDomain): Promise<Partial<UserPreferences>>;
 }
 
+/**
+ * Resolves platform credentials server-side so they never enter the LLM context.
+ * Implementations: env-backed (runtime-mcp host mode), DB-backed (worker scheduled mode).
+ */
+export interface CredentialResolver {
+  getCookie(userId: string, orgId: string, platform: string): Promise<string | undefined>;
+}
+
 // ── Agents ──
 export interface AgentSystemPromptContext {
   userId: string;
