@@ -45,6 +45,43 @@ function mapStatus(s: SupervisorState['status']): string {
         : 'running';
 }
 
+// DEV ONLY (AGENT_DEV_STUB_LLM=1): deterministic stub LLM so the full
+// pause→approve→resume flow can be exercised locally without a real model
+// (e.g. no provider network/key). On the first CONTENT-node call it emits a
+// high-risk publish.video call → the L1 gate escalates it → the run pauses.
+// On every later call (including the resumed run) it finalizes, so the run
+// completes after approval. Never enabled in production (no env var set).
+let devStubEscalated = false;
+function createDevStubLLM(): LLMClient {
+  return {
+    chatWithTools: async (messages: unknown) => {
+      const list = messages as Array<{ content?: unknown }>;
+      const isContent = list.some(
+        (m) => typeof m.content === 'string' && m.content.includes('CONTENT')
+      );
+      if (!devStubEscalated && isContent) {
+        devStubEscalated = true;
+        return {
+          text: '',
+          toolCalls: [
+            {
+              id: 'dev-stub-1',
+              name: 'publish.video',
+              arguments: { __risk: 'high', __confidence: 0.9 }
+            }
+          ],
+          tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 }
+        } as never;
+      }
+      return {
+        text: '节点完成',
+        toolCalls: [],
+        tokenUsage: { inputTokens: 5, outputTokens: 5, totalTokens: 10 }
+      } as never;
+    }
+  } as never;
+}
+
 export async function handleAgentRun(
   job: Job<AgentRunJobPayload>,
   dbOverride?: DatabaseClient,
@@ -63,10 +100,25 @@ export async function handleAgentRun(
   // and `db.agentRun` crashes with "Cannot read properties of undefined
   // (reading 'findUnique')" on every production agent.run. Only a genuine
   // DatabaseClient (test injection) short-circuits createDatabaseClient().
+  // BullMQ calls job processors as (job, token, abortSignal) — `token` (2nd)
+  // is a string and `abortSignal` (3rd) is an AbortSignal; neither is a
+  // DatabaseClient / LLMClient. The test-only dbOverride / llmClientOverride
+  // occupy those same positional slots, so BOTH must be type-guarded: only a
+  // genuine client is honored. Without these guards the BullMQ token is used
+  // as `db` (db.agentRun crashes) and the AbortSignal as `llmClient`
+  // (chatWithTools is not a function) — every production agent.run fails.
   const db =
     dbOverride && typeof dbOverride === 'object' && 'agentRun' in dbOverride
       ? dbOverride
       : createDatabaseClient();
+  const llmClient =
+    llmClientOverride &&
+    typeof (llmClientOverride as { chatWithTools?: unknown }).chatWithTools ===
+      'function'
+      ? llmClientOverride
+      : process.env.AGENT_DEV_STUB_LLM === '1'
+        ? createDevStubLLM()
+        : undefined;
 
   // Resolve runId: explicit (manual API) or create one for the daily scheduled run.
   let runId = job.data.runId;
@@ -211,7 +263,7 @@ export async function handleAgentRun(
       confirmationGate: gate,
       credentials,
       approvedTools,
-      llmClient: llmClientOverride,
+      llmClient,
       maxSteps: 8
     });
     tokensUsedTotal += result.tokenUsage.totalTokens;
