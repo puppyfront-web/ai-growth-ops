@@ -52,6 +52,9 @@ export default defineConfig({
       ),
       '@ai-growth-ops/runtime': fileURLToPath(
         new URL('./packages/runtime/src/index.ts', import.meta.url)
+      ),
+      '@ai-growth-ops/runtime-mcp': fileURLToPath(
+        new URL('./packages/runtime-mcp/src/index.ts', import.meta.url)
       )
     }
   },
