@@ -62,7 +62,7 @@ export class StaticPreferencesStore implements PreferencesStore {
     const keys = DOMAIN_KEYS[domain];
     const out: Partial<UserPreferences> = {};
     for (const k of keys) {
-      if (k in this.seed) (out as Record<string, unknown>)[k] = (this.seed as Record<string, unknown>)[k];
+      if (k in this.seed) (out as Record<string, unknown>)[k] = (this.seed as unknown as Record<string, unknown>)[k];
     }
     return out;
   }
