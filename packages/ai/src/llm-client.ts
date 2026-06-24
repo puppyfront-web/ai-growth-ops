@@ -18,7 +18,9 @@ export function createLLMClient(config?: Partial<LLMConfig>): LLMClient {
       : process.env.OPENAI_BASE_URL);
   const model =
     config?.model ||
-    (provider === 'anthropic' ? 'claude-sonnet-4-6-20250514' : 'gpt-4o');
+    (provider === 'anthropic'
+      ? process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6-20250514'
+      : process.env.OPENAI_MODEL || 'gpt-4o');
 
   const fullConfig: LLMConfig = { provider, apiKey, baseUrl, model, ...config };
 
