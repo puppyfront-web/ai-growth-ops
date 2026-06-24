@@ -601,6 +601,26 @@ const REPLY_SELECTORS: Record<string, ReplySelectors> = {
 
 // ── Helpers ───────────────────────────────────────────────────────
 
+/**
+ * Parse a JSON string while preserving every integer beyond the
+ * safe-integer range as a string.
+ *
+ * Douyin/XHS IDs (item_id, aweme_id, comment_id, …) are 18–19 digit integers
+ * that exceed Number.MAX_SAFE_INTEGER, so `JSON.parse`/`response.json()`
+ * silently zero out their trailing digits (…5360953 → …536000). By quoting
+ * large integer literals in the raw text *before* parsing, the IDs survive as
+ * strings. Small integers (statistics, counts) are untouched and stay numeric.
+ */
+function parseJsonBigInt(text: string): unknown {
+  // Quote bare integer literals with 16+ digits. Boundaries ensure we only
+  // touch numbers (not digits inside strings), and avoid matching decimals.
+  const safe = text.replace(
+    /(?<=[:\[,]\s*)-?\d{16,}(?=\s*[,\]\}])/g,
+    (m) => `"${m}"`
+  );
+  return JSON.parse(safe);
+}
+
 function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
@@ -644,6 +664,43 @@ async function createSession(
   const hostname = extractDomain(targetUrl);
   const domain = rootDomain(hostname);
   return createStealthSession(cookie, domain, headed);
+}
+
+/**
+ * Resolve the iframe that hosts douyin's private-message UI.
+ *
+ * Douyin renders its DM inbox inside a `summon.bytedance.com` iframe rather
+ * than in the top-level page, so selectors like `page.locator('textarea')`
+ * find nothing. This waits for that frame to mount and returns it; if no
+ * matching frame appears (older layout / different platform), it falls back to
+ * `null` so callers can keep using the top-level page.
+ */
+async function resolveImFrame(
+  page: import('playwright').Page
+): Promise<import('playwright').Frame | null> {
+  try {
+    // Wait for the IM iframe to mount on the page.
+    await page
+      .locator('iframe[src*="summon.bytedance.com"], iframe[src*="im"]')
+      .first()
+      .waitFor({ state: 'attached', timeout: 10_000 })
+      .catch(() => {});
+    // Resolve it from the page's frame tree (reliable across reloads).
+    const frame = page
+      .frames()
+      .find((f) =>
+        /summon\.bytedance\.com|\/im[/?#]/i.test(f.url())
+      );
+    if (frame) {
+      await frame
+        .locator('body')
+        .waitFor({ state: 'attached', timeout: 8_000 })
+        .catch(() => {});
+    }
+    return frame ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Route handlers ────────────────────────────────────────────────
@@ -986,7 +1043,9 @@ async function waitForXhsNoteRef(
         XHS_NOTE_LIST_PATTERNS.some((pattern) => item.url().includes(pattern)),
       { timeout: 10000 }
     );
-    return pickXhsNoteRef((await response.json()) as Record<string, unknown>);
+    return pickXhsNoteRef(
+      parseJsonBigInt(await response.text()) as Record<string, unknown>
+    );
   } catch {
     return undefined;
   }
@@ -1200,10 +1259,15 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
         )
           return;
 
-        // Read the response body ONCE — Response.json() can only be called once
+        // Read the response body ONCE — Response.json() can only be called once.
+        // Use parseJsonBigInt so comment_id / user uid (18–19 digit integers)
+        // survive as strings instead of being truncated by Number coercion.
         let json: Record<string, unknown>;
         try {
-          json = (await response.json()) as Record<string, unknown>;
+          json = parseJsonBigInt(await response.text()) as Record<
+            string,
+            unknown
+          >;
         } catch {
           return; /* non-JSON, skip */
         }
@@ -1467,7 +1531,10 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
         const url = response.url();
         if (!xhrPatterns.some((p) => url.includes(p))) return;
         try {
-          const json = (await response.json()) as Record<string, unknown>;
+          const json = parseJsonBigInt(await response.text()) as Record<
+            string,
+            unknown
+          >;
           const items = extractMessageList(body.platform, json);
           captured.push(...items);
         } catch {
@@ -1651,36 +1718,44 @@ const handleReplyMessage: RouteHandler = async (_req, res, ctx) => {
       waitUntil: 'domcontentloaded',
       timeout: 30000
     });
+    // Douyin私信 UI is hosted inside an iframe (summon.bytedance.com).
+    // Give it time to mount before we reach into its frame.
+    await page.waitForTimeout(4000);
+
+    // Resolve the IM frame — douyin renders DMs in a bytedance iframe.
+    const frame = await resolveImFrame(page);
+    const root = frame ?? page;
 
     // Try to find and click the conversation with the target user
-    const userLink = page
+    const userLink = root
       .locator(
         `[data-id="${body.externalUserId}"], [data-user-id="${body.externalUserId}"], a:has-text("${body.externalUserId}")`
       )
       .first();
     try {
       await userLink.click({ timeout: 5000 });
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1500);
     } catch {
       // Conversation not found; try typing in the default input
     }
 
-    // Find message input and type
-    const messageInput = page
+    // Find message input and type. Covers native textarea, contenteditable,
+    // and douyin/bytedance IM class variants.
+    const messageInput = root
       .locator(
-        'textarea, [contenteditable="true"], [class*="message-input"], [class*="msg-input"]'
+        'textarea, [contenteditable="true"], [class*="message-input"], [class*="msg-input"], [class*="chat-input"], [class*="im-input"]'
       )
       .first();
-    await messageInput.click({ timeout: 5000 });
+    await messageInput.click({ timeout: 8000 });
     await messageInput.fill(body.messageText);
 
     // Submit
-    const sendBtn = page
+    const sendBtn = root
       .locator(
         '[class*="send"], button:has-text("发送"), button:has-text("Send"), button[type="submit"]'
       )
       .first();
-    await sendBtn.click({ timeout: 3000 });
+    await sendBtn.click({ timeout: 5000 });
 
     // Brief wait for confirmation
     await page.waitForTimeout(2000);
@@ -1778,7 +1853,12 @@ const handleListVideos: RouteHandler = async (_req, res, ctx) => {
         if (!WORK_LIST_API_PATTERNS.some((p) => url.includes(p))) return;
         const ct = response.headers()['content-type'] || '';
         if (!ct.includes('json')) return;
-        workList = (await response.json()) as Record<string, any>;
+        // Parse manually: Douyin item_id/aweme_id are 19-digit integers that
+        // exceed Number.MAX_SAFE_INTEGER, so response.json() truncates them
+        // (…536000 → …536000 with trailing digits zeroed). A reviver preserves
+        // any integer beyond safe-integer range as a string so IDs survive.
+        const raw = await response.text();
+        workList = parseJsonBigInt(raw) as Record<string, any>;
       } catch {
         /* noop */
       }

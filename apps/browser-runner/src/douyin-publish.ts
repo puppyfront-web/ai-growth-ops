@@ -233,28 +233,44 @@ async function clickPublish(
           continue;
         }
       }
-      // Try to extract the first post ID from the manage page
+      // Try to extract the first post ID from the manage page.
+      // The manage page renders the work list via an XHR (work_list) whose
+      // JSON payload carries item_id — DOM attributes no longer expose it, so
+      // intercept the API response instead. Large IDs are quoted to avoid
+      // Number precision loss (see parseJsonBigInt in assist-routes).
       const manageUrl = page.url();
       let postId: string | null = null;
       try {
-        await page.waitForTimeout(3000);
-        const firstItem = page
-          .locator('a[href*="/content/detail/"], [data-item-id]')
-          .first();
-        if (await firstItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-          const href = await firstItem.getAttribute('href').catch(() => null);
-          const dataId = await firstItem
-            .getAttribute('data-item-id')
-            .catch(() => null);
-          if (dataId) {
-            postId = dataId;
-          } else if (href) {
-            const m = href.match(/\/content\/detail\/(\d+)/);
-            if (m) postId = m[1];
-          }
+        const workListPromise = page
+          .waitForResponse(
+            (r) =>
+              /work_list|\/item\/list|\/creator\/item\/list/.test(r.url()) &&
+              (r.headers()['content-type'] || '').includes('json'),
+            { timeout: 10_000 }
+          )
+          .catch(() => null);
+
+        // Trigger list load by settling on the page.
+        await page.waitForTimeout(2000);
+
+        const workListResp = await workListPromise;
+        if (workListResp) {
+          const raw = await workListResp.text();
+          // Quote ≥16-digit integer literals so item_id survives parsing.
+          const safe = raw.replace(
+            /(?<=[:\[,]\s*)-?\d{16,}(?=\s*[,\]\}])/g,
+            (m) => `"${m}"`
+          );
+          const json = JSON.parse(safe) as Record<string, unknown>;
+          const list = (json.aweme_list ?? json.items ?? json.list ?? []) as Array<
+            Record<string, unknown>
+          >;
+          const first = Array.isArray(list) ? list[0] : undefined;
+          const id = first?.item_id ?? first?.aweme_id ?? first?.video_id;
+          if (id != null) postId = String(id);
         }
       } catch {
-        /* best effort */
+        /* best effort — publish itself already succeeded */
       }
       return { postId, postUrl: manageUrl };
     }
