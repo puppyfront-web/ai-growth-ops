@@ -13,9 +13,17 @@ import {
 
 // ── Platform comment management page URLs ─────────────────────────
 
-/** 抖音创作者中心：互动管理 → 评论管理 */
+/**
+ * 抖音评论入口。
+ *
+ * 抖音创作者中心的 `/creator-micro/interaction/comment` 已被官方下线
+ * (跳转回首页,不再加载评论),所以评论抓取改走网页版:
+ *   - 有 itemId → 视频页 `www.douyin.com/video/{id}`,评论区直接渲染,
+ *     评论 API `/aweme/v1/web/comment/list/` 在该页自动触发。
+ *   - 无 itemId → 网页版通知/消息页,聚合所有视频收到的评论。
+ */
 const DOUYIN_COMMENT_MANAGE_URL =
-  'https://creator.douyin.com/creator-micro/interaction/comment';
+  'https://www.douyin.com/?recommend=1';
 const DOUYIN_ITEM_LIST_PATTERNS = [
   '/web/api/creator/item/list',
   '/aweme/v1/creator/item/list',
@@ -23,7 +31,7 @@ const DOUYIN_ITEM_LIST_PATTERNS = [
 ];
 
 function douyinPostCommentUrl(itemId: string): string {
-  return `https://creator.douyin.com/creator-micro/content/post-comment/${encodeURIComponent(itemId)}`;
+  return `https://www.douyin.com/video/${encodeURIComponent(itemId)}`;
 }
 
 const COMMENT_PAGE_URLS: Record<string, (sourceContentId?: string) => string> =
@@ -57,6 +65,7 @@ const MESSAGE_PAGE_URLS: Record<string, () => string> = {
 
 const COMMENT_API_PATTERNS: Record<string, string[]> = {
   douyin: [
+    '/aweme/v1/web/comment/list/',
     '/aweme/v1/comment/list/',
     '/aweme/v1/creator/comment/list/',
     '/aweme/v1/creator/notice/comment/',
@@ -1576,6 +1585,9 @@ interface ReplyCommentBody {
   externalCommentId: string;
   replyText: string;
   sourceContentId?: string;
+  /** Optional comment text — used to locate the comment row by content on
+   * pages (douyin public video page) that don't expose data-comment-id. */
+  commentText?: string;
 }
 
 const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
@@ -1613,84 +1625,136 @@ const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
       timeout: 30000
     });
 
+    // On the public video page the comment list is lazy-loaded: it only
+    // renders after the comments panel is scrolled into view / clicked. Nudge
+    // it so the target comment actually appears in the DOM before we look.
     try {
-      await page.waitForSelector('[class*="comment"]', { timeout: 8000 });
+      await page.waitForSelector('[class*="comment"], [class*="Comment"]', {
+        timeout: 8000
+      });
+      // Scroll the comment panel into view and give it time to fetch.
+      await page
+        .evaluate(() => {
+          const panels = document.querySelectorAll(
+            '[class*="comment"], [class*="Comment"]'
+          );
+          panels.forEach((p) => p.scrollIntoView({ block: 'center' }));
+          // Also scroll within the page to trigger lazy-load observers.
+          window.scrollBy(0, 400);
+        })
+        .catch(() => {});
+      await page.waitForTimeout(2500);
     } catch {
       // Comments may not have loaded
     }
 
-    // Find the target comment by data-id attribute or by content matching
+    // Find the target comment. The public video page does NOT expose
+    // data-comment-id on comment nodes, so we locate by data attribute when
+    // present, otherwise fall back to matching the comment text (passed by
+    // callers as `commentText`), then a vision model as last resort.
     const commentLocator = page
       .locator(
-        `[data-id="${body.externalCommentId}"], [data-comment-id="${body.externalCommentId}"]`
+        `[data-comment-id="${body.externalCommentId}"], [data-id="${body.externalCommentId}"]`
       )
       .first();
+    const locatedByData = (await commentLocator.count()) > 0;
 
-    if ((await commentLocator.count()) > 0) {
-      // Click reply button within the comment
-      const replyBtn = commentLocator.locator(replySels.replyButton).first();
+    // Text fallback: find the comment node whose text equals/contains the
+    // passed commentText, then climb to the comment row container.
+    let commentRow: import('playwright').Locator | null = locatedByData
+      ? commentLocator
+      : null;
+    if (!commentRow && body.commentText) {
+      const byText = page
+        .locator(`text=${body.commentText}`)
+        .first();
+      if (await byText.isVisible({ timeout: 3000 }).catch(() => false)) {
+        commentRow = byText;
+      }
+    }
+
+    // If we located the comment row, hover it to reveal the "回复" button
+    // (douyin video page shows reply buttons on hover), then click reply.
+    if (commentRow) {
       try {
-        await replyBtn.click({ timeout: 3000 });
+        await commentRow.hover({ timeout: 3000 });
+        await page.waitForTimeout(500);
       } catch {
-        // Reply button may not be found or clickable
+        /* hover optional */
       }
-
-      // Type reply text. Try the comment-scoped input, then a page-level
-      // input, then — when both selectors miss (hashed classes rotated) —
-      // let a vision model find the reply input from a screenshot.
-      const replyInput = commentLocator.locator(replySels.replyInput).first();
-      const pageInput = page.locator(replySels.replyInput).first();
-      let replied = false;
-      try {
-        await replyInput.click({ timeout: 3000 });
-        await replyInput.fill(body.replyText);
-        replied = true;
-      } catch {
-        /* try next */
-      }
-      if (!replied) {
-        replied = await fillWithVisionFallback(
-          page,
-          pageInput,
-          '回复评论的输入框',
-          body.replyText,
-          { timeout: 5000 }
-        );
-      }
-      if (!replied) {
-        sendJson(res, 200, {
-          success: false,
-          errorMessage: '未找到回复输入框(选择器与视觉兜底均失败)'
-        });
-        return;
-      }
-
-      // Submit — comment-scoped, then page-level, then vision fallback.
-      const submitBtn = commentLocator.locator(replySels.submitButton).first();
-      const submitted = await clickWithVisionFallback(
+      // Try clicking the reply button near the located comment, then a
+      // page-level "回复" via vision fallback.
+      const replyBtn =
+        commentRow.locator(replySels.replyButton).first();
+      await clickWithVisionFallback(
         page,
-        submitBtn,
-        '回复评论的发送/提交按钮',
+        replyBtn,
+        '评论旁边的"回复"按钮',
         { timeout: 4000 }
       );
-      if (!submitted) {
-        // Enter often submits a reply inline.
-        await page.keyboard.press('Enter').catch(() => {});
-      }
-
-      // Brief wait for submission confirmation
-      await page.waitForTimeout(2000);
-
-      sendJson(res, 200, {
-        success: true,
-        externalReplyId: `reply-${Date.now()}`
-      });
     } else {
+      // Couldn't locate the comment row at all — try opening a reply input
+      // via vision (model looks for the reply affordance on the page).
+      await clickWithVisionFallback(
+        page,
+        page.locator(replySels.replyButton).first(),
+        '"回复"按钮或评论输入区',
+        { timeout: 4000 }
+      );
+    }
+
+    // Type reply text. Try the comment-scoped input, then a page-level
+    // input, then — when both selectors miss (hashed classes rotated) —
+    // let a vision model find the reply input from a screenshot.
+    const replyInputScope = commentRow ?? page;
+    const replyInput = replyInputScope.locator(replySels.replyInput).first();
+    const pageInput = page.locator(replySels.replyInput).first();
+    let replied = false;
+    try {
+      await replyInput.click({ timeout: 3000 });
+      await replyInput.fill(body.replyText);
+      replied = true;
+    } catch {
+      /* try next */
+    }
+    if (!replied) {
+      replied = await fillWithVisionFallback(
+        page,
+        pageInput,
+        '回复评论的输入框',
+        body.replyText,
+        { timeout: 5000 }
+      );
+    }
+    if (!replied) {
       sendJson(res, 200, {
         success: false,
-        errorMessage: 'Target comment not found on page'
+        errorMessage: '未找到回复输入框(选择器与视觉兜底均失败)'
       });
+      return;
     }
+
+    // Submit — comment-scoped, then page-level, then vision fallback.
+    const submitScope = commentRow ?? page;
+    const submitBtn = submitScope.locator(replySels.submitButton).first();
+    const submitted = await clickWithVisionFallback(
+      page,
+      submitBtn,
+      '回复评论的发送/提交按钮',
+      { timeout: 4000 }
+    );
+    if (!submitted) {
+      // Enter often submits a reply inline.
+      await page.keyboard.press('Enter').catch(() => {});
+    }
+
+    // Brief wait for submission confirmation
+    await page.waitForTimeout(2000);
+
+    sendJson(res, 200, {
+      success: true,
+      externalReplyId: `reply-${Date.now()}`
+    });
   } catch (err) {
     sendJson(res, 200, {
       success: false,
