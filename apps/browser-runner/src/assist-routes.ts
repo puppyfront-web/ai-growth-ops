@@ -2,6 +2,10 @@ import type { ServerResponse } from 'node:http';
 import type { RouteHandler, Route } from './routes.js';
 import { createStealthSession } from './browser-session.js';
 import {
+  fillWithVisionFallback,
+  clickWithVisionFallback
+} from './vision-assist.js';
+import {
   dedupeByKey,
   RECENT_INTERACTION_FALLBACK_LIMIT,
   selectTodayOrRecent
@@ -1631,26 +1635,47 @@ const handleReplyComment: RouteHandler = async (_req, res, ctx) => {
         // Reply button may not be found or clickable
       }
 
-      // Type reply text
+      // Type reply text. Try the comment-scoped input, then a page-level
+      // input, then — when both selectors miss (hashed classes rotated) —
+      // let a vision model find the reply input from a screenshot.
       const replyInput = commentLocator.locator(replySels.replyInput).first();
+      const pageInput = page.locator(replySels.replyInput).first();
+      let replied = false;
       try {
         await replyInput.click({ timeout: 3000 });
         await replyInput.fill(body.replyText);
+        replied = true;
       } catch {
-        // Fallback: try page-level input
-        const pageInput = page.locator(replySels.replyInput).first();
-        await pageInput.click({ timeout: 3000 });
-        await pageInput.fill(body.replyText);
+        /* try next */
+      }
+      if (!replied) {
+        replied = await fillWithVisionFallback(
+          page,
+          pageInput,
+          '回复评论的输入框',
+          body.replyText,
+          { timeout: 5000 }
+        );
+      }
+      if (!replied) {
+        sendJson(res, 200, {
+          success: false,
+          errorMessage: '未找到回复输入框(选择器与视觉兜底均失败)'
+        });
+        return;
       }
 
-      // Submit
+      // Submit — comment-scoped, then page-level, then vision fallback.
       const submitBtn = commentLocator.locator(replySels.submitButton).first();
-      try {
-        await submitBtn.click({ timeout: 3000 });
-      } catch {
-        // Fallback: try page-level submit
-        const pageSubmit = page.locator(replySels.submitButton).first();
-        await pageSubmit.click({ timeout: 3000 });
+      const submitted = await clickWithVisionFallback(
+        page,
+        submitBtn,
+        '回复评论的发送/提交按钮',
+        { timeout: 4000 }
+      );
+      if (!submitted) {
+        // Enter often submits a reply inline.
+        await page.keyboard.press('Enter').catch(() => {});
       }
 
       // Brief wait for submission confirmation
@@ -1740,22 +1765,49 @@ const handleReplyMessage: RouteHandler = async (_req, res, ctx) => {
     }
 
     // Find message input and type. Covers native textarea, contenteditable,
-    // and douyin/bytedance IM class variants.
+    // and douyin/bytedance IM class variants. Falls back to a vision model
+    // (screenshot → "私信输入框在哪") when the selectors miss — douyin's DM
+    // UI lives in a bytedance iframe whose class names rotate frequently.
     const messageInput = root
       .locator(
         'textarea, [contenteditable="true"], [class*="message-input"], [class*="msg-input"], [class*="chat-input"], [class*="im-input"]'
       )
       .first();
-    await messageInput.click({ timeout: 8000 });
-    await messageInput.fill(body.messageText);
+    const frameArg =
+      root !== page ? (root as import('playwright').Frame) : undefined;
+    const filled = await fillWithVisionFallback(
+      page,
+      messageInput,
+      '私信/消息输入框(用来输入要发送的文字)',
+      body.messageText,
+      { timeout: 8000, frame: frameArg }
+    );
+    if (!filled) {
+      sendJson(res, 200, {
+        success: false,
+        errorMessage: '未找到私信输入框(选择器与视觉兜底均失败)'
+      });
+      return;
+    }
 
-    // Submit
+    // Submit — selector first, vision fallback if the send button moved.
     const sendBtn = root
       .locator(
         '[class*="send"], button:has-text("发送"), button:has-text("Send"), button[type="submit"]'
       )
       .first();
-    await sendBtn.click({ timeout: 5000 });
+    const sent = await clickWithVisionFallback(
+      page,
+      sendBtn,
+      '发送按钮(发送私信)',
+      { timeout: 5000, frame: frameArg }
+    );
+    if (!sent) {
+      // Last resort: Enter key often submits in IM clients. Keyboard input
+      // goes through the Page (Frame has no keyboard API); focus should
+      // already be in the input after fillWithVisionFallback clicked it.
+      await page.keyboard.press('Enter').catch(() => {});
+    }
 
     // Brief wait for confirmation
     await page.waitForTimeout(2000);

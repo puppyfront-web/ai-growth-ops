@@ -16,7 +16,8 @@ import type {
 import {
   classifyByRules,
   generateRuleBasedReply,
-  containsSensitiveContent
+  containsSensitiveContent,
+  classifySensitiveWithAI
 } from './rule-classifier.js';
 
 /** Valid ReplyType enum values per Prisma schema */
@@ -150,10 +151,18 @@ export async function classifyAndSuggestReply(
       reply = generateRuleBasedReply(content, classification, platform);
     }
 
-    // Apply sensitive content policy
+    // Apply sensitive content policy. Regex catches literal contact patterns
+    // instantly; on a regex miss, run an LLM semantic check for evasions
+    // (homophones, soft引流). LLM failure degrades gracefully to no-flag.
     if (containsSensitiveContent(reply.suggestedText)) {
       reply.needReview = true;
       reply.reason = 'Contains sensitive content (phone/URL/email)';
+    } else {
+      const aiCheck = await classifySensitiveWithAI(reply.suggestedText);
+      if (aiCheck.sensitive) {
+        reply.needReview = true;
+        reply.reason = aiCheck.reason ?? 'AI 审核标记为潜在敏感内容';
+      }
     }
 
     // Determine if review is needed

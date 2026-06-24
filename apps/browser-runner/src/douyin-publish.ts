@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import type { Page } from 'playwright';
 import { createHeadlessSession } from './browser-session.js';
 import { reportPublishProgress } from './report-publish-progress.js';
+import { clickWithVisionFallback } from './vision-assist.js';
 
 const UPLOAD_URL = 'https://creator.douyin.com/creator-micro/content/upload';
 const MANAGE_PATTERN =
@@ -210,7 +211,15 @@ async function clickPublish(
 
     const btn = page.getByRole('button', { name: '发布', exact: true });
     if ((await btn.count()) > 0) {
-      await btn.click({ timeout: 10_000 });
+      // Click via the selector; if the hashed class/name drifted, fall back to
+      // a vision model that looks at a screenshot and returns the click point.
+      const clicked = await clickWithVisionFallback(
+        page,
+        btn,
+        '发布按钮(抖音创作者中心,用于提交发布作品)',
+        { timeout: 10_000 }
+      );
+      if (!clicked) continue;
       const declarationVisible = await page
         .getByText('未添加自主声明', { exact: true })
         .first()

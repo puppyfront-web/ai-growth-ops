@@ -267,3 +267,81 @@ export function containsSensitiveContent(text: string): boolean {
   ];
   return sensitivePatterns.some((p) => p.test(text));
 }
+
+/**
+ * AI-enhanced sensitive content detection.
+ *
+ * The regex above only catches literal phone/WeChat/email/URL patterns and
+ * misses semantic evasions common on Chinese social platforms: homophones
+ * ("威信" for 微信), QQ numbers, emoji-encoded contact info, "私信我拿价"
+ * style soft引流, etc. This function asks an LLM for a semantic judgement.
+ *
+ * Strategy (cost/latency aware):
+ *   1. Run the cheap regex first — a hit is authoritative, no LLM call needed.
+ *   2. Only on a regex miss, ask the LLM for a semantic check.
+ *   3. Any LLM error (no key, network, bad JSON) degrades to { sensitive: false }
+ *      so the reply pipeline never blocks on the audit step.
+ *
+ * Standalone: calls an OpenAI-compatible endpoint via fetch so this package
+ * stays free of a workspace AI dependency.
+ */
+export async function classifySensitiveWithAI(
+  text: string
+): Promise<{ sensitive: boolean; reason?: string }> {
+  // Fast path: existing regex catches literal patterns definitively.
+  if (containsSensitiveContent(text)) {
+    return { sensitive: true, reason: 'regex: literal contact pattern' };
+  }
+
+  const apiKey =
+    process.env.OPENAI_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
+    '';
+  if (!apiKey) return { sensitive: false };
+
+  const baseUrl = (
+    process.env.OPENAI_BASE_URL ||
+    'https://api.openai.com/v1'
+  ).replace(/\/$/, '');
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+  try {
+    const resp = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 80,
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              '你是合规审核助手。判断一段客服回复是否含有变相留联系方式、引流到站外、违规营销等敏感内容。只输出JSON: {"sensitive": true/false, "reason": "简短中文说明"}。注意识别谐音(威信/vx)、QQ号、emoji编码的联系方式、"私信我"等软引流。'
+          },
+          { role: 'user', content: text }
+        ]
+      }),
+      signal: AbortSignal.timeout(15_000)
+    });
+    if (!resp.ok) return { sensitive: false };
+    const data = (await resp.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const raw = data.choices?.[0]?.message?.content ?? '';
+    const parsed = JSON.parse(raw) as {
+      sensitive?: boolean;
+      reason?: string;
+    };
+    return {
+      sensitive: parsed.sensitive === true,
+      reason: parsed.reason
+    };
+  } catch {
+    return { sensitive: false };
+  }
+}

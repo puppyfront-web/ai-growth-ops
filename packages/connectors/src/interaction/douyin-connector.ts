@@ -12,6 +12,7 @@ import type {
   ReplyResult
 } from './types.js';
 import { platformGet, platformPost } from './http-client.js';
+import { extractApiError } from '../error-utils.js';
 
 interface DouyinCommentItem {
   comment_id: string;
@@ -200,13 +201,15 @@ export class DouyinConnector implements InteractionConnector {
       };
     }
 
-    const statusMsg = resp.data?.status_msg;
-    const statusCode = resp.data?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
+    const apiError = extractApiError(
+      resp.data as Record<string, unknown>,
+      'douyin'
+    );
+    if (apiError) {
       return {
         success: false,
-        errorCode: String(statusCode),
-        errorMessage: statusMsg ?? 'Unknown Douyin API error'
+        errorCode: apiError.code,
+        errorMessage: apiError.message
       };
     }
 
@@ -243,13 +246,15 @@ export class DouyinConnector implements InteractionConnector {
       };
     }
 
-    const statusMsg = resp.data?.status_msg;
-    const statusCode = resp.data?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
+    const apiError = extractApiError(
+      resp.data as Record<string, unknown>,
+      'douyin'
+    );
+    if (apiError) {
       return {
         success: false,
-        errorCode: String(statusCode),
-        errorMessage: statusMsg ?? 'Unknown Douyin API error'
+        errorCode: apiError.code,
+        errorMessage: apiError.message
       };
     }
 
