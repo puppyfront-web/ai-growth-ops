@@ -29,10 +29,18 @@ export class BrowserAssistInteractionConnector implements InteractionConnector {
   async getCapabilities(): Promise<InteractionCapabilities> {
     return {
       platform: this.platform,
+      // Monitoring (fetch) is reliable: douyin web comment/message list APIs
+      // work with cookie auth and no DOM scraping.
       fetchComments: true,
       fetchMessages: true,
-      replyComments: true,
-      replyMessages: true,
+      // Replies via browser automation are best-effort only: douyin's web
+      // comment-publish API is gated by an X-Bogus/a_bogus signature that
+      // changes frequently, and the creator-center reply pages have been
+      // deprecated. Reliable auto-reply requires the official_api mode
+      // (access_token → open.douyin.com /comment/reply/). Mark 'limited' so
+      // callers know to require human review rather than trust silent sends.
+      replyComments: 'limited',
+      replyMessages: 'limited',
       webhookSupported: false,
       pollingSupported: true,
       browserAssistSupported: true,

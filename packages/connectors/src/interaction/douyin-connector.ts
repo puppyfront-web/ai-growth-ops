@@ -64,7 +64,10 @@ export class DouyinConnector implements InteractionConnector {
       platform: 'douyin',
       fetchComments: true,
       fetchMessages: true,
-      replyComments: 'limited',
+      // Official API replies are stable (open.douyin.com /comment/reply/,
+      // /im/message/send/ with Bearer access_token). This is the reliable
+      // path; browser_assist replies are only 'limited'.
+      replyComments: true,
       replyMessages: true,
       webhookSupported: false,
       pollingSupported: true,

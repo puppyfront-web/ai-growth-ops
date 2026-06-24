@@ -40,6 +40,27 @@ cp .env.example .env      # 然后编辑 .env 填入 OPENAI_API_KEY(AI 能力需
 
 ---
 
+## 能力与配置(回复功能必读)
+
+系统对不同认证模式的能力支持不同,**自动回复的可靠性取决于账号配置方式**:
+
+| 能力 | `browser_assist`(扫码登录) | `official_api`(开放平台) |
+|---|---|---|
+| 监控评论/私信(抓取) | ✅ 稳定 | ✅ 稳定 |
+| 内容发布 | ✅ 稳定 | ✅ 稳定 |
+| **自动回复评论/私信** | ⚠️ **尽力而为**(受抖音 web 签名风控,需人工复核) | ✅ **稳定**(官方 API) |
+| 线索分类/回复建议 | ✅ AI 驱动 | ✅ AI 驱动 |
+
+**要让自动回复可靠工作(自动驾驶),账号必须配 `official_api` 模式:**
+
+1. 在[抖音开放平台](https://open.douyin.com)注册应用,拿到 `client_key` / `client_secret`
+2. 用 OAuth 流程给目标账号授权,获取 `access_token`(存入账号的 `accessTokenEncrypted`)
+3. 系统会自动用官方 `/comment/reply/`、`/im/message/send/` 发送回复
+
+> `browser_assist` 模式的回复受限于抖音对网页版评论发布 API 的签名风控(X-Bogus/a_bogus),会间歇性失败,因此该模式下回复会标记为需要人工复核。**监控、抓取、发布、线索管理在两种模式下都稳定可用。**
+
+---
+
 ## Scope
 
 M0 project foundation for the AI growth ops system described in `spec/`.
