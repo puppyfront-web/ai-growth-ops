@@ -1,8 +1,48 @@
 # AI Growth Ops
 
-M0 project foundation for the AI growth ops system described in `spec/`.
+AI Native 的多平台获客运营系统:抖音 / 小红书 / 微信等平台的内容发布、互动抓取、线索分类与自动回复。浏览器自动化 + LLM 双驱动,选择器失效时由视觉模型兜底。
+
+## 🚀 5 分钟本地启动
+
+### 前置要求
+
+- **Node.js v20+**(推荐 v24)— `node --version`
+- **pnpm** — `npm i -g pnpm`
+- **Docker Desktop**(提供 PostgreSQL / Redis / MinIO)— `docker --version`
+
+### 一键启动
+
+```bash
+git clone <repo-url> ai-growth-ops && cd ai-growth-ops
+cp .env.example .env      # 然后编辑 .env 填入 OPENAI_API_KEY(AI 能力需要)
+./scripts/dev.sh
+```
+
+`dev.sh` 会自动:启动 docker 基础设施 → 安装依赖 → 迁移并 seed 数据库 → 启动 4 个服务。完成后打开:
+
+| 服务 | 地址 | 说明 |
+|---|---|---|
+| **前端** | http://localhost:3001 | 主要操作界面 |
+| API | http://localhost:3100 | 后端接口 |
+
+**默认登录:** `admin@ai-growth-ops.local` / `changeme123`(首次登录后请改密码)
+
+**停止服务:** `./scripts/stop.sh`(容器不受影响)
+
+### 启动后做什么
+
+1. **配置平台账号**:进入「集成 → 平台账号」,扫码登录抖音(会弹出浏览器窗口,用手机扫码)
+2. **发布内容**:「内容」创建图文/视频 → 「发布」选择账号触发
+3. **互动管理**:「对话」查看同步的评论/私信,AI 自动分类并生成回复建议
+4. **配 LLM 增强**(强烈推荐):在 `.env` 填入有效 `OPENAI_API_KEY`,启用评论分类、回复生成、以及浏览器操作的**视觉兜底**(平台改版时自动用 vision 模型定位元素,避免选择器失效)
+
+> 日志位于 `.dev-logs/`。详见下方 [Architecture](#architecture)。
+
+---
 
 ## Scope
+
+M0 project foundation for the AI growth ops system described in `spec/`.
 
 This stage creates the workspace skeleton only:
 
