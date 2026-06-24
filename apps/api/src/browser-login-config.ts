@@ -18,6 +18,32 @@ export function getBrowserRunnerUrl(): string {
 }
 
 /**
+ * Shared-secret that browser-runner expects on every non-health request.
+ * Mirrors the lookup in browser-runner/src/routes.ts so both sides agree.
+ */
+export function getRunnerSecret(): string {
+  return (
+    process.env.BROWSER_RUNNER_SECRET ||
+    process.env.TOKEN_ENCRYPTION_KEY ||
+    ''
+  );
+}
+
+/**
+ * Build the Authorization header for browser-runner calls.
+ * Returns an empty object when no secret is configured (dev mode allows all).
+ */
+export function runnerHeaders(
+  extra: Record<string, string> = {}
+): Record<string, string> {
+  const secret = getRunnerSecret();
+  return {
+    ...(secret ? { authorization: `Bearer ${secret}` } : {}),
+    ...extra
+  };
+}
+
+/**
  * Fetch with AbortController timeout so stalled connections to browser-runner don't hang.
  */
 export function fetchWithTimeout(

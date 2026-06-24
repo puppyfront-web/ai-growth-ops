@@ -29,7 +29,11 @@ import {
   applyPublishProgress,
   isPublishProgressAuthorized
 } from './publish-progress.js';
-import { getBrowserRunnerUrl, fetchWithTimeout } from './browser-login-config';
+import {
+  getBrowserRunnerUrl,
+  fetchWithTimeout,
+  runnerHeaders
+} from './browser-login-config';
 import {
   setSession,
   getSessionId,
@@ -3783,7 +3787,7 @@ const routes: Route[] = [
           try {
             await fetchWithTimeout(
               `${runnerUrl}/session/${existingSessionId}/cancel`,
-              { method: 'POST' },
+              { method: 'POST', headers: runnerHeaders() },
               5_000
             );
           } catch {
@@ -3793,7 +3797,7 @@ const routes: Route[] = [
         }
         const startRes = await fetchWithTimeout(`${runnerUrl}/session/start`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: runnerHeaders({ 'content-type': 'application/json' }),
           body: JSON.stringify({ platform: account.platform })
         });
         if (!startRes.ok) {
@@ -3852,7 +3856,7 @@ const routes: Route[] = [
         const runnerUrl = getBrowserRunnerUrl();
         const statusRes = await fetchWithTimeout(
           `${runnerUrl}/session/${sessionId}/status`,
-          { method: 'GET' },
+          { method: 'GET', headers: runnerHeaders() },
           10_000
         );
         if (!statusRes.ok) {
@@ -3912,7 +3916,7 @@ const routes: Route[] = [
           const runnerUrl = getBrowserRunnerUrl();
           await fetchWithTimeout(
             `${runnerUrl}/session/${sessionId}/cancel`,
-            { method: 'POST' },
+            { method: 'POST', headers: runnerHeaders() },
             5_000
           );
         } catch {
@@ -5028,7 +5032,7 @@ const routes: Route[] = [
           `${runnerUrl}/assist/search-and-fetch-comments`,
           {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: runnerHeaders({ 'content-type': 'application/json' }),
             body: JSON.stringify({
               platform,
               cookie,
