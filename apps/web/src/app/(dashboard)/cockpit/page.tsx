@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { RunTimeline } from '@/components/cockpit/RunTimeline';
 import { EscalationList } from '@/components/cockpit/EscalationList';
 import { DailyReport } from '@/components/cockpit/DailyReport';
+import { LlmConfigCard } from '@/components/cockpit/LlmConfigCard';
 import {
   Card,
   CardContent,
@@ -169,6 +170,11 @@ export default function CockpitPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* LLM config — operator-set from the UI, not .env */}
+      <div className="mb-6">
+        <LlmConfigCard />
+      </div>
 
       {/* Current run hero */}
       <Card className="mb-6">

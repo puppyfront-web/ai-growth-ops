@@ -15,6 +15,7 @@ import {
   type LLMClient
 } from '@ai-growth-ops/runtime';
 import { createDbCredentialResolver } from '../credentials.js';
+import { resolveLlmClientFromDb } from '../llm-config.js';
 import { publishDailyReport } from '../notifications.js';
 
 export interface AgentRunJobPayload {
@@ -111,14 +112,6 @@ export async function handleAgentRun(
     dbOverride && typeof dbOverride === 'object' && 'agentRun' in dbOverride
       ? dbOverride
       : createDatabaseClient();
-  const llmClient =
-    llmClientOverride &&
-    typeof (llmClientOverride as { chatWithTools?: unknown }).chatWithTools ===
-      'function'
-      ? llmClientOverride
-      : process.env.AGENT_DEV_STUB_LLM === '1'
-        ? createDevStubLLM()
-        : undefined;
 
   // Resolve runId: explicit (manual API) or create one for the daily scheduled run.
   let runId = job.data.runId;
@@ -185,6 +178,25 @@ export async function handleAgentRun(
   }
 
   const autonomyLevel = autonomyFromRun(run);
+
+  // Resolve the LLM client. Priority: (1) cockpit-configured org LLM config
+  // (AppConfig key='llm_config', apiKey decrypted server-side — set from the
+  // cockpit UI, NOT .env); (2) AGENT_DEV_STUB_LLM dev hook (local flow
+  // verification without a real model); (3) undefined → runDomainAgent falls
+  // back to createLLMClient() (env) as the last resort. The test-only
+  // llmClientOverride slot is type-guarded because BullMQ passes an AbortSignal
+  // there as the 3rd positional arg in production.
+  const dbLlm = await resolveLlmClientFromDb(db, run.organizationId);
+  const llmClient =
+    llmClientOverride &&
+    typeof (llmClientOverride as { chatWithTools?: unknown }).chatWithTools ===
+      'function'
+      ? llmClientOverride
+      : dbLlm ??
+        (process.env.AGENT_DEV_STUB_LLM === '1'
+          ? createDevStubLLM()
+          : undefined);
+
   const gate = createConfirmationGate();
   const workingMemory = createWorkingMemory();
   const preferences = createPreferencesStore(db, run.organizationId);

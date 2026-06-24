@@ -61,7 +61,8 @@ export const queryKeys = {
   settings: {
     ai: ['settings', 'ai'] as const,
     skills: ['settings', 'skills'] as const,
-    compliance: ['settings', 'compliance'] as const
+    compliance: ['settings', 'compliance'] as const,
+    llm: ['settings', 'llm'] as const
   },
   notifications: {
     all: ['notifications'] as const

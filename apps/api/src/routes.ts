@@ -5353,6 +5353,95 @@ const routes: Route[] = [
       }
     }
   },
+  // ── LLM Config (org-level; apiKey encrypted at rest) ─────────
+  // Lets the operator configure the model provider from the cockpit UI
+  // instead of .env. Stored in AppConfig(key='llm_config'); the apiKey is
+  // encrypted with the same TOKEN_ENCRYPTION_KEY used for platform cookies
+  // and is NEVER returned in plaintext (GET only reports hasApiKey).
+  {
+    method: 'GET',
+    pattern: '/api/settings/llm',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const row = await ctx.db.appConfig.findFirst({
+        where: { organizationId: orgCtx.organization.id, key: 'llm_config' },
+        select: { value: true }
+      });
+      const cfg = (row?.value ?? null) as {
+        provider?: string;
+        apiKeyEncrypted?: string;
+        baseUrl?: string;
+        model?: string;
+        updatedAt?: string;
+      } | null;
+      sendJson(res, 200, {
+        provider: cfg?.provider ?? 'openai',
+        baseUrl: cfg?.baseUrl ?? '',
+        model: cfg?.model ?? '',
+        hasApiKey: !!cfg?.apiKeyEncrypted,
+        updatedAt: cfg?.updatedAt ?? null
+      });
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/settings/llm',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = (ctx.body ?? {}) as {
+        provider?: string;
+        apiKey?: string;
+        baseUrl?: string;
+        model?: string;
+      };
+      const provider = body.provider === 'anthropic' ? 'anthropic' : 'openai';
+      const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+      const model = typeof body.model === 'string' ? body.model.trim() : '';
+      // Preserve the existing encrypted apiKey when the operator leaves the
+      // field blank (so they can edit baseUrl/model without re-entering it).
+      const existing = await ctx.db.appConfig.findFirst({
+        where: { organizationId: orgCtx.organization.id, key: 'llm_config' },
+        select: { id: true, value: true }
+      });
+      const prev = (existing?.value ?? {}) as { apiKeyEncrypted?: string };
+      let apiKeyEncrypted = prev.apiKeyEncrypted;
+      if (typeof body.apiKey === 'string' && body.apiKey.trim() !== '') {
+        apiKeyEncrypted = encryptToken(body.apiKey.trim());
+      }
+      const updatedAt = new Date().toISOString();
+      const value = {
+        provider,
+        baseUrl,
+        model,
+        apiKeyEncrypted,
+        updatedAt
+      };
+      if (existing) {
+        await ctx.db.appConfig.update({
+          where: { id: existing.id },
+          data: { value: value as never }
+        });
+      } else {
+        await ctx.db.appConfig.create({
+          data: {
+            organizationId: orgCtx.organization.id,
+            userId: orgCtx.user.id,
+            key: 'llm_config',
+            value: value as never
+          }
+        });
+      }
+      sendJson(res, 200, {
+        provider,
+        baseUrl,
+        model,
+        hasApiKey: !!apiKeyEncrypted,
+        updatedAt
+      });
+    }
+  },
   // ── Agent Runs (Workbench trigger + query) ─────────────────────
   {
     method: 'POST',

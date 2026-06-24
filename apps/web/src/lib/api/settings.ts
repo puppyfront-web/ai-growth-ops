@@ -175,3 +175,28 @@ export function getReports(): Promise<GeneratedReport[]> {
 export function generateReport(type: string): Promise<GeneratedReport> {
   return apiPost<GeneratedReport>('/api/analytics/reports/generate', { type });
 }
+
+// ── LLM Config (org-level cockpit setting; apiKey encrypted at rest) ──
+export interface LlmConfigView {
+  provider: 'openai' | 'anthropic';
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  updatedAt: string | null;
+}
+
+export interface LlmConfigInput {
+  provider: 'openai' | 'anthropic';
+  /** Omit/blank to preserve the existing encrypted key. */
+  apiKey?: string;
+  baseUrl: string;
+  model: string;
+}
+
+export function getLlmConfig(): Promise<LlmConfigView> {
+  return apiGet<LlmConfigView>('/api/settings/llm');
+}
+
+export function saveLlmConfig(body: LlmConfigInput): Promise<LlmConfigView> {
+  return apiPut<LlmConfigView>('/api/settings/llm', body);
+}
