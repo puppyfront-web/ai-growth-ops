@@ -29,11 +29,18 @@ const ERROR_FIELD_BY_PLATFORM: Record<string, string[]> = {
 /**
  * Returns true when the response body carries a non-zero platform error code.
  * Absent fields ⇒ not an error (caller decides success from data presence).
+ *
+ * Zhihu is special: it signals errors via a nested `error: { code, message }`
+ * object (presence ⇒ error), not a flat numeric field. That mirrors the
+ * original `if (resp.data?.error)` check in the zhihu connector.
  */
 export function isApiError(
   body: Record<string, unknown>,
   platform: string
 ): boolean {
+  if (platform === 'zhihu') {
+    return body['error'] != null;
+  }
   const fields = ERROR_FIELD_BY_PLATFORM[platform];
   if (!fields) return false;
   for (const field of fields) {
@@ -50,6 +57,19 @@ export function extractApiError(
   body: Record<string, unknown>,
   platform: string
 ): { code: string; message: string } | null {
+  if (!isApiError(body, platform)) return null;
+
+  if (platform === 'zhihu') {
+    const err = body['error'] as Record<string, unknown> | undefined;
+    const code = err?.['code'];
+    const message = err?.['message'];
+    return {
+      code: code != null ? String(code) : 'UNKNOWN',
+      message:
+        (typeof message === 'string' && message) || 'Unknown Zhihu API error'
+    };
+  }
+
   const fields = ERROR_FIELD_BY_PLATFORM[platform];
   if (!fields) return null;
   for (const field of fields) {
