@@ -3050,6 +3050,86 @@ const routes: Route[] = [
     }
   },
   {
+    method: 'POST',
+    pattern: '/api/leads/import',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as { csv?: string };
+      const csv = String(body.csv ?? '').trim();
+      if (!csv) return sendJson(res, 400, { error: 'csv 内容为空' });
+
+      // Minimal RFC-ish CSV parser: comma-separated, double-quote escaping,
+      // CRLF/LF line endings. Avoids adding a csv dependency.
+      const rows = parseCsv(csv);
+      if (rows.length < 2) {
+        return sendJson(res, 400, { error: 'CSV 至少需要表头 + 1 行数据' });
+      }
+      const header = rows[0].map((h) => h.trim().toLowerCase());
+      const ci = (name: string) => header.indexOf(name);
+
+      let created = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row.length || (row.length === 1 && !row[0].trim())) {
+          skipped++;
+          continue;
+        }
+        const name = (row[ci('externalusername')] ?? row[0] ?? '').trim();
+        if (!name) {
+          errors.push(`第 ${i + 1} 行缺少客户名称`);
+          skipped++;
+          continue;
+        }
+        const platform = (row[ci('sourceplatform')] ?? 'douyin').trim();
+        const validPlatforms = [
+          'douyin',
+          'xiaohongshu',
+          'wechat_official',
+          'wechat_channels',
+          'baijiahao',
+          'zhihu'
+        ];
+        if (!validPlatforms.includes(platform)) {
+          errors.push(`第 ${i + 1} 行平台无效: ${platform}`);
+          skipped++;
+          continue;
+        }
+        try {
+          await ctx.db.lead.upsert({
+            where: {
+              sourcePlatform_sourceAccountId_externalUserId: {
+                sourcePlatform: platform as never,
+                sourceAccountId: 'csv-import',
+                externalUserId: `csv-${i}-${name}`
+              }
+            },
+            create: {
+              organizationId: orgCtx.organization.id,
+              userId: orgCtx.user.id,
+              sourcePlatform: platform as never,
+              sourceAccountId: 'csv-import',
+              externalUserId: `csv-${i}-${name}`,
+              externalUserName: name,
+              level: ((row[ci('level')] ?? 'C').trim() as 'A' | 'B' | 'C' | 'D') || 'C',
+              status: 'NEW',
+              intent: (row[ci('intent')] ?? '').trim() || undefined,
+              summary: (row[ci('summary')] ?? '').trim() || undefined
+            },
+            update: {}
+          });
+          created++;
+        } catch (e) {
+          errors.push(`第 ${i + 1} 行导入失败: ${(e as Error).message}`);
+          skipped++;
+        }
+      }
+      sendJson(res, 201, { created, skipped, errors: errors.slice(0, 20) });
+    }
+  },
+  {
     method: 'GET',
     pattern: '/api/leads',
     handler: async (req, res, ctx) => {
@@ -4667,6 +4747,135 @@ const routes: Route[] = [
     }
   },
 
+  // ── Inbound lead webhook (public, token-authed) ─────────────────
+  // External systems POST leads here with X-Webhook-Token matching a
+  // LeadSourceConfig.token. No login required — the token IS the auth.
+  {
+    method: 'POST',
+    pattern: '/api/leads/webhook/ingest',
+    handler: async (req, res, ctx) => {
+      const token = (req.headers['x-webhook-token'] as string) || '';
+      if (!token) return sendJson(res, 401, { error: 'missing X-Webhook-Token' });
+      const source = await ctx.db.leadSourceConfig.findUnique({
+        where: { token }
+      });
+      if (!source || !source.enabled) {
+        return sendJson(res, 403, { error: 'invalid or disabled token' });
+      }
+      const body = ctx.body as {
+        externalUserName?: string;
+        externalUserId?: string;
+        intent?: string;
+        summary?: string;
+        level?: string;
+        phone?: string;
+        [k: string]: unknown;
+      };
+      const name = String(body.externalUserName || body.name || '');
+      if (!name) {
+        return sendJson(res, 400, { error: 'externalUserName (or name) required' });
+      }
+      const platform = (source.defaultPlatform || 'douyin') as never;
+      const externalUserId =
+        body.externalUserId ||
+        body.phone ||
+        `webhook-${source.id.slice(0, 8)}-${Date.now()}`;
+      const lead = await ctx.db.lead.upsert({
+        where: {
+          sourcePlatform_sourceAccountId_externalUserId: {
+            sourcePlatform: platform,
+            sourceAccountId: `webhook-${source.id.slice(0, 8)}`,
+            externalUserId
+          }
+        },
+        create: {
+          userId: source.userId,
+          organizationId: source.organizationId,
+          sourcePlatform: platform,
+          sourceAccountId: `webhook-${source.id.slice(0, 8)}`,
+          externalUserId,
+          externalUserName: name,
+          level: ((body.level as string) || source.defaultLevel || 'B') as 'A' | 'B' | 'C' | 'D',
+          status: 'NEW',
+          intent: body.intent || undefined,
+          summary: body.summary || undefined,
+          tags: ['webhook', source.name]
+        },
+        update: {
+          externalUserName: name,
+          intent: body.intent || undefined,
+          summary: body.summary || undefined
+        }
+      });
+      await ctx.db.leadActivity.create({
+        data: {
+          leadId: lead.id,
+          action: 'ingested_from_webhook',
+          note: `来源: ${source.name}`,
+          operator: 'webhook'
+        }
+      });
+      sendJson(res, 201, { ok: true, leadId: lead.id });
+    }
+  },
+  // ── LeadSourceConfig CRUD (login required) ──────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/lead-sources',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const sources = await ctx.db.leadSourceConfig.findMany({
+        where: { organizationId: orgCtx.organization.id },
+        orderBy: { createdAt: 'desc' }
+      });
+      sendJson(res, 200, sources);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/lead-sources',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as {
+        name?: string;
+        defaultLevel?: string;
+        defaultPlatform?: string;
+      };
+      if (!body.name?.trim()) {
+        return sendJson(res, 400, { error: '名称必填' });
+      }
+      const token =
+        'src_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const created = await ctx.db.leadSourceConfig.create({
+        data: {
+          organizationId: orgCtx.organization.id,
+          userId: orgCtx.user.id,
+          name: body.name.trim(),
+          token,
+          defaultLevel: body.defaultLevel || 'B',
+          defaultPlatform: body.defaultPlatform || 'douyin'
+        }
+      });
+      sendJson(res, 201, created);
+    }
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/lead-sources/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const targetId = (ctx.params as Record<string, string>)?.id;
+      if (!targetId) return sendJson(res, 400, { error: '缺少 ID' });
+      await ctx.db.leadSourceConfig.deleteMany({
+        where: { id: targetId, organizationId: orgCtx.organization.id }
+      });
+      sendJson(res, 200, { ok: true });
+    }
+  },
+
   // ── Analytics: Engagement ──────────────────────────────────────
   {
     method: 'GET',
@@ -5785,6 +5994,52 @@ async function getOrCreateDefaultProject(
     if (existing2) return existing2.id;
     throw new Error('Failed to create default project');
   }
+}
+
+/**
+ * Minimal CSV parser: comma-separated, double-quote field escaping (incl.
+ * embedded quotes/commas/newlines), CRLF or LF line endings. Returns rows as
+ * string[][]. Used by /api/leads/import so we avoid adding a csv dependency.
+ */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field);
+      field = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += c;
+    }
+  }
+  // flush last field/row
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {

@@ -330,6 +330,7 @@ model Organization {
   leads                Lead[]
   researchTasks        ResearchTask[]
   leadSinkConfigs      LeadSinkConfig[]
+  leadSources          LeadSourceConfig[]
   appConfigs           AppConfig[]
   notifications        Notification[]
   auditLogs            AuditLog[]
@@ -810,6 +811,29 @@ model LeadSinkConfig {
 
   @@index([organizationId])
   @@map("lead_sink_configs")
+}
+
+/// External lead source (inbound webhook). Mirrors LeadSinkConfig but for the
+/// receive direction: a third-party system posts a lead to our webhook with an
+/// X-Webhook-Token matching `token` and we ingest it into the leads table.
+model LeadSourceConfig {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  name           String
+  /// Shared secret the external caller must send in the X-Webhook-Token header.
+  token          String   @unique
+  /// Optional default values applied to every lead from this source.
+  defaultLevel   String   @default("B")
+  defaultPlatform String  @default("douyin")
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("lead_source_configs")
 }
 
 model LeadExternalMapping {

@@ -1,7 +1,8 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listLeads, createLead } from '@/lib/api/leads';
+import { listLeads, createLead, importLeads } from '@/lib/api/leads';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { DataTable } from '@/components/shared/DataTable';
@@ -14,7 +15,6 @@ import { formatDate } from '@/lib/utils';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Lead } from '@/types/lead';
 import Link from 'next/link';
-import { useState } from 'react';
 import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
 
 const leadStatusLabels: Record<string, string> = {
@@ -143,6 +143,24 @@ export default function LeadsPage() {
     }
   });
 
+  // ── CSV import ──
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importMsg, setImportMsg] = useState('');
+  const importMutation = useMutation({
+    mutationFn: (csv: string) => importLeads(csv),
+    onSuccess: (r) => {
+      setImportMsg(`导入完成: 新增 ${r.created} 条, 跳过 ${r.skipped} 条${r.errors.length ? `, 错误 ${r.errors.length} 条` : ''}`);
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      setTimeout(() => setImportMsg(''), 6000);
+    },
+    onError: (e: Error) => setImportMsg(`导入失败: ${e.message}`)
+  });
+  const handleFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => importMutation.mutate(String(reader.result));
+    reader.readAsText(file);
+  };
+
   return (
     <div>
       <Breadcrumb />
@@ -157,6 +175,30 @@ export default function LeadsPage() {
             >
               + 新建线索
             </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importMutation.isPending}
+              className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50"
+            >
+              {importMutation.isPending ? '导入中…' : '导入 CSV'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+                e.target.value = '';
+              }}
+            />
+            <Link
+              href="/leads/sources"
+              className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent"
+            >
+              线索来源
+            </Link>
             <Link
               href="/leads/pipeline"
               className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
@@ -166,6 +208,11 @@ export default function LeadsPage() {
           </div>
         }
       />
+      {importMsg && (
+        <div className="mb-4 rounded-md bg-blue-50 dark:bg-blue-950 px-4 py-2 text-sm text-blue-700">
+          {importMsg}
+        </div>
+      )}
       {showCreate && (
         <div className="mb-4 rounded-lg border bg-muted/30 p-3">
           <div className="flex flex-wrap items-end gap-2">

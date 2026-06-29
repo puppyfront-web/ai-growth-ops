@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from './client';
+import { apiGet, apiPost, apiPut, apiDelete } from './client';
 import type { Lead, LeadActivity } from '@/types/lead';
 
 interface PaginatedResponse<T> {
@@ -83,6 +83,43 @@ export function addLeadActivity(
     action,
     note
   });
+}
+
+/** Bulk import leads from CSV text. Returns {created, skipped, errors}. */
+export function importLeads(csv: string): Promise<{
+  created: number;
+  skipped: number;
+  errors: string[];
+}> {
+  return apiPost('/api/leads/import', { csv });
+}
+
+// ── Inbound lead sources (webhook ingest) ──
+
+export interface LeadSourceConfig {
+  id: string;
+  name: string;
+  token: string;
+  defaultLevel: string;
+  defaultPlatform: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export function listLeadSources(): Promise<LeadSourceConfig[]> {
+  return apiGet<LeadSourceConfig[]>('/api/lead-sources');
+}
+
+export function createLeadSource(data: {
+  name: string;
+  defaultLevel?: string;
+  defaultPlatform?: string;
+}): Promise<LeadSourceConfig> {
+  return apiPost<LeadSourceConfig>('/api/lead-sources', data);
+}
+
+export function deleteLeadSource(id: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(`/api/lead-sources/${id}`);
 }
 
 export function getLeadActivities(leadId: string): Promise<LeadActivity[]> {
