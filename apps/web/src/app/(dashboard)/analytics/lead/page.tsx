@@ -4,6 +4,8 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalyticsOverview, getLeadTrend } from '@/lib/api/analytics';
 import { listLeads } from '@/lib/api/leads';
+import { listPublishJobs } from '@/lib/api/publish';
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
@@ -81,6 +83,30 @@ export default function LeadAnalyticsPage() {
       count: leads.filter((l) => l.level === lv).length
     }));
   }, [allLeads]);
+
+  // 内容获客归因:每条发布内容带来多少线索(A级多少)
+  const { data: publishJobs } = useQuery({
+    queryKey: ['publish-jobs', 'analytics'],
+    queryFn: () => listPublishJobs()
+  });
+  const byContent = useMemo(() => {
+    const leads = allLeads?.items ?? [];
+    const jobs = publishJobs?.items ?? [];
+    return jobs
+      .map((job) => {
+        const jobLeads = leads.filter((l) => l.sourcePublishJobId === job.id);
+        return {
+          id: job.id,
+          title: job.contentVariant?.title || job.contentType || job.id.slice(0, 8),
+          platform: job.platform,
+          total: jobLeads.length,
+          aLevel: jobLeads.filter((l) => l.level === 'A').length,
+          won: jobLeads.filter((l) => l.status === 'WON').length
+        };
+      })
+      .filter((j) => j.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [allLeads, publishJobs]);
 
   if (isLoading) return <LoadingState />;
   if (overviewError) return <ErrorState onRetry={() => refetchOverview()} />;
@@ -208,6 +234,60 @@ export default function LeadAnalyticsPage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* 内容获客归因 */}
+      <div className="rounded-xl border bg-card p-5 mt-6">
+        <h3 className="font-semibold mb-1">内容获客归因</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          每条发布内容带来的线索贡献 · 评估内容获客 ROI
+        </p>
+        {byContent.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">内容</th>
+                  <th className="py-2 px-3 font-medium">平台</th>
+                  <th className="py-2 px-3 font-medium text-center">线索总数</th>
+                  <th className="py-2 px-3 font-medium text-center">A级线索</th>
+                  <th className="py-2 px-3 font-medium text-center">已成交</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byContent.map((c) => (
+                  <tr key={c.id} className="border-b last:border-0">
+                    <td className="py-2 pr-4">
+                      <Link href={`/publish/jobs/${c.id}`} className="text-blue-600 hover:underline">
+                        {c.title}
+                      </Link>
+                    </td>
+                    <td className="py-2 px-3 text-muted-foreground">{c.platform}</td>
+                    <td className="py-2 px-3 text-center font-medium">{c.total}</td>
+                    <td className="py-2 px-3 text-center">
+                      {c.aLevel > 0 ? (
+                        <span className="text-red-600 font-medium">{c.aLevel}</span>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {c.won > 0 ? (
+                        <span className="text-emerald-600 font-medium">{c.won}</span>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            暂无内容归因数据 · 发布内容并获取评论后,系统会自动归因线索来源
+          </p>
+        )}
       </div>
     </div>
   );

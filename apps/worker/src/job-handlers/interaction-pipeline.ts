@@ -367,7 +367,8 @@ async function convertInteractionToLead(
       platform: true,
       platformAccountId: true,
       externalUserId: true,
-      externalUserName: true
+      externalUserName: true,
+      publishJobId: true
     }
   });
   if (!interaction) return;
@@ -404,6 +405,7 @@ async function convertInteractionToLead(
       sourcePlatform: interaction.platform,
       sourceAccountId: interaction.platformAccountId,
       sourceInteractionId: interactionId,
+      sourcePublishJobId: interaction.publishJobId,
       externalUserId: interaction.externalUserId,
       externalUserName: interaction.externalUserName,
       level: newLevel,
