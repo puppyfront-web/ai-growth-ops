@@ -5,6 +5,11 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 export default function IntegrationsPage() {
   const items = [
     {
+      href: '/integrations/llm',
+      title: 'LLM 配置',
+      desc: '配置 AI 模型 · 驱动评论分级、回复建议、敏感审核（API Key 加密存库，不写 .env）'
+    },
+    {
       href: '/integrations/platforms',
       title: '平台账号',
       desc: '管理6大平台账号授权'
