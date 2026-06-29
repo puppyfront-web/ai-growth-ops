@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -7,6 +8,9 @@ import {
   getLead,
   getLeadActivities,
   updateLeadStatus,
+  updateLeadLevel,
+  assignLead,
+  addLeadActivity,
   syncLeadToFeishu,
   syncLeadToWecom
 } from '@/lib/api/leads';
@@ -71,6 +75,27 @@ export default function LeadDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead', id] })
   });
 
+  const levelMutation = useMutation({
+    mutationFn: (level: 'A' | 'B' | 'C' | 'D') => updateLeadLevel(id, level),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead', id] })
+  });
+  const assignMutation = useMutation({
+    mutationFn: (assignedTo: string) => assignLead(id, assignedTo),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead', id] });
+      qc.invalidateQueries({ queryKey: ['lead-activities', id] });
+    }
+  });
+  const [followUp, setFollowUp] = useState('');
+  const [followUpAction, setFollowUpAction] = useState('电话沟通');
+  const activityMutation = useMutation({
+    mutationFn: () => addLeadActivity(id, followUpAction, followUp),
+    onSuccess: () => {
+      setFollowUp('');
+      qc.invalidateQueries({ queryKey: ['lead-activities', id] });
+    }
+  });
+
   if (isLoading) return <LoadingState />;
   if (!lead) return null;
 
@@ -118,8 +143,23 @@ export default function LeadDetailPage() {
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <span className="text-muted-foreground">线索等级</span>
-              <div>
+              <div className="flex items-center gap-2">
                 <LeadLevelBadge level={lead.level} />
+                <select
+                  value={lead.level}
+                  onChange={(e) =>
+                    levelMutation.mutate(e.target.value as 'A' | 'B' | 'C' | 'D')
+                  }
+                  disabled={levelMutation.isPending}
+                  className="rounded border bg-background px-1.5 py-0.5 text-xs"
+                  title="调整线索等级"
+                >
+                  {(['A', 'B', 'C', 'D'] as const).map((lv) => (
+                    <option key={lv} value={lv}>
+                      {lv} 级
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div>
@@ -139,7 +179,22 @@ export default function LeadDetailPage() {
             </div>
             <div>
               <span className="text-muted-foreground">负责人</span>
-              <div>{lead.assignedTo ?? '未分配'}</div>
+              <div className="flex items-center gap-2">
+                <span>{lead.assignedTo ?? '未分配'}</span>
+                <input
+                  type="text"
+                  placeholder="分派给..."
+                  defaultValue={lead.assignedTo ?? ''}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const v = (e.target as HTMLInputElement).value.trim();
+                      if (v) assignMutation.mutate(v);
+                    }
+                  }}
+                  className="w-28 rounded border bg-background px-1.5 py-0.5 text-xs"
+                  title="输入负责人姓名后回车分派"
+                />
+              </div>
             </div>
             <div>
               <span className="text-muted-foreground">需求</span>
@@ -203,6 +258,48 @@ export default function LeadDetailPage() {
 
         <div className="rounded-xl border bg-card p-5">
           <h3 className="font-semibold mb-4">跟进记录</h3>
+
+          {/* Add follow-up entry */}
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-2">
+            <select
+              value={followUpAction}
+              onChange={(e) => setFollowUpAction(e.target.value)}
+              className="rounded border bg-background px-2 py-1 text-xs"
+            >
+              {[
+                '电话沟通',
+                '微信联系',
+                '已拜访',
+                '发资料',
+                '报价',
+                '其他'
+              ].map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={followUp}
+              onChange={(e) => setFollowUp(e.target.value)}
+              placeholder="记录跟进详情…"
+              className="min-w-[180px] flex-1 rounded border bg-background px-2 py-1 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && followUp.trim()) {
+                  activityMutation.mutate();
+                }
+              }}
+            />
+            <button
+              onClick={() => followUp.trim() && activityMutation.mutate()}
+              disabled={!followUp.trim() || activityMutation.isPending}
+              className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground disabled:opacity-50"
+            >
+              添加
+            </button>
+          </div>
+
           {activities && activities.length > 0 ? (
             <div className="space-y-3">
               {activities.map((activity) => (

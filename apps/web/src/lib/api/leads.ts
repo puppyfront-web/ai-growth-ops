@@ -32,6 +32,59 @@ export function updateLeadStatus(id: string, status: string): Promise<Lead> {
   return apiPut<Lead>(`/api/leads/${id}`, { status });
 }
 
+/** Update arbitrary lead fields (level, status, assignedTo, nextAction, …). */
+export function updateLead(
+  id: string,
+  data: Partial<{
+    level: 'A' | 'B' | 'C' | 'D';
+    status: string;
+    assignedTo: string;
+    nextAction: string;
+    intent: string;
+    summary: string;
+  }>
+): Promise<Lead> {
+  return apiPut<Lead>(`/api/leads/${id}`, data);
+}
+
+/** Convenience: change only the level. */
+export function updateLeadLevel(
+  id: string,
+  level: 'A' | 'B' | 'C' | 'D'
+): Promise<Lead> {
+  return updateLead(id, { level });
+}
+
+/** Assign a lead to a sales rep and move it to ASSIGNED. */
+export function assignLead(id: string, assignedTo: string): Promise<Lead> {
+  return apiPost<Lead>(`/api/leads/${id}/assign`, { assignedTo });
+}
+
+/** Manually create a lead (fallback for offline/exhibition sources). */
+export function createLead(data: {
+  sourcePlatform: string;
+  sourceAccountId: string;
+  externalUserId: string;
+  externalUserName?: string;
+  level?: 'A' | 'B' | 'C' | 'D';
+  intent?: string;
+  summary?: string;
+}): Promise<Lead> {
+  return apiPost<Lead>('/api/leads', data);
+}
+
+/** Append a follow-up note to a lead's activity timeline. */
+export function addLeadActivity(
+  leadId: string,
+  action: string,
+  note?: string
+): Promise<LeadActivity> {
+  return apiPost<LeadActivity>(`/api/leads/${leadId}/activities`, {
+    action,
+    note
+  });
+}
+
 export function getLeadActivities(leadId: string): Promise<LeadActivity[]> {
   return apiGet<LeadActivity[]>(`/api/leads/${leadId}/activities`);
 }

@@ -9,6 +9,7 @@
 
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
+import { getQueue, QUEUE_NAMES } from '../queue.js';
 import type {
   ClassificationResult,
   ReplySuggestionResult
@@ -19,6 +20,14 @@ import {
   containsSensitiveContent,
   classifySensitiveWithAI
 } from './rule-classifier.js';
+
+/** Lead level order, A = hottest. Used to avoid downgrading an existing lead. */
+const LEVEL_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+
+/** Only A/B-grade interactions auto-convert to leads (high intent). */
+function shouldConvertToLead(level: string | undefined): boolean {
+  return level === 'A' || level === 'B';
+}
 
 /** Valid ReplyType enum values per Prisma schema */
 const VALID_REPLY_TYPES = [
@@ -101,6 +110,18 @@ export async function classifyAndSuggestReply(
   } catch (error) {
     console.error('[pipeline] Classification DB write failed:', error);
     return;
+  }
+
+  // ── Step 2.5: Auto-convert high-intent interactions to leads ──────────
+  // A/B-grade comments/messages are the product's customer-acquisition entry
+  // point. C/D are ignored to keep the lead pool signal-heavy. This runs
+  // independently of reply suggestion (an interaction may convert to a lead
+  // even when no auto-reply is sent).
+  if (shouldConvertToLead(classification.leadLevel)) {
+    await convertInteractionToLead(db, interactionId, classification).catch(
+      (err) =>
+        console.error('[pipeline] Lead auto-conversion failed:', err)
+    );
   }
 
   // ── Step 2: Suggest reply (skip for D-level / spam) ───────────────
@@ -321,5 +342,162 @@ async function enqueueAutoReplyIfEligible(
     );
   } catch (err) {
     console.error('[pipeline] Auto-reply eligibility check failed:', err);
+  }
+}
+
+/**
+ * Convert a high-intent Interaction into a Lead.
+ *
+ * Upserts on (sourcePlatform, sourceAccountId, externalUserId) so the same
+ * commenter only ever has one lead. Existing leads are upgraded (never
+ * downgraded): a later B-grade comment won't weaken an existing A-grade lead.
+ * On a freshly-created lead we: record a LeadActivity, push an in-app
+ * notification, and enqueue sync to any enabled external sink (Feishu/WeCom).
+ */
+async function convertInteractionToLead(
+  db: DatabaseClient,
+  interactionId: string,
+  classification: ClassificationResult
+): Promise<void> {
+  const interaction = await db.interaction.findUnique({
+    where: { id: interactionId },
+    select: {
+      userId: true,
+      organizationId: true,
+      platform: true,
+      platformAccountId: true,
+      externalUserId: true,
+      externalUserName: true
+    }
+  });
+  if (!interaction) return;
+
+  const newLevel = (classification.leadLevel || 'C') as 'A' | 'B' | 'C' | 'D';
+
+  // Peek at any existing lead to honour "upgrade only".
+  const existing = await db.lead.findUnique({
+    where: {
+      sourcePlatform_sourceAccountId_externalUserId: {
+        sourcePlatform: interaction.platform,
+        sourceAccountId: interaction.platformAccountId,
+        externalUserId: interaction.externalUserId
+      }
+    },
+    select: { id: true, level: true }
+  });
+
+  const shouldUpdateLevel =
+    !existing ||
+    (LEVEL_RANK[newLevel] ?? 99) < (LEVEL_RANK[existing.level] ?? 99);
+
+  const lead = await db.lead.upsert({
+    where: {
+      sourcePlatform_sourceAccountId_externalUserId: {
+        sourcePlatform: interaction.platform,
+        sourceAccountId: interaction.platformAccountId,
+        externalUserId: interaction.externalUserId
+      }
+    },
+    create: {
+      userId: interaction.userId,
+      organizationId: interaction.organizationId,
+      sourcePlatform: interaction.platform,
+      sourceAccountId: interaction.platformAccountId,
+      sourceInteractionId: interactionId,
+      externalUserId: interaction.externalUserId,
+      externalUserName: interaction.externalUserName,
+      level: newLevel,
+      status: 'NEW',
+      intent: classification.intent || null,
+      confidence: classification.confidence ?? null,
+      summary: classification.summary || null,
+      tags: classification.tags ?? undefined,
+      nextAction: classification.nextAction || null,
+      riskLevel: classification.riskLevel || 'low'
+    },
+    update: shouldUpdateLevel
+      ? {
+          level: newLevel,
+          intent: classification.intent || undefined,
+          confidence: classification.confidence ?? undefined,
+          summary: classification.summary || undefined,
+          nextAction: classification.nextAction || undefined
+        }
+      : { summary: classification.summary || undefined }
+  });
+
+  // Only fan out (activity / notify / sync) for freshly-created leads.
+  if (existing) {
+    console.log(
+      `[pipeline] Lead ${lead.id} already exists, level ${shouldUpdateLevel ? 'upgraded' : 'kept'}`
+    );
+    return;
+  }
+
+  await db.leadActivity.create({
+    data: {
+      leadId: lead.id,
+      action: 'created_from_interaction',
+      note: `AI 自动转化(${newLevel}级) · ${classification.intent || ''}`,
+      operator: 'system',
+      metadata: { interactionId, confidence: classification.confidence }
+    }
+  });
+
+  // In-app notification (worker cannot import the API's notification-service,
+  // so write the row directly — mirrors publishDailyReport's pattern).
+  await db.notification
+    .create({
+      data: {
+        type: 'lead',
+        title: '新线索',
+        content: `收到 ${newLevel} 级线索: ${interaction.externalUserName || interaction.externalUserId} · ${classification.intent || ''}`,
+        level: newLevel === 'A' ? 'warning' : 'info',
+        userId: interaction.userId,
+        organizationId: interaction.organizationId,
+        actionUrl: `/leads/${lead.id}`
+      }
+    } as never)
+    .catch(() => {
+      /* notification write is best-effort */
+    });
+
+  // Enqueue sync to any enabled external sink (Feishu bitable / WeCom).
+  await enqueueLeadSinkSync(db, lead.id, interaction.organizationId).catch(
+    (err) => console.error('[pipeline] Lead sink enqueue failed:', err)
+  );
+
+  console.log(
+    `[pipeline] Lead ${lead.id} created (${newLevel}) from interaction ${interactionId}`
+  );
+}
+
+/**
+ * If the org has any enabled lead-sink config, enqueue the corresponding sync
+ * job so the freshly-created lead is pushed to Feishu/WeCom. Activates the
+ * previously-orphaned LEAD_SYNC_FEISHU / LEAD_SYNC_WECOM queues.
+ */
+async function enqueueLeadSinkSync(
+  db: DatabaseClient,
+  leadId: string,
+  organizationId: string | null
+): Promise<void> {
+  if (!organizationId) return;
+  const configs = await db.leadSinkConfig.findMany({
+    where: { organizationId, enabled: true },
+    select: { sinkType: true }
+  });
+  for (const cfg of configs) {
+    if (cfg.sinkType === 'lark' || cfg.sinkType === 'feishu_bitable') {
+      await getQueue(QUEUE_NAMES.LEAD_SYNC_FEISHU).add(
+        QUEUE_NAMES.LEAD_SYNC_FEISHU,
+        { leadId }
+      );
+    } else if (cfg.sinkType === 'wecom' || cfg.sinkType === 'wecom_contact') {
+      await getQueue(QUEUE_NAMES.LEAD_SYNC_WECOM).add(
+        QUEUE_NAMES.LEAD_SYNC_WECOM,
+        { leadId }
+      );
+    }
   }
 }

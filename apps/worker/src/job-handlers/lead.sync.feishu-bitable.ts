@@ -36,6 +36,12 @@ export async function handleLeadSyncFeishuBitable(
       );
     }
 
+    // Respect the enabled flag — a disabled sink should not silently sync.
+    if (sinkConfig.enabled === false) {
+      job.log(`Feishu sink config ${sinkConfig.id} is disabled, skipping`);
+      return;
+    }
+
     const configObj = sinkConfig.config as Record<string, unknown>;
 
     // Update lead status to SYNCING

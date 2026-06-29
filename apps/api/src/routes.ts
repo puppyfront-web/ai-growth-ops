@@ -3195,6 +3195,40 @@ const routes: Route[] = [
   },
   {
     method: 'POST',
+    pattern: '/api/leads/:leadId/activities',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = ctx.body as {
+        action?: string;
+        note?: string;
+        operator?: string;
+      };
+      if (!body.action || !String(body.action).trim()) {
+        return sendJson(res, 400, { error: 'action 不能为空' });
+      }
+      const lead = await ctx.db.lead.findFirst({
+        where: {
+          id: ctx.params.leadId,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        },
+        select: { id: true }
+      });
+      if (!lead) return sendJson(res, 404, { error: 'Not found' });
+      const activity = await ctx.db.leadActivity.create({
+        data: {
+          leadId: ctx.params.leadId,
+          action: String(body.action).trim(),
+          note: body.note ?? null,
+          operator: body.operator ?? orgCtx.user.name ?? 'unknown'
+        }
+      });
+      sendJson(res, 201, activity);
+    }
+  },
+  {
+    method: 'POST',
     pattern: '/api/leads/:id/sync-feishu',
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
