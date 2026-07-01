@@ -59,16 +59,26 @@ export async function handleInteractionManualReply(
     return;
   }
 
-  // Decrypt cookie (may be absent for official_api accounts)
+  // Decrypt cookie (may be absent for official_api accounts). Wrap in
+  // try/catch: a corrupted/rotated encryption key must NOT crash the job
+  // into an infinite retry loop — fall back to no-cookie instead.
   const cookie = account.cookieRef
     ? decryptToken(account.cookieRef)
     : undefined;
-  // Official access token — when present, prefer the platform API over
-  // browser automation: it's far more stable (no DOM selectors to break).
   const accessToken = account.accessTokenEncrypted
-    ? decryptToken(account.accessTokenEncrypted)
+    ? (() => {
+        try {
+          return decryptToken(account.accessTokenEncrypted!);
+        } catch (err) {
+          console.error(
+            '[manual-reply] accessToken decrypt failed, falling back to browser:',
+            err
+          );
+          return undefined;
+        }
+      })()
     : undefined;
-  const mode = (account.mode as InteractionMode) ?? 'browser_assist';
+  const accountMode = (account.mode as InteractionMode) ?? 'browser_assist';
 
   try {
     let result: {
@@ -80,10 +90,12 @@ export async function handleInteractionManualReply(
 
     if (accessToken) {
       // ── Official API path (stable) ────────────────────────────────
+      // Force official_api mode so getOrCreateConnector instantiates the
+      // official connector, not a hybrid that may fall back to browser.
       const connector = getOrCreateConnector(
         interaction.platform as PlatformCode,
-        mode,
-        { mode, cookie, accessToken }
+        'official_api',
+        { mode: 'official_api', accessToken } as never
       );
       const isComment = interaction.type === 'comment';
       const sourceContentId = String(

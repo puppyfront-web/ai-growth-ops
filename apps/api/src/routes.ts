@@ -3097,6 +3097,10 @@ const routes: Route[] = [
           skipped++;
           continue;
         }
+        // Validate level against the enum — a bad value would 500 on insert.
+        const VALID_LEVELS = ['A', 'B', 'C', 'D'];
+        const rawCsvLevel = String(row[ci('level')] ?? 'C').trim().toUpperCase();
+        const csvLevel = (VALID_LEVELS.includes(rawCsvLevel) ? rawCsvLevel : 'C') as 'A' | 'B' | 'C' | 'D';
         try {
           await ctx.db.lead.upsert({
             where: {
@@ -3113,7 +3117,7 @@ const routes: Route[] = [
               sourceAccountId: 'csv-import',
               externalUserId: `csv-${i}-${name}`,
               externalUserName: name,
-              level: ((row[ci('level')] ?? 'C').trim() as 'A' | 'B' | 'C' | 'D') || 'C',
+              level: csvLevel,
               status: 'NEW',
               intent: (row[ci('intent')] ?? '').trim() || undefined,
               summary: (row[ci('summary')] ?? '').trim() || undefined
@@ -4780,6 +4784,10 @@ const routes: Route[] = [
         body.externalUserId ||
         body.phone ||
         `webhook-${source.id.slice(0, 8)}-${Date.now()}`;
+      // Validate level against the enum — a bad value would 500 on insert.
+      const VALID_LEVELS = ['A', 'B', 'C', 'D'];
+      const rawLevel = String(body.level || source.defaultLevel || 'B').toUpperCase();
+      const level = (VALID_LEVELS.includes(rawLevel) ? rawLevel : 'B') as 'A' | 'B' | 'C' | 'D';
       const lead = await ctx.db.lead.upsert({
         where: {
           sourcePlatform_sourceAccountId_externalUserId: {
@@ -4795,7 +4803,7 @@ const routes: Route[] = [
           sourceAccountId: `webhook-${source.id.slice(0, 8)}`,
           externalUserId,
           externalUserName: name,
-          level: ((body.level as string) || source.defaultLevel || 'B') as 'A' | 'B' | 'C' | 'D',
+          level,
           status: 'NEW',
           intent: body.intent || undefined,
           summary: body.summary || undefined,
@@ -4846,8 +4854,7 @@ const routes: Route[] = [
       if (!body.name?.trim()) {
         return sendJson(res, 400, { error: '名称必填' });
       }
-      const token =
-        'src_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const token = 'src_' + randomBytes(32).toString('hex');
       const created = await ctx.db.leadSourceConfig.create({
         data: {
           organizationId: orgCtx.organization.id,

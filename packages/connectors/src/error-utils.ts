@@ -19,9 +19,10 @@
 /** Maps a platform code to the JSON field that carries its error code. */
 const ERROR_FIELD_BY_PLATFORM: Record<string, string[]> = {
   douyin: ['error_code', 'status_code'],
-  'wechat-official': ['errcode'],
-  'wechat_channels': ['errcode'],
-  'xiaohongshu': ['code', 'status'],
+  // PlatformCode uses underscores (wechat_official), not hyphens.
+  wechat_official: ['errcode'],
+  wechat_channels: ['errcode'],
+  xiaohongshu: ['code', 'status'],
   baijiahao: ['errno'],
   zhihu: ['error', 'code']
 };

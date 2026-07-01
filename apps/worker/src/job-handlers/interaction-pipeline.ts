@@ -373,6 +373,17 @@ async function convertInteractionToLead(
   });
   if (!interaction) return;
 
+  // Guard: the unique key (sourcePlatform, sourceAccountId, externalUserId)
+  // requires all three to be non-null. Interactions missing these (e.g.
+  // malformed imports) cannot be deduped and would crash the upsert.
+  if (!interaction.platformAccountId || !interaction.externalUserId) {
+    console.warn(
+      '[pipeline] Interaction missing platformAccountId/externalUserId, skip lead conversion:',
+      interactionId
+    );
+    return;
+  }
+
   const newLevel = (classification.leadLevel || 'C') as 'A' | 'B' | 'C' | 'D';
 
   // Peek at any existing lead to honour "upgrade only".
@@ -490,15 +501,25 @@ async function enqueueLeadSinkSync(
     select: { sinkType: true }
   });
   for (const cfg of configs) {
-    if (cfg.sinkType === 'lark' || cfg.sinkType === 'feishu_bitable') {
+    // Normalise sinkType aliases to the value the sync handlers actually
+    // query for (feishu handler reads 'lark', wecom reads 'wecom'). Without
+    // this, a config saved as 'feishu_bitable'/'wecom_contact' would enqueue
+    // a job whose handler then finds no matching config and throws.
+    const normalized = cfg.sinkType.replace(/_bitable$|_contact$/, '').replace(
+      /^feishu$/,
+      'lark'
+    );
+    if (normalized === 'lark') {
       await getQueue(QUEUE_NAMES.LEAD_SYNC_FEISHU).add(
         QUEUE_NAMES.LEAD_SYNC_FEISHU,
-        { leadId }
+        { leadId },
+        { jobId: `lead-sync-feishu-${leadId}` }
       );
-    } else if (cfg.sinkType === 'wecom' || cfg.sinkType === 'wecom_contact') {
+    } else if (normalized === 'wecom') {
       await getQueue(QUEUE_NAMES.LEAD_SYNC_WECOM).add(
         QUEUE_NAMES.LEAD_SYNC_WECOM,
-        { leadId }
+        { leadId },
+        { jobId: `lead-sync-wecom-${leadId}` }
       );
     }
   }
