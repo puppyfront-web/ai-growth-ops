@@ -296,8 +296,7 @@ async function executeBrowserAssistPublish(params: {
   errorMessage?: string;
 }> {
   const runnerUrl = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-  const runnerSecret =
-    process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+  const runnerSecret = process.env.BROWSER_RUNNER_SECRET || '';
   const runnerAuthHeaders: Record<string, string> = {
     'content-type': 'application/json'
   };

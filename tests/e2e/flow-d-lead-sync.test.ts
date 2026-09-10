@@ -1,31 +1,28 @@
 import { expect, test } from '@playwright/test';
+import { login, resetAndSeedDatabase } from './helpers';
 
-test.describe('Flow D: Lead Sync', () => {
-  test('leads page shows seed data', async ({ page }) => {
-    await page.goto('/leads');
-    await expect(page.locator('text=线索').first()).toBeVisible({
-      timeout: 15000
-    });
+test.describe('Keyword prospecting', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetAndSeedDatabase();
+    await login(page);
   });
 
-  test('lead detail shows sync options', async ({ page }) => {
-    await page.goto('/leads');
-    await expect(page.locator('text=线索').first()).toBeVisible({
-      timeout: 15000
-    });
+  test('shows the prospecting workspace', async ({ page }) => {
+    await expect(
+      page.getByRole('heading', { name: '关键词获客' })
+    ).toBeVisible();
+    await expect(page.getByText('暂无获客任务')).toBeVisible();
+  });
 
-    // Click on first lead
-    const firstLead = page.locator('a[href^="/leads/"]').first();
-    if (await firstLead.isVisible()) {
-      await firstLead.click();
-      await page.waitForURL('**/leads/*', { timeout: 10000 });
-      // Should show lead details
-      await expect(
-        page
-          .locator('text=飞书')
-          .or(page.locator('text=企微'))
-          .or(page.locator('text=同步'))
-      ).toBeVisible();
-    }
+  test('creates a prospecting task and opens its detail', async ({ page }) => {
+    await page.getByRole('button', { name: /新建任务/ }).click();
+    await page
+      .getByLabel('主题关键词（逗号或换行分隔）*')
+      .fill('企业获客, 采购经理');
+    await page.getByRole('button', { name: '创建并开始执行' }).click();
+
+    await expect(page).toHaveURL(/\/prospecting\/[^/]+$/);
+    await expect(page.getByText('企业获客')).toBeVisible();
+    await expect(page.getByRole('button', { name: '开始执行' })).toBeVisible();
   });
 });

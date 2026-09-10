@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "userKey": { "type": "string" },
+          "relevanceScore": { "type": "number" },
+          "leadLevel": { "type": "string", "enum": ["A", "B", "C", "D"] },
+          "intent": { "type": "string" },
+          "summary": { "type": "string" },
+          "matchedKeywords": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["userKey", "relevanceScore", "leadLevel"]
+      }
+    }
+  },
+  "required": ["results"]
+}

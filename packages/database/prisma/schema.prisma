@@ -226,6 +226,30 @@ enum ResearchMode {
   disabled
 }
 
+enum AcquisitionChannel {
+  douyin
+  xiaohongshu
+  wechat_official
+  wechat_channels
+  baijiahao
+  zhihu
+  manual
+  import
+  referral
+  exhibition
+  phone
+  website
+  partner
+  other
+}
+
+enum CustomerStatus {
+  active
+  inactive
+  won
+  lost
+}
+
 model User {
   id              String    @id @default(uuid())
   email           String    @unique
@@ -259,6 +283,8 @@ model User {
   chatThreads              ChatThread[]
   campaigns                Campaign[]
   workflows                Workflow[]
+  customers                Customer[]
+  prospectingTasks         ProspectingTask[]
 }
 
 model TokenBlacklist {
@@ -339,6 +365,12 @@ model Organization {
   chatThreads          ChatThread[]
   campaigns            Campaign[]
   workflows            Workflow[]
+  customers            Customer[]
+  prospectingTasks     ProspectingTask[]
+  prospectCandidates   ProspectCandidate[]
+  prospectingLedgers   ProspectingGuardLedger[]
+  prospectingVideos    ProspectingCrawledVideo[]
+  icpConfig            OrganizationIcpConfig?
 
   @@map("organizations")
 }
@@ -410,6 +442,7 @@ model PlatformAccount {
   platformCapabilities PlatformCapability[]
   conversations        Conversation[]
   interactions         Interaction[]
+  prospectingLedgers   ProspectingGuardLedger[]
 
   @@unique([userId, platform, name])
   @@index([organizationId])
@@ -749,6 +782,7 @@ model Lead {
   id                  String     @id @default(uuid())
   organizationId      String?
   userId              String
+  customerId          String?
   sourcePlatform      Platform
   sourceAccountId     String
   sourceInteractionId String?
@@ -771,6 +805,7 @@ model Lead {
 
   user             User                  @relation(fields: [userId], references: [id])
   organization     Organization?         @relation(fields: [organizationId], references: [id])
+  customer         Customer?             @relation(fields: [customerId], references: [id])
   interaction      Interaction?          @relation(fields: [sourceInteractionId], references: [id])
   publishJob       PublishJob?           @relation(fields: [sourcePublishJobId], references: [id])
   leadActivities   LeadActivity[]
@@ -778,6 +813,7 @@ model Lead {
   syncLogs         LeadSinkSyncLog[]
 
   @@index([organizationId])
+  @@index([customerId])
   @@unique([sourcePlatform, sourceAccountId, externalUserId])
   @@map("leads")
 }
@@ -864,6 +900,225 @@ model LeadSinkSyncLog {
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@map("lead_sink_sync_logs")
+}
+
+model Customer {
+  id             String             @id @default(uuid())
+  organizationId String
+  userId         String
+  displayName    String
+  phone          String
+  company        String
+  role           String
+  intent         String
+  channel        AcquisitionChannel @default(manual)
+  sourceNote     String?
+  status         CustomerStatus     @default(active)
+  assignedTo     String?
+  fitScore       Int                @default(0)
+  intentScore    Int                @default(0)
+  healthScore    Int                @default(100)
+  segment        String?
+  tags           Json?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+  metadata       Json?
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  user         User               @relation(fields: [userId], references: [id])
+  activities   CustomerActivity[]
+  leads        Lead[]
+  profile      CustomerProfile?
+  playbooks    CustomerPlaybook[]
+  prospects    ProspectCandidate[]
+
+  @@index([organizationId, phone])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("customers")
+}
+
+model CustomerActivity {
+  id         String   @id @default(uuid())
+  customerId String
+  action     String
+  note       String?
+  operator   String?
+  createdAt  DateTime @default(now())
+  metadata   Json?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@map("customer_activities")
+}
+
+model CustomerProfile {
+  id           String    @id @default(uuid())
+  customerId   String    @unique
+  industry     String?
+  companySize  String?
+  painPoints   Json?
+  interests    Json?
+  budget       String?
+  timeline     String?
+  bant         Json?
+  summary      String?
+  tags         Json?
+  source       String    @default("rules")
+  version      Int       @default(1)
+  extractedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("customer_profiles")
+}
+
+enum CustomerPlaybookStatus {
+  draft
+  active
+  completed
+  cancelled
+}
+
+model CustomerPlaybook {
+  id          String                 @id @default(uuid())
+  customerId  String
+  summary     String
+  reasoning   String?
+  actions     Json
+  status      CustomerPlaybookStatus @default(draft)
+  generatedBy String?
+  approvedAt  DateTime?
+  approvedBy  String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, status])
+  @@index([customerId, createdAt])
+  @@map("customer_playbooks")
+}
+
+enum ProspectingTaskStatus {
+  draft
+  running
+  completed
+  failed
+  cancelled
+}
+
+model ProspectingTask {
+  id                   String                @id @default(uuid())
+  organizationId       String
+  userId               String
+  platform             Platform
+  keywords             Json
+  status               ProspectingTaskStatus @default(draft)
+  executionToken       String?
+  topNVideos           Int                   @default(5)
+  maxCommentsPerVideo  Int                   @default(30)
+  commentScrollRounds  Int                   @default(8)
+  minRelevanceScore    Int                   @default(40)
+  totalVideos          Int                   @default(0)
+  totalComments        Int                   @default(0)
+  totalCandidates      Int                   @default(0)
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  lastError            String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  metadata             Json?
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  user         User               @relation(fields: [userId], references: [id])
+  candidates   ProspectCandidate[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("prospecting_tasks")
+}
+
+model ProspectCandidate {
+  id                 String    @id @default(uuid())
+  prospectingTaskId  String
+  organizationId     String
+  platform           Platform
+  keyword            String
+  userKey            String
+  externalUserId     String?
+  userNickname       String?
+  userHomepage       String?
+  avatarUrl          String?
+  content            String
+  commentCount       Int       @default(1)
+  evidence           Json?
+  sourceVideoTitle   String?
+  sourceVideoUrl     String?
+  sourceVideoAuthor  String?
+  sourcePostId       String?
+  relevanceScore     Int       @default(0)
+  leadLevel          String
+  scoreSource        String    @default("rules")
+  intent             String?
+  summary            String?
+  matchedKeywords    Json?
+  customerId         String?
+  createdAt          DateTime  @default(now())
+  metadata           Json?
+
+  prospectingTask ProspectingTask @relation(fields: [prospectingTaskId], references: [id], onDelete: Cascade)
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  customer        Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@unique([prospectingTaskId, userKey])
+  @@index([prospectingTaskId, relevanceScore])
+  @@index([organizationId, createdAt])
+  @@index([customerId])
+  @@map("prospect_candidates")
+}
+
+model ProspectingGuardLedger {
+  id                  String    @id @default(uuid())
+  organizationId      String
+  platformAccountId   String
+  date                String
+  videosCrawled       Int       @default(0)
+  profilesFetched     Int       @default(0)
+  captchaBlockedUntil DateTime?
+  captchaHits         Int       @default(0)
+  lastVideoAt         DateTime?
+  lastProfileAt       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, platformAccountId, date])
+  @@index([platformAccountId, date])
+  @@map("prospecting_guard_ledgers")
+}
+
+model ProspectingCrawledVideo {
+  id             String   @id @default(uuid())
+  organizationId String
+  platform       Platform
+  videoId        String
+  lastCrawledAt  DateTime
+  commentCount   Int      @default(0)
+  taskId         String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, platform, videoId])
+  @@index([organizationId, lastCrawledAt])
+  @@map("prospecting_crawled_videos")
 }
 
 model ResearchTask {
@@ -1128,6 +1383,18 @@ model AppConfig {
   @@index([organizationId])
   @@unique([userId, key])
   @@map("app_configs")
+}
+
+model OrganizationIcpConfig {
+  organizationId String   @id
+  value          Json
+  updatedBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_icp_configs")
 }
 
 model SecretRef {

@@ -1,0 +1,2 @@
+-- Historical migration marker.
+-- The current Prisma schema already excludes the retired domain fields.

@@ -30,21 +30,26 @@ export default function ConversationDetailPage() {
     queryKey: ['conversation', id],
     queryFn: () => getConversation(id)
   });
+  const latestInteraction =
+    conversation?.interactions[conversation.interactions.length - 1];
   const { data: suggestions } = useQuery({
-    queryKey: ['reply-suggestions', id],
-    queryFn: () => getReplySuggestions(id)
+    queryKey: ['reply-suggestions', latestInteraction?.id],
+    queryFn: () => getReplySuggestions(latestInteraction!.id),
+    enabled: Boolean(latestInteraction?.id)
   });
 
   const replyMutation = useMutation({
     mutationFn: (content: string) => {
-      const latestInteraction =
-        conversation?.interactions[conversation.interactions.length - 1];
       if (!latestInteraction) throw new Error('No interaction');
       return sendReply(latestInteraction.id, content);
     },
     onSuccess: () => {
+      toast.success('回复已提交发送，扫码账号需人工确认是否上屏');
       qc.invalidateQueries({ queryKey: ['conversation', id] });
       setReplyText('');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || '发送失败');
     }
   });
 
@@ -83,7 +88,22 @@ export default function ConversationDetailPage() {
   if (isLoading) return <LoadingState />;
   if (!conversation) return null;
 
-  const suggestion = suggestions?.[0];
+  const rawSuggestion = suggestions?.[0] as
+    | (typeof suggestions)[number]
+    | { suggestedText?: string }
+    | undefined;
+  const suggestedReply =
+    rawSuggestion &&
+    ('suggestedReply' in rawSuggestion
+      ? rawSuggestion.suggestedReply
+      : rawSuggestion.suggestedText);
+  const suggestion =
+    rawSuggestion &&
+    (rawSuggestion.leadLevel ||
+      rawSuggestion.intentSummary ||
+      suggestedReply)
+      ? { ...rawSuggestion, suggestedReply: suggestedReply ?? '' }
+      : undefined;
 
   return (
     <div>
@@ -113,7 +133,8 @@ export default function ConversationDetailPage() {
                       </span>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3 text-sm">
-                      {msg.content}
+                      {msg.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() ||
+                        msg.content}
                     </div>
                   </div>
                 </div>
@@ -130,6 +151,9 @@ export default function ConversationDetailPage() {
               className="w-full rounded-md border p-3 text-sm"
               placeholder="输入回复内容..."
             />
+            <p className="mb-2 text-xs text-muted-foreground">
+              已配置官方 token 时走官方回复；扫码账号是尽力而为，发送后请到平台确认。
+            </p>
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() =>
@@ -180,7 +204,7 @@ export default function ConversationDetailPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">置信度</span>
                   <span className="text-sm">
-                    {Math.round(suggestion.confidence * 100)}%
+                    {Math.round((suggestion.confidence || 0) * 100)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

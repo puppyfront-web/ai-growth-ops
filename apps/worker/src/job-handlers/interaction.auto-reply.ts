@@ -14,8 +14,7 @@ const logger = createLogger('auto-reply');
 
 const BROWSER_RUNNER_URL =
   process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-const RUNNER_SECRET =
-  process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
 
 function runnerHeaders(): Record<string, string> {
   const h: Record<string, string> = { 'content-type': 'application/json' };

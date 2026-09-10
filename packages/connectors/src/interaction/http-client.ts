@@ -6,8 +6,7 @@ export interface PlatformResponse<T> {
 }
 
 /** Shared secret for authenticating with the browser-runner service. */
-const RUNNER_SECRET =
-  process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
 
 /** Fetch with AbortController timeout so stalled connections don't hang forever. */
 export async function fetchWithTimeout(

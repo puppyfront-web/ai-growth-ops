@@ -20,7 +20,12 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PlatformBadge } from '@/components/shared/StatusBadge';
-import { FileUpload, type UploadedFile } from '@/components/media/FileUpload';
+import { type UploadedFile } from '@/components/media/FileUpload';
+import {
+  ContentMediaPanel,
+  mediaRequirement,
+  missingMediaMessage
+} from '@/components/content/ContentMediaPanel';
 import { platformLabels, platformIcons } from '@/lib/constants';
 import type { Platform } from '@/types/enums';
 import { useState, useMemo, useEffect } from 'react';
@@ -99,7 +104,8 @@ export default function ContentDetailPage() {
     queryFn: getPlatformAccounts
   });
 
-  const isTextImage = item?.type === 'text_image';
+  const mediaReq = item ? mediaRequirement(item.type) : null;
+  const needsMedia = Boolean(mediaReq?.required);
 
   const accountMap = useMemo(() => {
     const map = new Map<string, PlatformAccount>();
@@ -119,8 +125,8 @@ export default function ContentDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      if (isTextImage && mediaAssetIds.length === 0) {
-        return Promise.reject(new Error('图文类型内容必须上传至少一张图片'));
+      if (needsMedia && mediaAssetIds.length === 0) {
+        return Promise.reject(new Error(missingMediaMessage(item?.type ?? '')));
       }
       setSaveError(null);
       return updateContentItem(id, { title, body, mediaAssetIds });
@@ -154,8 +160,8 @@ export default function ContentDetailPage() {
 
   const publishMutation = useMutation({
     mutationFn: () => {
-      if (isTextImage && mediaAssetIds.length === 0) {
-        return Promise.reject(new Error('图文类型内容必须先上传图片才能发布'));
+      if (needsMedia && mediaAssetIds.length === 0) {
+        return Promise.reject(new Error(missingMediaMessage(item?.type ?? '')));
       }
       const platformAccountIds = Array.from(selectedPlatforms)
         .map((p) => accountMap.get(p)?.id)
@@ -281,35 +287,18 @@ export default function ContentDetailPage() {
               />
             </div>
 
-            {isTextImage && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <label className="text-sm font-medium">配图</label>
-                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-600">
-                    必传
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    最多 9 张，支持 JPG / PNG / WebP
-                  </span>
-                </div>
-                {saveError && (
-                  <p className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-600">
-                    {saveError}
-                  </p>
-                )}
-                <FileUpload
-                  accept="image/*"
-                  maxFiles={9}
-                  value={mediaAssetIds}
-                  onChange={(ids) => {
-                    setMediaAssetIds(ids);
-                    setSaveError(null);
-                  }}
-                  uploads={mediaUploads}
-                  onUploadsChange={setMediaUploads}
-                />
-              </div>
-            )}
+            <ContentMediaPanel
+              contentType={item.type}
+              value={mediaAssetIds}
+              onChange={(ids) => {
+                setMediaAssetIds(ids);
+                setSaveError(null);
+              }}
+              uploads={mediaUploads}
+              onUploadsChange={setMediaUploads}
+              defaultPrompt={title || body.slice(0, 80)}
+              error={saveError}
+            />
           </div>
           <div className="space-y-4">
             <div className="rounded-xl border bg-card p-5">
@@ -330,13 +319,13 @@ export default function ContentDetailPage() {
               </dl>
             </div>
 
-            {isTextImage && (
+            {needsMedia && (
               <div
                 className={`rounded-xl border p-4 text-xs ${mediaAssetIds.length > 0 ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 text-green-700' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-700'}`}
               >
                 {mediaAssetIds.length > 0
-                  ? `✓ 已上传 ${mediaAssetIds.length} 张图片`
-                  : '⚠ 图文内容尚未上传图片，保存和发布前请先添加配图'}
+                  ? `已准备 ${mediaAssetIds.length} 个${mediaReq?.label ?? '素材'}`
+                  : missingMediaMessage(item.type)}
               </div>
             )}
           </div>
@@ -345,15 +334,15 @@ export default function ContentDetailPage() {
 
       {activeTab === 'variants' && (
         <div className="space-y-3">
-          {isTextImage && mediaAssetIds.length === 0 && (
+          {needsMedia && mediaAssetIds.length === 0 && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-start gap-3">
               <span className="text-amber-500 text-base mt-0.5">⚠</span>
               <div>
                 <p className="text-sm font-medium text-amber-800">
-                  图文内容缺少配图
+                  {missingMediaMessage(item.type)}
                 </p>
                 <p className="text-xs text-amber-600 mt-0.5">
-                  请先在「内容编辑」标签上传图片，否则无法完成图文发布。
+                  请先在「内容编辑」上传本地文件，或配置生图 / 生视频 API 后生成。
                 </p>
               </div>
             </div>
@@ -532,12 +521,12 @@ export default function ContentDetailPage() {
                 disabled={
                   publishMutation.isPending ||
                   selectedPlatforms.size === 0 ||
-                  (isTextImage && mediaAssetIds.length === 0)
+                  (needsMedia && mediaAssetIds.length === 0)
                 }
                 className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
                 title={
-                  isTextImage && mediaAssetIds.length === 0
-                    ? '请先在「内容编辑」标签上传图片'
+                  needsMedia && mediaAssetIds.length === 0
+                    ? missingMediaMessage(item.type)
                     : undefined
                 }
               >

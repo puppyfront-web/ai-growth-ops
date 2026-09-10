@@ -6,8 +6,7 @@ import { decryptToken } from '@ai-growth-ops/providers';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 
 const RUNNER_URL = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-const RUNNER_SECRET =
-  process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
 
 export async function handleResearchRun(
   job: Job<ResearchRunInput>

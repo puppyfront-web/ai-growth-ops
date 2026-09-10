@@ -1,6 +1,6 @@
 import { decryptToken } from '@ai-growth-ops/providers';
 import { createLLMClient } from '@ai-growth-ops/ai';
-import type { LLMClient } from '@ai-growth-ops/runtime';
+import type { LLMClient, LLMProvider } from '@ai-growth-ops/ai';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 
 interface StoredLlmConfig {
@@ -8,6 +8,14 @@ interface StoredLlmConfig {
   apiKeyEncrypted?: string;
   baseUrl?: string;
   model?: string;
+}
+
+function inferProvider(cfg: StoredLlmConfig): LLMProvider {
+  const baseUrl = cfg.baseUrl ?? '';
+  const model = (cfg.model ?? '').toLowerCase();
+  if (baseUrl && !baseUrl.includes('anthropic.com')) return 'openai';
+  if (model.startsWith('claude')) return 'anthropic';
+  return cfg.provider === 'anthropic' ? 'anthropic' : 'openai';
 }
 
 /**
@@ -22,6 +30,9 @@ interface StoredLlmConfig {
  * read, same decryptToken, same "absent → undefined, never crash the run"
  * contract. baseUrl/model left undefined when blank so createLLMClient falls
  * through to its env defaults.
+ *
+ * Custom OpenAI-compatible gateways are always treated as `openai`, even if
+ * the UI provider is set to anthropic.
  */
 export async function resolveLlmClientFromDb(
   db: DatabaseClient,
@@ -36,7 +47,7 @@ export async function resolveLlmClientFromDb(
   try {
     const apiKey = decryptToken(cfg.apiKeyEncrypted);
     return createLLMClient({
-      provider: (cfg.provider ?? 'openai') as 'openai' | 'anthropic',
+      provider: inferProvider(cfg),
       apiKey,
       baseUrl: cfg.baseUrl || undefined,
       model: cfg.model || undefined

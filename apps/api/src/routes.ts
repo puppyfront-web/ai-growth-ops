@@ -10,20 +10,26 @@ import { join, extname, resolve, sep } from 'node:path';
 import Busboy from 'busboy';
 
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import { verifyDatabaseSchema } from '@ai-growth-ops/database';
 import { createLogger } from '@ai-growth-ops/observability';
 import {
   encryptToken,
   decryptToken,
   getPlatformProvider
 } from '@ai-growth-ops/providers';
+import { isOfficialDouyinInboxNoise } from '@ai-growth-ops/shared';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import type { SkillRunResult } from '@ai-growth-ops/skills';
+import type { LLMClient } from '@ai-growth-ops/ai';
+import { resolveLlmClientFromDb } from './services/llm-config.js';
 import { taskRoutes } from './routes-tasks.js';
 import { notificationRoutes } from './routes-notifications.js';
 import { auditRoutes } from './routes-audit.js';
 import { analyticsRoutes } from './routes-analytics.js';
 import { authRoutes } from './routes-auth.js';
 import { orgRoutes } from './routes-org.js';
+import { customerRoutes } from './routes-customers.js';
+import { prospectingRoutes } from './routes-prospecting.js';
 import { getCustomerDashboard } from './mvp-service';
 import {
   applyPublishProgress,
@@ -73,16 +79,24 @@ import {
   ResearchExecutionError
 } from './research-executor.js';
 import { classifyByRules, generateRuleBasedReply } from './rule-classifier.js';
+import { generateMediaAsset, loadAiConfigValue } from './services/media-generation.js';
+import {
+  isMaskedSecret,
+  mergeMediaGeneration,
+  publicMediaGeneration,
+  type StoredMediaGeneration
+} from './services/media-gen-config.js';
 
 // ── AI Skill Runner ────────────────────────────────────────────────
 
 async function runSkillSafely<T>(
   skillName: string,
-  input: unknown
+  input: unknown,
+  llmClient?: LLMClient
 ): Promise<SkillRunResult<T> | null> {
   try {
     const runner = getSharedSkillRunner();
-    return await runner.run({ skillName, input: input as never });
+    return await runner.run({ skillName, input: input as never, llmClient });
   } catch {
     return null;
   }
@@ -135,6 +149,31 @@ const routes: Route[] = [
         overall = 'unhealthy';
       }
 
+      // Verify CRM/prospecting columns match Prisma schema (catches missed migrations)
+      try {
+        const start = Date.now();
+        const schema = await verifyDatabaseSchema(ctx.db);
+        if (schema.ok) {
+          checks.schema = { status: 'ok', latencyMs: Date.now() - start };
+        } else {
+          const detail = schema.missing
+            .slice(0, 5)
+            .map((m) => `${m.table}.${m.column}`)
+            .join(', ');
+          checks.schema = {
+            status: 'error',
+            error: `数据库字段未同步: ${detail}${schema.missing.length > 5 ? '…' : ''}。请运行 pnpm db:deploy`
+          };
+          overall = overall === 'unhealthy' ? 'unhealthy' : 'degraded';
+        }
+      } catch (err) {
+        checks.schema = {
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err)
+        };
+        overall = overall === 'unhealthy' ? 'unhealthy' : 'degraded';
+      }
+
       // Check Redis
       try {
         const { default: Redis } = await import('ioredis');
@@ -169,6 +208,36 @@ const routes: Route[] = [
         checks.browserRunner = { status: 'ok', latencyMs: Date.now() - start };
       } catch (err) {
         checks.browserRunner = {
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err)
+        };
+        overall = overall === 'unhealthy' ? 'unhealthy' : 'degraded';
+      }
+
+      // Check worker connectivity (BullMQ consumer for prospecting)
+      try {
+        const { Queue } = await import('bullmq');
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+        const start = Date.now();
+        const queue = new Queue('prospecting.run', {
+          connection: { url: redisUrl }
+        });
+        const workers = await queue.getWorkers();
+        await queue.close();
+        if (workers.length > 0) {
+          checks.worker = {
+            status: 'ok',
+            latencyMs: Date.now() - start
+          };
+        } else {
+          checks.worker = {
+            status: 'error',
+            error: 'Worker 未运行，异步任务（获客/画像等）将无法执行'
+          };
+          overall = overall === 'unhealthy' ? 'unhealthy' : 'degraded';
+        }
+      } catch (err) {
+        checks.worker = {
           status: 'error',
           error: err instanceof Error ? err.message : String(err)
         };
@@ -501,7 +570,11 @@ const routes: Route[] = [
           keywords: researchKeywords,
           brandTone: '专业、友好',
           orgId: orgCtx.organization.id,
-          userId: orgCtx.user.id
+          userId: orgCtx.user.id,
+          llmClient: await resolveLlmClientFromDb(
+            ctx.db,
+            orgCtx.organization.id
+          )
         });
 
         // Mark as sourced from opportunity
@@ -1034,8 +1107,13 @@ const routes: Route[] = [
       if (!body?.topic) return sendJson(res, 400, { error: '缺少 topic 参数' });
 
       try {
+        const startedAt = Date.now();
         const { generateContentWithMedia } =
           await import('./services/content-media-generation.js');
+        const llmClient = await resolveLlmClientFromDb(
+          ctx.db,
+          orgCtx.organization.id
+        );
         const result = await generateContentWithMedia(ctx.db, {
           topic: body.topic as string,
           contentType: (body.contentType as string) || 'text_image',
@@ -1044,11 +1122,16 @@ const routes: Route[] = [
           imageStyle: body.imageStyle as string | undefined,
           imageCount: (body.imageCount as number) || 1,
           orgId: orgCtx.organization.id,
-          userId: orgCtx.user.id
+          userId: orgCtx.user.id,
+          llmClient
         });
+        console.info(
+          `[content-media] generated in ${Date.now() - startedAt}ms topic=${String(body.topic).slice(0, 80)}`
+        );
         sendJson(res, 201, result);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        console.error('[content-media] generate-with-media failed:', msg);
         sendJson(res, 500, { error: '内容生成失败', detail: msg });
       }
     }
@@ -1163,6 +1246,10 @@ const routes: Route[] = [
 
       // Attempt AI-powered compliance check
       try {
+        const llmClient = await resolveLlmClientFromDb(
+          ctx.db,
+          orgCtx.organization.id
+        );
         const skillResult = await runSkillSafely<{
           passed: boolean;
           issues?: Array<{ rule: string; message: string; severity: string }>;
@@ -1172,7 +1259,7 @@ const routes: Route[] = [
           title: item.title,
           body: item.body,
           contentType: item.type
-        });
+        }, llmClient);
 
         if (skillResult?.status === 'success' && skillResult.output) {
           const out = skillResult.output;
@@ -1251,7 +1338,11 @@ const routes: Route[] = [
         });
       const body = bodyResult.data as { platforms?: string[] } | null;
       const contentItem = await ctx.db.contentItem.findFirstOrThrow({
-        where: { id: ctx.params.contentItemId, deletedAt: null }
+        where: {
+          id: ctx.params.contentItemId,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        }
       });
       const allPlatforms = [
         'douyin',
@@ -1263,12 +1354,20 @@ const routes: Route[] = [
       ];
       const platforms = body?.platforms?.length ? body.platforms : allPlatforms;
       const existing = await ctx.db.contentVariant.findMany({
-        where: { contentItemId: contentItem.id, deletedAt: null },
+        where: {
+          contentItemId: contentItem.id,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        },
         select: { platform: true }
       });
       const existingPlatforms = new Set(existing.map((v) => v.platform));
       const toCreate = platforms.filter(
         (p: string) => !existingPlatforms.has(p as never)
+      );
+      const llmClient = await resolveLlmClientFromDb(
+        ctx.db,
+        orgCtx.organization.id
       );
 
       // Attempt AI-powered platform-specific rewrite for each platform
@@ -1290,7 +1389,7 @@ const routes: Route[] = [
               sourceBody: contentItem.body,
               platform,
               contentType: contentItem.type
-            });
+            }, llmClient);
 
             if (skillResult?.status === 'success' && skillResult.output) {
               const out = skillResult.output;
@@ -1318,7 +1417,7 @@ const routes: Route[] = [
               body: bodyText,
               tags: tags as never,
               cta,
-              complianceStatus: 'approved',
+              complianceStatus: 'pending',
               ...(itemMediaAssetIds.length > 0 && {
                 mediaAssetIds: itemMediaAssetIds as never
               })
@@ -1400,7 +1499,7 @@ const routes: Route[] = [
           contentType: variant.contentType,
           tags: variant.tags,
           cta: variant.cta
-        });
+        }, await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id));
 
         if (skillResult?.status === 'success' && skillResult.output) {
           const out = skillResult.output;
@@ -1708,7 +1807,7 @@ const routes: Route[] = [
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       if (isRateLimited(`media-gen:${orgCtx.organization.id}`, 15, 60_000))
         return sendJson(res, 429, {
-          error: '图片生成操作过于频繁，请稍后再试'
+          error: '素材生成操作过于频繁，请稍后再试'
         });
       const body = ctx.body as Record<string, unknown>;
       const prompt = String(body.prompt ?? '');
@@ -1720,124 +1819,22 @@ const routes: Route[] = [
         return sendJson(res, 400, { error: '请输入生成描述' });
 
       try {
-        // Determine which provider to use
-        const genMode = process.env.MEDIA_GEN_MODE ?? 'llm_provider';
-        const genProvider = process.env.MEDIA_GEN_PROVIDER ?? 'openai';
-        let apiKey: string;
-        let baseUrl: string;
-        let model: string;
-
-        if (genMode === 'dedicated' && process.env.MEDIA_GEN_API_KEY) {
-          apiKey = process.env.MEDIA_GEN_API_KEY;
-          baseUrl =
-            process.env.MEDIA_GEN_BASE_URL ?? 'https://api.openai.com/v1';
-          model = process.env.MEDIA_GEN_MODEL ?? 'dall-e-3';
-        } else {
-          // Reuse LLM provider config
-          apiKey = process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY ?? '';
-          baseUrl = process.env.AI_BASE_URL ?? 'https://api.openai.com/v1';
-          model = process.env.AI_IMAGE_MODEL ?? 'dall-e-3';
-        }
-
-        if (!apiKey)
-          return sendJson(res, 503, {
-            error: 'AI 服务未配置，请先在设置中配置 API Key'
-          });
-
-        // Call image generation API (OpenAI-compatible /v1/images/generations)
-        const fullPrompt = style ? `${prompt}, ${style}风格` : prompt;
-        const genResponse = await fetch(`${baseUrl}/images/generations`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model,
-            prompt: fullPrompt,
-            n: 1,
-            size,
-            response_format: 'b64_json'
-          })
+        const asset = await generateMediaAsset(ctx.db, {
+          prompt,
+          style: style || undefined,
+          size,
+          generationType: generationType === 'video' ? 'video' : 'image',
+          orgId: orgCtx.organization.id,
+          userId: orgCtx.user.id
         });
-
-        if (!genResponse.ok) {
-          const errBody = await genResponse.text();
-          console.error(
-            'Image generation failed:',
-            genResponse.status,
-            errBody
-          );
-          return sendJson(res, 502, { error: '图片生成失败，请检查 AI 配置' });
-        }
-
-        const genResult = (await genResponse.json()) as Record<string, unknown>;
-        const resultData = genResult.data as
-          | Array<Record<string, unknown>>
-          | undefined;
-        const imageData = resultData?.[0];
-        if (!imageData) return sendJson(res, 502, { error: '生成结果为空' });
-
-        // Save generated image to uploads
-        const imageBuffer = imageData.b64_json
-          ? Buffer.from(imageData.b64_json as string, 'base64')
-          : null;
-        const imageUrl = (imageData.url as string) ?? null;
-
-        if (!existsSync(UPLOADS_DIR))
-          mkdirSync(UPLOADS_DIR, { recursive: true });
-        const savedName = `${randomUUID()}.png`;
-        const filePath = join(UPLOADS_DIR, savedName);
-
-        if (imageBuffer) {
-          writeFileSync(filePath, imageBuffer);
-        } else if (imageUrl) {
-          // Download from URL
-          const imgResp = await fetch(imageUrl);
-          const imgBuf = Buffer.from(await imgResp.arrayBuffer());
-          writeFileSync(filePath, imgBuf);
-        } else {
-          return sendJson(res, 502, { error: '无法获取生成图片' });
-        }
-
-        // Create a simple hash for dedup
-        const promptHash = prompt.trim().slice(0, 64);
-
-        const asset = await ctx.db.mediaAsset.create({
-          data: {
-            organizationId: orgCtx.organization.id,
-            userId: orgCtx.user.id,
-            fileName: `ai-generated-${savedName}`,
-            fileType: 'image/png',
-            fileSize: imageBuffer?.length ?? 0,
-            sourceType: 'generated_future',
-            sourceUrl: `/uploads/${savedName}`,
-            reviewStatus: 'pending_review',
-            generationProvider: `${genProvider}/${model}`,
-            generationPromptHash: promptHash,
-            costEstimate: (
-              genResult.usage as Record<string, number> | undefined
-            )?.total_tokens
-              ? (genResult.usage as Record<string, number>).total_tokens *
-                0.00004
-              : 0.04,
-            metadata: {
-              prompt,
-              generationType,
-              style,
-              size,
-              revisedPrompt: (imageData.revised_prompt as string) ?? null
-            } as never
-          }
-        });
-
         sendJson(res, 201, asset);
       } catch (err: unknown) {
         console.error('Media generation error:', err);
-        sendJson(res, 500, {
-          error:
-            '素材生成失败: ' + (err instanceof Error ? err.message : '未知错误')
-        });
+        const message =
+          err instanceof Error ? err.message : '素材生成失败';
+        const status =
+          /未配置/.test(message) ? 503 : /失败|无法|为空|未返回/.test(message) ? 502 : 500;
+        sendJson(res, status, { error: message });
       }
     }
   },
@@ -2017,9 +2014,6 @@ const routes: Route[] = [
         const variant = variants.find((v) => v.platform === account.platform);
         if (!variant) continue;
         if (variant.complianceStatus === 'rejected') continue;
-        if (variant.complianceStatus !== 'approved') {
-          continue; // Skip variants not yet approved — do NOT auto-approve
-        }
         const existing = await ctx.db.publishJob.findFirst({
           where: {
             contentVariantId: variant.id,
@@ -2052,6 +2046,12 @@ const routes: Route[] = [
         if (!scheduledDate) {
           await startPublishJob(ctx.db, job);
         }
+      }
+
+      if (jobs.length === 0) {
+        return sendJson(res, 400, {
+          error: '未创建发布任务：所选账号没有可用的平台版本，或版本已合规拒绝'
+        });
       }
 
       const refreshed = await ctx.db.publishJob.findMany({
@@ -2315,7 +2315,15 @@ const routes: Route[] = [
         { receivedAt: 'desc' },
         { conversation: true }
       );
-      sendJson(res, 200, result);
+      const items = result.items.filter(
+        (item) =>
+          !isOfficialDouyinInboxNoise({
+            userNickname: item.externalUserName,
+            content: item.content,
+            rawPayload: item.rawPayload
+          })
+      );
+      sendJson(res, 200, { ...result, items, total: items.length });
     }
   },
   {
@@ -2548,7 +2556,7 @@ const routes: Route[] = [
         content: interaction.content,
         platform: interaction.platform,
         externalUserName: interaction.externalUserName
-      });
+      }, await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id));
 
       if (skillResult?.status === 'success' && skillResult.output) {
         intentLevel = skillResult.output.intentLevel ?? intentLevel;
@@ -2678,7 +2686,7 @@ const routes: Route[] = [
           content: interaction.content,
           platform: interaction.platform,
           externalUserName: interaction.externalUserName
-        });
+        }, await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id));
 
         if (
           skillResult?.status === 'success' &&
@@ -2882,12 +2890,28 @@ const routes: Route[] = [
       const syncType = String(body.syncType ?? 'all');
       const mode = String(body.mode ?? 'browser_assist');
       const headed = typeof body.headed === 'boolean' ? body.headed : undefined;
-      const sourceContentId = body.sourceContentId as string | undefined;
+      let sourceContentId = body.sourceContentId as string | undefined;
 
       if (!platform || !platformAccountId) {
         return sendJson(res, 400, {
           error: 'platform 和 platformAccountId 必填'
         });
+      }
+
+      if (
+        !sourceContentId &&
+        (syncType === 'comments' || syncType === 'all')
+      ) {
+        const latestPublish = await ctx.db.publishJob.findFirst({
+          where: {
+            platformAccountId,
+            status: 'PUBLISHED',
+            externalPostId: { not: null }
+          },
+          orderBy: { finishedAt: 'desc' },
+          select: { externalPostId: true }
+        });
+        sourceContentId = latestPublish?.externalPostId ?? undefined;
       }
 
       // Create InteractionSyncJob record
@@ -2993,8 +3017,48 @@ const routes: Route[] = [
           }
         }
       });
-      if (!item) return sendJson(res, 404, { error: 'Not found' });
-      sendJson(res, 200, item);
+      if (item) {
+        sendJson(res, 200, item);
+        return;
+      }
+
+      const interaction = await ctx.db.interaction.findFirst({
+        where: {
+          id: ctx.params.id,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        },
+        include: {
+          conversation: {
+            include: {
+              interactions: {
+                orderBy: { receivedAt: 'asc' },
+                where: { deletedAt: null }
+              }
+            }
+          }
+        }
+      });
+      if (!interaction) return sendJson(res, 404, { error: 'Not found' });
+      if (interaction.conversation) {
+        sendJson(res, 200, interaction.conversation);
+        return;
+      }
+      sendJson(res, 200, {
+        id: interaction.id,
+        userId: interaction.userId,
+        platform: interaction.platform,
+        platformAccountId: interaction.platformAccountId,
+        externalUserId: interaction.externalUserId,
+        externalUserName: interaction.externalUserName,
+        status: interaction.status,
+        lastMessageAt: interaction.receivedAt,
+        createdAt: interaction.createdAt,
+        updatedAt: interaction.updatedAt,
+        deletedAt: null,
+        metadata: { synthetic: true, interactionId: interaction.id },
+        interactions: [interaction]
+      });
     }
   },
   {
@@ -3913,11 +3977,15 @@ const routes: Route[] = [
           }
           clearSession(account.id);
         }
-        const startRes = await fetchWithTimeout(`${runnerUrl}/session/start`, {
-          method: 'POST',
-          headers: runnerHeaders({ 'content-type': 'application/json' }),
-          body: JSON.stringify({ platform: account.platform })
-        });
+        const startRes = await fetchWithTimeout(
+          `${runnerUrl}/session/start`,
+          {
+            method: 'POST',
+            headers: runnerHeaders({ 'content-type': 'application/json' }),
+            body: JSON.stringify({ platform: account.platform })
+          },
+          60_000
+        );
         if (!startRes.ok) {
           const err = (await startRes
             .json()
@@ -3975,7 +4043,7 @@ const routes: Route[] = [
         const statusRes = await fetchWithTimeout(
           `${runnerUrl}/session/${sessionId}/status`,
           { method: 'GET', headers: runnerHeaders() },
-          10_000
+          30_000
         );
         if (!statusRes.ok) {
           return sendJson(res, 200, {
@@ -4009,7 +4077,7 @@ const routes: Route[] = [
             }
           });
           clearSession(accountId);
-        } else if (data.status === 'expired' || data.status === 'error') {
+        } else if (data.status === 'expired') {
           clearSession(accountId);
         }
 
@@ -4217,29 +4285,47 @@ const routes: Route[] = [
           replySuggestion: true
         },
         lastRunAt: recentRuns[0]?.createdAt ?? null,
-        mediaGeneration: {
+        mediaGeneration: publicMediaGeneration({
+          ...((saved?.mediaGeneration as StoredMediaGeneration) ?? {}),
           mode:
-            ((saved?.mediaGeneration as Record<string, unknown>)
-              ?.mode as string) ??
+            ((saved?.mediaGeneration as StoredMediaGeneration)?.mode as string) ??
             process.env.MEDIA_GEN_MODE ??
             'llm_provider',
           provider:
-            ((saved?.mediaGeneration as Record<string, unknown>)
-              ?.provider as string) ??
+            ((saved?.mediaGeneration as StoredMediaGeneration)?.provider as
+              | string
+              | undefined) ??
             process.env.MEDIA_GEN_PROVIDER ??
             'openai',
-          apiKey: process.env.MEDIA_GEN_API_KEY ? '••••••••' : '',
+          apiKey:
+            (saved?.mediaGeneration as StoredMediaGeneration)?.apiKey ||
+            process.env.MEDIA_GEN_API_KEY ||
+            '',
           baseUrl:
-            ((saved?.mediaGeneration as Record<string, unknown>)
-              ?.baseUrl as string) ??
+            ((saved?.mediaGeneration as StoredMediaGeneration)?.baseUrl as
+              | string
+              | undefined) ??
             process.env.MEDIA_GEN_BASE_URL ??
             '',
           model:
-            ((saved?.mediaGeneration as Record<string, unknown>)
-              ?.model as string) ??
+            ((saved?.mediaGeneration as StoredMediaGeneration)?.model as
+              | string
+              | undefined) ??
             process.env.MEDIA_GEN_MODEL ??
-            'dall-e-3'
-        }
+            'dall-e-3',
+          videoApiKey:
+            (saved?.mediaGeneration as StoredMediaGeneration)?.videoApiKey ||
+            process.env.MEDIA_GEN_VIDEO_API_KEY ||
+            '',
+          videoBaseUrl:
+            (saved?.mediaGeneration as StoredMediaGeneration)?.videoBaseUrl ||
+            process.env.MEDIA_GEN_VIDEO_BASE_URL ||
+            '',
+          videoModel:
+            (saved?.mediaGeneration as StoredMediaGeneration)?.videoModel ||
+            process.env.MEDIA_GEN_VIDEO_MODEL ||
+            ''
+        })
       });
     }
   },
@@ -4281,21 +4367,25 @@ const routes: Route[] = [
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
 
+      const existing = await loadAiConfigValue(ctx.db, orgCtx.user.id);
+      const incomingApiKey = String(body.apiKey ?? '');
       const configValue = {
         provider: body.provider ?? process.env.AI_PROVIDER ?? 'openai',
         baseUrl: body.baseUrl ?? process.env.AI_BASE_URL ?? '',
         model: body.model ?? process.env.AI_MODEL ?? 'gpt-4o',
+        apiKey: isMaskedSecret(incomingApiKey)
+          ? String(existing?.apiKey ?? '')
+          : incomingApiKey,
         temperature:
           body.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.7),
         maxTokens: body.maxTokens ?? Number(process.env.AI_MAX_TOKENS ?? 4096),
         dailyTokenLimit:
           body.dailyTokenLimit ??
           Number(process.env.AI_DAILY_TOKEN_LIMIT ?? 100000),
-        mediaGeneration: body.mediaGeneration ?? {
-          mode: process.env.MEDIA_GEN_MODE ?? 'llm_provider',
-          provider: process.env.MEDIA_GEN_PROVIDER ?? 'openai',
-          model: process.env.MEDIA_GEN_MODEL ?? 'dall-e-3'
-        }
+        mediaGeneration: mergeMediaGeneration(
+          body.mediaGeneration as StoredMediaGeneration | undefined,
+          existing?.mediaGeneration as StoredMediaGeneration | undefined
+        )
       };
 
       await ctx.db.appConfig.upsert({
@@ -5031,6 +5121,12 @@ const routes: Route[] = [
 
   // Organization routes (CRUD, members, invitations)
   ...orgRoutes,
+
+  // Customer CRM routes
+  ...customerRoutes,
+
+  // Keyword prospecting routes
+  ...prospectingRoutes,
 
   // ── CSV Export endpoints ─────────────────────────────────────────────────
 

@@ -49,6 +49,18 @@ const columns: ColumnDef<Interaction>[] = [
         {formatDate(getValue() as string)}
       </span>
     )
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => (
+      <Link
+        href={`/conversations/${row.original.conversationId ?? row.original.id}`}
+        className="text-xs text-primary hover:underline"
+      >
+        查看
+      </Link>
+    )
   }
 ];
 

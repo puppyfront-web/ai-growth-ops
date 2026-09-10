@@ -9,9 +9,8 @@ import type { LLMClient } from '@ai-growth-ops/runtime';
 
 // Three `../` to reach repo root from tests/unit/worker/ (matches
 // interaction-sync-utils.test.ts convention).
-const { handleAgentRun } = await import(
-  '../../../apps/worker/src/job-handlers/agent.run'
-);
+const { handleAgentRun } =
+  await import('../../../apps/worker/src/job-handlers/agent.run');
 
 // ── Spy read tool ────────────────────────────────────────────────────
 // Registers a READ tool (name has no write prefix → inferMutate → 'Read')
@@ -99,7 +98,10 @@ function makeDb(): { db: unknown; stubs: DbStubs } {
       findUnique: async () => ({ ...runRow }),
       update: async () => ({})
     },
-    appConfig: { findUnique: async () => null },
+    appConfig: {
+      findFirst: async () => null,
+      findUnique: async () => null
+    },
     platformAccount: {
       findFirst: async (a: Record<string, unknown>) => {
         stubs.platformAccountCalls.push(a);
@@ -167,7 +169,9 @@ describe('handleAgentRun (daily scheduled path)', () => {
     // The handler-constructed resolver was invoked at execute time to look up
     // the platform cookie server-side (cookie never in the LLM context).
     expect(stubs.platformAccountCalls.length).toBeGreaterThanOrEqual(1);
-    const firstWhere = stubs.platformAccountCalls[0] as { where?: Record<string, unknown> };
+    const firstWhere = stubs.platformAccountCalls[0] as {
+      where?: Record<string, unknown>;
+    };
     expect(JSON.stringify(firstWhere)).toContain('admin-1');
     expect(JSON.stringify(firstWhere)).toContain('douyin');
     // Run still completes and publishes a report.

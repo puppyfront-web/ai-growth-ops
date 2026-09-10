@@ -22,11 +22,7 @@ export function getBrowserRunnerUrl(): string {
  * Mirrors the lookup in browser-runner/src/routes.ts so both sides agree.
  */
 export function getRunnerSecret(): string {
-  return (
-    process.env.BROWSER_RUNNER_SECRET ||
-    process.env.TOKEN_ENCRYPTION_KEY ||
-    ''
-  );
+  return process.env.BROWSER_RUNNER_SECRET || '';
 }
 
 /**

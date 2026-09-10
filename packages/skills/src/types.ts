@@ -1,3 +1,5 @@
+import type { LLMClient } from '@ai-growth-ops/ai';
+
 export interface SkillDefinition {
   name: string;
   version: string;
@@ -34,5 +36,6 @@ export interface SkillRunner {
     skillVersion?: string;
     input: TInput;
     context?: SkillContext;
+    llmClient?: LLMClient;
   }): Promise<SkillRunResult<TOutput>>;
 }

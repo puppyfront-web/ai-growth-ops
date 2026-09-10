@@ -1,12 +1,19 @@
 import type { ServerResponse } from 'node:http';
 import type { RouteHandler, Route } from './routes.js';
 import { createStealthSession } from './browser-session.js';
+import { detectCaptcha } from './captcha-detect.js';
+import {
+  cancelCaptchaSession,
+  getCaptchaSessionStatus,
+  startCaptchaSession
+} from './captcha-session.js';
 import {
   fillWithVisionFallback,
   clickWithVisionFallback
 } from './vision-assist.js';
 import {
   dedupeByKey,
+  isOfficialDouyinInboxNoise,
   RECENT_INTERACTION_FALLBACK_LIMIT,
   selectTodayOrRecent
 } from '@ai-growth-ops/shared';
@@ -16,22 +23,154 @@ import {
 /**
  * 抖音评论入口。
  *
- * 抖音创作者中心的 `/creator-micro/interaction/comment` 已被官方下线
- * (跳转回首页,不再加载评论),所以评论抓取改走网页版:
- *   - 有 itemId → 视频页 `www.douyin.com/video/{id}`,评论区直接渲染,
- *     评论 API `/aweme/v1/web/comment/list/` 在该页自动触发。
- *   - 无 itemId → 网页版通知/消息页,聚合所有视频收到的评论。
+ * 创作者中心 `/creator-micro/interaction/comment` 已下线。可靠路径是：
+ *   - 先走作品管理 `work_list` 拿 aweme_id（字符串，精度完整）
+ *   - 再打开对应公开页触发 `/aweme/v1/web/comment/list/`
+ *     图文 aweme_type=2 → `/note/{id}`，视频 → `/video/{id}`
  */
-const DOUYIN_COMMENT_MANAGE_URL =
-  'https://www.douyin.com/?recommend=1';
+const DOUYIN_CONTENT_MANAGE_URL =
+  'https://creator.douyin.com/creator-micro/content/manage';
+const DOUYIN_COMMENT_MANAGE_URL = DOUYIN_CONTENT_MANAGE_URL;
+const DOUYIN_COMMENT_NOTICE_URL = 'https://www.douyin.com/notification';
 const DOUYIN_ITEM_LIST_PATTERNS = [
+  'work_list',
   '/web/api/creator/item/list',
   '/aweme/v1/creator/item/list',
   '/creator/item/list'
 ];
 
-function douyinPostCommentUrl(itemId: string): string {
-  return `https://www.douyin.com/video/${encodeURIComponent(itemId)}`;
+function douyinPostCommentUrl(itemId: string, awemeType?: number): string {
+  const kind = awemeType === 2 ? 'note' : 'video';
+  return `https://www.douyin.com/${kind}/${encodeURIComponent(itemId)}`;
+}
+
+async function clickCreatorWorkComments(
+  page: import('playwright').Page
+): Promise<void> {
+  const locators = [
+    page.getByText(/^评论\s*\d+/),
+    page.getByRole('button', { name: /评论/ }),
+    page.getByText('查看评论'),
+    page.locator('[class*="comment-count"], [class*="commentCount"]').first(),
+    page.locator('[class*="work-item"], [class*="item-card"], [class*="cover"]').first()
+  ];
+  for (const locator of locators) {
+    try {
+      await locator.first().click({ timeout: 3000 });
+      await page.waitForTimeout(3500);
+      return;
+    } catch {
+      /* try next */
+    }
+  }
+}
+
+async function openDouyinCommentNoticeInbox(
+  page: import('playwright').Page
+): Promise<void> {
+  await page.goto(DOUYIN_COMMENT_NOTICE_URL, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
+  });
+  await page.waitForTimeout(4000);
+  await dismissDouyinPopups(page);
+  for (const name of ['评论', '收到的评论', '互动消息']) {
+    try {
+      await page.getByText(name, { exact: true }).first().click({ timeout: 2500 });
+      await page.waitForTimeout(2500);
+      break;
+    } catch {
+      /* try next tab label */
+    }
+  }
+  await scrollForLazyLoad(page);
+  await page.waitForTimeout(2000);
+}
+
+async function openDouyinPublicCommentPanel(
+  page: import('playwright').Page
+): Promise<void> {
+  try {
+    await page
+      .getByText('评论', { exact: true })
+      .first()
+      .click({ timeout: 4000 });
+  } catch {
+    /* panel may already be open */
+  }
+  await page
+    .evaluate(() => {
+      document
+        .querySelectorAll('[class*="comment"], [class*="Comment"]')
+        .forEach((node) =>
+          node.scrollIntoView({ block: 'center' })
+        );
+      window.scrollBy(0, 400);
+    })
+    .catch(() => {});
+  await page.waitForTimeout(2500);
+}
+
+const MAX_EXPAND_REPLY_CLICKS = 5;
+
+async function expandDouyinCommentReplies(
+  page: import('playwright').Page,
+  maxClicks = MAX_EXPAND_REPLY_CLICKS
+): Promise<void> {
+  await page.evaluate((limit) => {
+    const nodes = [...document.querySelectorAll('span, p, div, button, a')]
+      .filter((el) => {
+        const text = (el.textContent || '').replace(/\s+/g, '').trim();
+        return /^(展开\d+条回复|查看\d+条回复|展开更多回复)$/.test(text);
+      })
+      .slice(0, limit);
+    for (const el of nodes) {
+      (el as HTMLElement).click();
+    }
+  }, maxClicks);
+  await page.waitForTimeout(1200);
+}
+
+const DOUYIN_DOM_COMMENT_JUNK =
+  /^(互相关注|关注|已关注|分享|喜欢|收藏|评论|回复|展开|收起|作者)$/;
+
+export async function scrapeDouyinVisibleComments(
+  page: import('playwright').Page
+): Promise<Array<Record<string, unknown>>> {
+  const rows = await page.evaluate(() => {
+    const selectors = [
+      '[data-e2e="comment-item"]',
+      '[data-e2e="comment-list"] [data-e2e="comment-item"]'
+    ];
+    const nodes = [
+      ...new Set(selectors.flatMap((sel) => [...document.querySelectorAll(sel)]))
+    ];
+    return nodes.slice(0, 40).map((el, index) => {
+      const nick =
+        el.querySelector('[data-e2e="comment-user"]')?.textContent?.trim() ?? '';
+      const text =
+        el.querySelector('[data-e2e="comment-content"]')?.textContent?.trim() ??
+        '';
+      return { nick, text, index };
+    });
+  });
+  return rows
+    .filter(
+      (row) =>
+        row.text.length > 1 &&
+        !DOUYIN_DOM_COMMENT_JUNK.test(row.text) &&
+        !DOUYIN_DOM_COMMENT_JUNK.test(row.nick)
+    )
+    .map((row) => ({
+      externalCommentId: `dom-${row.index}-${row.text.slice(0, 24)}`,
+      externalUserId: '',
+      userNickname: row.nick,
+      content: row.text,
+      likeCount: 0,
+      replyCount: 0,
+      publishedAt: '',
+      rawPayload: { source: 'dom' }
+    }));
 }
 
 const COMMENT_PAGE_URLS: Record<string, (sourceContentId?: string) => string> =
@@ -66,13 +205,18 @@ const MESSAGE_PAGE_URLS: Record<string, () => string> = {
 const COMMENT_API_PATTERNS: Record<string, string[]> = {
   douyin: [
     '/aweme/v1/web/comment/list/',
+    '/aweme/v1/web/comment/list/reply',
+    '/aweme/v1/web/comment/',
     '/aweme/v1/comment/list/',
     '/aweme/v1/creator/comment/list/',
     '/aweme/v1/creator/notice/comment/',
     '/web/api/creator/comment',
     '/api/comment/list',
     '/openapi/v1/post/comment/list/',
-    '/creator/openapi/v1/comment/list/'
+    '/creator/openapi/v1/comment/list/',
+    '/aweme/v1/web/notice/',
+    '/aweme/v1/notice/',
+    'comment_notice'
   ],
   xiaohongshu: [
     '/api/sns/web/v2/comment/page',
@@ -104,8 +248,11 @@ const MESSAGE_API_PATTERNS: Record<string, string[]> = {
   douyin: [
     '/aweme/v1/creator/user_message/list/',
     '/aweme/v1/creator/user_message/notice/',
+    '/aweme/v1/creator/user_message/',
+    '/aweme/v1/creator/msg/',
     '/aweme/v1/im/message/list/',
     '/api/im/message/list',
+    '/web/api/v1/im/',
     '/creator-micro/api/im/',
     '/openapi/v1/im/message/list/'
   ],
@@ -206,7 +353,385 @@ interface SearchAndFetchCommentsBody {
   maxCommentsPerVideo?: number;
 }
 
-const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
+interface SearchVideosBody {
+  platform: string;
+  cookie: string;
+  keyword: string;
+  topN?: number;
+  headed?: boolean;
+}
+
+interface FetchSearchVideoCommentsBody {
+  platform: string;
+  cookie: string;
+  contentId: string;
+  title?: string;
+  author?: string;
+  commentScrollRounds?: number;
+  maxCommentsPerVideo?: number;
+  headed?: boolean;
+}
+
+async function runKeywordVideoSearch(
+  body: SearchVideosBody
+): Promise<{
+  keyword: string;
+  results: SearchResultItem[];
+  captchaRequired?: boolean;
+  message?: string;
+}> {
+  const searchUrl = SEARCH_PAGE_URLS[body.platform]?.(body.keyword);
+  if (!searchUrl) {
+    throw new Error(`No search URL for platform: ${body.platform}`);
+  }
+
+  const topN = body.topN ?? 3;
+  let session: Awaited<ReturnType<typeof createSession>> | null = null;
+  try {
+    session = await createSession(body.cookie, searchUrl, body.headed);
+    const { page } = session;
+
+    if (body.platform === 'douyin') {
+      try {
+        await page.goto('https://www.douyin.com/', {
+          waitUntil: 'domcontentloaded',
+          timeout: 15000
+        });
+        await page.waitForTimeout(2000);
+        await dismissDouyinPopups(page);
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    await page.goto(searchUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+    await page.waitForTimeout(4000);
+
+    const captchaDetected = await detectCaptcha(page);
+    if (captchaDetected) {
+      await page.waitForTimeout(5000);
+      if (await detectCaptcha(page)) {
+        return {
+          keyword: body.keyword,
+          results: [],
+          captchaRequired: true,
+          message: '搜索页面出现验证码，请在浏览器中手动完成验证后重试'
+        };
+      }
+    }
+
+    await humanLikeScroll(page, 5);
+    await page.waitForTimeout(2000);
+
+    const searchResults = await extractSearchResultsFromDOM(
+      page,
+      body.platform
+    );
+    return {
+      keyword: body.keyword,
+      results: searchResults.slice(0, topN)
+    };
+  } finally {
+    await session?.close();
+  }
+}
+
+async function runSearchVideoCommentFetch(
+  body: FetchSearchVideoCommentsBody
+): Promise<{
+  contentId: string;
+  title: string;
+  author: string;
+  url: string;
+  comments: Array<Record<string, unknown>>;
+}> {
+  const contentUrl =
+    body.platform === 'douyin'
+      ? `https://www.douyin.com/video/${body.contentId}`
+      : xhsNotePublicUrl(body.contentId);
+
+  let session: Awaited<ReturnType<typeof createSession>> | null = null;
+  try {
+    session = await createSession(body.cookie, contentUrl, body.headed);
+    const { page } = session;
+    const captured: Array<Record<string, unknown>> = [];
+    const responseTasks: Array<Promise<void>> = [];
+    const xhrPatterns = COMMENT_API_PATTERNS[body.platform] ?? [];
+
+    const responseListener = (response: import('playwright').Response) => {
+      const task = (async () => {
+        const url = response.url();
+        if (!xhrPatterns.some((pattern) => url.includes(pattern))) return;
+        try {
+          const json = parseJsonBigInt(await response.text()) as Record<
+            string,
+            unknown
+          >;
+          captured.push(
+            ...extractCommentList(body.platform, json, body.contentId)
+          );
+        } catch {
+          /* skip non-JSON */
+        }
+      })();
+      responseTasks.push(task);
+    };
+    page.on('response', responseListener);
+
+    await page.goto(contentUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+    await page.waitForTimeout(4000);
+    await dismissDouyinPopups(page);
+    if (await detectCaptcha(page)) {
+      throw new Error('平台触发了验证码，请在浏览器中完成验证后继续');
+    }
+
+    if (body.platform === 'douyin') {
+      await openDouyinPublicCommentPanel(page);
+    }
+
+    await page.mouse.move(900, 500);
+    await page.waitForTimeout(300);
+    const scrollRounds = body.commentScrollRounds ?? 10;
+    await humanLikeScroll(page, scrollRounds);
+
+    if (body.platform === 'douyin') {
+      await expandDouyinCommentReplies(page);
+      await page.waitForTimeout(2000);
+      await humanLikeScroll(page, 2);
+    }
+
+    page.off('response', responseListener);
+    await Promise.allSettled(responseTasks);
+
+    const comments = [
+      ...captured,
+      ...(await extractCommentsFromDOM(page, body.platform, body.contentId))
+    ];
+    const maxPerVideo = body.maxCommentsPerVideo ?? 50;
+
+    return {
+      contentId: body.contentId,
+      title: body.title ?? '',
+      author: body.author ?? '',
+      url: contentUrl,
+      comments: dedupeByKey(comments, (c) =>
+        String(c.externalCommentId ?? '')
+      ).slice(0, maxPerVideo)
+    };
+  } finally {
+    await session?.close();
+  }
+}
+
+const handleSearchVideos: RouteHandler = async (_req, res, ctx) => {
+  const body = ctx.body as SearchVideosBody | null;
+  if (!body?.platform || !body?.cookie || !body?.keyword) {
+    sendJson(res, 400, {
+      error: 'Missing required fields: platform, cookie, keyword'
+    });
+    return;
+  }
+
+  const supportedPlatforms = ['douyin', 'xiaohongshu'];
+  if (!supportedPlatforms.includes(body.platform)) {
+    sendJson(res, 400, {
+      error: `Unsupported platform for search: ${body.platform}. Supported: ${supportedPlatforms.join(', ')}`
+    });
+    return;
+  }
+
+  try {
+    const payload = await runKeywordVideoSearch(body);
+    sendJson(res, 200, payload);
+  } catch (error) {
+    sendJson(res, 502, {
+      error: 'Search videos failed',
+      errorCode: 'SEARCH_VIDEOS_FAILED',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+};
+
+const handleFetchSearchVideoComments: RouteHandler = async (_req, res, ctx) => {
+  const body = ctx.body as FetchSearchVideoCommentsBody | null;
+  if (!body?.platform || !body?.cookie || !body?.contentId) {
+    sendJson(res, 400, {
+      error: 'Missing required fields: platform, cookie, contentId'
+    });
+    return;
+  }
+
+  const supportedPlatforms = ['douyin', 'xiaohongshu'];
+  if (!supportedPlatforms.includes(body.platform)) {
+    sendJson(res, 400, {
+      error: `Unsupported platform: ${body.platform}. Supported: ${supportedPlatforms.join(', ')}`
+    });
+    return;
+  }
+
+  try {
+    const result = await runSearchVideoCommentFetch(body);
+    sendJson(res, 200, result);
+  } catch (error) {
+    sendJson(res, 502, {
+      error: 'Fetch search video comments failed',
+      errorCode: 'FETCH_SEARCH_VIDEO_COMMENTS_FAILED',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+};
+
+function parseCount(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.endsWith('万')) {
+    const n = parseFloat(trimmed);
+    return Number.isFinite(n) ? Math.round(n * 10000) : null;
+  }
+  const n = Number(trimmed.replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function userField(user: Record<string, unknown> | null, key: string): unknown {
+  return user?.[key];
+}
+
+function pickDouyinUserPayload(json: unknown): Record<string, unknown> | null {
+  if (!json || typeof json !== 'object') return null;
+  const root = json as Record<string, unknown>;
+  const nested =
+    root.user ??
+    root.user_info ??
+    (root.data && typeof root.data === 'object'
+      ? (root.data as Record<string, unknown>).user ?? root.data
+      : null);
+  return nested && typeof nested === 'object'
+    ? (nested as Record<string, unknown>)
+    : null;
+}
+
+type DouyinDomProfile = {
+  nickname: string | null;
+  signature: string | null;
+  followerText: string | null;
+  followingText: string | null;
+  likeText: string | null;
+  location: string | null;
+};
+
+async function extractDouyinUserProfile(
+  page: import('playwright').Page
+): Promise<DouyinDomProfile> {
+  return page.evaluate(String.raw`(() => {
+    const text = document.body && document.body.innerText ? document.body.innerText : '';
+    const nicknameEl = document.querySelector('h1') || document.querySelector('[data-e2e="user-info-nickname"]');
+    const nickname = nicknameEl && nicknameEl.textContent ? nicknameEl.textContent.trim() : null;
+    const signatureEl =
+      document.querySelector('[data-e2e="user-info-desc"], [data-e2e="user-signature"]') ||
+      document.querySelector('[class*="signature"], [class*="desc"]');
+    const signatureRaw = signatureEl && signatureEl.textContent ? signatureEl.textContent.trim() : null;
+    const followerFound = text.match(/([\d.]+万?)\s*粉丝|粉丝\s*([\d.]+万?)/);
+    const followingFound = text.match(/([\d.]+万?)\s*关注|关注\s*([\d.]+万?)/);
+    const likeFound = text.match(/([\d.]+万?)\s*获赞|获赞\s*([\d.]+万?)/);
+    const locationFound = text.match(/IP属地[:：]?\s*([^\s]+)/) || text.match(/IP[:：]\s*([^\s]+)/);
+    return {
+      nickname: nickname,
+      signature: signatureRaw && signatureRaw.length < 400 ? signatureRaw : null,
+      followerText: (followerFound && (followerFound[1] || followerFound[2])) || null,
+      followingText: (followingFound && (followingFound[1] || followingFound[2])) || null,
+      likeText: (likeFound && (likeFound[1] || likeFound[2])) || null,
+      location: (locationFound && locationFound[1]) || null
+    };
+  })()`) as Promise<DouyinDomProfile>;
+}
+
+const handleFetchUserProfile: RouteHandler = async (_req, res, ctx) => {
+  const body = ctx.body as {
+    platform?: string;
+    cookie?: string;
+    homepage?: string;
+    headed?: boolean;
+  } | null;
+  if (!body?.platform || !body?.cookie || !body?.homepage) {
+    sendJson(res, 400, {
+      error: 'Missing required fields: platform, cookie, homepage'
+    });
+    return;
+  }
+
+  let session: Awaited<ReturnType<typeof createSession>> | null = null;
+  try {
+    session = await createSession(body.cookie, body.homepage, body.headed);
+    const { page } = session;
+    let apiUser: Record<string, unknown> | null = null;
+
+    page.on('response', async (response) => {
+      const url = response.url();
+      if (!/user\/profile|\/user\/info|web\/user\//.test(url)) return;
+      try {
+        const json = await response.json();
+        apiUser = pickDouyinUserPayload(json) ?? apiUser;
+      } catch {
+        /* ignore non-json */
+      }
+    });
+
+    await page.goto(body.homepage, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+    await page.waitForTimeout(4000);
+    await dismissDouyinPopups(page);
+    if (await detectCaptcha(page)) {
+      sendJson(res, 429, {
+        error: '平台触发了验证码，请在浏览器中完成验证后继续',
+        captchaRequired: true
+      });
+      return;
+    }
+    await page.waitForTimeout(1500);
+
+    const dom = await extractDouyinUserProfile(page);
+    const nickname = userField(apiUser, 'nickname');
+    const signature = userField(apiUser, 'signature');
+    const location = userField(apiUser, 'ip_location');
+    sendJson(res, 200, {
+      nickname: (typeof nickname === 'string' && nickname) || dom.nickname,
+      signature: (typeof signature === 'string' && signature) || dom.signature,
+      followerCount:
+        parseCount(userField(apiUser, 'follower_count')) ??
+        parseCount(userField(apiUser, 'mplatform_followers_count')) ??
+        parseCount(dom.followerText),
+      followingCount:
+        parseCount(userField(apiUser, 'following_count')) ??
+        parseCount(dom.followingText),
+      likeCount:
+        parseCount(userField(apiUser, 'total_favorited')) ??
+        parseCount(dom.likeText),
+      location: (typeof location === 'string' && location) || dom.location,
+      homepage: body.homepage,
+      fetchedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    sendJson(res, 502, {
+      error: 'Fetch user profile failed',
+      errorCode: 'FETCH_USER_PROFILE_FAILED',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  } finally {
+    await session?.close();
+  }
+};
+
+const handleSearchAndFetchComments: RouteHandler = async (_req, res, ctx) => {
   const body = ctx.body as SearchAndFetchCommentsBody;
   if (!body.platform || !body.cookie || !body.keyword) {
     sendJson(res, 400, {
@@ -223,69 +748,14 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
     return;
   }
 
-  const topN = body.topN ?? 3;
-  const searchUrl = SEARCH_PAGE_URLS[body.platform]?.(body.keyword);
-  if (!searchUrl) {
-    sendJson(res, 400, {
-      error: `No search URL for platform: ${body.platform}`
-    });
-    return;
-  }
-
-  let session: Awaited<ReturnType<typeof createSession>> | null = null;
   try {
-    session = await createSession(body.cookie, searchUrl, body.headed);
-    const { page } = session;
-
-    // Pre-visit douyin.com homepage to establish session + dismiss popups
-    if (body.platform === 'douyin') {
-      try {
-        await page.goto('https://www.douyin.com/', {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000
-        });
-        await page.waitForTimeout(2000);
-        await dismissDouyinPopups(page);
-      } catch {
-        /* non-fatal */
-      }
+    const searchPayload = await runKeywordVideoSearch(body);
+    if (searchPayload.captchaRequired) {
+      sendJson(res, 200, searchPayload);
+      return;
     }
 
-    // ── Phase 1: Search → extract video links from DOM ──────────
-    await page.goto(searchUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000
-    });
-    await page.waitForTimeout(4000);
-
-    // Check for CAPTCHA on search page
-    const captchaDetected = await detectCaptcha(page);
-    if (captchaDetected) {
-      console.log('[prospecting] CAPTCHA detected, waiting for resolution...');
-      await page.waitForTimeout(5000);
-      const stillBlocked = await detectCaptcha(page);
-      if (stillBlocked) {
-        sendJson(res, 200, {
-          keyword: body.keyword,
-          results: [],
-          message: '搜索页面出现验证码，请在浏览器中手动完成验证后重试',
-          captchaRequired: true
-        });
-        return;
-      }
-    }
-
-    await humanLikeScroll(page, 5);
-    await page.waitForTimeout(2000);
-
-    // Extract search results from DOM
-    const searchResults = await extractSearchResultsFromDOM(
-      page,
-      body.platform
-    );
-    const topResults = searchResults.slice(0, topN);
-
-    if (topResults.length === 0) {
+    if (searchPayload.results.length === 0) {
       sendJson(res, 200, {
         keyword: body.keyword,
         results: [],
@@ -294,73 +764,44 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
       return;
     }
 
-    // ── Phase 2: For each result, fetch comments via DOM scraping ─
     const allResults: Array<{
       contentId: string;
       title: string;
       author: string;
+      url: string;
       comments: Array<Record<string, unknown>>;
     }> = [];
 
-    for (const result of topResults) {
-      let contentUrl: string;
-      if (body.platform === 'douyin') {
-        contentUrl = `https://www.douyin.com/video/${result.contentId}`;
-      } else {
-        contentUrl = xhsNotePublicUrl(result.contentId);
-      }
-
+    for (const result of searchPayload.results) {
       try {
-        await page.goto(contentUrl, {
-          waitUntil: 'domcontentloaded',
-          timeout: 30000
+        const video = await runSearchVideoCommentFetch({
+          platform: body.platform,
+          cookie: body.cookie,
+          contentId: result.contentId,
+          title: result.title,
+          author: result.author,
+          commentScrollRounds: body.commentScrollRounds,
+          maxCommentsPerVideo: body.maxCommentsPerVideo,
+          headed: body.headed
         });
-        await page.waitForTimeout(4000);
-        await dismissDouyinPopups(page);
-
-        // Scroll the page to load comments (move mouse to right side first for video pages)
-        await page.mouse.move(900, 500);
-        await page.waitForTimeout(300);
-        const scrollRounds = body.commentScrollRounds ?? 10;
-        await humanLikeScroll(page, scrollRounds);
-
-        // Extract comments from DOM
-        const comments = await extractCommentsFromDOM(
-          page,
-          body.platform,
-          result.contentId
-        );
-        console.log(
-          '[prospecting] Video',
-          result.contentId,
-          '-',
-          comments.length,
-          'comments extracted'
-        );
-        const maxPerVideo = body.maxCommentsPerVideo ?? 50;
-
+        allResults.push(video);
+      } catch (err) {
         allResults.push({
           contentId: result.contentId,
           title: result.title,
           author: result.author,
-          comments: dedupeByKey(comments, (c) =>
-            String(c.externalCommentId ?? '')
-          ).slice(0, maxPerVideo)
+          url:
+            body.platform === 'douyin'
+              ? `https://www.douyin.com/video/${result.contentId}`
+              : xhsNotePublicUrl(result.contentId),
+          comments: []
         });
-      } catch (err) {
-        // Navigation failed for this content — skip
         console.log(
           '[prospecting] Video',
           result.contentId,
           'failed:',
           err instanceof Error ? err.message : String(err)
         );
-        allResults.push({
-          contentId: result.contentId,
-          title: result.title,
-          author: result.author,
-          comments: []
-        });
       }
     }
 
@@ -371,8 +812,6 @@ const handleSearchAndFetchComments: RouteHandler = async (req, res, ctx) => {
       errorCode: 'SEARCH_FETCH_COMMENTS_FAILED',
       details: error instanceof Error ? error.message : String(error)
     });
-  } finally {
-    await session?.close();
   }
 };
 
@@ -395,21 +834,6 @@ async function dismissDouyinPopups(
   await page.waitForTimeout(500);
 }
 
-/** Detect if a CAPTCHA/verification is blocking the page. */
-async function detectCaptcha(
-  page: import('playwright').Page
-): Promise<boolean> {
-  return page.evaluate(() => {
-    const text = document.body.innerText;
-    return (
-      text.includes('请完成下列验证') ||
-      text.includes('拖动完成上方拼图') ||
-      text.includes('请完成安全验证')
-    );
-  });
-}
-
-/** Extract search result videos from the rendered DOM. */
 async function extractSearchResultsFromDOM(
   page: import('playwright').Page,
   platform: string
@@ -547,10 +971,25 @@ async function extractCommentsFromDOM(
               /前|天|小时|分钟|秒/.test(l)
             );
 
+            const secUid = href.split('/user/')[1]?.split(/[?#]/)[0] || '';
+            const likeLine = lines
+              .slice(1)
+              .find((l: string) => /^[\d.]+万?$/.test(l.trim()));
+            const likeText = likeLine?.trim() || '';
+            const likeCount = likeText.endsWith('万')
+              ? Math.round(parseFloat(likeText) * 10000)
+              : Number(likeText) || 0;
+
             results.push({
               externalCommentId: `dom-${href.slice(-10)}-${key.replace(/\s/g, '').slice(0, 8)}`,
+              externalUserId: secUid,
               userNickname: username,
+              userHomepage: secUid
+                ? `https://www.douyin.com/user/${secUid}`
+                : '',
+              avatarUrl: el.querySelector('img')?.getAttribute('src') || '',
               content: contentLine.trim().slice(0, 300),
+              likeCount,
               publishedAt: timeLine || '',
               sourceContentId: contentId
             });
@@ -742,6 +1181,122 @@ function xhsCommentPublishedAt(item: Record<string, unknown>): string {
   ).toISOString();
 }
 
+function douyinUserHomepage(
+  user: Record<string, unknown> | undefined
+): string {
+  const sec = user?.sec_uid ?? user?.sec_uid_str;
+  return typeof sec === 'string' && sec
+    ? `https://www.douyin.com/user/${sec}`
+    : '';
+}
+
+function mapDouyinCommentItem(
+  raw: Record<string, unknown>,
+  sourceContentId?: string
+): Record<string, unknown> | null {
+  const nested = raw.comment;
+  const item = (
+    nested && typeof nested === 'object'
+      ? { ...raw, ...(nested as Record<string, unknown>) }
+      : raw
+  ) as Record<string, unknown>;
+  const user = (item.user ?? item.author ?? raw.user) as
+    | Record<string, unknown>
+    | undefined;
+  const itemId =
+    item.item_id != null
+      ? String(item.item_id)
+      : raw.aweme_id != null
+        ? String(raw.aweme_id)
+        : undefined;
+  const externalCommentId = String(
+    item.id ?? item.cid ?? item.comment_id ?? raw.cid ?? ''
+  );
+  if (!externalCommentId) return null;
+  return {
+    externalCommentId,
+    externalUserId: String(
+      user?.uid ?? user?.open_id ?? item.user_id ?? item.uid ?? ''
+    ),
+    userNickname: String(
+      user?.nickname ?? item.nick_name ?? item.nickname ?? ''
+    ),
+    userHomepage: douyinUserHomepage(user),
+    content: String(item.text ?? item.content ?? ''),
+    likeCount: Number(item.digg_count ?? item.like_count ?? 0),
+    replyCount: Number(item.reply_comment_total ?? item.all_comment_num ?? 0),
+    publishedAt: douyinCommentPublishedAt(item),
+    sourceContentId: itemId ?? sourceContentId,
+    rawPayload: item
+  };
+}
+
+function douyinReplyArrays(
+  raw: Record<string, unknown>
+): Array<Record<string, unknown>> {
+  const nested =
+    raw.comment && typeof raw.comment === 'object'
+      ? (raw.comment as Record<string, unknown>)
+      : undefined;
+  const candidates = [
+    raw.reply_comment,
+    raw.reply_list,
+    raw.reply_comment_list,
+    nested?.reply_comment,
+    nested?.reply_list
+  ];
+  const replies: Array<Record<string, unknown>> = [];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      for (const row of candidate) {
+        if (row && typeof row === 'object') {
+          replies.push(row as Record<string, unknown>);
+        }
+      }
+      continue;
+    }
+    if (candidate && typeof candidate === 'object') {
+      const block = candidate as Record<string, unknown>;
+      const inner = block.reply_list ?? block.comments ?? block.reply_comment;
+      if (Array.isArray(inner)) {
+        for (const row of inner) {
+          if (row && typeof row === 'object') {
+            replies.push(row as Record<string, unknown>);
+          }
+        }
+      }
+    }
+  }
+  return replies;
+}
+
+function flattenDouyinComments(
+  list: unknown[],
+  sourceContentId?: string
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+
+  const walk = (rows: unknown[]) => {
+    for (const raw of rows) {
+      if (!raw || typeof raw !== 'object') continue;
+      const item = raw as Record<string, unknown>;
+      const mapped = mapDouyinCommentItem(item, sourceContentId);
+      if (mapped) {
+        const id = String(mapped.externalCommentId);
+        if (!seen.has(id)) {
+          seen.add(id);
+          out.push(mapped);
+        }
+      }
+      walk(douyinReplyArrays(item));
+    }
+  };
+
+  walk(list);
+  return out;
+}
+
 /** Extract a normalised comment list from a raw XHR JSON payload. */
 export function extractCommentList(
   platform: string,
@@ -756,38 +1311,18 @@ export function extractCommentList(
         (Array.isArray(data) ? data : null) ??
         data?.list ??
         data?.comments ??
+        data?.comment_info_list ??
+        data?.comment_list ??
+        data?.comment_notice_list ??
+        data?.notice_list ??
         json?.comments ??
+        json?.comment_info_list ??
+        json?.comment_list ??
+        json?.comment_notice_list ??
+        json?.notice_list ??
         json?.list;
       if (!Array.isArray(list)) return [];
-      return list
-        .map((item: Record<string, unknown>) => {
-          const user = (item.user ?? item.author) as
-            | Record<string, unknown>
-            | undefined;
-          const itemId =
-            item.item_id != null ? String(item.item_id) : undefined;
-          const externalCommentId = String(
-            item.id ?? item.cid ?? item.comment_id ?? ''
-          );
-          return {
-            externalCommentId,
-            externalUserId: String(
-              user?.uid ?? user?.open_id ?? item.user_id ?? item.uid ?? ''
-            ),
-            userNickname: String(
-              user?.nickname ?? item.nick_name ?? item.nickname ?? ''
-            ),
-            content: String(item.text ?? item.content ?? ''),
-            likeCount: Number(item.digg_count ?? item.like_count ?? 0),
-            replyCount: Number(
-              item.reply_comment_total ?? item.all_comment_num ?? 0
-            ),
-            publishedAt: douyinCommentPublishedAt(item),
-            sourceContentId: sourceContentId ?? itemId,
-            rawPayload: item
-          };
-        })
-        .filter((item) => item.externalCommentId.length > 0);
+      return flattenDouyinComments(list, sourceContentId);
     }
     case 'xiaohongshu': {
       const list =
@@ -1071,52 +1606,166 @@ export function isDouyinEncodedItemId(value: string): boolean {
 function pickDouyinItemIdFromItem(
   item: Record<string, unknown>
 ): string | undefined {
+  return pickSafeDouyinItemId(item);
+}
+
+/** Prefer string aweme_id. Numeric item_id/group_id lose the last digits in JSON. */
+export function pickSafeDouyinItemId(
+  item: Record<string, unknown>
+): string | undefined {
   const encodedInJson = JSON.stringify(item).match(
-    /"(?:item_id|open_item_id)"\s*:\s*"(@[^"]+)"/
+    /"(?:item_id|open_item_id|aweme_id)"\s*:\s*"(@[^"]+)"/
   );
   if (encodedInJson?.[1]) return encodedInJson[1];
 
+  const nested = item.aweme as Record<string, unknown> | undefined;
   const candidates = [
-    item.item_id,
-    item.open_item_id,
-    item.id,
     item.aweme_id,
+    nested?.aweme_id,
+    item.open_item_id,
+    item.item_id,
+    item.id,
+    item.video_id,
     item.group_id
   ];
   for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    if (isDouyinEncodedItemId(candidate) || /^\d{15,}$/.test(candidate)) {
+      return candidate;
+    }
+  }
+  for (const candidate of candidates) {
     if (candidate == null) continue;
     const value = String(candidate);
-    if (isDouyinEncodedItemId(value)) return value;
+    if (value && !/0{3,}$/.test(value)) return value;
   }
-
-  const nested = item.aweme as Record<string, unknown> | undefined;
-  if (
-    nested?.aweme_id != null &&
-    isDouyinEncodedItemId(String(nested.aweme_id))
-  ) {
-    return String(nested.aweme_id);
-  }
-
   for (const candidate of candidates) {
     if (candidate != null) return String(candidate);
   }
-  if (nested?.aweme_id != null) return String(nested.aweme_id);
+  return undefined;
+}
+
+function firstRecordArray(
+  ...candidates: unknown[]
+): Array<Record<string, unknown>> | undefined {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      return candidate as Array<Record<string, unknown>>;
+    }
+  }
   return undefined;
 }
 
 export function pickDouyinItemId(
   json: Record<string, unknown>
 ): string | undefined {
+  return pickDouyinWorkItem(json)?.id;
+}
+
+export function pickDouyinWorkItem(
+  json: Record<string, unknown>
+): { id: string; awemeType?: number } | undefined {
   const noticeComments = json.comments;
-  if (Array.isArray(noticeComments) && noticeComments.length > 0) {
-    const first = noticeComments[0] as Record<string, unknown>;
-    if (first.item_id != null) return String(first.item_id);
+  const data = json.data as Record<string, unknown> | undefined;
+  const items = firstRecordArray(
+    noticeComments,
+    json.aweme_list,
+    data?.aweme_list,
+    json.items,
+    data?.items,
+    data?.item_list,
+    json.item_list
+  );
+  if (!items) return undefined;
+  const first = items[0];
+  const id = pickDouyinItemIdFromItem(first);
+  if (!id) return undefined;
+  const awemeType =
+    typeof first.aweme_type === 'number' ? first.aweme_type : undefined;
+  return { id, awemeType };
+}
+
+export function extractDouyinWorkItems(
+  json: Record<string, unknown>
+): Array<Record<string, unknown>> {
+  const noticeComments = json.comments;
+  const data = json.data as Record<string, unknown> | undefined;
+  return (
+    firstRecordArray(
+      noticeComments,
+      json.aweme_list,
+      data?.aweme_list,
+      json.items,
+      data?.items,
+      data?.item_list,
+      json.item_list
+    ) ?? []
+  );
+}
+
+function douyinNumericIdsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (!/^\d+$/.test(a) || !/^\d+$/.test(b)) return false;
+  const minLen = Math.min(a.length, b.length, 15);
+  return a.slice(0, minLen) === b.slice(0, minLen);
+}
+
+function douyinItemMatchesSourceId(
+  item: Record<string, unknown>,
+  sourceContentId: string
+): boolean {
+  const needle = sourceContentId.trim();
+  if (!needle) return false;
+  const id = pickSafeDouyinItemId(item);
+  if (id && (id === needle || douyinNumericIdsMatch(id, needle))) return true;
+  const candidates = [
+    item.aweme_id,
+    item.item_id,
+    item.open_item_id,
+    item.group_id,
+    (item.aweme as Record<string, unknown> | undefined)?.aweme_id
+  ];
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    const value = String(candidate);
+    if (value === needle || douyinNumericIdsMatch(value, needle)) return true;
+  }
+  return false;
+}
+
+/** Resolve a creator work_list row for inbox sync (prefer comment_count > 0). */
+export function findDouyinWorkItemBySourceId(
+  json: Record<string, unknown>,
+  sourceContentId?: string
+): { id: string; awemeType?: number } | undefined {
+  const items = extractDouyinWorkItems(json);
+  if (items.length === 0) return undefined;
+
+  const pick = (item: Record<string, unknown>) => {
+    const id = pickSafeDouyinItemId(item);
+    if (!id) return undefined;
+    const awemeType =
+      typeof item.aweme_type === 'number' ? item.aweme_type : undefined;
+    return { id, awemeType };
+  };
+
+  if (sourceContentId?.trim()) {
+    const matched = items.find((item) =>
+      douyinItemMatchesSourceId(item, sourceContentId)
+    );
+    if (matched) return pick(matched);
   }
 
-  const data = json.data as Record<string, unknown> | undefined;
-  const items = json.items ?? data?.items ?? data?.item_list ?? json.item_list;
-  if (!Array.isArray(items) || items.length === 0) return undefined;
-  return pickDouyinItemIdFromItem(items[0] as Record<string, unknown>);
+  const withComments = items.find((item) => {
+    const stat = item.statistics as Record<string, unknown> | undefined;
+    const count = Number(
+      stat?.comment_count ?? item.comment_count ?? item.commentCount ?? 0
+    );
+    return count > 0;
+  });
+  if (withComments) return pick(withComments);
+
+  return pick(items[0]!);
 }
 
 export function pickDouyinEncodedItemId(
@@ -1157,31 +1806,53 @@ async function trySelectVideoOnCommentPage(
   }
 }
 
-async function loadDouyinCommentsFromLatestVideo(
+async function openDouyinTargetComments(
   page: import('playwright').Page,
-  itemIdRef: { encoded?: string; numeric?: string }
+  itemId: string,
+  awemeType?: number
 ): Promise<void> {
-  if (!itemIdRef.encoded && !itemIdRef.numeric) {
-    // Page should already be on comment management from caller;
-    // just try to select a video directly instead of re-navigating.
-    await trySelectVideoOnCommentPage(page);
-    await page.waitForTimeout(3000);
-    return;
-  }
-
-  if (itemIdRef.encoded) {
-    await page.goto(douyinPostCommentUrl(itemIdRef.encoded), {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000
-    });
-    await page.waitForTimeout(5000);
-    return;
-  }
-
-  await openDouyinCommentManagement(page);
+  await page.goto(douyinPostCommentUrl(itemId, awemeType), {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
+  });
+  await page.waitForTimeout(4000);
+  await dismissDouyinPopups(page);
+  await openDouyinPublicCommentPanel(page);
+  await expandDouyinCommentReplies(page);
+  await scrollForLazyLoad(page);
   await page.waitForTimeout(2000);
-  await trySelectVideoOnCommentPage(page);
-  await page.waitForTimeout(3000);
+  await humanLikeScroll(page, 2);
+}
+
+async function loadDouyinCreatorWorkList(
+  page: import('playwright').Page
+): Promise<Record<string, unknown> | null> {
+  let workList: Record<string, unknown> | null = null;
+  const responseTasks: Array<Promise<void>> = [];
+  const onResponse = (response: import('playwright').Response) => {
+    const task = (async () => {
+      const url = response.url();
+      if (!DOUYIN_ITEM_LIST_PATTERNS.some((pattern) => url.includes(pattern)))
+        return;
+      workList = parseJsonBigInt(await response.text()) as Record<
+        string,
+        unknown
+      >;
+    })();
+    responseTasks.push(task);
+  };
+  page.on('response', onResponse);
+  await page.goto(DOUYIN_CONTENT_MANAGE_URL, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
+  });
+  await page.waitForTimeout(4000);
+  await dismissDouyinPopups(page);
+  await scrollForLazyLoad(page);
+  await page.waitForTimeout(1500);
+  page.off('response', onResponse);
+  await Promise.allSettled(responseTasks);
+  return workList;
 }
 
 function dedupeAndFilterTodayComments(
@@ -1213,7 +1884,8 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
 
   const targetUrl = urlFn(body.sourceContentId);
   const xhrPatterns = COMMENT_API_PATTERNS[body.platform] ?? [];
-  const itemIdRef: { encoded?: string; numeric?: string } = {};
+  const itemIdRef: { encoded?: string; numeric?: string; awemeType?: number } =
+    {};
   if (body.sourceContentId) {
     if (isDouyinEncodedItemId(body.sourceContentId))
       itemIdRef.encoded = body.sourceContentId;
@@ -1231,12 +1903,14 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
     const responseTasks: Array<Promise<void>> = [];
 
     const rememberDouyinItemId = (json: Record<string, unknown>) => {
+      const work = pickDouyinWorkItem(json);
+      if (work?.awemeType != null) itemIdRef.awemeType = work.awemeType;
       const encoded = pickDouyinEncodedItemId(json);
       if (encoded) {
         itemIdRef.encoded = encoded;
         return;
       }
-      const id = pickDouyinItemId(json);
+      const id = work?.id ?? pickDouyinItemId(json);
       if (!id) return;
       if (isDouyinEncodedItemId(id)) itemIdRef.encoded = id;
       else itemIdRef.numeric = id;
@@ -1325,14 +1999,34 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
     };
     page.on('response', responseListener);
 
-    if (body.platform === 'douyin' && !body.sourceContentId) {
-      await openDouyinCommentManagement(page);
-      await scrollForLazyLoad(page);
-      await page.waitForTimeout(2500);
+    if (body.platform === 'douyin') {
+      const workList = await loadDouyinCreatorWorkList(page);
+      const target =
+        (workList
+          ? findDouyinWorkItemBySourceId(workList, body.sourceContentId)
+          : undefined) ?? (workList ? pickDouyinWorkItem(workList) : undefined);
+      if (target) {
+        if (isDouyinEncodedItemId(target.id)) itemIdRef.encoded = target.id;
+        else itemIdRef.numeric = target.id;
+        if (target.awemeType != null) itemIdRef.awemeType = target.awemeType;
+      }
+      await Promise.allSettled(responseTasks.splice(0));
+
+      const resolvedId = resolveDouyinItemId();
+      if (resolvedId) {
+        await openDouyinTargetComments(page, resolvedId, itemIdRef.awemeType);
+        await Promise.allSettled(responseTasks.splice(0));
+        if (captured.length === 0) {
+          captured.push(...(await scrapeDouyinVisibleComments(page)));
+        }
+      }
+
       if (captured.length === 0) {
-        await loadDouyinCommentsFromLatestVideo(page, itemIdRef);
-        await scrollForLazyLoad(page);
-        await page.waitForTimeout(2500);
+        await openDouyinCommentNoticeInbox(page);
+        await Promise.allSettled(responseTasks.splice(0));
+        if (captured.length === 0) {
+          captured.push(...(await scrapeDouyinVisibleComments(page)));
+        }
       }
     } else if (body.platform === 'xiaohongshu' && !body.sourceContentId) {
       // Step 1: note management page → triggers note list API → captures note ID
@@ -1360,7 +2054,18 @@ const handleFetchComments: RouteHandler = async (_req, res, ctx) => {
       if (body.platform === 'douyin') {
         await page.waitForTimeout(5000);
         if (body.sourceContentId) {
+          await openDouyinPublicCommentPanel(page);
           await scrollForLazyLoad(page);
+          await Promise.allSettled(responseTasks.splice(0));
+          if (captured.length === 0) {
+            await page.goto(douyinPostCommentUrl(body.sourceContentId, 2), {
+              waitUntil: 'domcontentloaded',
+              timeout: 30000
+            });
+            await page.waitForTimeout(4000);
+            await openDouyinPublicCommentPanel(page);
+            await scrollForLazyLoad(page);
+          }
         }
       } else if (body.platform === 'xiaohongshu') {
         // With sourceContentId: on the public note page, wait then scroll
@@ -1410,8 +2115,10 @@ function dedupeAndFilterTodayMessages(
   );
 }
 
+export { isOfficialDouyinInboxNoise };
+
 /** Extract a normalised message list from a raw XHR JSON payload. */
-function extractMessageList(
+export function extractMessageList(
   platform: string,
   json: Record<string, unknown>
 ): Array<Record<string, unknown>> {
@@ -1419,35 +2126,110 @@ function extractMessageList(
 
   switch (platform) {
     case 'douyin': {
+      const notice = json.message_notice as Record<string, unknown> | undefined;
+      const dataNotice = data?.message_notice as
+        | Record<string, unknown>
+        | undefined;
+      const noticeArrays = [
+        ...Object.values(notice ?? {}),
+        ...Object.values(dataNotice ?? {})
+      ];
       const list =
-        data?.list ?? data?.messages ?? json?.message_list ?? json?.list;
-      if (!Array.isArray(list)) return [];
-      return list.map((item: Record<string, unknown>) => {
-        const sender = (item.sender ?? item.from_user) as
-          | Record<string, unknown>
-          | undefined;
-        const contentRaw = item.content;
-        let content = '';
-        if (typeof contentRaw === 'string') {
-          try {
-            content =
-              (JSON.parse(contentRaw) as { text?: string }).text ?? contentRaw;
-          } catch {
-            content = contentRaw;
+        firstRecordArray(
+          json.user_message_list,
+          data?.user_message_list,
+          json.message_notice,
+          data?.message_notice,
+          notice?.list,
+          notice?.notice_list,
+          notice?.messages,
+          dataNotice?.list,
+          dataNotice?.notice_list,
+          ...noticeArrays,
+          data?.list,
+          data?.messages,
+          data?.message_list,
+          data?.notice_list,
+          data?.notices,
+          data?.conversation_list,
+          data?.conversations,
+          json.message_list,
+          json.notice_list,
+          json.list
+        ) ?? [];
+      return list
+        .map((item: Record<string, unknown>) => {
+          const lastMessage = (item.last_message ??
+            item.lastMessage ??
+            item.message) as Record<string, unknown> | undefined;
+          const sender = (item.sender ??
+            item.from_user ??
+            item.user ??
+            lastMessage?.sender ??
+            item.notice_user) as Record<string, unknown> | undefined;
+          const contentRaw =
+            item.content ??
+            item.text ??
+            item.desc ??
+            item.title ??
+            lastMessage?.content ??
+            lastMessage?.text;
+          let content = '';
+          if (typeof contentRaw === 'string') {
+            try {
+              content =
+                (JSON.parse(contentRaw) as { text?: string }).text ??
+                contentRaw;
+            } catch {
+              content = contentRaw;
+            }
+          } else if (contentRaw && typeof contentRaw === 'object') {
+            const nested = contentRaw as Record<string, unknown>;
+            content = String(nested.text ?? nested.content ?? nested.desc ?? '');
           }
-        }
-        return {
-          externalMessageId: String(item.message_id ?? item.msg_id ?? ''),
-          externalUserId: String(sender?.uid ?? sender?.open_id ?? ''),
-          userNickname: String(sender?.nickname ?? ''),
-          content,
-          type: item.content_type === 'image' ? 'image' : 'text',
-          publishedAt: item.create_time
-            ? new Date(Number(item.create_time) * 1000).toISOString()
-            : '',
-          rawPayload: item
-        };
-      });
+          const rawTime =
+            item.create_time ??
+            item.createTime ??
+            item.time_stamp ??
+            item.send_time ??
+            lastMessage?.create_time ??
+            lastMessage?.createTime;
+          const timeNum = Number(rawTime);
+          return {
+            externalMessageId: String(
+              item.user_message_id ??
+                item.message_id ??
+                item.msg_id ??
+                lastMessage?.message_id ??
+                lastMessage?.msg_id ??
+                item.notice_id ??
+                item.conversation_id ??
+                item.task_id ??
+                item.id ??
+                ''
+            ),
+            externalUserId: String(
+              sender?.uid ?? sender?.open_id ?? item.user_id ?? item.uid ?? ''
+            ),
+            userNickname: String(
+              sender?.nickname ?? item.nick_name ?? item.nickname ?? ''
+            ),
+            content,
+            type: item.content_type === 'image' ? 'image' : 'text',
+            publishedAt:
+              rawTime != null && rawTime !== '' && Number.isFinite(timeNum)
+                ? timeNum > 1e12
+                  ? new Date(timeNum).toISOString()
+                  : new Date(timeNum * 1000).toISOString()
+                : '',
+            rawPayload: item
+          };
+        })
+        .filter(
+          (item) =>
+            item.externalMessageId.length > 0 &&
+            !isOfficialDouyinInboxNoise(item)
+        );
     }
     case 'xiaohongshu': {
       const list = data?.chats ?? data?.list ?? data?.messages ?? json?.data;
@@ -1542,7 +2324,12 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
     const messageListener = (response: import('playwright').Response) => {
       const task = (async () => {
         const url = response.url();
-        if (!xhrPatterns.some((p) => url.includes(p))) return;
+        const contentType = response.headers()['content-type'] || '';
+        const isSummonIm =
+          contentType.includes('json') &&
+          url.includes('summon.bytedance.com') &&
+          /im|conversation|message|session|inbox|chat/i.test(url);
+        if (!xhrPatterns.some((p) => url.includes(p)) && !isSummonIm) return;
         try {
           const json = parseJsonBigInt(await response.text()) as Record<
             string,
@@ -1564,6 +2351,29 @@ const handleFetchMessages: RouteHandler = async (_req, res, ctx) => {
     });
 
     await scrollForLazyLoad(page);
+    if (body.platform === 'douyin') {
+      try {
+        await page.getByText('私信', { exact: true }).first().click({
+          timeout: 4000
+        });
+        await page.waitForTimeout(3000);
+      } catch {
+        /* tab may already be selected */
+      }
+      const frame = await resolveImFrame(page);
+      const root = frame ?? page;
+      try {
+        await root
+          .locator(
+            '[class*="conversation"], [class*="session"], [class*="chat-item"], [class*="contact-item"], [class*="msg-item"]'
+          )
+          .first()
+          .click({ timeout: 5000 });
+        await page.waitForTimeout(2500);
+      } catch {
+        await page.waitForTimeout(2000);
+      }
+    }
 
     page.off('response', messageListener);
     await Promise.allSettled(messageTasks.splice(0));
@@ -1929,7 +2739,7 @@ function normalizeDouyinVideo(it: Record<string, any>) {
     (video.cover as any)?.url_list ||
     (it.cover as any)?.url_list;
   return {
-    itemId: String(it.item_id ?? it.aweme_id ?? it.video_id ?? it.id ?? ''),
+    itemId: pickSafeDouyinItemId(it) ?? '',
     desc: String(it.desc ?? it.item_title ?? it.title ?? ''),
     publishedAt: douyinVideoPublishedAt(it),
     statistics: {
@@ -2046,7 +2856,60 @@ export const assistRoutes: Route[] = [
   },
   {
     method: 'POST',
+    pattern: '/assist/search-videos',
+    handler: handleSearchVideos
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/fetch-search-video-comments',
+    handler: handleFetchSearchVideoComments
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/fetch-user-profile',
+    handler: handleFetchUserProfile
+  },
+  {
+    method: 'POST',
     pattern: '/assist/search-and-fetch-comments',
     handler: handleSearchAndFetchComments
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/captcha-session/start',
+    handler: async (_req, res, ctx) => {
+      const body = ctx.body as { cookie?: string; platform?: string } | null;
+      if (!body?.cookie) {
+        sendJson(res, 400, { error: 'Missing required field: cookie' });
+        return;
+      }
+      try {
+        const started = await startCaptchaSession({
+          cookie: body.cookie,
+          platform: body.platform || 'douyin'
+        });
+        sendJson(res, 200, started);
+      } catch (error) {
+        sendJson(res, 502, {
+          error: error instanceof Error ? error.message : '无法打开过码窗口'
+        });
+      }
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/assist/captcha-session/:id/status',
+    handler: async (_req, res, ctx) => {
+      const status = await getCaptchaSessionStatus(ctx.params.id);
+      sendJson(res, 200, status);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/assist/captcha-session/:id/cancel',
+    handler: async (_req, res, ctx) => {
+      await cancelCaptchaSession(ctx.params.id);
+      sendJson(res, 200, { ok: true });
+    }
   }
 ];

@@ -8,13 +8,15 @@ export const createContentItemSchema = z.object({
   title: z.string().min(1, '标题不能为空').max(200, '标题不能超过200个字符'),
   body: z.string().optional().default(''),
   sourceType: z.string().optional(),
-  sourceResearchTaskId: z.string().optional()
+  sourceResearchTaskId: z.string().optional(),
+  mediaAssetIds: z.array(z.string().min(1)).optional()
 });
 
 export const updateContentItemSchema = z.object({
   title: z.string().min(1, '标题不能为空').max(200).optional(),
   body: z.string().optional(),
-  status: z.enum(['draft', 'ready', 'archived']).optional()
+  status: z.enum(['draft', 'ready', 'archived']).optional(),
+  mediaAssetIds: z.array(z.string().min(1)).optional()
 });
 
 export const createContentVariantSchema = z.object({

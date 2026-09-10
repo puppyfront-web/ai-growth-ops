@@ -76,12 +76,10 @@ export function BrowserLoginDialog({
             sessionActiveRef.current = false;
             setState('logged_in');
             qc.invalidateQueries({ queryKey: ['platform-accounts'] });
-            // Auto-close dialog after a short delay so user sees the success state
+            // Auto-close dialog after user sees the success state (2.5s)
             setTimeout(() => {
-              setState('idle');
-              setError(null);
               onClose();
-            }, 1500);
+            }, 2500);
           } else if (status.status === 'expired') {
             cleanup();
             sessionActiveRef.current = false;
@@ -131,13 +129,18 @@ export function BrowserLoginDialog({
     }
   }, [accountId, cleanup, startPolling]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) {
-      sessionActiveRef.current = false;
-      cleanup();
-      setState('idle');
-      setError(null);
-      setCountdown(TIMEOUT_SECONDS);
+      // Don't wipe state if we're in logged_in — let the success screen stay
+      // visible until the auto-close timer fires (or user clicks 完成).
+      if (state !== 'logged_in') {
+        sessionActiveRef.current = false;
+        cleanup();
+        setState('idle');
+        setError(null);
+        setCountdown(TIMEOUT_SECONDS);
+      }
       return;
     }
 
@@ -164,15 +167,11 @@ export function BrowserLoginDialog({
     return () => {
       cancelled = true;
       cleanup();
-      // Cancel the browser session if component unmounts mid-flow
-      if (sessionActiveRef.current) {
-        sessionActiveRef.current = false;
-        cancelBrowserLogin(accountId).catch(() => {});
-      }
     };
   }, [open, accountId, cleanup, startPolling]);
 
-  if (!open) return null;
+  // Keep rendering during logged_in so the success screen is visible
+  if (!open && state !== 'logged_in') return null;
 
   const platformName =
     platformLabels[platform as keyof typeof platformLabels] ?? platform;
@@ -221,16 +220,20 @@ export function BrowserLoginDialog({
         )}
 
         {state === 'logged_in' && (
-          <div className="flex flex-col items-center py-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <span className="text-2xl text-green-600">✓</span>
+          <div className="flex flex-col items-center py-8 gap-2">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <span className="text-3xl">✅</span>
             </div>
-            <p className="mt-3 text-sm font-medium text-green-700">
-              登录成功，凭证已保存
+            <p className="mt-2 text-base font-semibold text-green-700">
+              登录成功！Cookie 已加密保存
             </p>
+            <p className="text-xs text-muted-foreground text-center">
+              账号状态已更新为「已授权」，现在可以执行获客任务了
+            </p>
+            <p className="text-xs text-muted-foreground">窗口将自动关闭…</p>
             <button
               onClick={handleClose}
-              className="mt-4 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+              className="mt-3 rounded-md bg-green-600 px-6 py-2 text-sm text-white hover:bg-green-700"
             >
               完成
             </button>

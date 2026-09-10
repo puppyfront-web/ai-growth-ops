@@ -32,8 +32,9 @@ export const hiddenSectionPrefixes = [
 ] as const;
 
 export const navItems: NavItem[] = [
-  // 获客 CRM is the core value loop → primary entry.
-  { label: '线索管理', href: '/leads', icon: UserCheck },
+  { label: '关键词获客', href: '/prospecting', icon: Search },
+  { label: '客户管理', href: '/customers', icon: UserCheck },
+  { label: '线索管理', href: '/leads', icon: UserCheck, hidden: true },
   { label: '内容运营', href: '/content', icon: FileText },
   { label: '发布运营', href: '/publish', icon: Send },
   { label: '评论私信', href: '/conversations', icon: MessageSquare },

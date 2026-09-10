@@ -23,19 +23,23 @@ export function isTransientError(err: unknown): boolean {
   return TRANSIENT_ERROR_MESSAGES.some((t) => msg.includes(t));
 }
 
-const workerOptions: WorkerOptions = {
+const defaultWorkerOptions: WorkerOptions = {
   connection: { url: REDIS_URL },
   concurrency: 5,
-  lockDuration: 120_000 // 2 min — long enough for browser operations
+  lockDuration: 120_000
 };
 
 const workers: Worker[] = [];
 
 export function registerWorker(
   queueName: QueueName,
-  handler: (job: Job) => Promise<void>
+  handler: (job: Job) => Promise<void>,
+  overrides: Partial<WorkerOptions> = {}
 ): Worker {
-  const worker = new Worker(queueName, handler, workerOptions);
+  const worker = new Worker(queueName, handler, {
+    ...defaultWorkerOptions,
+    ...overrides
+  });
 
   worker.on('completed', (job) => {
     console.log(`[worker] Job ${job.id} completed on ${queueName}`);

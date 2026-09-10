@@ -11,7 +11,11 @@ pnpm-lock.yaml
 .DS_Store
 *.tsbuildinfo
 .next
+.next-*
 out
 .claude/settings.local.json
 apps/api/uploads/
 .tmp-tests/
+.logs/
+uploads/
+.cursor/

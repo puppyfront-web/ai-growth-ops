@@ -1,6 +1,8 @@
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import { clampAcquisitionDays } from '@ai-growth-ops/shared';
 import { getOrganizationContext } from './auth.js';
+import { getAcquisitionAnalytics } from './services/acquisition-analytics.js';
 
 interface AnalyticsRouteContext {
   db: DatabaseClient;
@@ -76,6 +78,23 @@ export const analyticsRoutes: Array<{
         }
       });
       sendJson(res, 201, item);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/analytics/acquisition',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const days = clampAcquisitionDays(
+        Number(ctx.url.searchParams.get('days') || 30)
+      );
+      const payload = await getAcquisitionAnalytics(
+        ctx.db,
+        orgCtx.organization.id,
+        days
+      );
+      sendJson(res, 200, payload);
     }
   }
 ];

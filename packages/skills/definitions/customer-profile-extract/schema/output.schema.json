@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "industry": { "type": ["string", "null"] },
+    "companySize": { "type": ["string", "null"] },
+    "painPoints": { "type": "array", "items": { "type": "string" } },
+    "interests": { "type": "array", "items": { "type": "string" } },
+    "budget": { "type": ["string", "null"] },
+    "timeline": { "type": ["string", "null"] },
+    "bant": {
+      "type": "object",
+      "properties": {
+        "budget": { "type": ["string", "null"] },
+        "authority": { "type": ["string", "null"] },
+        "need": { "type": ["string", "null"] },
+        "timeline": { "type": ["string", "null"] }
+      }
+    },
+    "summary": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["summary", "tags", "painPoints", "interests", "bant"]
+}

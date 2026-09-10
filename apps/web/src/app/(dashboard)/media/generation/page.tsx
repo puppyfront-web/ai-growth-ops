@@ -30,16 +30,16 @@ const generationTypes = [
     desc: '根据描述生成营销配图、封面图等'
   },
   {
-    key: 'cover',
-    label: '视频封面',
+    key: 'video',
+    label: '视频生成',
     icon: Video,
-    desc: '为视频内容自动生成吸引人的封面'
+    desc: '调用已配置的生视频 API 生成短视频'
   },
   {
-    key: 'copywrite',
-    label: '文案配图',
+    key: 'cover',
+    label: '视频封面',
     icon: FileText,
-    desc: '为文章/图文内容生成配套插图'
+    desc: '为视频内容自动生成吸引人的封面'
   }
 ];
 
@@ -56,7 +56,7 @@ export default function MediaGenerationPage() {
     mutationFn: () =>
       generateMedia({
         prompt,
-        generationType: genType,
+        generationType: genType === 'video' ? 'video' : 'image',
         style: style || undefined,
         size
       }),
@@ -80,7 +80,7 @@ export default function MediaGenerationPage() {
       <Breadcrumb />
       <PageHeader
         title="AI 素材生成"
-        description="使用 AI 生成营销图片、视频封面和配图"
+        description="使用已配置的生图 / 生视频 API 生成营销素材"
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -177,7 +177,9 @@ export default function MediaGenerationPage() {
                 </Button>
                 {generateMutation.isError && (
                   <span className="text-sm text-red-500">
-                    生成失败，请检查 AI 配置
+                    {generateMutation.error instanceof Error
+                      ? generateMutation.error.message
+                      : '生成失败，请检查 AI 配置'}
                   </span>
                 )}
               </div>

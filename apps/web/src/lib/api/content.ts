@@ -81,3 +81,72 @@ export function batchCreatePublishJobs(data: {
 }): Promise<Record<string, unknown>[]> {
   return apiPost('/api/publish-jobs/batch', data);
 }
+
+export type GenerateContentWithMediaInput = {
+  topic: string;
+  contentType?: string;
+  keywords?: string[];
+  brandTone?: string;
+  imageStyle?: string;
+  imageCount?: number;
+};
+
+export type GenerateContentWithMediaResult = {
+  contentItem: ContentItem;
+  mediaAssets: Array<Record<string, unknown>>;
+  skillOutput: Record<string, unknown>;
+};
+
+export function generateContentWithMedia(
+  data: GenerateContentWithMediaInput
+): Promise<GenerateContentWithMediaResult> {
+  return apiPost<GenerateContentWithMediaResult>(
+    '/api/content-items/generate-with-media',
+    data
+  );
+}
+
+export type ComplianceCheckResult = {
+  skillRunId: string;
+  passed: boolean;
+  riskLevel: 'low' | 'medium' | 'high';
+  issues: Array<{ rule: string; message: string; severity: string }>;
+  suggestedFixes: Array<{ issue: string; suggestion: string }> | null;
+  aiChecked: boolean;
+};
+
+export function checkContentCompliance(
+  contentItemId: string
+): Promise<ComplianceCheckResult> {
+  return apiPost<ComplianceCheckResult>(
+    `/api/content-items/${contentItemId}/compliance-check`
+  );
+}
+
+export type AiContentPipelineInput = GenerateContentWithMediaInput & {
+  platforms?: string[];
+};
+
+export type AiContentPipelineResult = {
+  contentItem: ContentItem;
+  variants: ContentVariant[];
+  compliance: ComplianceCheckResult;
+};
+
+/** Chains content-writing → platform-rewrite → compliance-check. */
+export async function runAiContentPipeline(
+  input: AiContentPipelineInput
+): Promise<AiContentPipelineResult> {
+  const { platforms, ...generateInput } = input;
+  const generated = await generateContentWithMedia(generateInput);
+  const variants = await generatePlatformVariants(
+    generated.contentItem.id,
+    platforms?.length ? platforms : undefined
+  );
+  const compliance = await checkContentCompliance(generated.contentItem.id);
+  return {
+    contentItem: generated.contentItem,
+    variants,
+    compliance
+  };
+}

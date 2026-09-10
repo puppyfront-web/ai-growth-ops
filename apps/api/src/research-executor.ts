@@ -86,10 +86,7 @@ export async function executeResearchTaskSync(
     }
     const cookie = decryptToken(account.cookieRef!);
     const runnerUrl = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-    const RUNNER_SECRET =
-      process.env.BROWSER_RUNNER_SECRET ||
-      process.env.TOKEN_ENCRYPTION_KEY ||
-      '';
+    const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
 
     const allPosts: Array<Record<string, unknown>> = [];
     const allComments: Array<Record<string, unknown>> = [];
@@ -504,7 +501,6 @@ async function createInsightsAndOpportunitiesFallback(
     });
   }
 }
-
 
 export class ResearchExecutionError extends Error {
   constructor(

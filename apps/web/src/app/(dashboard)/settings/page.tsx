@@ -11,6 +11,11 @@ export default function SettingsPage() {
     },
     { href: '/settings/skills', title: 'Skill 管理', desc: '管理 AI 技能模块' },
     {
+      href: '/settings/icp',
+      title: 'ICP 理想客户',
+      desc: '配置 Fit 评分与目标客户画像规则'
+    },
+    {
       href: '/settings/compliance',
       title: '合规规则',
       desc: '配置敏感词和审核规则'

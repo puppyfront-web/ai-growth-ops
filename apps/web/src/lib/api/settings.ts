@@ -6,6 +6,11 @@ export interface MediaGenerationConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  videoMode: 'llm_provider' | 'dedicated';
+  videoProvider: string;
+  videoApiKey: string;
+  videoBaseUrl: string;
+  videoModel: string;
 }
 
 export interface AiConfig {
@@ -199,4 +204,19 @@ export function getLlmConfig(): Promise<LlmConfigView> {
 
 export function saveLlmConfig(body: LlmConfigInput): Promise<LlmConfigView> {
   return apiPut<LlmConfigView>('/api/settings/llm', body);
+}
+
+export interface IcpConfig {
+  targetIndustries: string[];
+  targetRoles: string[];
+  highIntentKeywords: string[];
+  excludedKeywords: string[];
+}
+
+export function getIcpConfig(): Promise<IcpConfig> {
+  return apiGet<IcpConfig>('/api/settings/icp');
+}
+
+export function updateIcpConfig(data: IcpConfig): Promise<IcpConfig> {
+  return apiPut<IcpConfig>('/api/settings/icp', data);
 }

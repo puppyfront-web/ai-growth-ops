@@ -7,6 +7,11 @@ export * from './client';
 export * from './repositories';
 export * from './schema-metadata';
 export * from './seed';
+export * from './customer-profile';
+export * from './customer-playbook';
+export * from './prospecting';
+export * from './prospect-guard';
+export * from './schema-guard';
 
 export type {
   ContentItem,

@@ -1,10 +1,7 @@
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import type { LLMClient } from '@ai-growth-ops/ai';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import { generateMediaAsset } from './media-generation.js';
-
-// NOTE: The route handler for POST /api/content-items/generate-with-media needs to be
-// added to apps/api/src/routes.ts after the Phase 1 agent finishes modifying that file.
-// The route should call generateContentWithMedia(ctx.db, { ...body, orgId, userId }).
 
 interface GenerateContentWithMediaOptions {
   topic: string;
@@ -15,6 +12,7 @@ interface GenerateContentWithMediaOptions {
   imageCount?: number;
   orgId: string;
   userId: string;
+  llmClient?: LLMClient;
 }
 
 export async function generateContentWithMedia(
@@ -29,18 +27,20 @@ export async function generateContentWithMedia(
     imageStyle,
     imageCount = 1,
     orgId,
-    userId
+    userId,
+    llmClient
   } = options;
 
   // Step 1: Generate content via content-writing skill
   const runner = getSharedSkillRunner();
   const contentResult = await runner.run({
     skillName: 'content-writing',
-    input: { topic, contentType, keywords, brandTone }
+    input: { topic, contentType, keywords, brandTone },
+    llmClient
   });
 
   if (contentResult.status !== 'success' || !contentResult.output) {
-    throw new Error('Content generation failed');
+    throw new Error(contentResult.error || 'Content generation failed');
   }
 
   const output = contentResult.output as Record<string, unknown>;
@@ -76,6 +76,7 @@ export async function generateContentWithMedia(
         const asset = await generateMediaAsset(db, {
           prompt,
           style: imageStyle,
+          generationType: 'image',
           orgId,
           userId
         });
@@ -83,6 +84,23 @@ export async function generateContentWithMedia(
       } catch (err) {
         console.error('[content-media] Image generation failed:', err);
       }
+    }
+  }
+
+  if (contentType === 'video') {
+    try {
+      const asset = await generateMediaAsset(db, {
+        prompt: imageStyle
+          ? `${title}. ${imageStyle}`
+          : `${title}. ${body.slice(0, 120)}`,
+        style: imageStyle,
+        generationType: 'video',
+        orgId,
+        userId
+      });
+      mediaAssets.push(asset);
+    } catch (err) {
+      console.error('[content-media] Video generation failed:', err);
     }
   }
 

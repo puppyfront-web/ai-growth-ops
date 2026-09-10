@@ -1,8 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // eslint-disable-next-line no-undef
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  transpilePackages: ['@ai-growth-ops/shared'],
   experimental: {
-    proxyTimeout: 30000
+    // LLM writing + image generation routinely exceeds Next's 30s rewrite default
+    proxyTimeout: 300_000
   },
   async rewrites() {
     // eslint-disable-next-line no-undef
@@ -11,6 +15,10 @@ const nextConfig = {
       {
         source: '/api/:path*',
         destination: `${apiBaseUrl}/api/:path*`
+      },
+      {
+        source: '/uploads/:path*',
+        destination: `${apiBaseUrl}/uploads/:path*`
       }
     ];
   }

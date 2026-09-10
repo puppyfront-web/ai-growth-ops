@@ -12,7 +12,10 @@ const labelMap: Record<string, string> = {
   publish: '发布运营',
   conversations: '评论私信',
   leads: '线索管理',
+  customers: '客户管理',
+  prospecting: '关键词获客',
   analytics: '数据复盘',
+  lead: '获客分析',
   integrations: '集成配置',
   settings: '系统设置',
   login: '登录',
@@ -33,6 +36,7 @@ const labelMap: Record<string, string> = {
   ai: 'AI配置',
   skills: 'Skill管理',
   compliance: '合规规则',
+  icp: 'ICP 理想客户',
   variants: '平台版本',
   calendar: '日历',
   templates: '模板'
@@ -47,7 +51,7 @@ export function Breadcrumb() {
   return (
     <nav className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
       <Link
-        href="/dashboard"
+        href="/prospecting"
         className="flex items-center hover:text-foreground"
       >
         <Home className="h-3.5 w-3.5" />

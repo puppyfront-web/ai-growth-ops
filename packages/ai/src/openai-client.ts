@@ -18,7 +18,9 @@ export class OpenAIClient implements LLMClient {
   constructor(config: LLMConfig) {
     this.client = new OpenAI({
       apiKey: config.apiKey,
-      baseURL: config.baseUrl
+      baseURL: config.baseUrl,
+      timeout: 120_000,
+      maxRetries: 1
     });
     this.model = config.model || 'gpt-4o';
     this.defaultMaxTokens = config.maxTokens || 4096;

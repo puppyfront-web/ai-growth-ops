@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "keywords": { "type": "array", "items": { "type": "string" } },
+    "highIntentKeywords": { "type": "array", "items": { "type": "string" } },
+    "users": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "userKey": { "type": "string" },
+          "userNickname": { "type": "string" },
+          "sourceVideoTitle": { "type": "string" },
+          "comments": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["userKey", "comments"]
+      }
+    }
+  },
+  "required": ["keywords", "users"]
+}

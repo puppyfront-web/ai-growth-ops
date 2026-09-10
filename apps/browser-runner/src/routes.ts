@@ -12,10 +12,8 @@ import { publishAssistRoutes } from './publish-routes.js';
 // ── Shared-secret authentication ──────────────────────────────────
 // Browser-runner is an internal service. All non-health endpoints
 // require the caller to send an `Authorization: Bearer <SECRET>` header
-// matching the BROWSER_RUNNER_SECRET env var (or falling back to
-// TOKEN_ENCRYPTION_KEY for convenience in dev).
-const RUNNER_SECRET =
-  process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+// matching the BROWSER_RUNNER_SECRET env var.
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
 
 function safeEqual(a: string, b: string): boolean {
   if (!a || !b || a.length !== b.length) return false;

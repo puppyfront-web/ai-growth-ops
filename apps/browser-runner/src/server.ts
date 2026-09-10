@@ -65,6 +65,13 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
+  process.on('unhandledRejection', (reason) => {
+    console.error('[browser-runner] unhandledRejection (session kept alive):', reason);
+  });
+  process.on('uncaughtException', (error) => {
+    console.error('[browser-runner] uncaughtException (session kept alive):', error);
+  });
+
   await startBrowserRunnerServer();
   console.log(
     `Browser Runner listening on http://localhost:${process.env.BROWSER_RUNNER_PORT ?? 3200}`

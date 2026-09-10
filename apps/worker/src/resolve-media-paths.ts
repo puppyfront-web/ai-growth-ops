@@ -3,9 +3,15 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 
-function uploadsDir(): string {
-  if (process.env.UPLOADS_DIR) return process.env.UPLOADS_DIR;
-  return resolve(dirname(fileURLToPath(import.meta.url)), '../../api/uploads');
+function uploadsDirs(): string[] {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const dirs = [
+    process.env.UPLOADS_DIR,
+    resolve(process.cwd(), 'uploads'),
+    resolve(here, '../../../uploads'),
+    resolve(here, '../../api/uploads')
+  ].filter((dir): dir is string => Boolean(dir));
+  return [...new Set(dirs)];
 }
 
 export async function resolveMediaFilePaths(
@@ -23,12 +29,15 @@ export async function resolveMediaFilePaths(
     where: { id: { in: ids }, deletedAt: null }
   });
 
-  const dir = uploadsDir();
+  const dirs = uploadsDirs();
   const paths: string[] = [];
   for (const asset of assets) {
     if (!asset.sourceUrl?.startsWith('/uploads/')) continue;
-    const filePath = resolve(dir, asset.sourceUrl.slice('/uploads/'.length));
-    if (existsSync(filePath)) paths.push(filePath);
+    const name = asset.sourceUrl.slice('/uploads/'.length);
+    const filePath = dirs
+      .map((dir) => resolve(dir, name))
+      .find((candidate) => existsSync(candidate));
+    if (filePath) paths.push(filePath);
   }
   return paths;
 }

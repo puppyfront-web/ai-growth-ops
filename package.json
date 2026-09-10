@@ -6,8 +6,10 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "db:generate": "pnpm prisma generate --schema packages/database/prisma/schema.prisma",
-    "db:migrate": "dotenv -e .env -- pnpm prisma migrate dev --schema packages/database/prisma/schema.prisma",
-    "db:push": "dotenv -e .env -- pnpm prisma db push --schema packages/database/prisma/schema.prisma",
+    "db:migrate": "pnpm prisma migrate dev --schema packages/database/prisma/schema.prisma",
+    "db:deploy": "pnpm prisma migrate deploy --schema packages/database/prisma/schema.prisma",
+    "db:prune-migrations": "node scripts/prune-migration-ghosts.mjs",
+    "db:push": "pnpm prisma db push --schema packages/database/prisma/schema.prisma",
     "db:seed": "tsx --env-file=.env packages/database/prisma/seed.ts",
     "db:reset:test": "dotenv -e .env -- pnpm prisma migrate reset --force --skip-seed --schema packages/database/prisma/schema.prisma",
     "dev": "pnpm --filter @ai-growth-ops/api dev",

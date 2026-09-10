@@ -40,9 +40,9 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema)
   });
 
-  // If already authenticated, redirect to dashboard
+  // If already authenticated, redirect to CRM home
   if (isAuthenticated) {
-    router.replace('/dashboard');
+    router.replace('/prospecting');
     return null;
   }
 
@@ -50,7 +50,7 @@ export default function LoginPage() {
     setServerError(null);
     try {
       await login(data.email, data.password);
-      router.push('/dashboard');
+      router.push('/prospecting');
     } catch (err) {
       if (err instanceof ApiError) {
         setServerError(err.message);

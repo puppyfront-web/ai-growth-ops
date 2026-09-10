@@ -10,7 +10,12 @@ describe('packages/skills skill-to-tool converter', () => {
 
     // Verify skills are registered
     const skills = listSkills();
-    expect(skills.length).toBe(7);
+    expect(skills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'customer-profile-extract' }),
+        expect.objectContaining({ name: 'customer-playbook-generate' })
+      ])
+    );
 
     // Convert a single skill
     const toolSpec = skillToToolSpec('lead-classification');
@@ -21,11 +26,11 @@ describe('packages/skills skill-to-tool converter', () => {
 
     // Convert all skills
     const allSpecs = allSkillsToToolSpecs();
-    expect(allSpecs.length).toBe(7);
+    expect(allSpecs).toHaveLength(skills.length);
 
     // All should have unique names
     const names = new Set(allSpecs.map((s) => s.name));
-    expect(names.size).toBe(7);
+    expect(names.size).toBe(skills.length);
   });
 
   it('should return null for non-existent skill', async () => {
@@ -45,9 +50,8 @@ describe('packages/skills skill-to-tool converter', () => {
   });
 
   it('should create skill tool call handler', async () => {
-    const { createSkillToolCallHandler, getSharedSkillRunner } = await import(
-      '@ai-growth-ops/skills'
-    );
+    const { createSkillToolCallHandler, getSharedSkillRunner } =
+      await import('@ai-growth-ops/skills');
 
     const runner = getSharedSkillRunner();
     const handler = createSkillToolCallHandler(runner);

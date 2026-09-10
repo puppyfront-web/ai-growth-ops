@@ -51,7 +51,7 @@ export default function RegisterPage() {
     setServerError(null);
     try {
       await setAuthFromRegister(data);
-      router.push('/dashboard');
+      router.push('/prospecting');
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 409) {

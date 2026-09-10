@@ -32,7 +32,10 @@ export const QUEUE_NAMES = {
   INTERACTION_MANUAL_REPLY: 'interaction.manual-reply',
   SCHEDULED_INTERACTION_SYNC: 'scheduled.interaction-sync',
   WORKFLOW_EXECUTE: 'workflow.execute',
-  AGENT_RUN: 'agent.run'
+  AGENT_RUN: 'agent.run',
+  CUSTOMER_PROFILE_REFRESH: 'customer.profile.refresh',
+  CUSTOMER_PLAYBOOK_GENERATE: 'customer.playbook.generate',
+  PROSPECTING_RUN: 'prospecting.run'
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

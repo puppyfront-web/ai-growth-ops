@@ -119,4 +119,28 @@ describe('prepareMessagesForSync', () => {
       })
     ]);
   });
+
+  it('falls back to recent messages when none are from today', () => {
+    const now = new Date('2026-05-28T12:00:00+08:00');
+    const messages = prepareMessagesForSync(
+      [
+        {
+          externalMessageId: 'message-old',
+          externalUserId: 'user-2',
+          userNickname: 'B',
+          content: 'yesterday',
+          type: 'text' as const,
+          publishedAt: '2026-05-27T10:00:00+08:00'
+        }
+      ],
+      now
+    );
+
+    expect(messages).toEqual([
+      expect.objectContaining({
+        externalMessageId: 'message-old',
+        content: 'yesterday'
+      })
+    ]);
+  });
 });

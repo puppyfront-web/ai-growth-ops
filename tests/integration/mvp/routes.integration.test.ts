@@ -592,6 +592,20 @@ describe('Analytics', () => {
     expect(status).toBe(200);
     expect(Array.isArray(body)).toBe(true);
   });
+
+  it('GET /api/analytics/acquisition returns pipeline KPIs', async () => {
+    const { status, body } = await api.get('/api/analytics/acquisition?days=30');
+    expect(status).toBe(200);
+    expect(body.kpis.candidates).toBeGreaterThanOrEqual(0);
+    expect(body.kpis.convertedCustomers).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(body.funnel)).toBe(true);
+    expect(body.funnel.map((stage: { key: string }) => stage.key)).toEqual([
+      'candidates',
+      'highIntent',
+      'converted',
+      'won'
+    ]);
+  });
 });
 
 // ── Platform Accounts & Providers ────────────────────────────────

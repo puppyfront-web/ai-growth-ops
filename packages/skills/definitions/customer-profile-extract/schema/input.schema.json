@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "displayName": { "type": "string" },
+    "company": { "type": "string" },
+    "role": { "type": "string" },
+    "intent": { "type": "string" },
+    "channel": { "type": "string" },
+    "sourceNote": { "type": "string" },
+    "activities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["displayName", "company", "role", "intent"]
+}

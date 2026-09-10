@@ -1,44 +1,32 @@
 import { expect, test } from '@playwright/test';
+import { login, resetAndSeedDatabase } from './helpers';
 
-test.describe('Flow B: Content → Publish', () => {
-  test('create content and navigate to detail', async ({ page }) => {
-    await page.goto('/content');
-    await expect(page.locator('text=内容').first()).toBeVisible({
-      timeout: 15000
-    });
+async function createCustomer(page: Parameters<typeof login>[0], name: string) {
+  await page.goto('/customers');
+  await page.getByRole('button', { name: /新建客户/ }).click();
+  await page.getByLabel('姓名 *').fill(name);
+  await page.getByLabel('手机号').fill('13800138000');
+  await page.getByLabel('公司').fill('E2E 测试公司');
+  await page.getByLabel('职位').fill('采购经理');
+  await page.getByLabel('需求 *').fill('需要企业获客解决方案');
+  await page.getByRole('button', { name: '保存客户' }).click();
+  await expect(page.getByText(name)).toBeVisible();
+}
 
-    // Navigate to new content page
-    await page.goto('/content/new');
-    await expect(page.locator('text=新建内容')).toBeVisible();
-
-    // Fill form
-    await page.fill('input[placeholder="输入内容标题"]', 'E2E测试内容');
-    await page.selectOption('select', 'text_image');
-    await page.fill(
-      'textarea[placeholder="输入正文内容..."]',
-      '这是通过E2E测试创建的内容'
-    );
-
-    // Submit
-    await page.click('button:has-text("创建")');
-    await page.waitForURL('**/content', { timeout: 10000 });
-    await expect(page.locator('text=E2E测试内容')).toBeVisible();
+test.describe('Customer management', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetAndSeedDatabase();
+    await login(page);
   });
 
-  test('content detail shows variants tab', async ({ page }) => {
-    await page.goto('/content');
-    await expect(page.locator('text=内容').first()).toBeVisible({
-      timeout: 15000
-    });
+  test('creates a customer', async ({ page }) => {
+    await createCustomer(page, 'E2E 客户');
+  });
 
-    // Click on first content item
-    const firstItem = page.locator('a[href^="/content/"]').first();
-    if (await firstItem.isVisible()) {
-      await firstItem.click();
-      await page.waitForURL('**/content/*', { timeout: 10000 });
-      await expect(
-        page.locator('text=正文').or(page.locator('text=平台版本'))
-      ).toBeVisible();
-    }
+  test('opens customer detail', async ({ page }) => {
+    await createCustomer(page, 'E2E 详情客户');
+    await page.getByRole('link', { name: 'E2E 详情客户' }).click();
+    await expect(page).toHaveURL(/\/customers\/[^/]+$/);
+    await expect(page.getByText('客户画像')).toBeVisible();
   });
 });

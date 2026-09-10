@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-growth-ops/ai-tools": "workspace:*",
+    "@ai-growth-ops/shared": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.81",
     "@ai-sdk/openai": "^3.0.69",
     "@ai-sdk/react": "^3.0.200",

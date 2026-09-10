@@ -7,9 +7,8 @@ import {
 import { z } from 'zod';
 import type { LLMClient } from '@ai-growth-ops/runtime';
 
-const { handleAgentRun } = await import(
-  '../../../apps/worker/src/job-handlers/agent.run'
-);
+const { handleAgentRun } =
+  await import('../../../apps/worker/src/job-handlers/agent.run');
 
 // WRITE spy tool — publish.* prefix → inferMutate 'Write'. Under L2 + high
 // risk the gate escalates it; on resume the approval must unlock execution.
@@ -41,18 +40,31 @@ function resumeLlm(): LLMClient {
             {
               id: 'r1',
               name: 'publish.video',
-              arguments: { platform: 'douyin', title: 't', __risk: 'high', __confidence: 0.9 }
+              arguments: {
+                platform: 'douyin',
+                title: 't',
+                __risk: 'high',
+                __confidence: 0.9
+              }
             }
           ],
           tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
         } as never;
       }
-      return { text: 'published', toolCalls: [], tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } } as never;
+      return {
+        text: 'published',
+        toolCalls: [],
+        tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
+      } as never;
     }
   } as never;
 }
 
-function makeResumeDb(): { db: unknown; updates: Array<Record<string, unknown>>; counts: { notifications: number } } {
+function makeResumeDb(): {
+  db: unknown;
+  updates: Array<Record<string, unknown>>;
+  counts: { notifications: number };
+} {
   const updates: Array<Record<string, unknown>> = [];
   const counts = { notifications: 0 };
   const pausedRun = {
@@ -73,7 +85,11 @@ function makeResumeDb(): { db: unknown; updates: Array<Record<string, unknown>>;
           outcome: 'need_input',
           summary: 'escalated',
           escalatedItems: [
-            { toolName: 'publish.video', input: { platform: 'douyin' }, risk: 'high' }
+            {
+              toolName: 'publish.video',
+              input: { platform: 'douyin' },
+              risk: 'high'
+            }
           ]
         },
         REVIEW: undefined
@@ -86,15 +102,29 @@ function makeResumeDb(): { db: unknown; updates: Array<Record<string, unknown>>;
   };
   const db = {
     agentRun: {
-      findUnique: async () => ({ ...pausedRun, output: { ...pausedRun.output, nodeResults: { ...pausedRun.output.nodeResults } } }),
+      findUnique: async () => ({
+        ...pausedRun,
+        output: {
+          ...pausedRun.output,
+          nodeResults: { ...pausedRun.output.nodeResults }
+        }
+      }),
       update: async (a: { data: Record<string, unknown> }) => {
         updates.push(a.data);
         return {};
       }
     },
-    appConfig: { findUnique: async () => null },
+    appConfig: {
+      findFirst: async () => null,
+      findUnique: async () => null
+    },
     platformAccount: { findFirst: async () => null },
-    notification: { create: async () => { counts.notifications += 1; return {}; } },
+    notification: {
+      create: async () => {
+        counts.notifications += 1;
+        return {};
+      }
+    },
     $disconnect: async () => {}
   };
   return { db, updates, counts };
@@ -123,6 +153,8 @@ describe('handleAgentRun (auto-resume of a paused run)', () => {
     expect(updates.some((u) => u.status === 'success')).toBe(true);
     expect(counts.notifications).toBe(1);
     // Resume must NOT reset startedAt (preserves original run start time).
-    expect(updates.find((u) => u.status === 'running')).not.toHaveProperty('startedAt');
+    expect(updates.find((u) => u.status === 'running')).not.toHaveProperty(
+      'startedAt'
+    );
   });
 });

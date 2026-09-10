@@ -56,6 +56,26 @@ export function dedupeByKey<T>(
 
 export const RECENT_INTERACTION_FALLBACK_LIMIT = 10;
 
+export function isOfficialDouyinInboxNoise(item: {
+  userNickname?: string | null;
+  content?: string | null;
+  rawPayload?: unknown;
+}): boolean {
+  const nick = item.userNickname ?? '';
+  const content = item.content ?? '';
+  if (/官方|小助手|系统通知|安全中心/.test(nick)) return true;
+  if (/认证清退|逐步清退|账号规范|平台通知|违规提醒|黄V标识/.test(content))
+    return true;
+  const raw =
+    item.rawPayload && typeof item.rawPayload === 'object'
+      ? (item.rawPayload as Record<string, unknown>)
+      : {};
+  const noticeType = String(
+    raw.notice_type ?? raw.scene ?? raw.message_type ?? raw.notice_type_name ?? ''
+  );
+  return /official|system|announce|platform_notice/.test(noticeType);
+}
+
 export interface SelectTodayOrRecentOptions {
   limit?: number;
   fallbackLimit?: number;

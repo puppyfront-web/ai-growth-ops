@@ -94,6 +94,63 @@ export const CONTENT_EXPORT_COLUMNS: ExportColumn[] = [
   }
 ];
 
+const LEAD_LEVEL_LABELS: Record<string, string> = {
+  A: '高意向',
+  B: '中意向',
+  C: '低意向',
+  D: '无效'
+};
+
+export const PROSPECT_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'userNickname', label: '用户昵称' },
+  { key: 'externalUserId', label: '平台用户ID' },
+  { key: 'userHomepage', label: '主页链接' },
+  { key: 'keyword', label: '命中关键词' },
+  { key: 'relevanceScore', label: '相关度' },
+  {
+    key: 'leadLevel',
+    label: '意向等级',
+    transform: (v) => LEAD_LEVEL_LABELS[String(v)] ?? String(v ?? '')
+  },
+  { key: 'intent', label: '意向描述' },
+  { key: 'summary', label: '判断依据' },
+  {
+    key: 'matchedKeywords',
+    label: '匹配关键词',
+    transform: (v) => (Array.isArray(v) ? v.join(';') : String(v ?? ''))
+  },
+  { key: 'commentCount', label: '评论条数' },
+  { key: 'content', label: '优先评论' },
+  {
+    key: 'evidence',
+    label: '全部评论',
+    transform: (v) =>
+      Array.isArray(v)
+        ? v
+            .map((item) =>
+              item && typeof item === 'object' && 'content' in item
+                ? String((item as { content?: unknown }).content ?? '')
+                : ''
+            )
+            .filter(Boolean)
+            .join(' | ')
+        : ''
+  },
+  { key: 'sourceVideoTitle', label: '来源内容' },
+  { key: 'sourceVideoUrl', label: '来源链接' },
+  { key: 'sourceVideoAuthor', label: '来源作者' },
+  {
+    key: 'scoreSource',
+    label: '评分方式',
+    transform: (v) => (v === 'skill' ? 'AI 语义' : '规则')
+  },
+  {
+    key: 'createdAt',
+    label: '发现时间',
+    transform: (v) => (v ? new Date(v as string).toLocaleString('zh-CN') : '')
+  }
+];
+
 export const INTERACTION_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'id', label: 'ID' },
   { key: 'type', label: '类型' },

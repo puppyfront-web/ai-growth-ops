@@ -17,8 +17,7 @@ const logger = createLogger('manual-reply');
 
 const BROWSER_RUNNER_URL =
   process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-const RUNNER_SECRET =
-  process.env.BROWSER_RUNNER_SECRET || process.env.TOKEN_ENCRYPTION_KEY || '';
+const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
 
 function runnerHeaders(): Record<string, string> {
   const h: Record<string, string> = { 'content-type': 'application/json' };
@@ -138,9 +137,8 @@ export async function handleInteractionManualReply(
         )?.sourceContentId;
         if (sourceContentId) body.sourceContentId = String(sourceContentId);
         // commentText aids locating the comment row on lazy-loaded pages.
-        const text = (
-          interaction.rawPayload as Record<string, unknown>
-        )?.content;
+        const text = (interaction.rawPayload as Record<string, unknown>)
+          ?.content;
         if (typeof text === 'string') body.commentText = text;
       } else {
         body.externalUserId = interaction.externalUserId;
@@ -157,9 +155,7 @@ export async function handleInteractionManualReply(
 
       const respBody = (await response.json()) as Record<string, unknown>;
       if (!response.ok || respBody.error) {
-        throw new Error(
-          String(respBody.error || `HTTP ${response.status}`)
-        );
+        throw new Error(String(respBody.error || `HTTP ${response.status}`));
       }
       result = {
         success: respBody.success !== false,
@@ -186,7 +182,9 @@ export async function handleInteractionManualReply(
           status: 'sent',
           externalReplyId: result.externalReplyId || `manual-${Date.now()}`,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          rawResponse: { mode: accessToken ? 'official_api' : 'browser_assist' } as any
+          rawResponse: {
+            mode: accessToken ? 'official_api' : 'browser_assist'
+          } as any
         }
       });
 

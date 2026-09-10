@@ -351,11 +351,16 @@ export default function PlatformsPage() {
               </div>
 
               {/* Status + Mode */}
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <StatusBadge
                   status={account.status}
                   label={accountStatusLabels[account.status] ?? account.status}
                 />
+                {account.cookieRef && account.mode === 'browser_assist' && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                    Cookie 已保存
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground">
                   {publishModeLabels[account.mode] ?? account.mode}
                 </span>

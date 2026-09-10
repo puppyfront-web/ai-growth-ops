@@ -42,11 +42,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // Redirect hidden sections to the CRM home (线索管理), since the old
-  // default (/cockpit) is itself hidden now.
+  // Redirect hidden sections to CRM home.
   if (!isPublic && isHiddenSection) {
     if (typeof window !== 'undefined') {
-      router.replace('/leads');
+      router.replace('/prospecting');
     }
     return null;
   }

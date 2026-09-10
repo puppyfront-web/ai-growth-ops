@@ -42,6 +42,9 @@ import { handleInteractionManualReply } from './job-handlers/interaction.manual-
 import { handleScheduledInteractionSync } from './job-handlers/scheduled.interaction-sync.js';
 import { handleWorkflowExecute } from './job-handlers/workflow.execute.js';
 import { handleAgentRun } from './job-handlers/agent.run.js';
+import { handleCustomerProfileRefresh } from './job-handlers/customer.profile.refresh.js';
+import { handleCustomerPlaybookGenerate } from './job-handlers/customer.playbook.generate.js';
+import { handleProspectingRun } from './job-handlers/prospecting.run.js';
 import {
   startScheduler,
   SCHEDULED_QUEUE,
@@ -68,6 +71,9 @@ const realHandlers: Record<
   [QUEUE_NAMES.SCHEDULED_INTERACTION_SYNC]: handleScheduledInteractionSync,
   [QUEUE_NAMES.WORKFLOW_EXECUTE]: handleWorkflowExecute,
   [QUEUE_NAMES.AGENT_RUN]: handleAgentRun,
+  [QUEUE_NAMES.CUSTOMER_PROFILE_REFRESH]: handleCustomerProfileRefresh,
+  [QUEUE_NAMES.CUSTOMER_PLAYBOOK_GENERATE]: handleCustomerPlaybookGenerate,
+  [QUEUE_NAMES.PROSPECTING_RUN]: handleProspectingRun,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
   [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule
 };
@@ -83,11 +89,25 @@ export async function startWorker(): Promise<void> {
       logger.error(`No handler for queue ${queueName} — skipping`);
       continue;
     }
-    registerWorker(queueName, handler);
+    const overrides =
+      queueName === QUEUE_NAMES.PROSPECTING_RUN
+        ? {
+            concurrency: 1,
+            lockDuration: 600_000,
+            stalledInterval: 60_000,
+            maxStalledCount: 1
+          }
+        : {};
+    registerWorker(queueName, handler, overrides);
     logger.info(`Registered worker for ${queueName}`);
   }
 
   logger.info(`${Object.keys(QUEUE_NAMES).length} workers registered`);
+
+  const { recoverOrphanedProspectingTasks } = await import(
+    './recover-prospecting.js'
+  );
+  await recoverOrphanedProspectingTasks();
 
   // Start the scheduler for periodic tasks
   await startScheduler();

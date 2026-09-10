@@ -6,6 +6,7 @@ import {
   loadSchema,
   createSchemaValidator,
   trackTokenUsage,
+  type LLMClient,
   type ToolSpec,
   type ToolResult,
   type ToolCall
@@ -16,6 +17,37 @@ import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(import.meta.url);
 const DEFINITIONS_DIR = resolve(__dirname, '..', '..', 'definitions');
+
+function coerceParsedSkillOutput(output: unknown): unknown {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) {
+    return output;
+  }
+  let o = { ...(output as Record<string, unknown>) };
+  const nested = o.data ?? o.result ?? o.output;
+  if (
+    nested &&
+    typeof nested === 'object' &&
+    !Array.isArray(nested) &&
+    typeof o.title !== 'string' &&
+    typeof o.body !== 'string'
+  ) {
+    o = { ...o, ...(nested as Record<string, unknown>) };
+  }
+  if (typeof o.title !== 'string') {
+    const title = o.标题 ?? o.headline ?? o.subject;
+    if (typeof title === 'string') o.title = title;
+  }
+  if (typeof o.body !== 'string') {
+    const body = o.正文 ?? o.content ?? o.text;
+    if (typeof body === 'string') o.body = body;
+  }
+  if (Array.isArray(o.imagePrompts)) {
+    o.imagePrompts = o.imagePrompts.map((item) =>
+      typeof item === 'string' ? { prompt: item } : item
+    );
+  }
+  return o;
+}
 
 export interface SkillRunAdvancedOptions<TInput = unknown> {
   skillName: string;
@@ -28,6 +60,8 @@ export interface SkillRunAdvancedOptions<TInput = unknown> {
   onToolCall?: (call: ToolCall) => Promise<ToolResult>;
   /** Max tool rounds per skill execution (default 3) */
   maxToolRounds?: number;
+  /** Injected LLM client (org config). Falls back to env-based createLLMClient(). */
+  llmClient?: LLMClient;
 }
 
 export class DefaultSkillRunner implements SkillRunner {
@@ -42,6 +76,7 @@ export class DefaultSkillRunner implements SkillRunner {
     skillVersion?: string;
     input: TInput;
     context?: SkillContext;
+    llmClient?: LLMClient;
   }): Promise<SkillRunResult<TOutput>> {
     const start = Date.now();
     const runId = randomUUID();
@@ -72,7 +107,7 @@ export class DefaultSkillRunner implements SkillRunner {
 
       // Load prompt and call LLM
       const prompt = loadPromptFromSKILLMd(skillDir);
-      const client = createLLMClient();
+      const client = input.llmClient ?? createLLMClient();
 
       const contextStr = input.context
         ? `\n\nContext: ${JSON.stringify(input.context)}`
@@ -107,8 +142,16 @@ export class DefaultSkillRunner implements SkillRunner {
         };
       }
 
-      // Validate output
-      validator.validateOutput(parsedOutput);
+      parsedOutput = coerceParsedSkillOutput(parsedOutput) as TOutput;
+
+      try {
+        validator.validateOutput(parsedOutput);
+      } catch (err) {
+        const preview = JSON.stringify(parsedOutput).slice(0, 300);
+        throw new Error(
+          `${err instanceof Error ? err.message : String(err)}; output=${preview}`
+        );
+      }
 
       // Track token usage
       trackTokenUsage({
@@ -180,7 +223,7 @@ export class DefaultSkillRunner implements SkillRunner {
 
       // Load prompt
       const prompt = loadPromptFromSKILLMd(skillDir);
-      const client = createLLMClient();
+      const client = options.llmClient ?? createLLMClient();
 
       const contextStr = options.context
         ? `\n\nContext: ${JSON.stringify(options.context)}`
@@ -220,6 +263,7 @@ export class DefaultSkillRunner implements SkillRunner {
           };
         }
 
+        parsedOutput = coerceParsedSkillOutput(parsedOutput) as TOutput;
         validator.validateOutput(parsedOutput);
 
         trackTokenUsage({
@@ -248,7 +292,8 @@ export class DefaultSkillRunner implements SkillRunner {
           skillName: options.skillName,
           skillVersion: options.skillVersion,
           input: options.input,
-          context: options.context
+          context: options.context,
+          llmClient: options.llmClient
         });
       }
     } catch (err) {

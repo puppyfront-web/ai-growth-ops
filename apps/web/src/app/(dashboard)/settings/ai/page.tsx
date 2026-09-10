@@ -8,7 +8,7 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState, useEffect } from 'react';
-import { Bot, Image, Sparkles } from 'lucide-react';
+import { Bot, Image, Sparkles, Video } from 'lucide-react';
 
 export default function AiSettingsPage() {
   const qc = useQueryClient();
@@ -33,7 +33,12 @@ export default function AiSettingsPage() {
     provider: 'openai',
     apiKey: '',
     baseUrl: '',
-    model: 'dall-e-3'
+    model: 'dall-e-3',
+    videoMode: 'dedicated',
+    videoProvider: 'openai',
+    videoApiKey: '',
+    videoBaseUrl: '',
+    videoModel: ''
   });
 
   useEffect(() => {
@@ -45,7 +50,20 @@ export default function AiSettingsPage() {
       setMaxTokens(config.maxTokens);
       setDailyTokenLimit(config.dailyTokenLimit);
       setFeatures(config.features);
-      if (config.mediaGeneration) setMediaGen(config.mediaGeneration);
+      if (config.mediaGeneration) {
+        setMediaGen({
+          mode: config.mediaGeneration.mode ?? 'llm_provider',
+          provider: config.mediaGeneration.provider ?? 'openai',
+          apiKey: config.mediaGeneration.apiKey ?? '',
+          baseUrl: config.mediaGeneration.baseUrl ?? '',
+          model: config.mediaGeneration.model ?? 'dall-e-3',
+          videoMode: config.mediaGeneration.videoMode ?? 'dedicated',
+          videoProvider: config.mediaGeneration.videoProvider ?? 'openai',
+          videoApiKey: config.mediaGeneration.videoApiKey ?? '',
+          videoBaseUrl: config.mediaGeneration.videoBaseUrl ?? '',
+          videoModel: config.mediaGeneration.videoModel ?? ''
+        });
+      }
     }
   }, [config]);
 
@@ -207,102 +225,54 @@ export default function AiSettingsPage() {
                 </CardTitle>
               </div>
               <p className="text-xs text-muted-foreground">
-                配置 AI 图片/视频生成的 Provider
+                内容素材可上传本地文件，或在此配置生图 / 生视频 API
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">配置模式</label>
-                <div className="mt-2 flex items-center gap-3">
-                  <button
-                    onClick={() =>
-                      setMediaGen((m) => ({ ...m, mode: 'llm_provider' }))
-                    }
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.mode === 'llm_provider' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
-                  >
-                    复用 LLM 配置
-                  </button>
-                  <button
-                    onClick={() =>
-                      setMediaGen((m) => ({ ...m, mode: 'dedicated' }))
-                    }
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.mode === 'dedicated' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
-                  >
-                    独立配置
-                  </button>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Image className="h-4 w-4 text-emerald-500" />
+                  生图 API
                 </div>
-              </div>
-
-              {mediaGen.mode === 'llm_provider' && (
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-sm text-muted-foreground">
-                    将使用上方 LLM 配置的 Provider 和 API Key 调用图片生成接口。
-                    支持 OpenAI 的{' '}
-                    <code className="rounded bg-muted px-1">gpt-4o</code>{' '}
-                    (图片生成) 和{' '}
-                    <code className="rounded bg-muted px-1">dall-e-3</code>。
-                  </p>
-                </div>
-              )}
-
-              {mediaGen.mode === 'llm_provider' && (
                 <div>
-                  <label className="text-sm font-medium">图片生成模型</label>
-                  <input
-                    value={mediaGen.model}
-                    onChange={(e) =>
-                      setMediaGen((m) => ({ ...m, model: e.target.value }))
-                    }
-                    placeholder="dall-e-3"
-                    className="mt-1 w-full rounded-md border p-2 text-sm"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    留空则使用 dall-e-3
-                  </p>
-                </div>
-              )}
-
-              {mediaGen.mode === 'dedicated' && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm font-medium">Provider</label>
-                    <select
-                      value={mediaGen.provider}
-                      onChange={(e) =>
-                        setMediaGen((m) => ({ ...m, provider: e.target.value }))
+                  <label className="text-sm font-medium">配置模式</label>
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMediaGen((m) => ({ ...m, mode: 'llm_provider' }))
                       }
-                      className="mt-1 w-full rounded-md border p-2 text-sm"
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.mode === 'llm_provider' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
                     >
-                      <option value="openai">OpenAI (DALL·E)</option>
-                      <option value="stability">Stability AI</option>
-                      <option value="other">其他 OpenAI 兼容</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">API Key</label>
-                    <input
-                      type="password"
-                      value={mediaGen.apiKey}
-                      onChange={(e) =>
-                        setMediaGen((m) => ({ ...m, apiKey: e.target.value }))
+                      复用 LLM 配置
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMediaGen((m) => ({ ...m, mode: 'dedicated' }))
                       }
-                      placeholder="sk-***"
-                      className="mt-1 w-full rounded-md border p-2 text-sm"
-                    />
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.mode === 'dedicated' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
+                    >
+                      独立配置
+                    </button>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">Base URL</label>
-                    <input
-                      value={mediaGen.baseUrl}
-                      onChange={(e) =>
-                        setMediaGen((m) => ({ ...m, baseUrl: e.target.value }))
-                      }
-                      placeholder="https://api.openai.com/v1"
-                      className="mt-1 w-full rounded-md border p-2 text-sm"
-                    />
+                </div>
+
+                {mediaGen.mode === 'llm_provider' && (
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <p className="text-sm text-muted-foreground">
+                      使用上方 LLM 的 API Key 调用 OpenAI 兼容{' '}
+                      <code className="rounded bg-muted px-1">
+                        /images/generations
+                      </code>
+                      。
+                    </p>
                   </div>
+                )}
+
+                {mediaGen.mode === 'llm_provider' && (
                   <div>
-                    <label className="text-sm font-medium">模型名称</label>
+                    <label className="text-sm font-medium">图片生成模型</label>
                     <input
                       value={mediaGen.model}
                       onChange={(e) =>
@@ -312,8 +282,167 @@ export default function AiSettingsPage() {
                       className="mt-1 w-full rounded-md border p-2 text-sm"
                     />
                   </div>
+                )}
+
+                {mediaGen.mode === 'dedicated' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium">Provider</label>
+                      <select
+                        value={mediaGen.provider}
+                        onChange={(e) =>
+                          setMediaGen((m) => ({
+                            ...m,
+                            provider: e.target.value
+                          }))
+                        }
+                        className="mt-1 w-full rounded-md border p-2 text-sm"
+                      >
+                        <option value="openai">OpenAI (DALL·E)</option>
+                        <option value="stability">Stability AI</option>
+                        <option value="other">其他 OpenAI 兼容</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">API Key</label>
+                      <input
+                        type="password"
+                        value={mediaGen.apiKey}
+                        onChange={(e) =>
+                          setMediaGen((m) => ({ ...m, apiKey: e.target.value }))
+                        }
+                        placeholder="sk-***"
+                        className="mt-1 w-full rounded-md border p-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Base URL</label>
+                      <input
+                        value={mediaGen.baseUrl}
+                        onChange={(e) =>
+                          setMediaGen((m) => ({
+                            ...m,
+                            baseUrl: e.target.value
+                          }))
+                        }
+                        placeholder="https://api.openai.com/v1"
+                        className="mt-1 w-full rounded-md border p-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">模型名称</label>
+                      <input
+                        value={mediaGen.model}
+                        onChange={(e) =>
+                          setMediaGen((m) => ({ ...m, model: e.target.value }))
+                        }
+                        placeholder="dall-e-3"
+                        className="mt-1 w-full rounded-md border p-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Video className="h-4 w-4 text-sky-500" />
+                  生视频 API
                 </div>
-              )}
+                <p className="text-xs text-muted-foreground">
+                  填写 OpenAI 兼容的 Base URL，系统会请求{' '}
+                  <code className="rounded bg-muted px-1">
+                    /videos/generations
+                  </code>
+                  ，需同步返回视频 URL。
+                </p>
+                <div>
+                  <label className="text-sm font-medium">配置模式</label>
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMediaGen((m) => ({ ...m, videoMode: 'llm_provider' }))
+                      }
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.videoMode === 'llm_provider' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
+                    >
+                      复用 LLM 配置
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMediaGen((m) => ({ ...m, videoMode: 'dedicated' }))
+                      }
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.videoMode === 'dedicated' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
+                    >
+                      独立配置
+                    </button>
+                  </div>
+                </div>
+                {mediaGen.videoMode === 'llm_provider' && (
+                  <div>
+                    <label className="text-sm font-medium">视频生成模型</label>
+                    <input
+                      value={mediaGen.videoModel}
+                      onChange={(e) =>
+                        setMediaGen((m) => ({
+                          ...m,
+                          videoModel: e.target.value
+                        }))
+                      }
+                      placeholder="sora-2"
+                      className="mt-1 w-full rounded-md border p-2 text-sm"
+                    />
+                  </div>
+                )}
+                {mediaGen.videoMode === 'dedicated' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium">API Key</label>
+                      <input
+                        type="password"
+                        value={mediaGen.videoApiKey}
+                        onChange={(e) =>
+                          setMediaGen((m) => ({
+                            ...m,
+                            videoApiKey: e.target.value
+                          }))
+                        }
+                        placeholder="sk-***"
+                        className="mt-1 w-full rounded-md border p-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Base URL</label>
+                      <input
+                        value={mediaGen.videoBaseUrl}
+                        onChange={(e) =>
+                          setMediaGen((m) => ({
+                            ...m,
+                            videoBaseUrl: e.target.value
+                          }))
+                        }
+                        placeholder="https://api.openai.com/v1"
+                        className="mt-1 w-full rounded-md border p-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">模型名称</label>
+                      <input
+                        value={mediaGen.videoModel}
+                        onChange={(e) =>
+                          setMediaGen((m) => ({
+                            ...m,
+                            videoModel: e.target.value
+                          }))
+                        }
+                        placeholder="sora-2"
+                        className="mt-1 w-full rounded-md border p-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 

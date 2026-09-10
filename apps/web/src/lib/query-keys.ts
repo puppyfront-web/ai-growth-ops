@@ -44,13 +44,18 @@ export const queryKeys = {
     activities: (leadId: string) => ['leads', leadId, 'activities'] as const,
     sinks: (type: string) => ['leads', 'sinks', type] as const
   },
+  customers: {
+    all: ['customers'] as const,
+    customer: (id: string) => ['customers', id] as const
+  },
   analytics: {
     overview: ['analytics', 'overview'] as const,
     platforms: ['analytics', 'platforms'] as const,
     contentRoi: ['analytics', 'content-roi'] as const,
     leadTrend: ['analytics', 'lead-trend'] as const,
     platformTrend: ['analytics', 'platform-trend'] as const,
-    events: ['analytics', 'events'] as const
+    events: ['analytics', 'events'] as const,
+    acquisition: (days: number) => ['analytics', 'acquisition', days] as const
   },
   integrations: {
     accounts: ['integrations', 'accounts'] as const,

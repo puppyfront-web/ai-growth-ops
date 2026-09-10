@@ -2,7 +2,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
-    message: string
+    message: string,
+    public payload: Record<string, unknown> = {}
   ) {
     super(message);
     this.name = 'ApiError';
@@ -64,12 +65,16 @@ function extractErrorMessage(
   fallback: string
 ): string {
   const err = body.error;
-  if (typeof err === 'string') return err;
-  if (err && typeof err === 'object' && 'message' in err) {
-    return String((err as { message: unknown }).message);
+  let message = fallback;
+  if (typeof err === 'string') message = err;
+  else if (err && typeof err === 'object' && 'message' in err) {
+    message = String((err as { message: unknown }).message);
+  } else if (typeof body.message === 'string') message = body.message;
+  const detail = body.detail;
+  if (typeof detail === 'string' && detail && detail !== message) {
+    return `${message}：${detail}`;
   }
-  if (typeof body.message === 'string') return body.message;
-  return fallback;
+  return message;
 }
 
 function extractErrorCode(body: Record<string, unknown>): string {
@@ -83,7 +88,7 @@ function extractErrorCode(body: Record<string, unknown>): string {
 async function parseError(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   const message = extractErrorMessage(body, res.statusText);
-  return new ApiError(res.status, extractErrorCode(body), message);
+  return new ApiError(res.status, extractErrorCode(body), message, body);
 }
 
 export async function apiGet<T>(path: string, opts?: RequestInit): Promise<T> {
@@ -147,6 +152,23 @@ export async function apiUpload<T>(
   if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw await parseError(res);
   return res.json();
+}
+
+/** Downloads an authenticated file response and saves it via a temporary link. */
+export async function apiDownload(
+  path: string,
+  filename: string
+): Promise<void> {
+  const res = await fetch(path, { headers: buildHeaders() });
+  if (res.status === 401) handleUnauthorized();
+  if (!res.ok) throw await parseError(res);
+
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function apiGetPage<T>(

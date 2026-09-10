@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "displayName": { "type": "string" },
+    "company": { "type": "string" },
+    "role": { "type": "string" },
+    "intent": { "type": "string" },
+    "channel": { "type": "string" },
+    "status": { "type": "string" },
+    "segment": { "type": "string" },
+    "fitScore": { "type": "number" },
+    "intentScore": { "type": "number" },
+    "healthScore": { "type": "number" },
+    "profileSummary": { "type": "string" },
+    "painPoints": { "type": "array", "items": { "type": "string" } },
+    "interests": { "type": "array", "items": { "type": "string" } },
+    "recentActivities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["displayName", "company", "role", "intent"]
+}

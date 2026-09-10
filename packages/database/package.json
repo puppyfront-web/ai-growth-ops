@@ -20,6 +20,9 @@
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-growth-ops/providers": "workspace:*",
+    "@ai-growth-ops/shared": "workspace:*",
+    "@ai-growth-ops/skills": "workspace:*",
     "@prisma/client": "^5.22.0"
   }
 }

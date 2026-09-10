@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { apiUpload } from '@/lib/api/client';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { apiUpload, authToken } from '@/lib/api/client';
 
 export interface UploadedFile {
   id: string;
@@ -19,6 +19,59 @@ interface FileUploadProps {
   onUploadsChange: (files: UploadedFile[]) => void;
 }
 
+function AuthedMedia({
+  src,
+  fileType,
+  fileName
+}: {
+  src: string;
+  fileType: string;
+  fileName: string;
+}) {
+  const [blobUrl, setBlobUrl] = useState(src);
+  useEffect(() => {
+    if (!src || src.startsWith('blob:') || src.startsWith('data:')) {
+      setBlobUrl(src);
+      return;
+    }
+    let objectUrl = '';
+    let cancelled = false;
+    const headers: Record<string, string> = {};
+    const token = authToken.get();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    fetch(src, { headers })
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setBlobUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setBlobUrl(src);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
+
+  if (fileType.startsWith('video/')) {
+    return (
+      <video src={blobUrl} className="h-24 w-full object-cover" muted playsInline />
+    );
+  }
+  if (fileType.startsWith('image/')) {
+    return (
+      <img src={blobUrl} alt={fileName} className="h-24 w-full object-cover" />
+    );
+  }
+  return (
+    <div className="h-24 flex items-center justify-center text-muted-foreground text-xs">
+      {fileType.startsWith('video/') ? '视频文件' : fileName}
+    </div>
+  );
+}
+
 export function FileUpload({
   accept = 'image/*,video/*',
   maxFiles = 9,
@@ -29,6 +82,7 @@ export function FileUpload({
 }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback(
@@ -39,6 +93,7 @@ export function FileUpload({
       if (files.length === 0) return;
 
       setUploading(true);
+      setUploadError(null);
       try {
         const formData = new FormData();
         files.forEach((f) => formData.append('files', f));
@@ -56,6 +111,8 @@ export function FileUpload({
         );
         onUploadsChange([...uploads, ...newUploads]);
         onChange([...value, ...newUploads.map((u) => u.id)]);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : '上传失败');
       } finally {
         setUploading(false);
       }
@@ -67,8 +124,6 @@ export function FileUpload({
     onUploadsChange(uploads.filter((u) => u.id !== id));
     onChange(value.filter((v) => v !== id));
   };
-
-  const isImage = (ft?: string | null) => (ft ?? '').startsWith('image/');
 
   return (
     <div className="space-y-3">
@@ -101,11 +156,14 @@ export function FileUpload({
           ref={inputRef}
           type="file"
           accept={accept}
-          multiple
+          multiple={maxFiles > 1}
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
         />
       </div>
+      {uploadError && (
+        <p className="text-xs text-destructive">{uploadError}</p>
+      )}
 
       {uploads.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
@@ -114,17 +172,11 @@ export function FileUpload({
               key={file.id}
               className="relative group rounded-lg border bg-muted/30 overflow-hidden"
             >
-              {isImage(file.fileType) ? (
-                <img
-                  src={file.sourceUrl}
-                  alt={file.fileName}
-                  className="h-24 w-full object-cover"
-                />
-              ) : (
-                <div className="h-24 flex items-center justify-center text-muted-foreground text-xs">
-                  视频文件
-                </div>
-              )}
+              <AuthedMedia
+                src={file.sourceUrl}
+                fileType={file.fileType}
+                fileName={file.fileName}
+              />
               <div className="p-1.5 flex items-center justify-between">
                 <span className="text-xs truncate max-w-[80%]">
                   {file.fileName}
