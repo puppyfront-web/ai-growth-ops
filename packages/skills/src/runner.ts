@@ -127,24 +127,50 @@ export class DefaultSkillRunner implements SkillRunner {
         }
       ];
 
-      const response = await client.chat(messages);
-
-      // Parse JSON from response
-      let parsedOutput: TOutput;
-      try {
-        // Try to extract JSON from markdown code blocks or raw text
-        const jsonMatch = response.text.match(
-          /```(?:json)?\s*\n?([\s\S]*?)\n?```/
-        ) || [null, response.text];
-        parsedOutput = JSON.parse(jsonMatch[1] || response.text) as TOutput;
-      } catch {
+      // 推理型模型（DeepSeek 等）会先消耗补全额度做思考链，预算不足时
+      // 返回空文本或被截断的 JSON；给足预算并在解析失败时带反馈重试一次
+      let response: Awaited<ReturnType<typeof client.chat>> | null = null;
+      let parsedOutput: TOutput | null = null;
+      let lastAssistantText = '';
+      for (let attempt = 0; attempt < 2 && parsedOutput === null; attempt++) {
+        response = await client.chat(
+          attempt === 0
+            ? messages
+            : [
+                ...messages,
+                { role: 'assistant' as const, content: lastAssistantText },
+                {
+                  role: 'user' as const,
+                  content:
+                    '上一次输出不是合法 JSON（可能被截断）。请严格按输出 schema 重新返回完整 JSON，不要附加说明。'
+                }
+              ],
+          {
+            maxTokens: 8000,
+            temperature: attempt === 0 ? 0.3 : 0
+          }
+        );
+        lastAssistantText = response.text;
+        try {
+          // Try to extract JSON from markdown code blocks or raw text
+          const jsonMatch = response.text.match(
+            /```(?:json)?\s*\n?([\s\S]*?)\n?```/
+          ) || [null, response.text];
+          parsedOutput = JSON.parse(
+            jsonMatch[1] || response.text
+          ) as TOutput;
+        } catch {
+          parsedOutput = null;
+        }
+      }
+      if (parsedOutput === null || response === null) {
         return {
           runId,
           skillName: input.skillName,
           skillVersion: input.skillVersion || '1.0.0',
           status: 'failed',
-          error: `Failed to parse LLM output as JSON: ${response.text.substring(0, 200)}`,
-          tokenUsage: response.tokenUsage,
+          error: `Failed to parse LLM output as JSON: ${lastAssistantText.substring(0, 200)}`,
+          tokenUsage: response?.tokenUsage,
           latencyMs: Date.now() - start
         };
       }
