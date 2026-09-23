@@ -23,6 +23,7 @@ services:
       MINIO_ENDPOINT: minio
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+      LOCAL_DATA_DIR: /var/lib/ai-growth-ops
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?Set INTERNAL_API_SECRET}
       BROWSER_RUNNER_SECRET: ${BROWSER_RUNNER_SECRET:?Set BROWSER_RUNNER_SECRET}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
@@ -41,8 +42,16 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ai-growth-ops.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
       ADMIN_NAME: ${ADMIN_NAME:-Admin}
+    volumes:
+      - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}:/var/lib/ai-growth-ops
     healthcheck:
-      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -82,6 +91,7 @@ services:
       REDIS_URL: redis://redis:6379
       BROWSER_RUNNER_URL: http://browser-runner:3200
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+      LOCAL_DATA_DIR: /var/lib/ai-growth-ops
       BROWSER_RUNNER_SECRET: ${BROWSER_RUNNER_SECRET:?Set BROWSER_RUNNER_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
@@ -91,6 +101,8 @@ services:
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
       AGENT_DAILY_DRY_RUN: ${AGENT_DAILY_DRY_RUN:-true}
       FEISHU_DAILY_REPORT_WEBHOOK: ${FEISHU_DAILY_REPORT_WEBHOOK:-}
+    volumes:
+      - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}:/var/lib/ai-growth-ops
 
   browser-runner:
     build:
@@ -103,9 +115,12 @@ services:
       BROWSER_RUNNER_HEADED: 'false'
       BROWSER_RUNNER_SECRET: ${BROWSER_RUNNER_SECRET:?Set BROWSER_RUNNER_SECRET}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+      LOCAL_DATA_DIR: /var/lib/ai-growth-ops
       VISION_API_KEY: ${VISION_API_KEY:-}
       VISION_BASE_URL: ${VISION_BASE_URL:-}
       VISION_MODEL: ${VISION_MODEL:-}
+    volumes:
+      - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}:/var/lib/ai-growth-ops:ro
 
   postgres:
     image: postgres:16-alpine
@@ -116,7 +131,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres}']
       interval: 10s
@@ -128,7 +143,7 @@ services:
     container_name: ai-growth-ops-redis
     restart: unless-stopped
     volumes:
-      - redis-data:/data
+      - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}/redis:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
@@ -144,9 +159,4 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
     volumes:
-      - minio-data:/data
-
-volumes:
-  postgres-data:
-  redis-data:
-  minio-data:
+      - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}/objects:/data

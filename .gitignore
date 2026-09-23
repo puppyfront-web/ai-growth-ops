@@ -17,4 +17,6 @@ apps/api/uploads/
 .tmp-tests/
 .logs/
 uploads/
+.local-data/
+packages/database/generated/
 .cursor/

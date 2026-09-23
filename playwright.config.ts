@@ -30,7 +30,9 @@ export default defineConfig({
         ...process.env,
         API_PORT: '3310',
         REDIS_URL: process.env.REDIS_URL,
-        DATABASE_URL: e2eDatabaseUrl
+        DATABASE_URL: e2eDatabaseUrl,
+        // e2e 产生的平台 Cookie/密钥文件落在临跑目录，避免污染真实 ~/.ai-growth-ops
+        LOCAL_DATA_DIR: 'test-results/local-data'
       }
     },
     {
