@@ -51,7 +51,8 @@ export class SandboxInteractionConnector implements InteractionConnector {
         content: this.getMockContent(i),
         likeCount: Math.floor(Math.random() * 100),
         replyCount: Math.floor(Math.random() * 5),
-        publishedAt: new Date(Date.now() - i * 3600000).toISOString(),
+        // 分钟级回溯：同步链路只保留“今天”的互动，小时级会跨午夜导致行为随时段变化
+        publishedAt: new Date(Date.now() - i * 60_000).toISOString(),
         sourceContentId: input.sourceContentId || 'sandbox_content',
         sourceContentTitle: '沙箱测试内容'
       });
@@ -69,7 +70,7 @@ export class SandboxInteractionConnector implements InteractionConnector {
         userNickname: `沙箱用户${i + 1}`,
         content: this.getMockMessage(i),
         type: 'text',
-        publishedAt: new Date(Date.now() - i * 1800000).toISOString()
+        publishedAt: new Date(Date.now() - i * 60_000).toISOString()
       });
     }
     return messages;

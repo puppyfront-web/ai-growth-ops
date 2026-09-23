@@ -78,7 +78,8 @@ function handleCORS(req: IncomingMessage, res: ServerResponse): boolean {
 
 // Simple in-memory rate limiter for login endpoint
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-const LOGIN_RATE_LIMIT = 10; // max attempts
+// e2e 全量套件共享同一 API 实例且每个用例都要登录，通过环境变量放宽阈值
+const LOGIN_RATE_LIMIT = Number(process.env.LOGIN_RATE_LIMIT ?? 10); // max attempts
 const LOGIN_RATE_WINDOW = 60_000; // per minute
 
 function isLoginRateLimited(ip: string): boolean {

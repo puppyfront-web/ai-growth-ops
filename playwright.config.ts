@@ -31,7 +31,9 @@ export default defineConfig({
         API_PORT: '3310',
         REDIS_URL: process.env.REDIS_URL,
         DATABASE_URL: e2eDatabaseUrl,
-        LOCAL_DATA_DIR: 'test-results/local-data'
+        LOCAL_DATA_DIR: 'test-results/local-data',
+        // 全量套件共享本 API 实例且每个用例都登录一次，默认 10 次/分钟会触发限流
+        LOGIN_RATE_LIMIT: '1000'
       }
     },
     {
