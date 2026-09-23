@@ -1,12 +1,19 @@
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 
 function uploadsDirs(): string[] {
   const here = dirname(fileURLToPath(import.meta.url));
+  // 与 API 端 localDataPath('uploads') 的解析保持一致：
+  // LOCAL_DATA_DIR 优先，未配置时落到 .local-data（相对服务启动目录）
+  const localDataRoot = process.env.LOCAL_DATA_DIR?.trim() || '.local-data';
   const dirs = [
     process.env.UPLOADS_DIR,
+    resolve(localDataRoot, 'uploads'),
+    resolve(homedir(), '.ai-growth-ops', 'uploads'),
+    // 旧版本地目录，保留以兼容历史素材
     resolve(process.cwd(), 'uploads'),
     resolve(here, '../../../uploads'),
     resolve(here, '../../api/uploads')
