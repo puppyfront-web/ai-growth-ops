@@ -1,15 +1,19 @@
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { resolveLlmConfigFromDb, type DatabaseClient } from '@ai-growth-ops/database';
+import {
+  resolveLlmConfigFromDb,
+  type DatabaseClient
+} from '@ai-growth-ops/database';
 import {
   credentialsFromSaved,
   generationEndpoint,
   pickGeneratedMediaUrl,
   type MediaGenKind
 } from './media-gen-config.js';
+import { localDataPath } from '../local-paths.js';
 
-const UPLOADS_DIR = join(process.cwd(), 'uploads');
+const UPLOADS_DIR = localDataPath('uploads');
 
 export interface GenerateMediaOptions {
   prompt: string;
@@ -26,7 +30,11 @@ export async function loadAiConfigValue(
   orgId: string
 ): Promise<Record<string, unknown> | null> {
   const savedConfig = await db.appConfig.findFirst({
-    where: { userId, organizationId: orgId, key: { in: [`ai_config:${orgId}`, 'ai_config'] } },
+    where: {
+      userId,
+      organizationId: orgId,
+      key: { in: [`ai_config:${orgId}`, 'ai_config'] }
+    },
     orderBy: { key: 'desc' }
   });
   return (savedConfig?.value as Record<string, unknown> | null) ?? null;
@@ -53,11 +61,17 @@ async function persistGeneratedFile(params: {
     return { savedName, fileSize: buffer.length, fileType };
   }
   if (!params.url) {
-    throw new Error(params.kind === 'video' ? '无法获取生成视频' : '无法获取生成图片');
+    throw new Error(
+      params.kind === 'video' ? '无法获取生成视频' : '无法获取生成图片'
+    );
   }
-  const remote = await fetch(params.url, { signal: AbortSignal.timeout(120_000) });
+  const remote = await fetch(params.url, {
+    signal: AbortSignal.timeout(120_000)
+  });
   if (!remote.ok) {
-    throw new Error(params.kind === 'video' ? '下载生成视频失败' : '下载生成图片失败');
+    throw new Error(
+      params.kind === 'video' ? '下载生成视频失败' : '下载生成图片失败'
+    );
   }
   const buffer = Buffer.from(await remote.arrayBuffer());
   writeFileSync(filePath, buffer);
