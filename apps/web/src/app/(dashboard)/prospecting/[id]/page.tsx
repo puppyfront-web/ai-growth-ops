@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   getProspectingTask,
@@ -18,6 +18,7 @@ import {
   resolveProspectingCaptcha,
   formatProspectingProgress,
   getProspectingProgressPercent,
+  isAccountLoginRequiredError,
   type ProspectCandidate,
   type ProspectEvidence,
   type ProspectUserProfile
@@ -153,7 +154,7 @@ function ConvertDialog({
           转入客户库
         </h3>
         <p className="text-xs text-muted-foreground">
-          平台拿不到手机号，可直接转入，后续由销售人工跟进补充。
+          平台拿不到手机号，可直接转入；跟进请到飞书完成。
         </p>
         <p className="text-sm font-medium">
           {candidate.userNickname ?? '未知用户'}
@@ -415,6 +416,7 @@ function ConvertedBadge({ customerId }: { customerId: string }) {
 
 export default function ProspectingDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
   const qc = useQueryClient();
   const [convertTarget, setConvertTarget] = useState<ProspectCandidate | null>(
@@ -463,7 +465,14 @@ export default function ProspectingDetailPage() {
   const runMutation = useMutation({
     mutationFn: () => runProspectingTask(id, forceRecrawl),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ['prospecting', 'task', id] })
+      qc.invalidateQueries({ queryKey: ['prospecting', 'task', id] }),
+    // Cookie can lapse between page load and the click — follow the same
+    // "jump to account config" path as the pre-click check.
+    onError: (err: Error) => {
+      if (isAccountLoginRequiredError(err.message)) {
+        router.push('/integrations/platforms');
+      }
+    }
   });
 
   const exportMutation = useMutation({
@@ -522,8 +531,9 @@ export default function ProspectingDetailPage() {
     allowedVideos,
     guard?.limits
   );
+  // needsLogin intentionally does NOT block the button — the click handler
+  // redirects to the platform-account config page instead.
   const runBlocked =
-    Boolean(guard?.needsLogin) ||
     Boolean(guard && guard.videosRemaining <= 0) ||
     Boolean(guard && guard.captchaWaitMs > 0);
   const runLabel =
@@ -557,7 +567,13 @@ export default function ProspectingDetailPage() {
             </button>
             {task.status !== 'running' && (
               <button
-                onClick={() => runMutation.mutate()}
+                onClick={() => {
+                  if (guard?.needsLogin) {
+                    router.push('/integrations/platforms');
+                    return;
+                  }
+                  runMutation.mutate();
+                }}
                 disabled={runMutation.isPending || runBlocked}
                 className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
               >
@@ -571,8 +587,8 @@ export default function ProspectingDetailPage() {
       {convertNotice && (
         <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
           {convertNotice.reused
-            ? '已关联已有客户，可继续跟进。'
-            : '已转入客户库，正在生成画像与跟进方案。'}{' '}
+            ? '已关联已有客户。'
+            : '已转入客户库，正在生成画像。'}{' '}
           <Link
             href={`/customers/${convertNotice.customerId}`}
             className="underline"
@@ -743,7 +759,11 @@ export default function ProspectingDetailPage() {
             const comments = candidateComments(c);
             const converted = group.all.find((item) => item.customerId)?.customerId;
             return (
-              <div key={group.key} className="rounded-lg border">
+              <div
+                key={group.key}
+                id={`candidate-${c.id}`}
+                className="rounded-lg border scroll-mt-24"
+              >
                 <div className="flex gap-3 p-4 items-start">
                   <button
                     type="button"

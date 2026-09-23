@@ -112,7 +112,7 @@ export async function refreshCustomerProfile(
   db: DatabaseClient,
   customerId: string,
   organizationId: string,
-  userId: string
+  _userId: string
 ) {
   const customer = await db.customer.findFirst({
     where: { id: customerId, organizationId, deletedAt: null },

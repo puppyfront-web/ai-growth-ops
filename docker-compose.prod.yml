@@ -9,30 +9,61 @@ services:
     container_name: ai-growth-ops-api
     restart: unless-stopped
     ports:
-      - '${API_PORT:-3100}:3100'
-    env_file: .env
+      - '127.0.0.1:${API_PORT:-3100}:3100'
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_growth_ops}
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_growth_ops}
       REDIS_URL: redis://redis:6379
+      BROWSER_RUNNER_URL: http://browser-runner:3200
+      MINIO_ENDPOINT: minio
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?Set INTERNAL_API_SECRET}
+      BROWSER_RUNNER_SECRET: ${BROWSER_RUNNER_SECRET:?Set BROWSER_RUNNER_SECRET}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-ai-growth-ops}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      APP_URL: ${APP_URL:?Set APP_URL}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ai-growth-ops.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME:-Admin}
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        API_BASE_URL: http://api:3100
     container_name: ai-growth-ops-web
     restart: unless-stopped
     ports:
-      - '${WEB_PORT:-3000}:3000'
-    env_file: .env
+      - '127.0.0.1:${WEB_PORT:-3000}:3000'
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3100}
+      NODE_ENV: production
+      API_BASE_URL: http://api:3100
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?Set INTERNAL_API_SECRET}
 
   worker:
     build:
@@ -40,15 +71,26 @@ services:
       dockerfile: apps/worker/Dockerfile
     container_name: ai-growth-ops-worker
     restart: unless-stopped
-    env_file: .env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_growth_ops}
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_growth_ops}
       REDIS_URL: redis://redis:6379
+      BROWSER_RUNNER_URL: http://browser-runner:3200
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+      BROWSER_RUNNER_SECRET: ${BROWSER_RUNNER_SECRET:?Set BROWSER_RUNNER_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      AGENT_DAILY_DRY_RUN: ${AGENT_DAILY_DRY_RUN:-true}
+      FEISHU_DAILY_REPORT_WEBHOOK: ${FEISHU_DAILY_REPORT_WEBHOOK:-}
 
   browser-runner:
     build:
@@ -56,9 +98,14 @@ services:
       dockerfile: apps/browser-runner/Dockerfile
     container_name: ai-growth-ops-browser-runner
     restart: unless-stopped
-    ports:
-      - '${BROWSER_RUNNER_PORT:-3200}:3200'
-    env_file: .env
+    environment:
+      NODE_ENV: production
+      BROWSER_RUNNER_HEADED: 'false'
+      BROWSER_RUNNER_SECRET: ${BROWSER_RUNNER_SECRET:?Set BROWSER_RUNNER_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+      VISION_API_KEY: ${VISION_API_KEY:-}
+      VISION_BASE_URL: ${VISION_BASE_URL:-}
+      VISION_MODEL: ${VISION_MODEL:-}
 
   postgres:
     image: postgres:16-alpine
@@ -67,7 +114,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ai_growth_ops}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -95,12 +142,9 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
     volumes:
       - minio-data:/data
-    ports:
-      - '${MINIO_API_PORT:-9000}:9000'
-      - '${MINIO_CONSOLE_PORT:-9001}:9001'
 
 volumes:
   postgres-data:

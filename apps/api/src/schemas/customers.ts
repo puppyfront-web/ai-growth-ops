@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { isValidPhone } from '@ai-growth-ops/shared';
+import {
+  CUSTOMER_IMPORT_CSV_MAX_CHARS,
+  isValidPhone
+} from '@ai-growth-ops/shared';
 
 const acquisitionChannelSchema = z.enum([
   'douyin',
@@ -72,13 +75,18 @@ const customerFieldMappingSchema = z
   })
   .optional();
 
+const csvBodySchema = z
+  .string()
+  .min(1, 'CSV 内容不能为空')
+  .max(CUSTOMER_IMPORT_CSV_MAX_CHARS, 'CSV 不能超过 500KB');
+
 export const customerImportPreviewSchema = z.object({
-  csv: z.string().min(1, 'CSV 内容不能为空'),
+  csv: csvBodySchema,
   mapping: customerFieldMappingSchema
 });
 
 export const customerImportExecuteSchema = z.object({
-  csv: z.string().min(1, 'CSV 内容不能为空'),
+  csv: csvBodySchema,
   mapping: customerFieldMappingSchema,
   skipDuplicates: z.boolean().default(true)
 });

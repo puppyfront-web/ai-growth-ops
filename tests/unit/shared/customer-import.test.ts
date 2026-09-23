@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  CUSTOMER_IMPORT_CSV_MAX_CHARS,
   parseCsv,
   suggestCustomerMapping,
   mappingIsComplete
@@ -8,6 +9,7 @@ import {
   buildImportPreviewRows,
   summarizeImportPreview
 } from '../../../packages/shared/src/customer-import';
+import { customerImportPreviewSchema } from '../../../apps/api/src/schemas/customers';
 
 describe('parseCsv', () => {
   it('parses quoted fields', () => {
@@ -76,5 +78,14 @@ describe('customer import preview', () => {
     expect(summary.duplicateFile).toBe(1);
     expect(summary.invalid).toBe(1);
     expect(summary.ready).toBe(0);
+  });
+});
+
+describe('customer import csv size', () => {
+  it('rejects oversized csv payloads', () => {
+    const result = customerImportPreviewSchema.safeParse({
+      csv: 'a'.repeat(CUSTOMER_IMPORT_CSV_MAX_CHARS + 1)
+    });
+    expect(result.success).toBe(false);
   });
 });

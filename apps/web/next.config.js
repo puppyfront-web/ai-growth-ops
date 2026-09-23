@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
+  // Root build runs ESLint 9 before Next 14, whose bundled lint integration is incompatible.
+  eslint: { ignoreDuringBuilds: true },
   // eslint-disable-next-line no-undef
   distDir: process.env.NEXT_DIST_DIR || '.next',
   transpilePackages: ['@ai-growth-ops/shared'],

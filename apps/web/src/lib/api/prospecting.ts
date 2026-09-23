@@ -337,3 +337,12 @@ export function cancelProspectingCaptcha() {
 export function resolveProspectingCaptcha() {
   return apiPost<{ ok: boolean }>('/api/prospecting/captcha/resolved', {});
 }
+
+/** Matches the API's "platform account not logged in" family of errors. */
+export function isAccountLoginRequiredError(message: string): boolean {
+  return (
+    /未找到.*已登录账号/.test(message) ||
+    /请先在集成配置中扫码登录/.test(message) ||
+    /登录已失效/.test(message)
+  );
+}

@@ -46,10 +46,10 @@ export function classifyByRules(content: string): ClassificationResult {
     };
   }
 
-  // Price inquiry
+  // Price inquiry ("价格战" is news commentary, not an ask)
   if (
     text.match(
-      /多少钱|价格|费用|报价|收费标准|怎么卖|在哪买|哪里买|购买|cost|price/
+      /多少钱|价格(?!战)|费用|报价|收费标准|怎么卖|在哪买|哪里买|购买|cost|price/
     )
   ) {
     return {
@@ -96,7 +96,7 @@ export function classifyByRules(content: string): ClassificationResult {
   // Product quality / detail inquiry
   if (
     text.match(
-      /质量|怎么样|能用|耐用|售后|保修|换货|退货|材质|规格|参数|介绍|详细/
+      /质量|怎么样|能用|耐用|售后|保修|换货|退货|材质|规格|参数|介绍|详细|求推荐|推荐一下|怎么选|如何选/
     )
   ) {
     return {

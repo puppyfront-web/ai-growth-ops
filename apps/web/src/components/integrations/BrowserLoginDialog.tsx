@@ -129,7 +129,6 @@ export function BrowserLoginDialog({
     }
   }, [accountId, cleanup, startPolling]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) {
       // Don't wipe state if we're in logged_in — let the success screen stay

@@ -13,11 +13,12 @@ import { useState } from 'react';
 
 export default function MediaPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [sourceType, setSourceType] = useState('');
   const [filter, setFilter] = useState<string>('');
   const { data, isLoading } = useQuery({
-    queryKey: ['media-assets', filter],
+    queryKey: ['media-assets', filter, sourceType],
     queryFn: () =>
-      listMediaAssets(filter ? { reviewStatus: filter } : undefined)
+      listMediaAssets({ reviewStatus: filter || undefined, sourceType: sourceType || undefined })
   });
 
   return (
@@ -54,6 +55,12 @@ export default function MediaPage() {
           <option value="pending_review">待审核</option>
           <option value="approved">已通过</option>
           <option value="rejected">已拒绝</option>
+        </select>
+        <select aria-label="素材来源" value={sourceType} onChange={(event) => setSourceType(event.target.value)} className="rounded-md border p-2 text-sm">
+          <option value="">全部来源</option>
+          <option value="uploaded">本地上传</option>
+          <option value="external_url">外部链接</option>
+          <option value="generated_future">AI 生成</option>
         </select>
         <div className="flex rounded-md border">
           <button

@@ -36,6 +36,7 @@ export function listCustomers(filters?: {
   status?: string;
   channel?: string;
   source?: string;
+  pending?: string;
   q?: string;
   page?: number;
   pageSize?: number;
@@ -44,6 +45,7 @@ export function listCustomers(filters?: {
   if (filters?.status) params.set('status', filters.status);
   if (filters?.channel) params.set('channel', filters.channel);
   if (filters?.source) params.set('source', filters.source);
+  if (filters?.pending) params.set('pending', filters.pending);
   if (filters?.q) params.set('q', filters.q);
   if (filters?.page) params.set('page', String(filters.page));
   if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
@@ -55,6 +57,15 @@ export function listCustomers(filters?: {
 
 export function getCustomer(id: string): Promise<Customer> {
   return apiGet<Customer>(`/api/customers/${id}`);
+}
+
+export function syncCustomerToFeishu(customerId: string): Promise<{
+  success: boolean;
+  externalId?: string;
+  externalUrl?: string;
+  errorMessage?: string;
+}> {
+  return apiPost(`/api/customers/${customerId}/sync-feishu`, {});
 }
 
 export function checkCustomerDuplicate(

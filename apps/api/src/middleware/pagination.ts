@@ -39,8 +39,8 @@ export function parsePagination(url: URL): PaginationParams {
  */
 export async function paginate<
   T extends {
-    findMany(args: any): Promise<unknown[]>;
-    count(args: any): Promise<number>;
+    findMany(args: { where: object; orderBy: object; skip: number; take: number; include?: object }): Promise<unknown[]>;
+    count(args: { where: object }): Promise<number>;
   }
 >(
   model: T,

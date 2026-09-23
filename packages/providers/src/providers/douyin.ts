@@ -20,7 +20,8 @@ export class DouyinProvider implements PlatformProvider {
       return {
         valid: false,
         platform: this.platform,
-        error: '缺少 Access Token 或 Cookie'
+        error: '缺少 Access Token 或 Cookie',
+        authExpired: true
       };
     }
     return this.validateAccessToken(config.accessToken);
@@ -41,7 +42,8 @@ export class DouyinProvider implements PlatformProvider {
         return {
           valid: false,
           platform: this.platform,
-          error: 'Token 已过期或无效 (401)'
+          error: 'Token 已过期或无效 (401)',
+          authExpired: true
         };
       }
       return {
@@ -80,14 +82,16 @@ export class DouyinProvider implements PlatformProvider {
         return {
           valid: false,
           platform: this.platform,
-          error: 'Cookie 已失效，被重定向到登录页'
+          error: 'Cookie 已失效，被重定向到登录页',
+          authExpired: true
         };
       }
       if (res.status === 401) {
         return {
           valid: false,
           platform: this.platform,
-          error: 'Cookie 已过期 (401)'
+          error: 'Cookie 已过期 (401)',
+          authExpired: true
         };
       }
       return {

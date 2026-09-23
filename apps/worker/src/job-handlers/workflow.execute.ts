@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 /**
  * Workflow Execution Engine
  *
@@ -99,14 +100,14 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
             where: { id: executionId },
             data: {
               currentStepIndex: i + 1,
-              stepResults: [
+              stepResults: JSON.parse(JSON.stringify([
                 ...stepResults,
                 {
                   stepId: step.id,
                   status: 'completed',
                   output: { delayed: true }
                 }
-              ] as any
+              ])) as Prisma.InputJsonArray
             }
           });
           // Schedule continuation after delay
@@ -142,7 +143,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
         where: { id: executionId },
         data: {
           currentStepIndex: i + 1,
-          stepResults: stepResults as any
+          stepResults: JSON.parse(JSON.stringify(stepResults)) as Prisma.InputJsonArray
         }
       });
     }
@@ -161,7 +162,7 @@ export async function handleWorkflowExecute(job: Job): Promise<void> {
         status: 'failed',
         errorMessage,
         finishedAt: new Date(),
-        stepResults: stepResults as any
+        stepResults: JSON.parse(JSON.stringify(stepResults)) as Prisma.InputJsonArray
       }
     });
     console.error(`[workflow] Execution ${executionId} failed:`, errorMessage);

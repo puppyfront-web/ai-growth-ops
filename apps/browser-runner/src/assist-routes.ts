@@ -39,30 +39,21 @@ const DOUYIN_ITEM_LIST_PATTERNS = [
   '/creator/item/list'
 ];
 
-function douyinPostCommentUrl(itemId: string, awemeType?: number): string {
+export function douyinPostCommentUrl(itemId: string, awemeType?: number): string {
   const kind = awemeType === 2 ? 'note' : 'video';
   return `https://www.douyin.com/${kind}/${encodeURIComponent(itemId)}`;
 }
 
-async function clickCreatorWorkComments(
-  page: import('playwright').Page
-): Promise<void> {
-  const locators = [
-    page.getByText(/^评论\s*\d+/),
-    page.getByRole('button', { name: /评论/ }),
-    page.getByText('查看评论'),
-    page.locator('[class*="comment-count"], [class*="commentCount"]').first(),
-    page.locator('[class*="work-item"], [class*="item-card"], [class*="cover"]').first()
-  ];
-  for (const locator of locators) {
-    try {
-      await locator.first().click({ timeout: 3000 });
-      await page.waitForTimeout(3500);
-      return;
-    } catch {
-      /* try next */
-    }
-  }
+export function parseDouyinContentHref(href: string): {
+  contentId: string;
+  awemeType?: number;
+} | null {
+  const match = href.match(/\/(video|note)\/([^/?#]+)/);
+  if (!match?.[1] || !match[2]) return null;
+  return {
+    contentId: match[2],
+    awemeType: match[1] === 'note' ? 2 : undefined
+  };
 }
 
 async function openDouyinCommentNoticeInbox(
@@ -290,6 +281,7 @@ interface SearchResultItem {
   contentId: string;
   title: string;
   author: string;
+  awemeType?: number;
 }
 
 export function extractSearchResults(
@@ -312,7 +304,9 @@ export function extractSearchResults(
         return {
           contentId: String(aweme.aweme_id ?? aweme.id ?? ''),
           title: String(aweme.desc ?? aweme.title ?? ''),
-          author: String(authorInfo?.nickname ?? '')
+          author: String(authorInfo?.nickname ?? ''),
+          awemeType:
+            typeof aweme.aweme_type === 'number' ? aweme.aweme_type : undefined
         };
       });
   }
@@ -367,6 +361,7 @@ interface FetchSearchVideoCommentsBody {
   contentId: string;
   title?: string;
   author?: string;
+  awemeType?: number;
   commentScrollRounds?: number;
   maxCommentsPerVideo?: number;
   headed?: boolean;
@@ -450,7 +445,7 @@ async function runSearchVideoCommentFetch(
 }> {
   const contentUrl =
     body.platform === 'douyin'
-      ? `https://www.douyin.com/video/${body.contentId}`
+      ? douyinPostCommentUrl(body.contentId, body.awemeType)
       : xhsNotePublicUrl(body.contentId);
 
   let session: Awaited<ReturnType<typeof createSession>> | null = null;
@@ -780,6 +775,7 @@ const handleSearchAndFetchComments: RouteHandler = async (_req, res, ctx) => {
           contentId: result.contentId,
           title: result.title,
           author: result.author,
+          awemeType: result.awemeType,
           commentScrollRounds: body.commentScrollRounds,
           maxCommentsPerVideo: body.maxCommentsPerVideo,
           headed: body.headed
@@ -792,7 +788,7 @@ const handleSearchAndFetchComments: RouteHandler = async (_req, res, ctx) => {
           author: result.author,
           url:
             body.platform === 'douyin'
-              ? `https://www.douyin.com/video/${result.contentId}`
+              ? douyinPostCommentUrl(result.contentId, result.awemeType)
               : xhsNotePublicUrl(result.contentId),
           comments: []
         });
@@ -851,13 +847,14 @@ async function extractSearchResultsFromDOM(
         contentId: string;
         title: string;
         author: string;
+        awemeType?: number;
       }> = [];
 
       links.forEach((a) => {
         const href = a.href;
-        const match = href.match(/\/(?:video|note)\/(\d+)/);
-        if (!match || seen.has(match[1])) return;
-        seen.add(match[1]);
+        const match = href.match(/\/(video|note)\/([^/?#]+)/);
+        if (!match || seen.has(match[2])) return;
+        seen.add(match[2]);
 
         const card = (a.closest('div') || a) as HTMLElement;
         const text = card.innerText || '';
@@ -873,9 +870,10 @@ async function extractSearchResultsFromDOM(
           ) || '';
 
         results.push({
-          contentId: match[1],
+          contentId: match[2],
           title,
-          author
+          author,
+          awemeType: match[1] === 'note' ? 2 : undefined
         });
       });
       return results;
@@ -1064,12 +1062,47 @@ const REPLY_SELECTORS: Record<string, ReplySelectors> = {
  * strings. Small integers (statistics, counts) are untouched and stay numeric.
  */
 function parseJsonBigInt(text: string): unknown {
-  // Quote bare integer literals with 16+ digits. Boundaries ensure we only
-  // touch numbers (not digits inside strings), and avoid matching decimals.
-  const safe = text.replace(
-    /(?<=[:\[,]\s*)-?\d{16,}(?=\s*[,\]\}])/g,
-    (m) => `"${m}"`
-  );
+  // Build a same-length mask where every character inside a string literal
+  // becomes 's' — the big-int regex then only matches real number tokens.
+  // A bare lookbehind regex cannot tell digits inside strings (e.g. a
+  // comment containing "，1234567890123456789") from actual IDs, and quoting
+  // those breaks the whole JSON payload ("Expected ',' or '}' ...").
+  const maskChars: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i] as string;
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+        maskChars.push('"');
+        continue;
+      }
+      maskChars.push('s');
+    } else if (ch === '"') {
+      inString = true;
+      maskChars.push('"');
+    } else {
+      maskChars.push(ch);
+    }
+  }
+  const ranges: Array<[number, number]> = [];
+  for (const m of maskChars
+    .join('')
+    .matchAll(/(?<=[:[,]\s*)-?\d{16,}(?=\s*[,\]}])/g)) {
+    ranges.push([m.index as number, (m.index as number) + m[0].length]);
+  }
+  let safe = '';
+  let cursor = 0;
+  for (const [start, end] of ranges) {
+    safe += `${text.slice(cursor, start)}"${text.slice(start, end)}"`;
+    cursor = end;
+  }
+  safe += text.slice(cursor);
   return JSON.parse(safe);
 }
 
@@ -1445,34 +1478,6 @@ export function extractCommentList(
   }
 }
 
-async function openDouyinCommentManagement(
-  page: import('playwright').Page
-): Promise<void> {
-  await page.goto(DOUYIN_COMMENT_MANAGE_URL, {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000
-  });
-  await page.waitForTimeout(2000);
-
-  if (!page.url().includes('interaction')) {
-    const interactionEntry = page.getByText('互动管理').first();
-    try {
-      await interactionEntry.click({ timeout: 5000 });
-      await page.waitForTimeout(1000);
-    } catch {
-      // sidebar may already expose comment entry
-    }
-  }
-
-  const commentEntry = page.getByText('评论管理').first();
-  try {
-    await commentEntry.click({ timeout: 5000 });
-    await page.waitForTimeout(2000);
-  } catch {
-    // direct route may already load comment inbox
-  }
-}
-
 async function scrollForLazyLoad(
   page: import('playwright').Page
 ): Promise<void> {
@@ -1773,37 +1778,6 @@ export function pickDouyinEncodedItemId(
 ): string | undefined {
   const id = pickDouyinItemId(json);
   return id && isDouyinEncodedItemId(id) ? id : undefined;
-}
-
-async function trySelectVideoOnCommentPage(
-  page: import('playwright').Page
-): Promise<void> {
-  const selectVideo = page.getByText('选择视频').first();
-  try {
-    await selectVideo.click({ timeout: 4000 });
-    await page.waitForTimeout(1500);
-  } catch {
-    // selector may already show the video list
-  }
-
-  const rowSelectors = [
-    '[class*="video-item"]',
-    '[class*="content-card"]',
-    '[class*="item-card"]',
-    '[class*="video-card"]',
-    '[class*="list"] [class*="item"]',
-    'tr'
-  ];
-  for (const selector of rowSelectors) {
-    try {
-      const row = page.locator(selector).first();
-      await row.click({ timeout: 3000 });
-      await page.waitForTimeout(2500);
-      return;
-    } catch {
-      // try next selector
-    }
-  }
 }
 
 async function openDouyinTargetComments(
@@ -2731,13 +2705,13 @@ function douyinVideoPublishedAt(item: Record<string, unknown>): string {
   return n > 1e12 ? new Date(n).toISOString() : new Date(n * 1000).toISOString();
 }
 
-function normalizeDouyinVideo(it: Record<string, any>) {
-  const stat = (it.statistics ?? {}) as Record<string, any>;
-  const video = (it.video ?? {}) as Record<string, any>;
+function normalizeDouyinVideo(it: Record<string, unknown>) {
+  const stat = (it.statistics ?? {}) as Record<string, unknown>;
+  const video = (it.video ?? {}) as Record<string, unknown>;
   const cover =
-    (it.item_cover as any)?.url_list ||
-    (video.cover as any)?.url_list ||
-    (it.cover as any)?.url_list;
+    (it.item_cover as { url_list?: unknown })?.url_list ||
+    (video.cover as { url_list?: unknown })?.url_list ||
+    (it.cover as { url_list?: unknown })?.url_list;
   return {
     itemId: pickSafeDouyinItemId(it) ?? '',
     desc: String(it.desc ?? it.item_title ?? it.title ?? ''),
@@ -2772,7 +2746,7 @@ const handleListVideos: RouteHandler = async (_req, res, ctx) => {
     session = await createSession(body.cookie, targetUrl, body.headed);
     const { page } = session;
 
-    let workList: Record<string, any> | null = null;
+    let workList: Record<string, unknown> | null = null;
     page.on('response', async (response) => {
       try {
         const url = response.url();
@@ -2784,7 +2758,7 @@ const handleListVideos: RouteHandler = async (_req, res, ctx) => {
         // (…536000 → …536000 with trailing digits zeroed). A reviver preserves
         // any integer beyond safe-integer range as a string so IDs survive.
         const raw = await response.text();
-        workList = parseJsonBigInt(raw) as Record<string, any>;
+        workList = parseJsonBigInt(raw) as Record<string, unknown>;
       } catch {
         /* noop */
       }
@@ -2801,14 +2775,14 @@ const handleListVideos: RouteHandler = async (_req, res, ctx) => {
     // workList is reassigned only inside an async response callback, so CFA
     // narrows it to `null` here — a cast widens it back to the union so the
     // Array.isArray branch doesn't collapse it to `never`.
-    const wl = workList as Record<string, any> | null;
-    const list: any[] = Array.isArray(wl?.aweme_list)
+    const wl = workList as Record<string, unknown> | null;
+    const list: unknown[] = Array.isArray(wl?.aweme_list)
       ? wl.aweme_list
       : Array.isArray(wl?.items)
         ? wl.items
         : [];
     const videos = list
-      .filter((it): it is Record<string, any> => !!it && typeof it === 'object')
+      .filter((it): it is Record<string, unknown> => !!it && typeof it === 'object')
       .map((it) =>
         body.platform === 'douyin' ? normalizeDouyinVideo(it) : it
       )

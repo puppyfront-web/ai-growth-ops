@@ -187,6 +187,8 @@ export interface LlmConfigView {
   baseUrl: string;
   model: string;
   hasApiKey: boolean;
+  /** True when a DB key OR a valid (non-placeholder) env key is present. */
+  effectiveConfigured?: boolean;
   updatedAt: string | null;
 }
 

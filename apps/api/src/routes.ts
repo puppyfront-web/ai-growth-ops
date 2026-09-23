@@ -17,11 +17,19 @@ import {
   decryptToken,
   getPlatformProvider
 } from '@ai-growth-ops/providers';
-import { isOfficialDouyinInboxNoise } from '@ai-growth-ops/shared';
+import {
+  officialDouyinInboxNoiseWhere,
+  officialDouyinInboxNoticeNoiseConditions,
+  validatePlatformCookie,
+  isPlatformAuthExpiredError
+} from '@ai-growth-ops/shared';
+import { Prisma } from '@prisma/client';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import type { SkillRunResult } from '@ai-growth-ops/skills';
 import type { LLMClient } from '@ai-growth-ops/ai';
-import { resolveLlmClientFromDb } from './services/llm-config.js';
+import { resolveLlmClientFromDb, resolveLlmConfigFromDb, loadStoredLlmConfig, saveOrgLlmConfig, type StoredLlmConfig } from '@ai-growth-ops/database';
+import { isInternalApiAuthorized } from './services/internal-api-auth.js';
+import { llmSettingsSchema } from './schemas/llm-settings.js';
 import { taskRoutes } from './routes-tasks.js';
 import { notificationRoutes } from './routes-notifications.js';
 import { auditRoutes } from './routes-audit.js';
@@ -45,7 +53,9 @@ import {
   getSessionId,
   clearSession,
   markPending,
-  clearPending
+  clearPending,
+  waitForPendingToClear,
+  getFreshSession
 } from './browser-login-session';
 import {
   hashPassword,
@@ -2310,20 +2320,27 @@ const routes: Route[] = [
       if (type) where.type = type;
       const result = await paginate(
         ctx.db.interaction,
-        where,
+        {
+          AND: [
+            where,
+            { NOT: officialDouyinInboxNoiseWhere() },
+            {
+              // JSON-path noise conditions are only meaningful (and only
+              // SQL-safe) when rawPayload exists — on NULL payloads they
+              // evaluate to SQL NULL and NOT(NULL) would drop the row.
+              OR: [
+                { rawPayload: { equals: Prisma.DbNull } },
+                { rawPayload: { equals: Prisma.JsonNull } },
+                { NOT: { OR: officialDouyinInboxNoticeNoiseConditions() } }
+              ]
+            }
+          ]
+        },
         { page, pageSize },
         { receivedAt: 'desc' },
         { conversation: true }
       );
-      const items = result.items.filter(
-        (item) =>
-          !isOfficialDouyinInboxNoise({
-            userNickname: item.externalUserName,
-            content: item.content,
-            rawPayload: item.rawPayload
-          })
-      );
-      sendJson(res, 200, { ...result, items, total: items.length });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -2740,35 +2757,60 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const interaction = await ctx.db.interaction.findFirst({
-        where: {
-          id: ctx.params.id,
-          organizationId: orgCtx.organization.id,
-          deletedAt: null
-        },
-        include: { classification: true }
-      });
-      if (!interaction) return sendJson(res, 404, { error: 'Not found' });
-      const level = interaction.classification?.leadLevel ?? 'C';
-      const lead = await ctx.db.lead.create({
-        data: {
-          organizationId: orgCtx.organization.id,
-          userId: interaction.userId,
-          sourcePlatform: interaction.platform,
-          sourceAccountId: interaction.platformAccountId,
-          sourceInteractionId: interaction.id,
-          externalUserId: interaction.externalUserId,
-          externalUserName: interaction.externalUserName,
-          level: level as 'A',
-          intent: interaction.classification?.intent ?? null,
-          summary: interaction.content.slice(0, 200)
+      if (!hasPermission(orgCtx.memberRole, 'lead:edit')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      try {
+        const { convertInteractionToCustomerRecord } = await import(
+          './services/customer-from-interaction.js'
+        );
+        const result = await convertInteractionToCustomerRecord(
+          ctx.db,
+          ctx.params.id,
+          orgCtx.organization.id,
+          orgCtx.user.id
+        );
+        sendJson(res, 201, {
+          customer: result.customer,
+          lead: result.lead,
+          created: result.created
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (message.includes('不存在')) {
+          return sendJson(res, 404, { error: message });
         }
-      });
-      await ctx.db.interaction.update({
-        where: { id: ctx.params.id },
-        data: { status: 'CONVERTED_TO_LEAD' }
-      });
-      sendJson(res, 201, lead);
+        return sendJson(res, 400, { error: message });
+      }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/interactions/:id/convert-to-customer',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'lead:edit')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      try {
+        const { convertInteractionToCustomerRecord } = await import(
+          './services/customer-from-interaction.js'
+        );
+        const result = await convertInteractionToCustomerRecord(
+          ctx.db,
+          ctx.params.id,
+          orgCtx.organization.id,
+          orgCtx.user.id
+        );
+        sendJson(res, 201, result);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (message.includes('不存在')) {
+          return sendJson(res, 404, { error: message });
+        }
+        return sendJson(res, 400, { error: message });
+      }
     }
   },
   {
@@ -3751,7 +3793,9 @@ const routes: Route[] = [
       const encryptedRefresh = body.refreshToken
         ? encryptToken(String(body.refreshToken))
         : null;
-      const cookieRef = body.cookie ? encryptToken(String(body.cookie)) : null;
+      const cookie = body.cookie ? validatePlatformCookie(platform, String(body.cookie)) : null;
+      if (cookie && !cookie.valid) return sendJson(res, 400, { error: cookie.error });
+      const cookieRef = cookie?.valid ? encryptToken(cookie.cookie) : null;
 
       const account = await ctx.db.platformAccount.create({
         data: {
@@ -3760,7 +3804,7 @@ const routes: Route[] = [
           platform: platform as 'douyin',
           name,
           mode: mode as 'official_api',
-          status: 'active',
+          status: encryptedAccess || cookieRef ? 'active' : 'error',
           authType,
           accessTokenEncrypted: encryptedAccess,
           refreshTokenEncrypted: encryptedRefresh,
@@ -3829,10 +3873,20 @@ const routes: Route[] = [
         data.refreshTokenEncrypted = String(body.refreshToken)
           ? encryptToken(String(body.refreshToken))
           : null;
-      if (body.cookie != null)
-        data.cookieRef = String(body.cookie)
-          ? encryptToken(String(body.cookie))
-          : null;
+      if (body.cookie != null) {
+        const rawCookie = String(body.cookie);
+        if (!rawCookie) {
+          data.cookieRef = null;
+          data.status = 'error';
+        } else {
+          const cookie = validatePlatformCookie(account.platform, rawCookie);
+          if (!cookie.valid) return sendJson(res, 400, { error: cookie.error });
+          data.cookieRef = encryptToken(cookie.cookie);
+          data.authType = 'cookie';
+          data.mode = 'browser_assist';
+          data.status = 'active';
+        }
+      }
 
       await ctx.db.platformAccount.update({
         where: { id: ctx.params.id },
@@ -3898,20 +3952,30 @@ const routes: Route[] = [
           where: { id: account.id },
           data: {
             lastHealthCheckAt: new Date(),
-            ...(result.valid ? { status: 'active' } : { status: 'error' })
+            ...(result.valid
+              ? { status: 'active' }
+              : result.authExpired
+                ? { status: 'expired' }
+                : { status: 'error' })
           }
         });
 
         sendJson(res, 200, { ...result, checkedAt: new Date().toISOString() });
       } catch (err) {
+        // 解密失败等异常意味着本地凭证已损坏，与平台侧失效同样需要重新授权
+        const authExpired = isPlatformAuthExpiredError(err);
         await ctx.db.platformAccount.update({
           where: { id: account.id },
-          data: { lastHealthCheckAt: new Date(), status: 'error' }
+          data: {
+            lastHealthCheckAt: new Date(),
+            status: authExpired ? 'expired' : 'error'
+          }
         });
         sendJson(res, 200, {
           valid: false,
           platform: account.platform,
           error: (err as Error).message,
+          authExpired,
           checkedAt: new Date().toISOString()
         });
       }
@@ -3955,11 +4019,40 @@ const routes: Route[] = [
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
 
-      if (!markPending(account.id)) {
-        return sendJson(res, 409, {
-          status: 'error',
-          error: '登录会话正在创建中，请稍候'
+      // React StrictMode (dev) mounts effects twice, and users can double-click.
+      // Both re-fire /browser-login/start within milliseconds. Instead of 409,
+      // coalesce them into the same runner session when it was just created.
+      const SESSION_REUSE_MS = 15_000;
+      const fresh = getFreshSession(account.id, SESSION_REUSE_MS);
+      if (fresh) {
+        return sendJson(res, 200, {
+          sessionId: fresh.sessionId,
+          status: 'waiting_scan'
         });
+      }
+      if (!markPending(account.id)) {
+        // Another start is in flight (can take ~60s while Chromium launches).
+        // Wait for it and reuse its session rather than failing the dialog.
+        const cleared = await waitForPendingToClear(account.id);
+        if (!cleared) {
+          return sendJson(res, 503, {
+            status: 'error',
+            error: '登录会话正在创建中，请稍后重试'
+          });
+        }
+        const afterWait = getFreshSession(account.id, SESSION_REUSE_MS);
+        if (afterWait) {
+          return sendJson(res, 200, {
+            sessionId: afterWait.sessionId,
+            status: 'waiting_scan'
+          });
+        }
+        if (!markPending(account.id)) {
+          return sendJson(res, 409, {
+            status: 'error',
+            error: '登录会话正在创建中，请稍候'
+          });
+        }
       }
 
       const runnerUrl = getBrowserRunnerUrl();
@@ -4030,6 +4123,15 @@ const routes: Route[] = [
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const accountId = ctx.params.id;
+      const account = await ctx.db.platformAccount.findFirst({
+        where: {
+          id: accountId,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        },
+        select: { id: true, platform: true }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
       const sessionId = getSessionId(accountId);
       if (!sessionId) {
         return sendJson(res, 200, {
@@ -4058,14 +4160,26 @@ const routes: Route[] = [
         };
 
         if (data.status === 'logged_in') {
-          if (!data.cookies?.trim()) {
+          const cookie = data.cookies
+            ? validatePlatformCookie(account.platform, data.cookies)
+            : { valid: false as const, error: '登录成功但未获取到 Cookie，请完成扫码后稍等或重试' };
+          if (!cookie.valid) {
+            clearSession(accountId);
+            await ctx.db.platformAccount.update({
+              where: { id: accountId },
+              data: {
+                cookieRef: null,
+                status: 'error',
+                lastHealthCheckAt: new Date()
+              }
+            });
             sendJson(res, 200, {
               status: 'error',
-              error: '登录成功但未获取到 Cookie，请完成扫码后稍等或重试'
+              error: cookie.error
             });
             return;
           }
-          const encrypted = encryptToken(data.cookies);
+          const encrypted = encryptToken(cookie.cookie);
           await ctx.db.platformAccount.update({
             where: { id: accountId },
             data: {
@@ -4077,8 +4191,12 @@ const routes: Route[] = [
             }
           });
           clearSession(accountId);
-        } else if (data.status === 'expired') {
+        } else if (data.status === 'expired' || data.status === 'error') {
           clearSession(accountId);
+          await ctx.db.platformAccount.update({
+            where: { id: accountId },
+            data: { status: 'error', lastHealthCheckAt: new Date() }
+          });
         }
 
         // Strip plaintext cookies before sending to frontend
@@ -4148,11 +4266,14 @@ const routes: Route[] = [
         where: { organizationId: orgCtx.organization.id, sinkType: 'lark' }
       });
       if (!config) return sendJson(res, 200, { enabled: false });
+      const cfg = (config.config as Record<string, unknown>) || {};
       sendJson(res, 200, {
         id: config.id,
-        appId: (config.config as Record<string, unknown>)?.appId ?? '',
-        appToken: (config.config as Record<string, unknown>)?.appToken ?? '',
-        tableId: (config.config as Record<string, unknown>)?.tableId ?? '',
+        appId: cfg.appId ?? '',
+        appSecret: cfg.appSecret ?? '',
+        appToken: cfg.appToken ?? '',
+        tableId: cfg.tableId ?? '',
+        fieldMapping: cfg.fieldMapping ?? undefined,
         enabled: config.enabled,
         lastSyncAt: config.updatedAt
       });
@@ -4190,6 +4311,29 @@ const routes: Route[] = [
         });
         sendJson(res, 201, created);
       }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/lead-sinks/feishu/test',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const body = (ctx.body as Record<string, unknown>) || {};
+      const stored = await ctx.db.leadSinkConfig.findFirst({
+        where: { organizationId: orgCtx.organization.id, sinkType: 'lark' }
+      });
+      const storedConfig = stored
+        ? ((stored.config as Record<string, unknown>) ?? {})
+        : {};
+      const { testSinkConnection } = await import('@ai-growth-ops/lead-sinks');
+      const result = await testSinkConnection('lark', {
+        appId: String(body.appId ?? storedConfig.appId ?? ''),
+        appSecret: String(body.appSecret ?? storedConfig.appSecret ?? ''),
+        appToken: String(body.appToken ?? storedConfig.appToken ?? ''),
+        tableId: String(body.tableId ?? storedConfig.tableId ?? '')
+      });
+      sendJson(res, 200, result);
     }
   },
   {
@@ -4260,16 +4404,15 @@ const routes: Route[] = [
       });
 
       // Load saved config from database, fallback to env vars
-      const savedConfig = await ctx.db.appConfig.findUnique({
-        where: { userId_key: { userId: orgCtx.user.id, key: 'ai_config' } }
-      });
-      const saved = savedConfig?.value as Record<string, unknown> | null;
+      const saved = await loadAiConfigValue(ctx.db, orgCtx.user.id, orgCtx.organization.id);
+      const llmRow = await loadStoredLlmConfig(ctx.db, orgCtx.organization.id);
+      const llm = llmRow?.value as StoredLlmConfig | null;
 
       sendJson(res, 200, {
         provider:
-          (saved?.provider as string) ?? process.env.AI_PROVIDER ?? 'openai',
-        baseUrl: (saved?.baseUrl as string) ?? process.env.AI_BASE_URL ?? '',
-        model: (saved?.model as string) ?? process.env.AI_MODEL ?? 'gpt-4o',
+          llm?.provider ?? process.env.AI_PROVIDER ?? 'openai',
+        baseUrl: llm?.baseUrl ?? process.env.AI_BASE_URL ?? '',
+        model: llm?.model ?? process.env.AI_MODEL ?? 'gpt-4o',
         temperature:
           (saved?.temperature as number) ??
           Number(process.env.AI_TEMPERATURE ?? 0.7),
@@ -4329,30 +4472,15 @@ const routes: Route[] = [
       });
     }
   },
-  // Internal endpoint: returns the actual apiKey for server-side use (chat route).
-  // Not exposed to the browser — only called from the Next.js server.
   {
     method: 'GET',
     pattern: '/api/settings/ai/internal',
     handler: async (req, res, ctx) => {
+      if (!isInternalApiAuthorized(req)) return sendJson(res, 403, { error: '仅允许服务端访问' });
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-
-      const savedConfig = await ctx.db.appConfig.findUnique({
-        where: { userId_key: { userId: orgCtx.user.id, key: 'ai_config' } }
-      });
-      const saved = savedConfig?.value as Record<string, unknown> | null;
-
-      sendJson(res, 200, {
-        provider:
-          (saved?.provider as string) ?? process.env.AI_PROVIDER ?? 'openai',
-        apiKey:
-          (saved?.apiKey as string) ?? process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY ?? '',
-        baseUrl:
-          (saved?.baseUrl as string) ?? process.env.AI_BASE_URL ?? '',
-        model:
-          (saved?.model as string) ?? process.env.AI_MODEL ?? 'gpt-4o'
-      });
+      const config = await resolveLlmConfigFromDb(ctx.db, orgCtx.organization.id);
+      sendJson(res, 200, config ?? {});
     }
   },
   {
@@ -4367,15 +4495,17 @@ const routes: Route[] = [
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
 
-      const existing = await loadAiConfigValue(ctx.db, orgCtx.user.id);
-      const incomingApiKey = String(body.apiKey ?? '');
+      const existing = await loadAiConfigValue(ctx.db, orgCtx.user.id, orgCtx.organization.id);
+      const parsed = llmSettingsSchema.safeParse(body);
+      if (!parsed.success) return sendJson(res, 400, { error: '无效的模型配置' });
+      if (Object.keys(parsed.data).length > 0) {
+        await saveOrgLlmConfig(ctx.db, orgCtx.organization.id, orgCtx.user.id, {
+          ...parsed.data,
+          apiKey: isMaskedSecret(parsed.data.apiKey) ? undefined : parsed.data.apiKey
+        });
+      }
       const configValue = {
-        provider: body.provider ?? process.env.AI_PROVIDER ?? 'openai',
-        baseUrl: body.baseUrl ?? process.env.AI_BASE_URL ?? '',
-        model: body.model ?? process.env.AI_MODEL ?? 'gpt-4o',
-        apiKey: isMaskedSecret(incomingApiKey)
-          ? String(existing?.apiKey ?? '')
-          : incomingApiKey,
+        ...existing,
         temperature:
           body.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.7),
         maxTokens: body.maxTokens ?? Number(process.env.AI_MAX_TOKENS ?? 4096),
@@ -4389,11 +4519,11 @@ const routes: Route[] = [
       };
 
       await ctx.db.appConfig.upsert({
-        where: { userId_key: { userId: orgCtx.user.id, key: 'ai_config' } },
+        where: { userId_key: { userId: orgCtx.user.id, key: `ai_config:${orgCtx.organization.id}` } },
         create: {
           userId: orgCtx.user.id,
           organizationId: orgCtx.organization.id,
-          key: 'ai_config',
+          key: `ai_config:${orgCtx.organization.id}`,
           value: configValue as never
         },
         update: { value: configValue as never }
@@ -5714,23 +5844,15 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const row = await ctx.db.appConfig.findFirst({
-        where: { organizationId: orgCtx.organization.id, key: 'llm_config' },
-        select: { value: true }
-      });
-      const cfg = (row?.value ?? null) as {
-        provider?: string;
-        apiKeyEncrypted?: string;
-        baseUrl?: string;
-        model?: string;
-        updatedAt?: string;
-      } | null;
+      const row = await loadStoredLlmConfig(ctx.db, orgCtx.organization.id);
+      const cfg = (row?.value ?? {}) as StoredLlmConfig;
+      const envKey = (cfg.provider ?? 'openai') === 'anthropic'
+        ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
       sendJson(res, 200, {
-        provider: cfg?.provider ?? 'openai',
-        baseUrl: cfg?.baseUrl ?? '',
-        model: cfg?.model ?? '',
-        hasApiKey: !!cfg?.apiKeyEncrypted,
-        updatedAt: cfg?.updatedAt ?? null
+        provider: cfg.provider ?? 'openai', baseUrl: cfg.baseUrl ?? '', model: cfg.model ?? '',
+        hasApiKey: !!cfg.apiKeyEncrypted,
+        effectiveConfigured: !!cfg.apiKeyEncrypted || (!!envKey && !/CHANGE_ME/i.test(envKey)),
+        updatedAt: cfg.updatedAt ?? null
       });
     }
   },
@@ -5740,55 +5862,13 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const body = (ctx.body ?? {}) as {
-        provider?: string;
-        apiKey?: string;
-        baseUrl?: string;
-        model?: string;
-      };
-      const provider = body.provider === 'anthropic' ? 'anthropic' : 'openai';
-      const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
-      const model = typeof body.model === 'string' ? body.model.trim() : '';
-      // Preserve the existing encrypted apiKey when the operator leaves the
-      // field blank (so they can edit baseUrl/model without re-entering it).
-      const existing = await ctx.db.appConfig.findFirst({
-        where: { organizationId: orgCtx.organization.id, key: 'llm_config' },
-        select: { id: true, value: true }
-      });
-      const prev = (existing?.value ?? {}) as { apiKeyEncrypted?: string };
-      let apiKeyEncrypted = prev.apiKeyEncrypted;
-      if (typeof body.apiKey === 'string' && body.apiKey.trim() !== '') {
-        apiKeyEncrypted = encryptToken(body.apiKey.trim());
-      }
-      const updatedAt = new Date().toISOString();
-      const value = {
-        provider,
-        baseUrl,
-        model,
-        apiKeyEncrypted,
-        updatedAt
-      };
-      if (existing) {
-        await ctx.db.appConfig.update({
-          where: { id: existing.id },
-          data: { value: value as never }
-        });
-      } else {
-        await ctx.db.appConfig.create({
-          data: {
-            organizationId: orgCtx.organization.id,
-            userId: orgCtx.user.id,
-            key: 'llm_config',
-            value: value as never
-          }
-        });
-      }
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) return sendJson(res, 403, { error: '权限不足' });
+      const parsed = llmSettingsSchema.safeParse(ctx.body);
+      if (!parsed.success) return sendJson(res, 400, { error: '无效的模型配置' });
+      const cfg = await saveOrgLlmConfig(ctx.db, orgCtx.organization.id, orgCtx.user.id, parsed.data);
       sendJson(res, 200, {
-        provider,
-        baseUrl,
-        model,
-        hasApiKey: !!apiKeyEncrypted,
-        updatedAt
+        provider: cfg.provider, baseUrl: cfg.baseUrl, model: cfg.model,
+        hasApiKey: !!cfg.apiKeyEncrypted, updatedAt: cfg.updatedAt
       });
     }
   },

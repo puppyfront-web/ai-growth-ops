@@ -5,15 +5,16 @@ import {
   getPlatformLoginConfig,
   getSupportedPlatforms
 } from './platform-configs';
-import { createHealthSnapshot } from '@ai-growth-ops/shared';
+import { createHealthSnapshot, getBrowserRunnerConfig } from '@ai-growth-ops/shared';
 import { assistRoutes } from './assist-routes.js';
 import { publishAssistRoutes } from './publish-routes.js';
 
 // ── Shared-secret authentication ──────────────────────────────────
 // Browser-runner is an internal service. All non-health endpoints
 // require the caller to send an `Authorization: Bearer <SECRET>` header
-// matching the BROWSER_RUNNER_SECRET env var.
-const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
+// matching BROWSER_RUNNER_SECRET, or TOKEN_ENCRYPTION_KEY when the dedicated
+// secret is not configured.
+const RUNNER_SECRET = getBrowserRunnerConfig().secret;
 
 function safeEqual(a: string, b: string): boolean {
   if (!a || !b || a.length !== b.length) return false;

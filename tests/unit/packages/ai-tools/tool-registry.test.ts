@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 // We test the registry functions directly by importing the built module
 // Since the auto-registration happens on import, we need to test carefully
@@ -31,7 +31,7 @@ describe('Tool Registry', () => {
   });
 
   it('should register all tools on import', async () => {
-    const { getAllTools, getToolCount } = await import('@ai-growth-ops/ai-tools');
+    const { getToolCount } = await import('@ai-growth-ops/ai-tools');
 
     // Should have 53 tools registered (6+9+12+8+6+6+5+1 = 53)
     const count = getToolCount();

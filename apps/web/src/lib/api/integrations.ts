@@ -112,6 +112,15 @@ export function updateFeishuConfig(
   return apiPut<Record<string, unknown>>('/api/lead-sinks/feishu', data);
 }
 
+export function testFeishuConfig(
+  data: Record<string, unknown>
+): Promise<{ success: boolean; message: string }> {
+  return apiPost<{ success: boolean; message: string }>(
+    '/api/lead-sinks/feishu/test',
+    data
+  );
+}
+
 export function getWecomConfig(): Promise<Record<string, unknown>> {
   return apiGet<Record<string, unknown>>('/api/lead-sinks/wecom');
 }

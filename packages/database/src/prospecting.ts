@@ -6,6 +6,7 @@ import {
   assertCrawlAllowed,
   assertProfileAllowed,
   DEFAULT_ICP_CONFIG,
+  DEFAULT_ICP_FOR_PROSPECTING,
   type AggregatedProspect,
   type IcpConfig,
   type ProspectUserScoreResult,
@@ -16,6 +17,8 @@ import {
   jitterDelayMs,
   mergeProspectEvidence,
   mergeSemanticScore,
+  getBrowserRunnerConfig,
+  getBrowserRunnerHeaders,
   normalizePhone,
   passesProspectThreshold,
   PROSPECT_GUARD,
@@ -23,6 +26,8 @@ import {
   scoreProspectUser
 } from '@ai-growth-ops/shared';
 import { loadIcpConfig } from './customer-profile.js';
+import { resolveLlmClientFromDb } from './llm-config.js';
+import { findCustomerByAcquisitionIdentity } from './customer-crm.js';
 import {
   claimProfileFetch,
   claimVideoCrawl,
@@ -33,8 +38,10 @@ import {
   recordCrawledVideo
 } from './prospect-guard.js';
 
-const ICP_CONFIG_KEY = 'icp_config';
-const SEMANTIC_BATCH_SIZE = 20;
+// Keep well under the 4096-token output cap: each user result carries Chinese
+// intent/summary text (~200 tokens), so larger batches get truncated mid-JSON
+// and the whole batch silently falls back to rule scores.
+const SEMANTIC_BATCH_SIZE = 8;
 const SEMANTIC_SCORING_TIMEOUT_MS = 90_000;
 
 type TaskProgress = {
@@ -82,16 +89,12 @@ async function callBrowserRunner<T>(
   body: Record<string, unknown>,
   timeoutMs = 180_000
 ): Promise<T> {
-  const runnerUrl = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-  const runnerSecret = process.env.BROWSER_RUNNER_SECRET || '';
+  const runner = getBrowserRunnerConfig();
   const resp = await fetchWithTimeout(
-    `${runnerUrl}${path}`,
+    `${runner.url}${path}`,
     {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(runnerSecret ? { authorization: `Bearer ${runnerSecret}` } : {})
-      },
+      headers: getBrowserRunnerHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify(body)
     },
     timeoutMs
@@ -182,7 +185,12 @@ async function crawlKeywordComments(
 
   const searchPayload = await callBrowserRunner<{
     keyword: string;
-    results?: Array<{ contentId: string; title: string; author: string }>;
+    results?: Array<{
+      contentId: string;
+      title: string;
+      author: string;
+      awemeType?: number;
+    }>;
     captchaRequired?: boolean;
     message?: string;
   }>('/assist/search-videos', {
@@ -246,6 +254,7 @@ async function crawlKeywordComments(
         contentId: item.contentId,
         title: item.title,
         author: item.author,
+        awemeType: item.awemeType,
         maxCommentsPerVideo: params.maxCommentsPerVideo,
         commentScrollRounds: params.commentScrollRounds,
         headed: false
@@ -266,7 +275,7 @@ async function crawlKeywordComments(
         author: item.author,
         url:
           params.platform === 'douyin'
-            ? `https://www.douyin.com/video/${item.contentId}`
+            ? `https://www.douyin.com/${item.awemeType === 2 ? 'note' : 'video'}/${encodeURIComponent(item.contentId)}`
             : undefined,
         comments: []
       });
@@ -318,22 +327,42 @@ type SemanticScore = {
  * Semantic scoring is an enhancement over the rule engine: any skill failure
  * leaves the deterministic scores untouched so a task never fails on the LLM.
  */
+const LLM_NOT_CONFIGURED_MESSAGE = 'AI 服务未配置';
+
 async function scoreProspectsSemantically(
+  db: DatabaseClient,
+  organizationId: string,
   prospects: AggregatedProspect[],
   keywords: string[],
   highIntentKeywords: string[],
   onBatchProgress?: (batchIndex: number, batchTotal: number) => Promise<void>
-): Promise<Map<string, SemanticScore>> {
+): Promise<{
+  scores: Map<string, SemanticScore>;
+  llmUnavailable: boolean;
+}> {
   const byUserKey = new Map<string, SemanticScore>();
-  if (prospects.length === 0) return byUserKey;
+  if (prospects.length === 0) return { scores: byUserKey, llmUnavailable: false };
 
-  let runner: { run: <I, O>(req: unknown) => Promise<{ status: string; output?: O }> };
+  let runner: {
+    run: <I, O>(req: {
+      skillName: string;
+      input: I;
+      llmClient?: unknown;
+    }) => Promise<{ status: string; output?: O; error?: string }>;
+  };
   try {
     const { getSharedSkillRunner } = await import('@ai-growth-ops/skills');
     runner = getSharedSkillRunner() as typeof runner;
   } catch {
-    return byUserKey;
+    return { scores: byUserKey, llmUnavailable: false };
   }
+
+  // Prefer the org-level LLM config from the integrations UI; falls back to
+  // env-based createLLMClient() inside the runner when absent.
+  const orgLlm = await resolveLlmClientFromDb(db, organizationId).catch(
+    () => undefined
+  );
+  let llmUnavailable = false;
 
   const batchTotal = Math.ceil(prospects.length / SEMANTIC_BATCH_SIZE);
 
@@ -355,23 +384,40 @@ async function scoreProspectsSemantically(
               sourceVideoTitle: prospect.sourceVideoTitle ?? '',
               comments: prospect.evidence.map((item) => item.content)
             }))
-          }
+          },
+          llmClient: orgLlm
         }),
         SEMANTIC_SCORING_TIMEOUT_MS
       );
 
-      if (result.status !== 'success') continue;
+      if (result.status !== 'success') {
+        // Surface the reason once — a missing key silently degraded ALL
+        // scoring to keyword rules before, with nothing in the logs.
+        console.warn(
+          `[prospecting] 语义打分不可用，本批次沿用规则评分: ${result.error ?? result.status}`
+        );
+        if (result.error?.includes(LLM_NOT_CONFIGURED_MESSAGE)) {
+          llmUnavailable = true;
+        }
+        continue;
+      }
       for (const score of result.output?.results ?? []) {
         if (typeof score.userKey === 'string') {
           byUserKey.set(score.userKey, score);
         }
       }
-    } catch {
-      /* rule scores stay authoritative for this batch */
+    } catch (err) {
+      console.warn(
+        '[prospecting] 语义打分调用失败，本批次沿用规则评分:',
+        err instanceof Error ? err.message : String(err)
+      );
+      if (err instanceof Error && err.message.includes(LLM_NOT_CONFIGURED_MESSAGE)) {
+        llmUnavailable = true;
+      }
     }
   }
 
-  return byUserKey;
+  return { scores: byUserKey, llmUnavailable };
 }
 
 export async function executeProspectingTask(
@@ -440,6 +486,12 @@ export async function executeProspectingTask(
     } catch {
       icp = DEFAULT_ICP_CONFIG;
     }
+    // Orgs that never configured exclusion words still get peer/supplier
+    // phrases filtered out of prospecting results.
+    const icpExcludedKeywords =
+      icp.excludedKeywords.length > 0
+        ? icp.excludedKeywords
+        : DEFAULT_ICP_FOR_PROSPECTING.excludedKeywords;
 
     const existingCandidates = await db.prospectCandidate.findMany({
       where: { prospectingTaskId: task.id }
@@ -457,7 +509,7 @@ export async function executeProspectingTask(
       for (const id of recentIds) skipContentIds.add(id);
     }
 
-    let guard = await loadProspectGuard(db, organizationId, account.id);
+    const guard = await loadProspectGuard(db, organizationId, account.id);
     const plannedVideos =
       keywords.length *
       Math.min(task.topNVideos, PROSPECT_GUARD.maxVideosPerTask);
@@ -490,6 +542,8 @@ export async function executeProspectingTask(
       string,
       { prospect: AggregatedProspect; score: ProspectUserScoreResult }
     >();
+
+    let semanticLlmUnavailable = false;
 
     for (let keywordIndex = 0; keywordIndex < keywords.length; keywordIndex++) {
       const keyword = keywords[keywordIndex]!;
@@ -588,7 +642,9 @@ export async function executeProspectingTask(
       );
 
       const prospects = aggregateProspectComments(videos, keyword);
-      const semanticScores = await scoreProspectsSemantically(
+      const semantic = await scoreProspectsSemantically(
+        db,
+        organizationId,
         prospects,
         keywords,
         icp.highIntentKeywords,
@@ -611,6 +667,8 @@ export async function executeProspectingTask(
           );
         }
       );
+      const semanticScores = semantic.scores;
+      if (semantic.llmUnavailable) semanticLlmUnavailable = true;
 
       for (const prospect of prospects) {
         const ruleScore = scoreProspectUser({
@@ -619,7 +677,7 @@ export async function executeProspectingTask(
           icpHighIntentKeywords: icp.highIntentKeywords,
           icpTargetRoles: icp.targetRoles,
           icpTargetIndustries: icp.targetIndustries,
-          icpExcludedKeywords: icp.excludedKeywords,
+          icpExcludedKeywords,
           videoTitle: prospect.sourceVideoTitle ?? undefined,
           profileText: prospect.userNickname ?? undefined
         });
@@ -663,17 +721,23 @@ export async function executeProspectingTask(
       });
     }
 
-    const saved = await db.prospectCandidate.findMany({
-      where: { prospectingTaskId: task.id },
-      select: { commentCount: true, evidence: true }
+    // totalVideos/totalComments stay as the TRUE crawl metrics accumulated
+    // during the run. Recomputing them from saved candidates used to collapse
+    // "已爬取评论数" into "入库潜客拥有的评论数" (143 → 1), contradicting the
+    // progress UI and making the zero-result warning unreachable when comments
+    // were crawled but nobody passed the threshold.
+    totalCandidates = await db.prospectCandidate.count({
+      where: { prospectingTaskId: task.id }
     });
-    totalCandidates = saved.length;
-    totalComments = saved.reduce((sum, row) => sum + row.commentCount, 0);
-    totalVideos = Math.max(totalVideos, uniqueVideoCount(saved));
 
     const warnings: string[] = [];
     if (quotaExhausted) {
       warnings.push('今日额度已用完，已保存当前结果，明天可增量执行');
+    }
+    if (semanticLlmUnavailable) {
+      warnings.push(
+        'LLM 未配置，本轮仅用关键词规则评分，同行/行业解说类评论可能误入。请在「集成 → LLM」配置 API Key 后重新执行'
+      );
     }
     if (totalCandidates === 0) {
       warnings.push(
@@ -759,19 +823,6 @@ function collectedVideoIds(
     }
   }
   return ids;
-}
-
-function uniqueVideoCount(
-  rows: Array<{ evidence: unknown; sourceVideoUrl?: string | null }>
-): number {
-  const urls = new Set<string>();
-  for (const row of rows) {
-    if (row.sourceVideoUrl) urls.add(row.sourceVideoUrl);
-    for (const item of asProspectEvidenceList(row.evidence)) {
-      if (item.sourceVideoUrl) urls.add(item.sourceVideoUrl);
-    }
-  }
-  return urls.size;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -961,7 +1012,7 @@ export async function enrichProspectProfile(
   db: DatabaseClient,
   candidateId: string,
   organizationId: string,
-  userId: string
+  _userId: string
 ) {
   const candidate = await db.prospectCandidate.findFirst({
     where: { id: candidateId, organizationId }
@@ -1099,25 +1150,41 @@ export async function convertProspectToCustomer(
     if (!candidate) throw new Error('潜客不存在');
     if (candidate.customerId) throw new Error('该潜客已转入客户库');
 
-    const existingByUser = await tx.customer.findFirst({
-      where: {
-        organizationId,
-        deletedAt: null,
-        metadata: {
-          path: ['prospectUserKey'],
-          equals: candidate.userKey
-        }
+    const existingByUser = await findCustomerByAcquisitionIdentity(
+      tx,
+      organizationId,
+      {
+        platform: candidate.platform,
+        externalUserId: candidate.externalUserId,
+        userKey: candidate.userKey
       }
-    });
+    );
 
-    if (normalizedPhone && !existingByUser) {
-      const duplicates = await tx.customer.findMany({
-        where: {
-          organizationId,
-          phone: normalizedPhone,
-          deletedAt: null
-        }
-      });
+    if (!existingByUser) {
+      // Phone collisions are exact; same-channel same-display-name customers
+      // are usually the same person re-crawled under a different platform id
+      // (e.g. two candidate rows both nicknamed "滚筒洗衣机") — surface them
+      // in the same confirmation flow instead of silently creating doubles.
+      const displayName =
+        input.displayName?.trim() || candidate.userNickname || '潜客';
+      const duplicateConditions: Array<Record<string, unknown>> = [];
+      if (normalizedPhone) duplicateConditions.push({ phone: normalizedPhone });
+      if (displayName !== '潜客') {
+        duplicateConditions.push({
+          displayName,
+          channel: (channelMap[candidate.platform] ?? 'other') as never
+        });
+      }
+      const duplicates =
+        duplicateConditions.length > 0
+          ? await tx.customer.findMany({
+              where: {
+                organizationId,
+                deletedAt: null,
+                OR: duplicateConditions as never
+              }
+            })
+          : [];
       if (duplicates.length > 0 && !input.confirmDuplicate) {
         const err = new Error('duplicate') as Error & {
           code: string;
@@ -1183,6 +1250,11 @@ export async function convertProspectToCustomer(
             prospectCandidateId: candidate.id,
             prospectingTaskId: candidate.prospectingTaskId,
             prospectUserKey: candidate.userKey,
+            ...(candidate.externalUserId
+              ? {
+                  platformUserKey: `${candidate.platform}:${candidate.externalUserId}`
+                }
+              : {}),
             relevanceScore: candidate.relevanceScore,
             leadLevel: candidate.leadLevel,
             pendingContact: !normalizedPhone
@@ -1199,6 +1271,23 @@ export async function convertProspectToCustomer(
       }));
 
     if (reused) {
+      const meta = asRecord(customer.metadata);
+      const platformUserKey = candidate.externalUserId
+        ? `${candidate.platform}:${candidate.externalUserId}`
+        : undefined;
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: {
+          metadata: {
+            ...meta,
+            prospectCandidateId: candidate.id,
+            prospectingTaskId: candidate.prospectingTaskId,
+            prospectUserKey: candidate.userKey,
+            ...(platformUserKey ? { platformUserKey } : {}),
+            leadLevel: candidate.leadLevel
+          } as never
+        }
+      });
       await tx.customerActivity.create({
         data: {
           customerId: customer.id,

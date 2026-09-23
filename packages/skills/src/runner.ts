@@ -19,7 +19,14 @@ const __dirname = fileURLToPath(import.meta.url);
 const DEFINITIONS_DIR = resolve(__dirname, '..', '..', 'definitions');
 
 function coerceParsedSkillOutput(output: unknown): unknown {
-  if (!output || typeof output !== 'object' || Array.isArray(output)) {
+  // LLMs frequently answer list-shaped prompts with a bare top-level array
+  // even when the schema asks for {"results": [...]}. Wrap it so the
+  // validator sees the envelope — otherwise every such run "fails" output
+  // validation and the caller silently loses the whole result.
+  if (Array.isArray(output)) {
+    return { results: output };
+  }
+  if (!output || typeof output !== 'object') {
     return output;
   }
   let o = { ...(output as Record<string, unknown>) };

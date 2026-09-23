@@ -10,19 +10,14 @@ import { Job } from 'bullmq';
 import { createDatabaseClient } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import { createLogger } from '@ai-growth-ops/observability';
-import type { PlatformCode, InteractionMode } from '@ai-growth-ops/connectors';
+import type { PlatformCode } from '@ai-growth-ops/connectors';
 import { getOrCreateConnector } from '@ai-growth-ops/connectors';
+import { getBrowserRunnerConfig, getBrowserRunnerHeaders } from '@ai-growth-ops/shared';
 
 const logger = createLogger('manual-reply');
 
-const BROWSER_RUNNER_URL =
-  process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
-
 function runnerHeaders(): Record<string, string> {
-  const h: Record<string, string> = { 'content-type': 'application/json' };
-  if (RUNNER_SECRET) h['authorization'] = `Bearer ${RUNNER_SECRET}`;
-  return h;
+  return getBrowserRunnerHeaders({ 'content-type': 'application/json' });
 }
 
 interface ManualReplyJobData {
@@ -77,7 +72,6 @@ export async function handleInteractionManualReply(
         }
       })()
     : undefined;
-  const accountMode = (account.mode as InteractionMode) ?? 'browser_assist';
 
   try {
     let result: {
@@ -146,7 +140,7 @@ export async function handleInteractionManualReply(
         delete body.replyText;
       }
 
-      const response = await fetch(`${BROWSER_RUNNER_URL}${endpoint}`, {
+      const response = await fetch(`${getBrowserRunnerConfig().url}${endpoint}`, {
         method: 'POST',
         headers: runnerHeaders(),
         body: JSON.stringify(body),
@@ -181,10 +175,9 @@ export async function handleInteractionManualReply(
           providerMode: accessToken ? 'official_api' : 'browser_assist',
           status: 'sent',
           externalReplyId: result.externalReplyId || `manual-${Date.now()}`,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           rawResponse: {
             mode: accessToken ? 'official_api' : 'browser_assist'
-          } as any
+          }
         }
       });
 

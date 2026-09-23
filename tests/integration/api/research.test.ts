@@ -6,7 +6,7 @@ import {
   seedDatabase
 } from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
-import { getTestAuth, createAuthFetch, type TestAuthContext } from '../../setup/test-auth';
+import { getTestAuth, createAuthFetch } from '../../setup/test-auth';
 
 let server: Server;
 let baseUrl: string;
@@ -168,7 +168,7 @@ describe('Research API', () => {
 
   it('POST /api/research-tasks/:id/run rejects already completed task', async () => {
     if (!seededCompletedTaskId) return; // skip if no completed task
-    const { status, body } = await api.post(`/api/research-tasks/${seededCompletedTaskId}/run`);
+    const { status } = await api.post(`/api/research-tasks/${seededCompletedTaskId}/run`);
     // Should reject running an already-completed task
     expect([400, 409, 500]).toContain(status);
   });

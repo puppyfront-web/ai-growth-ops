@@ -1,0 +1,3 @@
+-- RenameIndex
+ALTER INDEX "prospecting_guard_ledgers_organizationId_platformAccountId_date" RENAME TO "prospecting_guard_ledgers_organizationId_platformAccountId__key";
+

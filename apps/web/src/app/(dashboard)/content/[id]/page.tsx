@@ -131,7 +131,12 @@ export default function ContentDetailPage() {
       setSaveError(null);
       return updateContentItem(id, { title, body, mediaAssetIds });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['content-item', id] }),
+    onSuccess: () => {
+      // Content confirmed without problems — continue straight to the
+      // platform-versions tab (the next step of the publish flow).
+      setActiveTab('variants');
+      qc.invalidateQueries({ queryKey: ['content-item', id] });
+    },
     onError: (err: Error) => setSaveError(err.message)
   });
 

@@ -33,6 +33,7 @@ import {
   AlertDialogAction
 } from '@/components/ui/alert-dialog';
 import { CustomerImportPanel } from '@/components/customers/CustomerImportPanel';
+import { getTeamMembers } from '@/lib/api/settings';
 import {
   CHANNEL_LABELS,
   CUSTOMER_STATUSES,
@@ -83,11 +84,13 @@ export default function CustomersPage() {
     channel?: string;
     source?: string;
     status?: string;
+    pending?: string;
   }>({
     q: searchParams.get('q') || undefined,
     channel: searchParams.get('channel') || undefined,
     source: searchParams.get('source') || undefined,
-    status: searchParams.get('status') || undefined
+    status: searchParams.get('status') || undefined,
+    pending: searchParams.get('pending') || undefined
   });
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
@@ -107,6 +110,10 @@ export default function CustomersPage() {
   const { data: followUps } = useQuery({
     queryKey: ['customers', 'follow-ups'],
     queryFn: listCustomerFollowUps
+  });
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ['team', 'members'],
+    queryFn: getTeamMembers
   });
 
   const resetForm = () => {
@@ -133,6 +140,7 @@ export default function CustomersPage() {
         intent: form.intent,
         channel: form.channel,
         sourceNote: form.sourceNote,
+        assignedTo: form.assignedTo || undefined,
         confirmDuplicate
       }),
     onSuccess: () => {
@@ -162,7 +170,8 @@ export default function CustomersPage() {
         intent: form.intent.trim(),
         channel: form.channel,
         sourceNote: form.sourceNote,
-        status: form.status
+        status: form.status,
+        assignedTo: form.assignedTo || undefined
       });
     },
     onSuccess: () => {
@@ -366,7 +375,7 @@ export default function CustomersPage() {
       <Breadcrumb />
       <PageHeader
         title="客户管理"
-        description="录入、导入和管理客户信息，支持手机号去重提示"
+        description="获客与评论私信汇入客户库，跟进在飞书完成"
         actions={
           <div className="flex items-center gap-2">
             <CustomerImportPanel />
@@ -393,6 +402,11 @@ export default function CustomersPage() {
             value={form}
             onChange={setForm}
             showStatus={Boolean(editingId)}
+            showAssignee
+            assigneeOptions={teamMembers.map((m) => ({
+              id: m.id,
+              name: m.name
+            }))}
             idPrefix={editingId ? 'edit-customer' : 'new-customer'}
             onPhoneBlur={handlePhoneBlur}
           />
@@ -447,7 +461,7 @@ export default function CustomersPage() {
 
       {(followUps?.items.length ?? 0) > 0 && (
         <div className="mb-4 rounded-lg border p-3 space-y-2">
-          <p className="text-sm font-medium">跟进待办</p>
+          <p className="text-sm font-medium">AI 建议</p>
           {followUps?.items.slice(0, 5).map((item) => (
             <div
               key={`${item.playbookId}-${item.actionId}`}
@@ -513,6 +527,21 @@ export default function CustomersPage() {
         >
           <option value="">全部客户</option>
           <option value="prospecting">获客转入</option>
+        </select>
+        <select
+          value={filters.pending ?? ''}
+          onChange={(e) => {
+            setPage(1);
+            setFilters((f) => ({
+              ...f,
+              pending: e.target.value || undefined
+            }));
+          }}
+          className="rounded border bg-background px-3 py-1.5 text-sm"
+          aria-label="待办筛选"
+        >
+          <option value="">全部待办</option>
+          <option value="contact">待补联系方式</option>
         </select>
         <select
           value={filters.status ?? ''}

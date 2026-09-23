@@ -1,29 +1,29 @@
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN apk add --no-cache openssl
+RUN npm install --global pnpm@10.33.0 --registry=https://registry.npmmirror.com && \
+    pnpm config set registry https://registry.npmmirror.com
 WORKDIR /app
 
-# Install dependencies
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/database/package.json packages/database/
-COPY packages/shared/package.json packages/shared/
-COPY packages/shared-types/package.json packages/shared-types/
-COPY packages/observability/package.json packages/observability/
-COPY apps/web/package.json apps/web/
-RUN pnpm install --frozen-lockfile
+COPY .npmrc ./
+COPY tsconfig.base.json tsup.config.ts ./
+COPY apps ./apps
+COPY packages ./packages
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
-# Build
-FROM base AS build
+FROM deps AS build
+ARG API_BASE_URL=http://api:3100
+ENV API_BASE_URL=$API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY tsconfig.base.json ./
-COPY packages/ ./packages/
-COPY apps/web/ ./apps/web/
-RUN pnpm --filter @ai-growth-ops/database generate && \
+RUN mkdir -p apps/web/public
+RUN pnpm --filter @ai-growth-ops/database db:generate && \
     pnpm --filter @ai-growth-ops/shared build && \
     pnpm --filter @ai-growth-ops/shared-types build && \
     pnpm --filter @ai-growth-ops/observability build && \
+    pnpm --filter @ai-growth-ops/ai build && \
+    pnpm --filter @ai-growth-ops/ai-tools build && \
     pnpm --filter @ai-growth-ops/web build
 
 # Production

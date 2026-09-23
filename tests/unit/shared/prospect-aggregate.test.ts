@@ -4,6 +4,7 @@ import {
   mergeProspectEvidence,
   prioritizeProspectEvidence
 } from '../../../packages/shared/src/prospect-aggregate';
+import { scoreProspectUser } from '../../../packages/shared/src/prospect-scoring';
 
 const videos = [
   {
@@ -169,5 +170,75 @@ describe('prioritizeProspectEvidence', () => {
     expect(ranked).toHaveLength(2);
     expect(ranked[0].content).toBe('想采购');
     expect(ranked[1].content).toBe('路过');
+  });
+});
+
+describe('demand-post author aggregation (需求帖作者)', () => {
+  it('aggregates the author of a demand-titled video as a prospect', () => {
+    const [author] = aggregateProspectComments(
+      [
+        {
+          contentId: 'v1',
+          title: '工厂想上AI改造，求推荐靠谱的服务商',
+          author: '老王厂长',
+          url: 'https://douyin.com/video/v1',
+          comments: []
+        }
+      ],
+      'AI工厂改造'
+    );
+    expect(author).toBeDefined();
+    expect(author.userKey).toBe('author:老王厂长');
+    expect(author.userNickname).toBe('老王厂长');
+    expect(author.evidence[0]?.content).toContain('（需求帖）');
+
+    const score = scoreProspectUser({
+      contents: author.evidence.map((item) => item.content),
+      keywords: ['AI改造'],
+      icpHighIntentKeywords: ['合作'],
+      videoTitle: author.sourceVideoTitle ?? undefined
+    });
+    expect(['A', 'B']).toContain(score.leadLevel);
+    expect(score.relevanceScore).toBeGreaterThanOrEqual(40);
+  });
+
+  it('ignores authors of promotional or informational videos', () => {
+    const prospects = aggregateProspectComments(
+      [
+        {
+          contentId: 'v2',
+          title: '工信部发令，2万家软件企业AI改造',
+          author: 'AI资讯号',
+          url: 'https://douyin.com/video/v2',
+          comments: [{ externalUserId: 'u1', content: '这个方向怎么看？' }]
+        }
+      ],
+      'AI工厂改造'
+    );
+    expect(prospects.map((p) => p.userKey)).toEqual(['u1']);
+  });
+});
+
+describe('DOM noise filtering (抓取噪音)', () => {
+  it('drops relative-timestamp residue like "5天前·广东"', () => {
+    const prospects = aggregateProspectComments(
+      [
+        {
+          contentId: 'v9',
+          title: 'AI工厂改造',
+          author: '作者',
+          url: 'u',
+          comments: [
+            { externalUserId: 'u9', content: '5天前·广东' },
+            { externalUserId: 'u9', content: '3小时前' },
+            { externalUserId: 'u9', content: '我们厂想做AI改造，怎么联系？' }
+          ]
+        }
+      ],
+      'AI工厂改造'
+    );
+    const evidences = prospects[0]?.evidence ?? [];
+    expect(evidences).toHaveLength(1);
+    expect(evidences[0]?.content).toContain('怎么联系');
   });
 });

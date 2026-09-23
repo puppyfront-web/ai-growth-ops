@@ -30,7 +30,7 @@ export function Sidebar() {
         {/* Logo area */}
         <div className="flex h-14 items-center justify-between border-b px-4">
           {!sidebarCollapsed && (
-            <Link href="/dashboard" className="flex items-center gap-2">
+            <Link href="/prospecting" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-700 text-sm font-bold text-white">
                 AI
               </div>
@@ -39,7 +39,7 @@ export function Sidebar() {
           )}
           {sidebarCollapsed && (
             <Link
-              href="/dashboard"
+              href="/prospecting"
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-700 text-sm font-bold text-white mx-auto"
             >
               AI

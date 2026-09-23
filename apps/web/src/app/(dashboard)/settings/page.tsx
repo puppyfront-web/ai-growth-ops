@@ -5,10 +5,11 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 export default function SettingsPage() {
   const items = [
     {
-      href: '/settings/ai',
-      title: 'AI 配置',
-      desc: '配置 LLM Provider 和功能开关'
+      href: '/integrations/llm',
+      title: 'LLM 配置',
+      desc: '统一配置组织的文本模型与密钥'
     },
+    { href: '/settings/ai', title: '素材生成配置', desc: '可选的图片与视频生成服务' },
     { href: '/settings/skills', title: 'Skill 管理', desc: '管理 AI 技能模块' },
     {
       href: '/settings/icp',

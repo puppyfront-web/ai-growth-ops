@@ -85,8 +85,24 @@ export function suggestReply(id: string): Promise<ReplySuggestion[]> {
   );
 }
 
-export function convertToLead(id: string): Promise<{ ok: boolean }> {
-  return apiPost<{ ok: boolean }>(
+export type ConvertInteractionToCustomerResult = {
+  customer: { id: string; displayName: string };
+  lead: { id: string };
+  created: boolean;
+};
+
+export function convertToCustomer(
+  id: string
+): Promise<ConvertInteractionToCustomerResult> {
+  return apiPost<ConvertInteractionToCustomerResult>(
+    `/api/interactions/${id}/convert-to-customer`,
+    {}
+  );
+}
+
+/** @deprecated 请使用 convertToCustomer，行为已统一写入客户库 */
+export function convertToLead(id: string): Promise<ConvertInteractionToCustomerResult> {
+  return apiPost<ConvertInteractionToCustomerResult>(
     `/api/interactions/${id}/convert-to-lead`,
     {}
   );

@@ -67,12 +67,7 @@ describe('API Client', () => {
     authToken.set('expired-token');
 
     // Mock window.location
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      value: { href: '' },
-      writable: true,
-      configurable: true
-    });
+    vi.stubGlobal('window', { location: { href: '' } });
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -91,11 +86,6 @@ describe('API Client', () => {
     expect(authToken.get()).toBeNull();
     expect(window.location.href).toBe('/login');
 
-    // Restore
-    Object.defineProperty(window, 'location', {
-      value: originalLocation,
-      writable: true,
-      configurable: true
-    });
+    vi.unstubAllGlobals();
   });
 });

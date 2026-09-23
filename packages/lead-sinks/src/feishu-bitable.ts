@@ -35,17 +35,22 @@ export class FeishuBitableSink implements LeadSink {
         if (value != null) fields[bitableField] = value;
       }
 
-      const resp = await fetch(
-        `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ fields })
-        }
-      );
+      const existingRecordId =
+        typeof config.existingRecordId === 'string'
+          ? config.existingRecordId
+          : undefined;
+      const recordPath = existingRecordId
+        ? `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/${existingRecordId}`
+        : `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`;
+
+      const resp = await fetch(recordPath, {
+        method: existingRecordId ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ fields })
+      });
 
       const data = (await resp.json()) as Record<string, unknown>;
 
@@ -60,10 +65,14 @@ export class FeishuBitableSink implements LeadSink {
       const record = (data.data as Record<string, unknown>)?.record as
         | Record<string, unknown>
         | undefined;
+      const recordId =
+        (record?.record_id as string | undefined) ?? existingRecordId;
       return {
         success: true,
-        externalId: record?.record_id as string | undefined,
-        externalUrl: `https://feishu.cn/base/${appToken}?table=${tableId}`
+        externalId: recordId,
+        externalUrl: recordId
+          ? `https://feishu.cn/base/${appToken}?table=${tableId}&record=${recordId}`
+          : `https://feishu.cn/base/${appToken}?table=${tableId}`
       };
     } catch (err) {
       return {

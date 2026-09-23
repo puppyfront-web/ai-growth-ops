@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { DatabaseClient } from '@ai-growth-ops/database';
+import { resolveLlmConfigFromDb, type DatabaseClient } from '@ai-growth-ops/database';
 import {
   credentialsFromSaved,
   generationEndpoint,
@@ -22,10 +22,12 @@ export interface GenerateMediaOptions {
 
 export async function loadAiConfigValue(
   db: DatabaseClient,
-  userId: string
+  userId: string,
+  orgId: string
 ): Promise<Record<string, unknown> | null> {
-  const savedConfig = await db.appConfig.findUnique({
-    where: { userId_key: { userId, key: 'ai_config' } }
+  const savedConfig = await db.appConfig.findFirst({
+    where: { userId, organizationId: orgId, key: { in: [`ai_config:${orgId}`, 'ai_config'] } },
+    orderBy: { key: 'desc' }
   });
   return (savedConfig?.value as Record<string, unknown> | null) ?? null;
 }
@@ -75,8 +77,9 @@ export async function generateMediaAsset(
     generationType
   } = options;
   const kind = resolveKind(generationType);
-  const saved = await loadAiConfigValue(db, userId);
-  const creds = credentialsFromSaved(saved, kind);
+  const saved = await loadAiConfigValue(db, userId, orgId);
+  const llm = await resolveLlmConfigFromDb(db, orgId);
+  const creds = credentialsFromSaved({ ...saved, ...llm }, kind);
 
   if (!creds.apiKey || /CHANGE_ME/i.test(creds.apiKey)) {
     throw new Error(

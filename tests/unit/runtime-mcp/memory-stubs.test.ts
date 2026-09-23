@@ -15,12 +15,12 @@ describe('InMemoryWorkingMemory', () => {
 
 describe('StaticPreferencesStore', () => {
   it('returns the seeded prefs sliced by domain', async () => {
-    const store = new StaticPreferencesStore({
+    const store = new StaticPreferencesStore({ defaultContentType: 'text_image', preferredPublishTimes: [], contentStylePreferences: '',
       preferredPlatforms: ['douyin'],
       brandVoice: 'friendly',
       avoidTopics: ['politics'],
       replyStylePreferences: 'concise'
-    } as any);
+    });
     const content = await store.forDomain('u', 'content');
     expect(content.brandVoice).toBe('friendly');
     expect(content.avoidTopics).toEqual(['politics']);

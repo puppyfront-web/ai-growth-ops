@@ -87,6 +87,10 @@ const BROWSER_TTL_MS = 15 * 60 * 1000;
 
 const sharedBrowsers = new Map<'headed' | 'headless', Browser>();
 const browserLastUsed = new Map<'headed' | 'headless', number>();
+// Live contexts per shared browser. A browser with active contexts must never
+// be recycled (TTL expiry used to close browsers mid-publish, killing in-flight
+// sessions with "Target page, context or browser has been closed").
+const browserActiveContexts = new Map<'headed' | 'headless', number>();
 
 export function resolveHeadedPreference(override?: boolean): boolean {
   if (typeof override === 'boolean') return override;
@@ -100,6 +104,13 @@ async function getSharedBrowser(headedOverride?: boolean): Promise<Browser> {
   const existing = sharedBrowsers.get(browserKey);
   const lastUsed = browserLastUsed.get(browserKey) ?? 0;
   if (existing && now - lastUsed < BROWSER_TTL_MS && existing.isConnected()) {
+    browserLastUsed.set(browserKey, now);
+    return existing;
+  }
+
+  if (existing && existing.isConnected() && (browserActiveContexts.get(browserKey) ?? 0) > 0) {
+    // Stale by TTL but still serving in-flight sessions — keep it alive and
+    // just refresh the timestamp; recycle on a later acquisition instead.
     browserLastUsed.set(browserKey, now);
     return existing;
   }
@@ -142,7 +153,11 @@ export async function createStealthSession(
   page: Page;
   close: () => Promise<void>;
 }> {
+  const browserKey: 'headed' | 'headless' = resolveHeadedPreference(headedOverride)
+    ? 'headed'
+    : 'headless';
   const browser = await getSharedBrowser(headedOverride);
+  browserActiveContexts.set(browserKey, (browserActiveContexts.get(browserKey) ?? 0) + 1);
 
   const context = await browser.newContext({
     userAgent:
@@ -177,6 +192,9 @@ export async function createStealthSession(
         await context.close();
       } catch {
         /* */
+      } finally {
+        const remaining = (browserActiveContexts.get(browserKey) ?? 1) - 1;
+        browserActiveContexts.set(browserKey, Math.max(remaining, 0));
       }
     }
   };
@@ -193,7 +211,11 @@ export async function createHeadlessSession(
   page: Page;
   close: () => Promise<void>;
 }> {
+  const browserKey: 'headed' | 'headless' = resolveHeadedPreference(headedOverride)
+    ? 'headed'
+    : 'headless';
   const browser = await getSharedBrowser(headedOverride);
+  browserActiveContexts.set(browserKey, (browserActiveContexts.get(browserKey) ?? 0) + 1);
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -213,6 +235,9 @@ export async function createHeadlessSession(
         await context.close();
       } catch {
         /* */
+      } finally {
+        const remaining = (browserActiveContexts.get(browserKey) ?? 1) - 1;
+        browserActiveContexts.set(browserKey, Math.max(remaining, 0));
       }
     }
   };

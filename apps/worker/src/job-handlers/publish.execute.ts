@@ -4,6 +4,7 @@ import { getOrCreatePublishConnector } from '@ai-growth-ops/connectors';
 import type { PlatformCode, InteractionMode } from '@ai-growth-ops/connectors';
 import { createDatabaseClient } from '@ai-growth-ops/database';
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import { getBrowserRunnerConfig, getBrowserRunnerHeaders } from '@ai-growth-ops/shared';
 import { updatePublishProgress } from '../publish-progress.js';
 import { resolveMediaFilePaths } from '../resolve-media-paths.js';
 
@@ -295,13 +296,8 @@ async function executeBrowserAssistPublish(params: {
   externalUrl?: string;
   errorMessage?: string;
 }> {
-  const runnerUrl = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-  const runnerSecret = process.env.BROWSER_RUNNER_SECRET || '';
-  const runnerAuthHeaders: Record<string, string> = {
-    'content-type': 'application/json'
-  };
-  if (runnerSecret)
-    runnerAuthHeaders['authorization'] = `Bearer ${runnerSecret}`;
+  const runner = getBrowserRunnerConfig();
+  const runnerAuthHeaders = getBrowserRunnerHeaders({ 'content-type': 'application/json' });
 
   try {
     // Get decrypted cookie from account
@@ -316,7 +312,7 @@ async function executeBrowserAssistPublish(params: {
       };
     }
 
-    const resp = await fetch(`${runnerUrl}/assist/publish`, {
+    const resp = await fetch(`${runner.url}/assist/publish`, {
       method: 'POST',
       headers: runnerAuthHeaders,
       signal: AbortSignal.timeout(5 * 60_000), // 5 min timeout for video uploads etc.

@@ -22,7 +22,7 @@ function normalizeMessages(raw: unknown[]): ModelMessage[] {
   });
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3100';
 
 /** Call backend API with auth context (server-side) */
 async function apiCall(
@@ -191,7 +191,7 @@ async function handleChat(req: Request) {
   let aiConfig: { provider: string; apiKey: string; baseUrl: string; model: string };
   try {
     const configRes = await fetch(`${API_BASE}/api/settings/ai/internal`, {
-      headers: authHeaders
+      headers: { ...authHeaders, 'x-internal-api-key': process.env.INTERNAL_API_SECRET || '' }
     });
     if (configRes.ok) {
       const configBody = await configRes.json() as Record<string, unknown>;
@@ -227,7 +227,7 @@ async function handleChat(req: Request) {
 
   if (!aiConfig.apiKey) {
     return new Response(
-      JSON.stringify({ error: '请先在「设置 > AI」中配置 API Key' }),
+      JSON.stringify({ error: '请先在「集成配置 → LLM」中配置 API Key' }),
       { status: 400, headers: { 'content-type': 'application/json' } }
     );
   }

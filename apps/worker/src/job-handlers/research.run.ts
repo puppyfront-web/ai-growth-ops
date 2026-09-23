@@ -4,15 +4,14 @@ import { createDatabaseClient } from '@ai-growth-ops/database';
 import type { DatabaseClient, Platform } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
-
-const RUNNER_URL = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
+import { getBrowserRunnerConfig, getBrowserRunnerHeaders } from '@ai-growth-ops/shared';
 
 export async function handleResearchRun(
   job: Job<ResearchRunInput>
 ): Promise<void> {
   const { researchTaskId, platform, taskType, keywords = [] } = job.data;
   const db: DatabaseClient = createDatabaseClient();
+  const runner = getBrowserRunnerConfig();
 
   try {
     const task = await db.researchTask.findFirst({
@@ -52,15 +51,10 @@ export async function handleResearchRun(
     for (const keyword of keywords.length > 0 ? keywords : ['热门内容']) {
       try {
         const resp = await fetchWithTimeout(
-          `${RUNNER_URL}/assist/search-and-fetch-comments`,
+          `${runner.url}/assist/search-and-fetch-comments`,
           {
             method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              ...(RUNNER_SECRET
-                ? { authorization: `Bearer ${RUNNER_SECRET}` }
-                : {})
-            },
+            headers: getBrowserRunnerHeaders({ 'content-type': 'application/json' }),
             body: JSON.stringify({
               platform,
               cookie,

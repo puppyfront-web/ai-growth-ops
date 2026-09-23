@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFeishuConfig, updateFeishuConfig } from '@/lib/api/integrations';
+import { getFeishuConfig, testFeishuConfig, updateFeishuConfig } from '@/lib/api/integrations';
+import { toast } from '@/components/ui/toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
@@ -15,20 +16,47 @@ export default function FeishuPage() {
     queryFn: getFeishuConfig
   });
   const [appId, setAppId] = useState('');
+  const [appSecret, setAppSecret] = useState('');
   const [appToken, setAppToken] = useState('');
   const [tableId, setTableId] = useState('');
+  const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
     if (config) {
       setAppId(String(config.appId ?? ''));
+      setAppSecret(String(config.appSecret ?? ''));
       setAppToken(String(config.appToken ?? ''));
       setTableId(String(config.tableId ?? ''));
+      setEnabled(config.enabled !== false);
     }
   }, [config]);
 
   const saveMutation = useMutation({
-    mutationFn: () => updateFeishuConfig({ appId, appToken, tableId }),
+    mutationFn: () =>
+      updateFeishuConfig({
+        appId,
+        appSecret,
+        appToken,
+        tableId,
+        enabled
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['feishu-config'] })
+  });
+  const testMutation = useMutation({
+    mutationFn: () =>
+      testFeishuConfig({
+        appId,
+        appSecret,
+        appToken,
+        tableId
+      }),
+    onSuccess: (result) => {
+      if (result.success) toast.success(result.message || '连接成功');
+      else toast.error(result.message || '连接失败');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || '连接失败');
+    }
   });
 
   if (isLoading) return <LoadingState />;
@@ -40,9 +68,14 @@ export default function FeishuPage() {
       <Breadcrumb />
       <PageHeader
         title="飞书配置"
-        description="配置飞书多维表格同步和群机器人"
+        description="客户管理写入的客户会自动同步到此表（需启用）；字段名见下方说明"
       />
       <div className="max-w-2xl space-y-6">
+        <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+          建议在多维表格中创建列：
+          customer_id、customer_name、channel、phone、company、role、intent、status、lead_level、segment、next_action、fit_score、intent_score、summary、assigned_to、created_at。
+          同一客户会更新同一行；跟进请在飞书完成。next_action 为可选列。也可自定义 fieldMapping。
+        </div>
         <div className="rounded-xl border bg-card p-5 space-y-4">
           <h3 className="font-semibold">应用配置</h3>
           <div className="space-y-3">
@@ -52,6 +85,16 @@ export default function FeishuPage() {
                 value={appId}
                 onChange={(e) => setAppId(e.target.value)}
                 className="mt-1 w-full rounded-md border p-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">App Secret</label>
+              <input
+                type="password"
+                value={appSecret}
+                onChange={(e) => setAppSecret(e.target.value)}
+                className="mt-1 w-full rounded-md border p-2 text-sm"
+                autoComplete="off"
               />
             </div>
             <div>
@@ -73,8 +116,16 @@ export default function FeishuPage() {
           </div>
         </div>
         <div className="rounded-xl border bg-card p-5 space-y-3">
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">启用客户自动同步</span>
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+          </label>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">启用状态</span>
+            <span className="text-sm font-medium">当前状态</span>
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${c.enabled ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}
             >
@@ -88,8 +139,13 @@ export default function FeishuPage() {
           )}
         </div>
         <div className="flex gap-2">
-          <button className="rounded-md border px-4 py-2 text-sm hover:bg-accent">
-            测试连接
+          <button
+            type="button"
+            onClick={() => testMutation.mutate()}
+            disabled={testMutation.isPending}
+            className="rounded-md border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"
+          >
+            {testMutation.isPending ? '测试中...' : '测试连接'}
           </button>
           <button
             onClick={() => saveMutation.mutate()}

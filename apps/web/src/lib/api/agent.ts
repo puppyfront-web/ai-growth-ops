@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from './client';
+import { apiGet, apiPost } from './client';
 
 // Supervisor fixed loop order — kept in sync with the kernel (FIRST_SLICE_NODES).
 export const NODE_ORDER = ['INIT', 'METRICS', 'CONTENT', 'PUBLISH', 'REVIEW'] as const;

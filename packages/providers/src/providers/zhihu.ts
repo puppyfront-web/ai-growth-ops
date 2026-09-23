@@ -12,7 +12,12 @@ export class ZhihuProvider implements PlatformProvider {
     config: PlatformAuthConfig
   ): Promise<HealthCheckResult> {
     if (!config.cookie) {
-      return { valid: false, platform: this.platform, error: '缺少 Cookie' };
+      return {
+        valid: false,
+        platform: this.platform,
+        error: '缺少 Cookie',
+        authExpired: true
+      };
     }
     try {
       const res = await fetch('https://www.zhihu.com/creator', {
@@ -29,7 +34,8 @@ export class ZhihuProvider implements PlatformProvider {
         return {
           valid: false,
           platform: this.platform,
-          error: 'Cookie 已失效，被重定向到登录页'
+          error: 'Cookie 已失效，被重定向到登录页',
+          authExpired: true
         };
       }
       return {

@@ -18,7 +18,7 @@ describe('buildNodeDirective', () => {
   it('packages a normal agent node with instructions, allowedTools, L0/L1 context', async () => {
     const wm = new InMemoryWorkingMemory();
     await wm.set('INIT', 'today', { videos: 3 });
-    const prefs = new StaticPreferencesStore({ preferredPlatforms: ['douyin'], brandVoice: 'bold' } as any);
+    const prefs = new StaticPreferencesStore({ defaultContentType: 'text_image', preferredPublishTimes: [], contentStylePreferences: '', replyStylePreferences: '', avoidTopics: [], preferredPlatforms: ['douyin'], brandVoice: 'bold' });
     const d = await buildNodeDirective(baseState, { workingMemory: wm, preferences: prefs });
     expect(d.node).toBe('INIT');
     expect(d.agent).toBe('publish');
@@ -32,7 +32,7 @@ describe('buildNodeDirective', () => {
 
   it('packages the REVIEW supervisor node with empty allowedTools', async () => {
     const wm = new InMemoryWorkingMemory();
-    const prefs = new StaticPreferencesStore({} as any);
+    const prefs = new StaticPreferencesStore({ defaultContentType: 'text_image', preferredPublishTimes: [], contentStylePreferences: '', replyStylePreferences: '', avoidTopics: [], brandVoice: '', preferredPlatforms: [],});
     const d = await buildNodeDirective({ ...baseState, currentNode: 'REVIEW' }, { workingMemory: wm, preferences: prefs });
     expect(d.agent).toBe('supervisor');
     expect(d.allowedTools).toEqual([]);

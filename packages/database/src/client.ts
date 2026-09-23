@@ -6,9 +6,17 @@ export function createDatabaseClient(): DatabaseClient {
   return new PrismaClient();
 }
 
+async function assertDisposableDatabase(db: DatabaseClient): Promise<void> {
+  const rows = await db.$queryRaw<Array<{ name: string }>>`SELECT current_database() AS name`;
+  if (rows[0]?.name !== 'ai_growth_ops_e2e') {
+    throw new Error('resetDatabase requires the ai_growth_ops_e2e database');
+  }
+}
+
 export async function resetDatabase(
   db: DatabaseClient = createDatabaseClient()
 ): Promise<void> {
+  await assertDisposableDatabase(db);
   await db.$transaction([
     db.auditLog.deleteMany(),
     db.providerRunLog.deleteMany(),

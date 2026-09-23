@@ -20,7 +20,8 @@ export class WechatOfficialProvider implements PlatformProvider {
       return {
         valid: false,
         platform: this.platform,
-        error: '缺少 AppID/AppSecret 或 Cookie'
+        error: '缺少 AppID/AppSecret 或 Cookie',
+        authExpired: true
       };
     }
     return this.validateOfficialApi(config.appId, config.appSecret);
@@ -74,7 +75,8 @@ export class WechatOfficialProvider implements PlatformProvider {
         return {
           valid: false,
           platform: this.platform,
-          error: 'Cookie 已失效，被重定向到登录页'
+          error: 'Cookie 已失效，被重定向到登录页',
+          authExpired: true
         };
       }
       return {

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
+import { syncCustomerToFeishu, trySyncCustomerToFeishu } from '@ai-growth-ops/database';
 import { normalizePhone } from '@ai-growth-ops/shared';
 import { getOrganizationContext } from './auth.js';
 import { parsePagination, paginate } from './middleware/pagination.js';
@@ -157,6 +158,14 @@ export const customerRoutes: Array<{
         };
       }
 
+      const pending = ctx.url.searchParams.get('pending');
+      if (pending === 'contact') {
+        where.metadata = {
+          path: ['pendingContact'],
+          equals: true
+        };
+      }
+
       const q = ctx.url.searchParams.get('q')?.trim();
       if (q) {
         where.OR = [
@@ -273,6 +282,12 @@ export const customerRoutes: Array<{
         orgCtx.organization.id,
         orgCtx.user.id
       ).catch(() => undefined);
+      trySyncCustomerToFeishu(
+        ctx.db,
+        result.customer.id,
+        orgCtx.organization.id,
+        orgCtx.user.name
+      ).catch(() => undefined);
     }
   },
   {
@@ -301,7 +316,111 @@ export const customerRoutes: Array<{
       });
 
       if (!customer) return sendJson(res, 404, { error: '客户不存在' });
-      sendJson(res, 200, customer);
+
+      const meta =
+        customer.metadata &&
+        typeof customer.metadata === 'object' &&
+        !Array.isArray(customer.metadata)
+          ? (customer.metadata as Record<string, unknown>)
+          : {};
+      const conversationId =
+        typeof meta.conversationId === 'string' ? meta.conversationId : null;
+      const platformUserKey =
+        typeof meta.platformUserKey === 'string' ? meta.platformUserKey : null;
+
+      let conversation: {
+        id: string;
+        externalUserName: string | null;
+        platform: string;
+        lastMessageAt: string | null;
+      } | null = null;
+      if (conversationId) {
+        const row = await ctx.db.conversation.findFirst({
+          where: {
+            id: conversationId,
+            organizationId: orgCtx.organization.id
+          },
+          select: {
+            id: true,
+            externalUserName: true,
+            platform: true,
+            lastMessageAt: true
+          }
+        });
+        if (row) {
+          conversation = {
+            id: row.id,
+            externalUserName: row.externalUserName,
+            platform: row.platform,
+            lastMessageAt: row.lastMessageAt?.toISOString() ?? null
+          };
+        }
+      } else if (platformUserKey) {
+        const [platform, externalUserId] = platformUserKey.split(':');
+        if (platform && externalUserId) {
+          const row = await ctx.db.conversation.findFirst({
+            where: {
+              organizationId: orgCtx.organization.id,
+              platform: platform as never,
+              externalUserId
+            },
+            select: {
+              id: true,
+              externalUserName: true,
+              platform: true,
+              lastMessageAt: true
+            }
+          });
+          if (row) {
+            conversation = {
+              id: row.id,
+              externalUserName: row.externalUserName,
+              platform: row.platform,
+              lastMessageAt: row.lastMessageAt?.toISOString() ?? null
+            };
+          }
+        }
+      }
+
+      const interactionWhere: Record<string, unknown> = {
+        organizationId: orgCtx.organization.id,
+        deletedAt: null,
+        OR: [{ leads: { some: { customerId: customer.id, deletedAt: null } } }]
+      };
+      if (platformUserKey) {
+        const [platform, externalUserId] = platformUserKey.split(':');
+        if (platform && externalUserId) {
+          (interactionWhere.OR as unknown[]).push({
+            platform: platform as never,
+            externalUserId
+          });
+        }
+      }
+
+      const recentInteractions = await ctx.db.interaction.findMany({
+        where: interactionWhere,
+        orderBy: { receivedAt: 'desc' },
+        take: 15,
+        select: {
+          id: true,
+          type: true,
+          content: true,
+          status: true,
+          receivedAt: true,
+          conversationId: true
+        }
+      });
+
+      sendJson(res, 200, {
+        ...customer,
+        crm: {
+          conversation,
+          recentInteractions: recentInteractions.map((row) => ({
+            ...row,
+            receivedAt: row.receivedAt.toISOString()
+          }))
+        }
+      });
     }
   },
   {
@@ -364,13 +483,26 @@ export const customerRoutes: Array<{
               ? nextTags
               : [...nextTags, '待跟进'];
 
+      const existingMeta =
+        existing.metadata &&
+        typeof existing.metadata === 'object' &&
+        !Array.isArray(existing.metadata)
+          ? (existing.metadata as Record<string, unknown>)
+          : {};
+
       const customer = await ctx.db.customer.update({
         where: { id: existing.id },
         data: {
           ...(body.displayName != null && {
             displayName: body.displayName.trim()
           }),
-          ...(phoneUpdate !== undefined && { phone: phoneUpdate }),
+          ...(phoneUpdate !== undefined && {
+            phone: phoneUpdate,
+            metadata: {
+              ...existingMeta,
+              pendingContact: !phoneUpdate
+            } as never
+          }),
           ...(body.company != null && {
             company: body.company.trim() || '待补充'
           }),
@@ -392,6 +524,12 @@ export const customerRoutes: Array<{
       });
 
       sendJson(res, 200, customer);
+      trySyncCustomerToFeishu(
+        ctx.db,
+        customer.id,
+        orgCtx.organization.id,
+        orgCtx.user.name
+      ).catch(() => undefined);
     }
   },
   {
@@ -583,6 +721,35 @@ export const customerRoutes: Array<{
     }
   },
   {
+    method: 'POST',
+    pattern: '/api/customers/:id/sync-feishu',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!canAccess(res, orgCtx.memberRole, 'lead:edit')) return;
+
+      try {
+        const result = await syncCustomerToFeishu(
+          ctx.db,
+          ctx.params.id,
+          orgCtx.organization.id,
+          orgCtx.user.name
+        );
+        if (!result.success) {
+          return sendJson(res, 502, {
+            error: result.errorMessage || '飞书同步失败',
+            ...result
+          });
+        }
+        sendJson(res, 200, result);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        const status = message.includes('不存在') ? 404 : 400;
+        sendJson(res, status, { error: message });
+      }
+    }
+  },
+  {
     method: 'GET',
     pattern: '/api/settings/icp',
     handler: async (req, res, ctx) => {
@@ -675,6 +842,12 @@ export const customerRoutes: Array<{
             customerId,
             orgCtx.organization.id,
             orgCtx.user.id
+          ).catch(() => undefined);
+          trySyncCustomerToFeishu(
+            ctx.db,
+            customerId,
+            orgCtx.organization.id,
+            orgCtx.user.name
           ).catch(() => undefined);
         }
         sendJson(res, 201, result);

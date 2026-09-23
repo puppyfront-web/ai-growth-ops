@@ -7,7 +7,6 @@ coverage
 .turbo
 playwright-report
 test-results
-pnpm-lock.yaml
 .DS_Store
 *.tsbuildinfo
 .next

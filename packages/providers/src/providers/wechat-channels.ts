@@ -49,6 +49,14 @@ export class WechatChannelsProvider implements PlatformProvider {
           }
         );
         if (res.ok) return { valid: true, platform: this.platform };
+        if (res.status === 401 || res.status === 302 || res.status === 301) {
+          return {
+            valid: false,
+            platform: this.platform,
+            error: `Cookie 已失效 (HTTP ${res.status})`,
+            authExpired: true
+          };
+        }
         return {
           valid: false,
           platform: this.platform,
@@ -66,7 +74,8 @@ export class WechatChannelsProvider implements PlatformProvider {
     return {
       valid: false,
       platform: this.platform,
-      error: '缺少 Cookie 或 AppID/AppSecret'
+      error: '缺少 Cookie 或 AppID/AppSecret',
+      authExpired: true
     };
   }
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { getTeamMembers } from '@/lib/api/settings';
 import {
   getCustomer,
   addCustomerActivity,
@@ -11,9 +12,9 @@ import {
   refreshCustomerProfile,
   getCustomerPlaybook,
   generateCustomerPlaybook,
-  approveCustomerPlaybook,
-  updateCustomerPlaybook
+  syncCustomerToFeishu
 } from '@/lib/api/customers';
+import { toast } from '@/components/ui/toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
@@ -34,13 +35,6 @@ const segmentLabels: Record<string, string> = {
   warm: '可培育',
   cold: '低活跃',
   at_risk: '流失风险'
-};
-
-const playbookStatusLabels: Record<string, string> = {
-  draft: '草稿',
-  active: '执行中',
-  completed: '已完成',
-  cancelled: '已取消'
 };
 
 const actionTypeLabels: Record<string, string> = {
@@ -92,12 +86,32 @@ export default function CustomerDetailPage() {
     queryKey: ['customers', id],
     queryFn: () => getCustomer(id)
   });
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ['team', 'members'],
+    queryFn: getTeamMembers
+  });
+  const assigneeName =
+    teamMembers.find((m) => m.id === customer?.assignedTo)?.name ?? null;
 
   const activityMutation = useMutation({
     mutationFn: () => addCustomerActivity(id, 'follow_up', note.trim()),
     onSuccess: () => {
       setNote('');
       qc.invalidateQueries({ queryKey: ['customers', id] });
+    }
+  });
+
+  const feishuSyncMutation = useMutation({
+    mutationFn: () => syncCustomerToFeishu(id),
+    onSuccess: (result) => {
+      toast.success('已同步到飞书多维表格');
+      if (result.externalUrl) {
+        window.open(result.externalUrl, '_blank', 'noopener,noreferrer');
+      }
+      qc.invalidateQueries({ queryKey: ['customers', id] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || '飞书同步失败');
     }
   });
 
@@ -112,7 +126,8 @@ export default function CustomerDetailPage() {
         intent: form.intent.trim(),
         channel: form.channel,
         sourceNote: form.sourceNote,
-        status: form.status
+        status: form.status,
+        assignedTo: form.assignedTo || undefined
       });
     },
     onSuccess: () => {
@@ -147,36 +162,8 @@ export default function CustomerDetailPage() {
       qc.invalidateQueries({ queryKey: ['customers', id, 'playbook'] })
   });
 
-  const approvePlaybookMutation = useMutation({
-    mutationFn: (playbookId: string) => approveCustomerPlaybook(id, playbookId),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ['customers', id, 'playbook'] })
-  });
-
-  const updateActionMutation = useMutation({
-    mutationFn: ({
-      playbookId,
-      actions
-    }: {
-      playbookId: string;
-      actions: PlaybookAction[];
-    }) => updateCustomerPlaybook(id, playbookId, { actions }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['customers', id, 'playbook'] });
-      qc.invalidateQueries({ queryKey: ['customers', id] });
-    }
-  });
-
   const playbook = playbookData?.playbook ?? null;
   const playbookActions = (playbook?.actions ?? []) as PlaybookAction[];
-
-  const markActionDone = (actionId: string) => {
-    if (!playbook) return;
-    const actions = playbookActions.map((a) =>
-      a.id === actionId ? { ...a, status: 'done' as const } : a
-    );
-    updateActionMutation.mutate({ playbookId: playbook.id, actions });
-  };
 
   if (isLoading) return <LoadingState />;
   if (customerError) {
@@ -207,6 +194,7 @@ export default function CustomerDetailPage() {
   const customerTags = Array.isArray(customer.tags)
     ? (customer.tags as string[])
     : [];
+  const feishuUrl = customer.metadata?.lark?.externalUrl ?? null;
 
   return (
     <div>
@@ -226,6 +214,30 @@ export default function CustomerDetailPage() {
                 获客转入
               </span>
             )}
+            {feishuUrl && (
+              <a
+                href={feishuUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+              >
+                打开飞书记录
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => feishuSyncMutation.mutate()}
+              disabled={feishuSyncMutation.isPending}
+              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+            >
+              {feishuSyncMutation.isPending ? '同步中…' : '同步飞书'}
+            </button>
+            {customer.metadata?.lark?.syncedAt &&
+              customer.metadata.lark.lastSuccess !== false && (
+                <span className="text-xs text-muted-foreground">
+                  飞书已同步
+                </span>
+              )}
             <Link
               href="/customers"
               className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
@@ -260,6 +272,11 @@ export default function CustomerDetailPage() {
                   value={form}
                   onChange={setForm}
                   showStatus
+                  showAssignee
+                  assigneeOptions={teamMembers.map((m) => ({
+                    id: m.id,
+                    name: m.name
+                  }))}
                   idPrefix="customer-detail"
                 />
                 <div className="flex gap-2">
@@ -313,6 +330,10 @@ export default function CustomerDetailPage() {
                 <dd>{CHANNEL_LABELS[customer.channel] ?? customer.channel}</dd>
               </div>
               <div>
+                <dt className="text-muted-foreground">负责人</dt>
+                <dd>{assigneeName ?? '未分配'}</dd>
+              </div>
+              <div>
                 <dt className="text-muted-foreground">公司</dt>
                 <dd>
                   {isUnfilled(customer.company) ? (
@@ -341,7 +362,11 @@ export default function CustomerDetailPage() {
                   <dt className="text-muted-foreground">获客任务</dt>
                   <dd>
                     <Link
-                      href={`/prospecting/${customer.metadata.prospectingTaskId}`}
+                      href={
+                        customer.metadata.prospectCandidateId
+                          ? `/prospecting/${customer.metadata.prospectingTaskId}#candidate-${customer.metadata.prospectCandidateId}`
+                          : `/prospecting/${customer.metadata.prospectingTaskId}`
+                      }
                       className="text-primary hover:underline"
                     >
                       查看来源任务
@@ -349,6 +374,19 @@ export default function CustomerDetailPage() {
                     {customer.metadata.leadLevel
                       ? ` · ${customer.metadata.leadLevel}级潜客`
                       : ''}
+                  </dd>
+                </div>
+              )}
+              {customer.crm?.conversation && (
+                <div className="sm:col-span-2">
+                  <dt className="text-muted-foreground">评论私信</dt>
+                  <dd>
+                    <Link
+                      href={`/conversations/${customer.crm.conversation.id}`}
+                      className="text-primary hover:underline"
+                    >
+                      打开会话
+                    </Link>
                   </dd>
                 </div>
               )}
@@ -436,42 +474,27 @@ export default function CustomerDetailPage() {
 
           <section className="rounded-lg border p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-medium">AI 跟进方案</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => generatePlaybookMutation.mutate()}
-                  disabled={generatePlaybookMutation.isPending}
-                  className="rounded border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
-                >
-                  {generatePlaybookMutation.isPending ? '生成中…' : '生成方案'}
-                </button>
-                {playbook?.status === 'draft' && (
-                  <button
-                    onClick={() => approvePlaybookMutation.mutate(playbook.id)}
-                    disabled={approvePlaybookMutation.isPending}
-                    className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
-                  >
-                    审批执行
-                  </button>
-                )}
-              </div>
+              <h2 className="font-medium">AI 下一步建议</h2>
+              <button
+                onClick={() => generatePlaybookMutation.mutate()}
+                disabled={generatePlaybookMutation.isPending}
+                className="rounded border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
+              >
+                {generatePlaybookMutation.isPending ? '生成中…' : '生成建议'}
+              </button>
             </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              建议可同步到飞书，跟进在飞书完成。
+            </p>
             {playbookLoading ? (
               <p className="text-sm text-muted-foreground">加载中…</p>
             ) : playbook ? (
               <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full border px-2 py-0.5 text-xs">
-                    {playbookStatusLabels[playbook.status] ?? playbook.status}
+                {playbook.generatedBy && (
+                  <span className="text-xs text-muted-foreground">
+                    {playbook.generatedBy === 'skill' ? 'AI 生成' : '规则引擎'}
                   </span>
-                  {playbook.generatedBy && (
-                    <span className="text-xs text-muted-foreground">
-                      {playbook.generatedBy === 'skill'
-                        ? 'AI 生成'
-                        : '规则引擎'}
-                    </span>
-                  )}
-                </div>
+                )}
                 <p>{playbook.summary}</p>
                 {playbook.reasoning && (
                   <p className="text-xs text-muted-foreground">
@@ -480,68 +503,64 @@ export default function CustomerDetailPage() {
                 )}
                 <ul className="space-y-2">
                   {playbookActions.map((action) => (
-                    <li
-                      key={action.id}
-                      className={`rounded border p-3 ${
-                        action.status === 'done' ? 'opacity-60' : ''
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
-                            <span className="font-medium">{action.title}</span>
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                              {actionTypeLabels[action.type] ?? action.type}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              优先级{' '}
-                              {priorityLabels[action.priority] ??
-                                action.priority}
-                            </span>
-                            {action.dueAt && (
-                              <span className="text-xs text-muted-foreground">
-                                截止 {action.dueAt}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-muted-foreground">
-                            {action.content}
-                          </p>
-                        </div>
-                        {action.status === 'pending' &&
-                          playbook.status === 'active' && (
-                            <button
-                              onClick={() => markActionDone(action.id)}
-                              disabled={updateActionMutation.isPending}
-                              className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
-                            >
-                              标记完成
-                            </button>
-                          )}
-                        {action.status === 'done' && (
-                          <span className="shrink-0 text-xs text-green-600">
-                            已完成
-                          </span>
-                        )}
+                    <li key={action.id} className="rounded border p-3">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="font-medium">{action.title}</span>
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                          {actionTypeLabels[action.type] ?? action.type}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          优先级{' '}
+                          {priorityLabels[action.priority] ?? action.priority}
+                        </span>
                       </div>
+                      <p className="text-muted-foreground">{action.content}</p>
                     </li>
                   ))}
                 </ul>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                尚未生成跟进方案。建议先刷新画像，再点击「生成方案」。
+                尚未生成建议。可先刷新画像，再点击「生成建议」。
               </p>
             )}
           </section>
 
+          {(customer.crm?.recentInteractions?.length ?? 0) > 0 && (
+            <section className="rounded-lg border p-4">
+              <h2 className="font-medium mb-3">平台互动</h2>
+              <ul className="space-y-2">
+                {customer.crm!.recentInteractions.map((item) => (
+                  <li key={item.id} className="rounded border p-2 text-sm">
+                    <div className="flex justify-between gap-2 text-xs text-muted-foreground">
+                      <span>
+                        {item.type === 'message' ? '私信' : '评论'} ·{' '}
+                        {item.status}
+                      </span>
+                      <span>{formatDate(item.receivedAt)}</span>
+                    </div>
+                    <p className="mt-1 line-clamp-3">{item.content}</p>
+                    {item.conversationId && (
+                      <Link
+                        href={`/conversations/${item.conversationId}`}
+                        className="text-xs text-primary hover:underline mt-1 inline-block"
+                      >
+                        在会话中查看
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="rounded-lg border p-4">
-            <h2 className="font-medium mb-3">跟进记录</h2>
+            <h2 className="font-medium mb-3">获客备注</h2>
             <div className="mb-3 flex gap-2">
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="添加跟进备注…"
+                placeholder="添加备注…"
                 className="flex-1 rounded border bg-background px-3 py-1.5 text-sm"
               />
               <button
@@ -569,7 +588,7 @@ export default function CustomerDetailPage() {
                 </li>
               ))}
               {(customer.activities ?? []).length === 0 && (
-                <li className="text-sm text-muted-foreground">暂无跟进记录</li>
+                <li className="text-sm text-muted-foreground">暂无备注</li>
               )}
             </ul>
           </section>

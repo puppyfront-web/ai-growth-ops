@@ -13,3 +13,6 @@ export * from './prospect-scoring';
 export * from './prospect-aggregate';
 export * from './prospect-guard';
 export * from './acquisition-analytics';
+export * from './browser-runner';
+export * from './platform-cookie';
+export * from './platform-auth';

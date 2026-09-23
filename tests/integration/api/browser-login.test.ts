@@ -209,6 +209,29 @@ describe('Browser Login Flow — all platforms', () => {
 });
 
 describe('Browser Login — error handling', () => {
+  it('rejects a logged-in response without the platform login cookie', async () => {
+    const account = await db.platformAccount.findFirstOrThrow({
+      where: { platform: 'douyin', name: 'douyin-test-account' }
+    });
+
+    mockSessionState = 'waiting';
+    await api.post(`/api/accounts/${account.id}/browser-login/start`);
+    mockSessionState = 'logged_in';
+    mockCookies = 'ttwid=visitor-cookie';
+
+    const { body } = await api.get(
+      `/api/accounts/${account.id}/browser-login/status`
+    );
+    expect(body.status).toBe('error');
+    expect(body.error).toContain('sessionid');
+
+    const persisted = await db.platformAccount.findUniqueOrThrow({
+      where: { id: account.id }
+    });
+    expect(persisted.cookieRef).toBeNull();
+    expect(persisted.status).toBe('error');
+  });
+
   it('returns 404 for non-existent account', async () => {
     const { status } = await api.post(
       '/api/accounts/nonexistent/browser-login/start'
@@ -235,18 +258,17 @@ describe('Browser Login — error handling', () => {
 
 // ── 重点测试：本次修复的关键场景 ──────────────────────────────────
 
-describe('Browser Login — concurrent start protection', () => {
-  it('rejects duplicate start requests for the same account with 409', async () => {
+describe('Browser Login — concurrent start coalescing', () => {
+  it('coalesces duplicate start requests into one session (React StrictMode double-mount)', async () => {
     const { body } = await api.get('/api/accounts');
     const accounts = body as Record<string, unknown>[];
     const dy = accounts.find(
       (a: Record<string, unknown>) => a.platform === 'douyin'
     ) as Record<string, unknown>;
 
-    // Temporarily override browser-runner URL to a slow mock
+    // Slow mock: session creation takes 500ms (simulates Chromium launch)
     const slowMock = createServer(async (req, res) => {
       if (req.url === '/session/start' && req.method === 'POST') {
-        // Simulate slow browser launch — hold the connection open
         await new Promise((r) => setTimeout(r, 500));
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(
@@ -266,21 +288,24 @@ describe('Browser Login — concurrent start protection', () => {
     const slowAddr = slowMock.address() as { address: string; port: number };
     process.env.BROWSER_RUNNER_URL = `http://${slowAddr.address}:${slowAddr.port}`;
 
-    // Fire two concurrent start requests
+    // Fire two concurrent start requests (StrictMode / double-click)
     const [res1, res2] = await Promise.all([
       api.post(`/api/accounts/${dy.id}/browser-login/start`),
       api.post(`/api/accounts/${dy.id}/browser-login/start`)
     ]);
 
-    const statuses = [res1.status, res2.status].sort();
-    // One should succeed (200), the other should be rejected (409)
-    expect(statuses).toContain(200);
-    expect(statuses).toContain(409);
+    // Both succeed and share the SAME session instead of a 409 error
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+    expect(res1.body.sessionId).toBe('slow-mock-session');
+    expect(res2.body.sessionId).toBe('slow-mock-session');
 
-    // The 409 response should have a clear error message
-    const rejected = res1.status === 409 ? res1 : res2;
-    expect(rejected.body.status).toBe('error');
-    expect(rejected.body.error).toContain('正在创建中');
+    // A repeat start within the reuse window also returns the same session
+    const res3 = await api.post(
+      `/api/accounts/${dy.id}/browser-login/start`
+    );
+    expect(res3.status).toBe(200);
+    expect(res3.body.sessionId).toBe('slow-mock-session');
 
     // Cleanup
     process.env.BROWSER_RUNNER_URL = mockRunnerUrl;
@@ -312,12 +337,16 @@ describe('Browser Login — concurrent start protection', () => {
 
 describe('Browser Login — timeout and error detail', () => {
   it('error message contains runner URL and non-empty detail', async () => {
-    process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
-    const { body } = await api.get('/api/accounts');
-    const accounts = body as Record<string, unknown>[];
+    // Clear any session left by earlier tests so the start below really
+    // reaches the (unreachable) runner instead of reusing a fresh session.
+    const { body: acctBody } = await api.get('/api/accounts');
+    const accounts = acctBody as Record<string, unknown>[];
     const dy = accounts.find(
       (a: Record<string, unknown>) => a.platform === 'douyin'
     ) as Record<string, unknown>;
+    await api.post(`/api/accounts/${dy.id}/browser-login/cancel`);
+
+    process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
 
     const { body: resBody } = await api.post(
       `/api/accounts/${dy.id}/browser-login/start`

@@ -1,3 +1,5 @@
+import { getBrowserRunnerConfig, getBrowserRunnerHeaders } from '@ai-growth-ops/shared';
+
 const loginUrls: Record<string, string> = {
   douyin: 'https://creator.douyin.com/',
   xiaohongshu: 'https://creator.xiaohongshu.com/login',
@@ -14,7 +16,7 @@ export function getLoginUrl(platform: string): string {
 }
 
 export function getBrowserRunnerUrl(): string {
-  return process.env.BROWSER_RUNNER_URL ?? 'http://localhost:3200';
+  return getBrowserRunnerConfig().url;
 }
 
 /**
@@ -22,7 +24,7 @@ export function getBrowserRunnerUrl(): string {
  * Mirrors the lookup in browser-runner/src/routes.ts so both sides agree.
  */
 export function getRunnerSecret(): string {
-  return process.env.BROWSER_RUNNER_SECRET || '';
+  return getBrowserRunnerConfig().secret;
 }
 
 /**
@@ -32,11 +34,7 @@ export function getRunnerSecret(): string {
 export function runnerHeaders(
   extra: Record<string, string> = {}
 ): Record<string, string> {
-  const secret = getRunnerSecret();
-  return {
-    ...(secret ? { authorization: `Bearer ${secret}` } : {}),
-    ...extra
-  };
+  return getBrowserRunnerHeaders(extra);
 }
 
 /**

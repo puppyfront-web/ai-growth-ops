@@ -51,6 +51,8 @@ export type CustomerImportField =
   | 'channel'
   | 'sourceNote';
 
+export const CUSTOMER_IMPORT_CSV_MAX_CHARS = 500_000;
+
 export const CUSTOMER_IMPORT_FIELDS: CustomerImportField[] = [
   'displayName',
   'phone',

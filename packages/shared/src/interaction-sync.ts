@@ -56,6 +56,70 @@ export function dedupeByKey<T>(
 
 export const RECENT_INTERACTION_FALLBACK_LIMIT = 10;
 
+export const DOUYIN_INBOX_NOISE_NICKNAMES = [
+  '官方',
+  '小助手',
+  '系统通知',
+  '安全中心'
+] as const;
+
+export const DOUYIN_INBOX_NOISE_CONTENTS = [
+  '认证清退',
+  '逐步清退',
+  '账号规范',
+  '平台通知',
+  '违规提醒',
+  '黄V标识'
+] as const;
+
+export const DOUYIN_INBOX_NOISE_NOTICE_MARKERS = [
+  'official',
+  'system',
+  'announce',
+  'platform_notice'
+] as const;
+
+const DOUYIN_INBOX_NOISE_NOTICE_KEYS = [
+  'notice_type',
+  'scene',
+  'message_type',
+  'notice_type_name'
+] as const;
+
+/**
+ * Nickname/content noise — plain text `contains`, safe to negate on any row.
+ */
+export function officialDouyinInboxNoiseWhere(): Record<string, unknown> {
+  return {
+    OR: [
+      ...DOUYIN_INBOX_NOISE_NICKNAMES.map((marker) => ({
+        externalUserName: { contains: marker }
+      })),
+      ...DOUYIN_INBOX_NOISE_CONTENTS.map((marker) => ({
+        content: { contains: marker }
+      }))
+    ]
+  };
+}
+
+/**
+ * rawPayload path-based notice noise, split from the text noise above.
+ * On rows where rawPayload is NULL every JSON-path condition evaluates to
+ * SQL NULL, and `NOT (NULL)` is NULL — folding them into one negated OR
+ * silently dropped every NULL-payload interaction from list queries. The
+ * query site must guard with an explicit `rawPayload IS NULL` arm (see
+ * routes.ts) before negating these.
+ */
+export function officialDouyinInboxNoticeNoiseConditions(): Array<
+  Record<string, unknown>
+> {
+  return DOUYIN_INBOX_NOISE_NOTICE_KEYS.flatMap((key) =>
+    DOUYIN_INBOX_NOISE_NOTICE_MARKERS.map((marker) => ({
+      rawPayload: { path: [key], string_contains: marker }
+    }))
+  );
+}
+
 export function isOfficialDouyinInboxNoise(item: {
   userNickname?: string | null;
   content?: string | null;
@@ -63,9 +127,12 @@ export function isOfficialDouyinInboxNoise(item: {
 }): boolean {
   const nick = item.userNickname ?? '';
   const content = item.content ?? '';
-  if (/官方|小助手|系统通知|安全中心/.test(nick)) return true;
-  if (/认证清退|逐步清退|账号规范|平台通知|违规提醒|黄V标识/.test(content))
+  if (DOUYIN_INBOX_NOISE_NICKNAMES.some((marker) => nick.includes(marker))) {
     return true;
+  }
+  if (DOUYIN_INBOX_NOISE_CONTENTS.some((marker) => content.includes(marker))) {
+    return true;
+  }
   const raw =
     item.rawPayload && typeof item.rawPayload === 'object'
       ? (item.rawPayload as Record<string, unknown>)
@@ -73,7 +140,9 @@ export function isOfficialDouyinInboxNoise(item: {
   const noticeType = String(
     raw.notice_type ?? raw.scene ?? raw.message_type ?? raw.notice_type_name ?? ''
   );
-  return /official|system|announce|platform_notice/.test(noticeType);
+  return DOUYIN_INBOX_NOISE_NOTICE_MARKERS.some((marker) =>
+    noticeType.includes(marker)
+  );
 }
 
 export interface SelectTodayOrRecentOptions {

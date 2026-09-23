@@ -12,7 +12,7 @@ describe('orchestrator.start', () => {
     const orch = createOrchestrator({
       runStore,
       workingMemory: new InMemoryWorkingMemory(),
-      preferences: new StaticPreferencesStore({ preferredPlatforms: ['douyin'] } as any)
+      preferences: new StaticPreferencesStore({ defaultContentType: 'text_image', preferredPublishTimes: [], contentStylePreferences: '', replyStylePreferences: '', avoidTopics: [], brandVoice: '', preferredPlatforms: ['douyin'] })
     });
     const { runId, directive } = await orch.start({ userId: 'u', orgId: 'o', dryRun: true });
     expect(directive.node).toBe('INIT');
@@ -27,7 +27,7 @@ describe('orchestrator.start', () => {
     const orch = createOrchestrator({
       runStore: new InMemoryRunStore(),
       workingMemory: new InMemoryWorkingMemory(),
-      preferences: new StaticPreferencesStore({} as any)
+      preferences: new StaticPreferencesStore({ defaultContentType: 'text_image', preferredPublishTimes: [], contentStylePreferences: '', replyStylePreferences: '', avoidTopics: [], brandVoice: '', preferredPlatforms: [],})
     });
     const { directive } = await orch.start({ userId: 'u', orgId: 'o' });
     expect(directive.gateLevel).toBe('L2_AUTOPILOT_LIGHT');
@@ -39,7 +39,7 @@ describe('orchestrator.report', () => {
     createOrchestrator({
       runStore: new InMemoryRunStore(),
       workingMemory: new InMemoryWorkingMemory(),
-      preferences: new StaticPreferencesStore({} as any)
+      preferences: new StaticPreferencesStore({ defaultContentType: 'text_image', preferredPublishTimes: [], contentStylePreferences: '', replyStylePreferences: '', avoidTopics: [], brandVoice: '', preferredPlatforms: [],})
     });
 
   it('advances INIT→METRICS on outcome=done', async () => {

@@ -8,6 +8,7 @@ import type { InteractionSyncCommentsInput } from '../job-types.js';
 import { prepareCommentsForSync } from './interaction-sync-utils.js';
 import { classifyAndSuggestReply } from './interaction-pipeline.js';
 import { isTransientError } from '../worker.js';
+import { isPlatformAuthExpiredError } from '@ai-growth-ops/shared';
 
 export async function handleInteractionSyncComments(
   job: Job<InteractionSyncCommentsInput>
@@ -154,6 +155,15 @@ export async function handleInteractionSyncComments(
     );
   } catch (err) {
     const transient = isTransientError(err);
+    // 平台登录态失效 → 标记账号 expired，前端会直接引导用户重新扫码授权
+    if (isPlatformAuthExpiredError(err)) {
+      await db.platformAccount
+        .update({
+          where: { id: platformAccountId },
+          data: { status: 'expired' }
+        })
+        .catch(() => {}); // DB may be down too
+    }
     // Update sync job as failed
     if (syncJobId) {
       await db.interactionSyncJob

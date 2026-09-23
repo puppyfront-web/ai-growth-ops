@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   createProspectingTask,
@@ -12,12 +13,14 @@ import {
   PROSPECTING_SUPPORTED_PLATFORMS,
   formatProspectingProgress,
   getProspectingProgressPercent,
+  isAccountLoginRequiredError,
   type ProspectingPlatform
 } from '@/lib/api/prospecting';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { formatDate } from '@/lib/utils';
+import { getLlmConfig } from '@/lib/api/settings';
 
 const platformLabels: Record<ProspectingPlatform, string> = {
   douyin: '抖音',
@@ -38,6 +41,7 @@ const statusLabels: Record<string, string> = {
 
 export default function ProspectingPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   const [platform, setPlatform] = useState<ProspectingPlatform>('douyin');
   const [keywordsText, setKeywordsText] = useState('');
@@ -50,6 +54,13 @@ export default function ProspectingPage() {
     queryFn: () => getProspectingGuard()
   });
 
+  const { data: llmConfig } = useQuery({
+    queryKey: ['settings', 'llm'],
+    queryFn: getLlmConfig
+  });
+  const llmMissing =
+    llmConfig !== undefined && llmConfig.effectiveConfigured === false;
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['prospecting', 'tasks', page],
     queryFn: () => listProspectingTasks(page),
@@ -61,8 +72,13 @@ export default function ProspectingPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      // 未登录自媒体账号时直接引导去账号配置页，不再创建注定失败的任务
+      if (guard?.needsLogin) {
+        router.push('/integrations/platforms');
+        throw new Error('请先扫码登录自媒体账号');
+      }
       const keywords = keywordsText
-        .split(/[,，\n]/)
+        .split(/[\s,，、]+/)
         .map((k) => k.trim())
         .filter(Boolean);
       const task = await createProspectingTask({
@@ -73,7 +89,14 @@ export default function ProspectingPage() {
       });
       try {
         await runProspectingTask(task.id);
-      } catch {
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          isAccountLoginRequiredError(err.message)
+        ) {
+          router.push('/integrations/platforms');
+          throw err;
+        }
         /* detail page surfaces login / retry */
       }
       return task;
@@ -87,7 +110,7 @@ export default function ProspectingPage() {
   });
 
   const keywords = keywordsText
-    .split(/[,，\n]/)
+    .split(/[\s,，、]+/)
     .map((k) => k.trim())
     .filter(Boolean);
   const plannedVideos = keywords.length * topNVideos;
@@ -114,6 +137,26 @@ export default function ProspectingPage() {
           </button>
         }
       />
+
+      {llmMissing && (
+        <div className="mb-6 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-amber-800">
+              尚未配置 LLM，潜客判断将只依赖关键词规则
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              关键词规则难以区分「有需求的客户」和「同行/行业解说」，容易误入低质潜客。配置 API
+              Key 后系统会用语义模型逐条判断真实意向。
+            </p>
+          </div>
+          <Link
+            href="/integrations/llm"
+            className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs text-white hover:bg-amber-700"
+          >
+            去配置 LLM →
+          </Link>
+        </div>
+      )}
 
       {showCreate && (
         <div className="mb-6 rounded-lg border bg-muted/30 p-4 space-y-4">

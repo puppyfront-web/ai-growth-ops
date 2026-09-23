@@ -8,25 +8,14 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState, useEffect } from 'react';
-import { Bot, Image, Sparkles, Video } from 'lucide-react';
+import { Image, Video } from 'lucide-react';
+import Link from 'next/link';
 
 export default function AiSettingsPage() {
   const qc = useQueryClient();
   const { data: config, isLoading } = useQuery({
     queryKey: ['ai-config'],
     queryFn: getAiConfig
-  });
-  const [provider, setProvider] = useState('openai');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('');
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(4096);
-  const [dailyTokenLimit, setDailyTokenLimit] = useState(100000);
-  const [features, setFeatures] = useState({
-    textGeneration: true,
-    leadIdentification: true,
-    replySuggestion: true
   });
   const [mediaGen, setMediaGen] = useState<MediaGenerationConfig>({
     mode: 'llm_provider',
@@ -43,13 +32,6 @@ export default function AiSettingsPage() {
 
   useEffect(() => {
     if (config) {
-      setProvider(config.provider);
-      setBaseUrl(config.baseUrl ?? '');
-      setModel(config.model);
-      setTemperature(config.temperature);
-      setMaxTokens(config.maxTokens);
-      setDailyTokenLimit(config.dailyTokenLimit);
-      setFeatures(config.features);
       if (config.mediaGeneration) {
         setMediaGen({
           mode: config.mediaGeneration.mode ?? 'llm_provider',
@@ -70,14 +52,6 @@ export default function AiSettingsPage() {
   const saveMutation = useMutation({
     mutationFn: () =>
       updateAiConfig({
-        provider,
-        baseUrl,
-        apiKey,
-        model,
-        temperature,
-        maxTokens,
-        dailyTokenLimit,
-        features,
         mediaGeneration: mediaGen
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-config'] })
@@ -89,133 +63,14 @@ export default function AiSettingsPage() {
     <div>
       <Breadcrumb />
       <PageHeader
-        title="AI 配置"
-        description="配置 LLM Provider 和 AI 功能开关"
+        title="素材生成配置"
+        description="配置可选的图片与视频生成服务"
       />
       {config && (
         <div className="max-w-2xl space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-blue-500" />
-                <CardTitle className="text-base font-semibold">
-                  LLM Provider
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <label className="text-sm font-medium">Provider</label>
-                <select
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                  className="mt-1 w-full rounded-md border p-2 text-sm"
-                >
-                  <option value="openai">OpenAI</option>
-                  <option value="anthropic">Anthropic</option>
-                  <option value="azure">Azure OpenAI</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Base URL</label>
-                <input
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.openai.com/v1"
-                  className="mt-1 w-full rounded-md border p-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">API Key</label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-***"
-                  className="mt-1 w-full rounded-md border p-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">模型名称</label>
-                <input
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="mt-1 w-full rounded-md border p-2 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">温度</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="2"
-                    value={temperature}
-                    onChange={(e) => setTemperature(Number(e.target.value))}
-                    className="mt-1 w-full rounded-md border p-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">最大 Tokens</label>
-                  <input
-                    type="number"
-                    value={maxTokens}
-                    onChange={(e) => setMaxTokens(Number(e.target.value))}
-                    className="mt-1 w-full rounded-md border p-2 text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">每日 Token 限额</label>
-                <input
-                  type="number"
-                  value={dailyTokenLimit}
-                  onChange={(e) => setDailyTokenLimit(Number(e.target.value))}
-                  className="mt-1 w-full rounded-md border p-2 text-sm"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-purple-500" />
-                  <CardTitle className="text-base font-semibold">
-                    功能开关
-                  </CardTitle>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                { key: 'textGeneration' as const, label: '文本生成' },
-                { key: 'leadIdentification' as const, label: '线索识别' },
-                { key: 'replySuggestion' as const, label: '回复建议' }
-              ].map((item) => (
-                <label
-                  key={item.key}
-                  className="flex items-center justify-between"
-                >
-                  <span className="text-sm">{item.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={features[item.key]}
-                    onChange={(e) =>
-                      setFeatures((f) => ({
-                        ...f,
-                        [item.key]: e.target.checked
-                      }))
-                    }
-                    className="rounded"
-                  />
-                </label>
-              ))}
-            </CardContent>
-          </Card>
-
+          <p className="text-sm text-muted-foreground">
+            文本模型统一在 <Link href="/integrations/llm" className="underline">LLM 配置</Link> 中管理。
+          </p>
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
@@ -261,7 +116,7 @@ export default function AiSettingsPage() {
                 {mediaGen.mode === 'llm_provider' && (
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <p className="text-sm text-muted-foreground">
-                      使用上方 LLM 的 API Key 调用 OpenAI 兼容{' '}
+                      使用组织 LLM 配置的 API Key 调用 OpenAI 兼容{' '}
                       <code className="rounded bg-muted px-1">
                         /images/generations
                       </code>

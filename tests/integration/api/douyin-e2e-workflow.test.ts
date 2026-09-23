@@ -411,34 +411,17 @@ describe('Douyin AI Native E2E Workflow', () => {
     }
 
     // 4d. Convert to lead
-    const { status: clStatus, body: lead } = await api.post(
+    const { status: clStatus, body: conversion } = await api.post(
       `/api/interactions/${targetId}/convert-to-lead`
     );
-    if (clStatus === 201) {
-      leadId = (lead as Record<string, unknown>).id as string;
-      expect(['A', 'B', 'C']).toContain(
-        (lead as Record<string, unknown>).level
-      );
-    }
-
-    // Fallback: create lead directly if convert-to-lead didn't work
-    if (!leadId) {
-      const newLead = await db.lead.create({
-        data: {
-          userId: adminId,
-          organizationId: auth.orgId,
-          sourcePlatform: 'douyin',
-          sourceAccountId: accountId,
-          externalUserId: 'sandbox_user_0',
-          externalUserName: '沙箱用户1',
-          level: 'A',
-          intent: 'price_inquiry',
-          summary: '用户询问价格并希望预约',
-          confidence: 0.88
-        }
-      });
-      leadId = newLead.id;
-    }
+    expect(clStatus).toBe(201);
+    const lead = conversion.lead as { id: string; level: string };
+    const customer = conversion.customer as { id: string };
+    expect(['A', 'B', 'C']).toContain(lead.level);
+    expect(customer.id).toBeTruthy();
+    leadId = lead.id;
+    const storedLead = await db.lead.findUniqueOrThrow({ where: { id: leadId } });
+    expect(storedLead.customerId).toBe(customer.id);
 
     expect(leadId).toBeTruthy();
   }, 15_000);

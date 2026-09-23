@@ -6,6 +6,21 @@
 const MIN_COMMENT_LENGTH = 3;
 const MAX_EVIDENCE_PER_USER = 10;
 
+/**
+ * DOM scraping residue that is not a real comment: relative timestamps with
+ * an optional location suffix ("5天前·广东", "3小时前") picked up from the
+ * comment panel chrome.
+ */
+const DOM_NOISE_PATTERN = /^\d+\s*(天|小时|分钟|秒)?前(·[\u4e00-\u9fa5]{2,3})?$/;
+
+/**
+ * Titles that publish a DEMAND ("求推荐工厂AI改造""这类设备怎么选") rather
+ * than promote an offering. Their authors are demand-side users themselves —
+ * the hottest leads — so they are aggregated as prospects alongside commenters.
+ */
+const DEMAND_POST_TITLE_PATTERN =
+  /求(?:推荐|介绍|个|教|助)|有没有(?:推荐|做|了解|好)|哪家好?|怎么选|如何选|选哪家|多少钱|报价|靠谱吗|避坑|想上|想引入|想找|咨询一下|急求/;
+
 export type RawProspectComment = {
   externalUserId?: unknown;
   userNickname?: unknown;
@@ -71,9 +86,47 @@ export function aggregateProspectComments(
     const videoTitle = optionalText(video.title);
     const videoUrl = optionalText(video.url);
 
+    // Demand-post author: the user who PUBLISHED the ask is a prospect too.
+    const author = optionalText(video.author);
+    if (author && videoTitle && DEMAND_POST_TITLE_PATTERN.test(videoTitle)) {
+      const userKey = `author:${author}`;
+      const content = `（需求帖）${videoTitle}`;
+      const evidenceKey = `${userKey}:${content.slice(0, 80)}`;
+      if (!seenEvidence.has(evidenceKey)) {
+        seenEvidence.add(evidenceKey);
+        let prospect = byUser.get(userKey);
+        if (!prospect) {
+          prospect = {
+            userKey,
+            keyword,
+            externalUserId: null,
+            userNickname: author,
+            userHomepage: null,
+            avatarUrl: null,
+            sourceVideoTitle: videoTitle,
+            sourceVideoUrl: videoUrl,
+            sourceVideoAuthor: author,
+            sourcePostId: optionalText(video.contentId),
+            evidence: []
+          };
+          byUser.set(userKey, prospect);
+        }
+        if (prospect.evidence.length < MAX_EVIDENCE_PER_USER) {
+          prospect.evidence.push({
+            content,
+            sourceVideoTitle: videoTitle,
+            sourceVideoUrl: videoUrl,
+            publishedAt: null,
+            likeCount: null
+          });
+        }
+      }
+    }
+
     for (const comment of video.comments ?? []) {
       const content = text(comment.content) || text(comment.text);
       if (content.length < MIN_COMMENT_LENGTH) continue;
+      if (DOM_NOISE_PATTERN.test(content)) continue;
 
       const externalUserId = optionalText(comment.externalUserId);
       const userNickname =

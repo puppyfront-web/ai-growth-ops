@@ -21,7 +21,7 @@ import {
 } from '@/lib/constants';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { formatDate } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const capabilityLabels: Record<string, string> = {
   text_image_publish: '图文发布',
@@ -35,7 +35,7 @@ const capabilityLabels: Record<string, string> = {
 
 const accountStatusLabels: Record<string, string> = {
   active: '已授权',
-  expired: '已过期',
+  expired: '登录已失效',
   disabled: '已禁用',
   error: '异常'
 };
@@ -106,6 +106,17 @@ export default function PlatformsPage() {
     platform: string;
   } | null>(null);
 
+  // 登录失效引导：检测到 expired 账号时直接弹出扫码授权对话框（每个账号只自动弹一次，
+  // 用户关闭后不重复打扰；手动点「重新扫码授权」始终可用）
+  const autoGuidedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const expired = data?.find((a) => a.status === 'expired');
+    if (expired && !autoGuidedRef.current.has(expired.id) && !browserLogin) {
+      autoGuidedRef.current.add(expired.id);
+      setBrowserLogin({ accountId: expired.id, platform: expired.platform });
+    }
+  }, [data, browserLogin]);
+
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   const updateMutation = useMutation({
@@ -161,6 +172,13 @@ export default function PlatformsPage() {
       const result = await validatePlatformAccount(accountId);
       setValidateResult({ ...result, accountId });
       qc.invalidateQueries({ queryKey: ['platform-accounts'] });
+      // 平台登录态失效 → 直接引导用户进入扫码授权
+      if (result.authExpired) {
+        const account = data?.find((a) => a.id === accountId);
+        if (account) {
+          setBrowserLogin({ accountId, platform: account.platform });
+        }
+      }
     } finally {
       setValidatingId(null);
     }
@@ -370,6 +388,26 @@ export default function PlatformsPage() {
                   </span>
                 )}
               </div>
+
+              {/* 登录失效引导横幅 */}
+              {account.status === 'expired' && (
+                <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 dark:border-amber-900 dark:bg-amber-950">
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    平台登录已失效，请重新扫码授权后继续获客任务
+                  </p>
+                  <button
+                    onClick={() =>
+                      setBrowserLogin({
+                        accountId: account.id,
+                        platform: account.platform
+                      })
+                    }
+                    className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+                  >
+                    重新扫码授权
+                  </button>
+                </div>
+              )}
 
               {/* Capabilities */}
               {caps.length > 0 && (

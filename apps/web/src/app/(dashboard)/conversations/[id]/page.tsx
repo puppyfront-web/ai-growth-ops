@@ -1,12 +1,12 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   getConversation,
   getReplySuggestions,
   sendReply,
-  convertToLead,
+  convertToCustomer,
   reviewReply
 } from '@/lib/api/conversations';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -19,10 +19,12 @@ import {
 import { formatDate } from '@/lib/utils';
 import { useState } from 'react';
 import { toast } from '@/components/ui/toast';
+import type { ReplySuggestion } from '@/types/interaction';
 
 export default function ConversationDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const router = useRouter();
   const qc = useQueryClient();
   const [replyText, setReplyText] = useState('');
 
@@ -53,19 +55,22 @@ export default function ConversationDetailPage() {
     }
   });
 
-  const convertToLeadMutation = useMutation({
+  const convertToCustomerMutation = useMutation({
     mutationFn: () => {
       const latestInteraction =
         conversation?.interactions[conversation.interactions.length - 1];
       if (!latestInteraction) throw new Error('No interaction');
-      return convertToLead(latestInteraction.id);
+      return convertToCustomer(latestInteraction.id);
     },
-    onSuccess: () => {
-      toast.success('已标记为线索 — 该互动已转为线索，可在线索列表中查看');
+    onSuccess: (result) => {
+      toast.success(
+        result.created ? '已转入客户库' : '已关联到已有客户'
+      );
       qc.invalidateQueries({ queryKey: ['conversation', id] });
+      router.push(`/customers/${result.customer.id}`);
     },
-    onError: () => {
-      toast.error('标记为线索失败，请重试');
+    onError: (err: Error) => {
+      toast.error(err.message || '转入客户库失败，请重试');
     }
   });
 
@@ -88,15 +93,12 @@ export default function ConversationDetailPage() {
   if (isLoading) return <LoadingState />;
   if (!conversation) return null;
 
-  const rawSuggestion = suggestions?.[0] as
-    | (typeof suggestions)[number]
-    | { suggestedText?: string }
-    | undefined;
+  type LooseSuggestion = Partial<ReplySuggestion> & {
+    suggestedText?: string;
+  };
+  const rawSuggestion = (suggestions ?? [])[0] as LooseSuggestion | undefined;
   const suggestedReply =
-    rawSuggestion &&
-    ('suggestedReply' in rawSuggestion
-      ? rawSuggestion.suggestedReply
-      : rawSuggestion.suggestedText);
+    rawSuggestion?.suggestedReply ?? rawSuggestion?.suggestedText;
   const suggestion =
     rawSuggestion &&
     (rawSuggestion.leadLevel ||
@@ -172,11 +174,13 @@ export default function ConversationDetailPage() {
                 {transferToHumanMutation.isPending ? '处理中...' : '转人工'}
               </button>
               <button
-                onClick={() => convertToLeadMutation.mutate()}
-                disabled={convertToLeadMutation.isPending}
+                onClick={() => convertToCustomerMutation.mutate()}
+                disabled={convertToCustomerMutation.isPending}
                 className="rounded-md border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"
               >
-                {convertToLeadMutation.isPending ? '处理中...' : '标记为线索'}
+                {convertToCustomerMutation.isPending
+                  ? '处理中...'
+                  : '转入客户库'}
               </button>
             </div>
           </div>
@@ -199,7 +203,7 @@ export default function ConversationDetailPage() {
                   <span className="text-sm text-muted-foreground">
                     线索等级
                   </span>
-                  <LeadLevelBadge level={suggestion.leadLevel} />
+                  <LeadLevelBadge level={suggestion.leadLevel ?? 'C'} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">置信度</span>

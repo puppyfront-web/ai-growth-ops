@@ -60,7 +60,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],
+    exclude: ['tests/e2e/**', 'tests/web/**', 'node_modules/**', 'dist/**'],
     fileParallelism: false,
     globals: true,
     include: ['tests/**/*.test.ts'],

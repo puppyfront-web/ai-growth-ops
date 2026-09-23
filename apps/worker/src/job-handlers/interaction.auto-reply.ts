@@ -9,17 +9,12 @@ import { Job } from 'bullmq';
 import { createDatabaseClient } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import { createLogger } from '@ai-growth-ops/observability';
+import { getBrowserRunnerConfig, getBrowserRunnerHeaders, isPlatformAuthExpiredError } from '@ai-growth-ops/shared';
 
 const logger = createLogger('auto-reply');
 
-const BROWSER_RUNNER_URL =
-  process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
-
 function runnerHeaders(): Record<string, string> {
-  const h: Record<string, string> = { 'content-type': 'application/json' };
-  if (RUNNER_SECRET) h['authorization'] = `Bearer ${RUNNER_SECRET}`;
-  return h;
+  return getBrowserRunnerHeaders({ 'content-type': 'application/json' });
 }
 
 interface AutoReplyJobData {
@@ -81,7 +76,7 @@ export async function handleInteractionAutoReply(
       ? '/assist/reply-comment'
       : '/assist/reply-message';
 
-    const response = await fetch(`${BROWSER_RUNNER_URL}${endpoint}`, {
+    const response = await fetch(`${getBrowserRunnerConfig().url}${endpoint}`, {
       method: 'POST',
       headers: runnerHeaders(),
       body: JSON.stringify({
@@ -131,6 +126,13 @@ export async function handleInteractionAutoReply(
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
+
+    // 平台登录态失效 → 标记账号 expired，前端会直接引导用户重新扫码授权
+    if (isPlatformAuthExpiredError(err) && account) {
+      await db.platformAccount
+        .update({ where: { id: account.id }, data: { status: 'expired' } })
+        .catch(() => {});
+    }
 
     await db.replyAttempt.create({
       data: {

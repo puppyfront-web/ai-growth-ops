@@ -36,11 +36,11 @@ export default function LeadSourcesPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-sources'] })
   });
 
-  const webhookUrl = (token: string) =>
+  const webhookUrl = () =>
     `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3100'}/api/leads/webhook/ingest`;
 
   const copyToken = (s: LeadSourceConfig) => {
-    const text = webhookUrl(s.token);
+    const text = webhookUrl();
     navigator.clipboard?.writeText(text).then(() => {
       setCopied(s.id);
       setTimeout(() => setCopied(null), 2000);
@@ -125,7 +125,7 @@ export default function LeadSourcesPage() {
             <div className="mt-3 rounded-lg bg-muted/40 p-2">
               <div className="flex items-center justify-between gap-2">
                 <code className="text-xs break-all">
-                  POST {webhookUrl(s.token)}
+                  POST {webhookUrl()}
                 </code>
                 <button
                   onClick={() => copyToken(s)}
@@ -142,7 +142,7 @@ export default function LeadSourcesPage() {
               <summary className="text-xs text-muted-foreground cursor-pointer">
                 查看请求示例
               </summary>
-              <pre className="mt-1 rounded bg-muted/60 p-2 text-xs overflow-x-auto">{`curl -X POST ${webhookUrl(s.token)} \\
+              <pre className="mt-1 rounded bg-muted/60 p-2 text-xs overflow-x-auto">{`curl -X POST ${webhookUrl()} \\
   -H "Content-Type: application/json" \\
   -H "X-Webhook-Token: ${s.token}" \\
   -d '{"externalUserName":"张总","intent":"咨询报价","level":"A"}'`}</pre>

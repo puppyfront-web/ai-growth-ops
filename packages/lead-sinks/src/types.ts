@@ -32,6 +32,8 @@ export interface LeadSinkConfig {
   secret?: string;
   webhookUrl?: string;
   fieldMapping?: Record<string, string>;
+  /** When set, update an existing Bitable row instead of creating one. */
+  existingRecordId?: string;
   [key: string]: unknown;
 }
 

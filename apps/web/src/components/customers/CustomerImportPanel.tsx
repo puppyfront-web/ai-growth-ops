@@ -10,6 +10,7 @@ import {
 } from '@/lib/api/customers';
 import {
   CUSTOMER_FIELD_LABELS,
+  CUSTOMER_IMPORT_CSV_MAX_CHARS,
   CUSTOMER_IMPORT_FIELDS,
   CUSTOMER_IMPORT_TEMPLATE,
   IMPORT_ISSUE_LABELS,
@@ -93,6 +94,10 @@ export function CustomerImportPanel() {
   };
 
   const handleFile = (file: File) => {
+    if (file.size > CUSTOMER_IMPORT_CSV_MAX_CHARS) {
+      setError('CSV 不能超过 500KB');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result ?? '');
@@ -132,6 +137,9 @@ export function CustomerImportPanel() {
       >
         下载模板
       </button>
+      {error && !open && (
+        <span className="text-xs text-destructive">{error}</span>
+      )}
       {resultMsg && (
         <span className="text-xs text-muted-foreground">{resultMsg}</span>
       )}

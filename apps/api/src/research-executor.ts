@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type {
   DatabaseClient,
   ContentOpportunity,
@@ -5,6 +6,7 @@ import type {
   ResearchTask
 } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
+import { getBrowserRunnerConfig, getBrowserRunnerHeaders } from '@ai-growth-ops/shared';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import {
   analyzeContentThemes,
@@ -85,8 +87,7 @@ export async function executeResearchTaskSync(
       );
     }
     const cookie = decryptToken(account.cookieRef!);
-    const runnerUrl = process.env.BROWSER_RUNNER_URL || 'http://localhost:3200';
-    const RUNNER_SECRET = process.env.BROWSER_RUNNER_SECRET || '';
+    const runner = getBrowserRunnerConfig();
 
     const allPosts: Array<Record<string, unknown>> = [];
     const allComments: Array<Record<string, unknown>> = [];
@@ -95,15 +96,10 @@ export async function executeResearchTaskSync(
       try {
         console.log(`[research] Searching "${keyword}" on ${platform}...`);
         const resp = await fetchWithTimeout(
-          `${runnerUrl}/assist/search-and-fetch-comments`,
+          `${runner.url}/assist/search-and-fetch-comments`,
           {
             method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              ...(RUNNER_SECRET
-                ? { authorization: `Bearer ${RUNNER_SECRET}` }
-                : {})
-            },
+            headers: getBrowserRunnerHeaders({ 'content-type': 'application/json' }),
             body: JSON.stringify({
               platform,
               cookie,
@@ -184,7 +180,7 @@ export async function executeResearchTaskSync(
           publishedAt: post.publishedAt
             ? new Date(post.publishedAt as string)
             : undefined,
-          metadata: post.metadata as any
+          metadata: post.metadata as Prisma.InputJsonValue
         }
       });
     }
@@ -202,7 +198,7 @@ export async function executeResearchTaskSync(
           externalUserName: comment.externalUserName as string | undefined,
           content: String(comment.content ?? comment.text ?? ''),
           likeCount: comment.likeCount as number | undefined,
-          metadata: comment.metadata as any
+          metadata: comment.metadata as Prisma.InputJsonValue
         }
       });
     }
@@ -362,7 +358,7 @@ async function createInsightsAndOpportunities(
             type: def.type,
             title: def.title,
             summary: items.slice(0, 3).map(String).join('；'),
-            data: def.data as any
+            data: def.data as Prisma.InputJsonValue
           }
         });
       }
@@ -463,7 +459,7 @@ async function createInsightsAndOpportunitiesFallback(
         type: insight.type,
         title: insight.title,
         summary: insight.summary,
-        data: insight.data as any
+        data: insight.data as Prisma.InputJsonValue
       }
     });
   }

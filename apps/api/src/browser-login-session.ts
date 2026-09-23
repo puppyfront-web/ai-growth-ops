@@ -29,3 +29,35 @@ export function markPending(accountId: string): boolean {
 export function clearPending(accountId: string): void {
   pendingStarts.delete(accountId);
 }
+
+/**
+ * Wait until another in-flight start for this account finishes.
+ * A start request can take up to ~60s (Chromium launch + page load), so
+ * poll until the other caller's finally-block clears the pending flag.
+ */
+export async function waitForPendingToClear(
+  accountId: string,
+  timeoutMs = 70_000
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (pendingStarts.has(accountId)) {
+    if (Date.now() > deadline) return false;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return true;
+}
+
+/**
+ * A session created moments ago for this account, if any.
+ * Used to coalesce duplicate starts (React StrictMode double-mount,
+ * double-clicks) into the same browser session instead of erroring 409.
+ */
+export function getFreshSession(
+  accountId: string,
+  maxAgeMs: number
+): { sessionId: string } | null {
+  const session = sessions.get(accountId);
+  if (!session) return null;
+  if (Date.now() - session.startedAt.getTime() > maxAgeMs) return null;
+  return { sessionId: session.sessionId };
+}

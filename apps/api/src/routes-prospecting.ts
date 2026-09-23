@@ -42,6 +42,7 @@ import {
   enqueueProspectingRun
 } from './services/prospecting.js';
 import { enqueueCustomerProfileRefresh } from './services/customer-profile.js';
+import { trySyncCustomerToFeishu } from '@ai-growth-ops/database';
 
 interface RouteContext {
   db: DatabaseClient;
@@ -339,12 +340,32 @@ export const prospectingRoutes: Array<{
         });
       }
 
+      // Space/comma-separated entries arrive as one string from some clients;
+      // an unsplit keyword never matches comment text, silently gutting the
+      // scoring. Split every entry on whitespace and separators.
+      const keywords = [
+        ...new Set(
+          bodyResult.data.keywords
+            .flatMap((keyword) => keyword.split(/[\s,，、;；]+/))
+            .map((keyword) => keyword.trim())
+            .filter(Boolean)
+        )
+      ];
+      if (keywords.length === 0) {
+        return sendJson(res, 400, { error: '至少一个关键词' });
+      }
+      if (keywords.length > 8) {
+        return sendJson(res, 400, {
+          error: '单次最多 8 个关键词，大批量请分天增量执行'
+        });
+      }
+
       const task = await ctx.db.prospectingTask.create({
         data: {
           organizationId: orgCtx.organization.id,
           userId: orgCtx.user.id,
           platform: bodyResult.data.platform ?? 'douyin',
-          keywords: bodyResult.data.keywords as never,
+          keywords: keywords as never,
           topNVideos: bodyResult.data.topNVideos,
           maxCommentsPerVideo: bodyResult.data.maxCommentsPerVideo,
           commentScrollRounds: bodyResult.data.commentScrollRounds,
@@ -567,6 +588,12 @@ export const prospectingRoutes: Array<{
           result.customer.id,
           orgCtx.organization.id,
           orgCtx.user.id
+        ).catch(() => undefined);
+        trySyncCustomerToFeishu(
+          ctx.db,
+          result.customer.id,
+          orgCtx.organization.id,
+          orgCtx.user.name
         ).catch(() => undefined);
       } catch (e) {
         const err = e as Error & { code?: string; duplicates?: unknown[] };

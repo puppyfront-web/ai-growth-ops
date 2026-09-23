@@ -27,6 +27,7 @@ const LEGEND = [
 ];
 
 export default function ContentCalendarPage() {
+  const [eventType, setEventType] = useState<'all' | 'content' | 'publish'>('all');
   const [month, setMonth] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -50,6 +51,26 @@ export default function ContentCalendarPage() {
     queryFn: () => listPublishJobs()
   });
 
+
+  // Build date → CalendarItem[] index
+  const dateMap = useMemo(() => {
+    const map = new Map<string, CalendarItem[]>();
+    for (const item of eventType === 'publish' ? [] : contentData?.items ?? []) {
+      const key = toDateKey(item.createdAt);
+      const arr = map.get(key) ?? [];
+      arr.push({ kind: 'content', item });
+      map.set(key, arr);
+    }
+    for (const job of eventType === 'content' ? [] : publishJobs?.items ?? []) {
+      const dateStr = job.scheduledAt ?? job.createdAt;
+      const key = toDateKey(dateStr);
+      const arr = map.get(key) ?? [];
+      arr.push({ kind: 'publish', job });
+      map.set(key, arr);
+    }
+    return map;
+  }, [contentData, publishJobs, eventType]);
+
   if (loadingContent || loadingPublish) return <LoadingState rows={6} />;
   if (errContent || errPublish)
     return (
@@ -62,26 +83,7 @@ export default function ContentCalendarPage() {
       />
     );
 
-  const contentItems = contentData?.items ?? [];
 
-  // Build date → CalendarItem[] index
-  const dateMap = useMemo(() => {
-    const map = new Map<string, CalendarItem[]>();
-    for (const item of contentItems) {
-      const key = toDateKey(item.createdAt);
-      const arr = map.get(key) ?? [];
-      arr.push({ kind: 'content', item });
-      map.set(key, arr);
-    }
-    for (const job of publishJobs?.items ?? []) {
-      const dateStr = job.scheduledAt ?? job.createdAt;
-      const key = toDateKey(dateStr);
-      const arr = map.get(key) ?? [];
-      arr.push({ kind: 'publish', job });
-      map.set(key, arr);
-    }
-    return map;
-  }, [contentItems, publishJobs]);
 
   const selectedKey = selectedDate ? toDateKey(selectedDate) : null;
   const selectedItems = selectedKey ? (dateMap.get(selectedKey) ?? []) : [];
@@ -99,8 +101,17 @@ export default function ContentCalendarPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="内容日历" description="按时间查看内容创作与发布计划" />
+      <PageHeader title="运营日历" description="按时间查看内容创作与发布计划" />
 
+      <label className="mb-4 flex items-center gap-2 text-sm">
+        显示事件
+        <select className="rounded-md border p-2" value={eventType}
+          onChange={(event) => setEventType(event.target.value as 'all' | 'content' | 'publish')}>
+          <option value="all">内容与发布</option>
+          <option value="content">内容创建</option>
+          <option value="publish">发布计划</option>
+        </select>
+      </label>
       <CalendarGrid
         month={month}
         onMonthChange={setMonth}

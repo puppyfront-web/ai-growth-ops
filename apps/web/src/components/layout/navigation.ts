@@ -27,7 +27,6 @@ export type NavItem = {
 // hidden until their UIs are promoted.
 export const hiddenSectionPrefixes = [
   '/research',
-  '/media',
   '/dashboard'
 ] as const;
 

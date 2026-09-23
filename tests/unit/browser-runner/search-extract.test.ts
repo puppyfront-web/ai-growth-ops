@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { extractSearchResults } from '../../../apps/browser-runner/src/assist-routes.js';
+import {
+  douyinPostCommentUrl,
+  extractSearchResults,
+  parseDouyinContentHref
+} from '../../../apps/browser-runner/src/assist-routes.js';
 
 describe('extractSearchResults', () => {
   describe('douyin', () => {
@@ -48,6 +52,28 @@ describe('extractSearchResults', () => {
       expect(results).toHaveLength(2);
       expect(results[0].contentId).toBe('111');
       expect(results[1].contentId).toBe('222');
+    });
+
+    it('keeps aweme_type so notes open as /note/ instead of /video/', () => {
+      const json = {
+        data: {
+          list: [
+            {
+              aweme_info: {
+                aweme_id: '7682448472766680354',
+                aweme_type: 2,
+                desc: '图文笔记'
+              }
+            }
+          ]
+        }
+      };
+
+      const results = extractSearchResults('douyin', json);
+      expect(results[0].awemeType).toBe(2);
+      expect(douyinPostCommentUrl(results[0].contentId, results[0].awemeType)).toBe(
+        'https://www.douyin.com/note/7682448472766680354'
+      );
     });
 
     it('returns empty for empty list', () => {
@@ -123,5 +149,22 @@ describe('extractSearchResults', () => {
     it('returns empty for unsupported platform', () => {
       expect(extractSearchResults('unknown', { data: {} })).toEqual([]);
     });
+  });
+});
+
+describe('parseDouyinContentHref', () => {
+  it('distinguishes note and video public URLs', () => {
+    expect(
+      parseDouyinContentHref('https://www.douyin.com/note/7682448472766680354')
+    ).toEqual({
+      contentId: '7682448472766680354',
+      awemeType: 2
+    });
+    expect(
+      parseDouyinContentHref('https://www.douyin.com/video/7123456789?from=search')
+    ).toEqual({ contentId: '7123456789' });
+    expect(douyinPostCommentUrl('7123456789')).toBe(
+      'https://www.douyin.com/video/7123456789'
+    );
   });
 });

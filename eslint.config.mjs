@@ -7,6 +7,7 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/.next/**',
+      '**/.next-*/**',
       '.tmp-tests/**',
       'coverage/**',
       'node_modules/**',
@@ -14,6 +15,10 @@ export default tseslint.config(
       'playwright-report/**',
       'test-results/**'
     ]
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { process: 'readonly', console: 'readonly', URL: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly' } }
   },
   // JSON files
   jsonc.configs['recommended-with-json'],

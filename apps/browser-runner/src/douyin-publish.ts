@@ -44,6 +44,34 @@ async function isLoginOverlay(page: Page): Promise<boolean> {
     .catch(() => false);
 }
 
+function isBrowserClosedError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /Target page, context or browser has been closed|browser has been closed/i.test(
+      err.message
+    )
+  );
+}
+
+async function typeIntoEditor(
+  page: Page,
+  editor: import('playwright').Locator,
+  description: string,
+  tags: string[]
+): Promise<void> {
+  await editor.waitFor({ state: 'visible', timeout: 8_000 });
+  await editor.click({ timeout: 5_000 });
+  const mod = modKey();
+  await page.keyboard.press(`${mod}+A`);
+  await page.keyboard.press('Delete');
+  await page.keyboard.type(description);
+
+  for (const tag of tags.slice(0, 5)) {
+    await page.keyboard.type(` #${tag.replace(/^#/, '')}`);
+    await page.keyboard.press('Space');
+  }
+}
+
 async function fillTitleAndDescription(
   page: Page,
   title: string,
@@ -55,23 +83,48 @@ async function fillTitleAndDescription(
     .locator('xpath=ancestor::div[2]')
     .locator('xpath=following-sibling::div[1]');
 
-  const titleInput = section.locator('input[type="text"]').first();
-  await titleInput.waitFor({ state: 'visible', timeout: 15_000 });
-  await titleInput.fill(title.slice(0, 30));
+  // The description editor is the core 文案 — fill it first so a missing
+  // title input (common on the image-post layout) can no longer abort the
+  // publish before any text is typed.
+  const editorCandidates = [
+    section.locator('.zone-container[contenteditable="true"]').first(),
+    page.locator('.zone-container[contenteditable="true"]').first(),
+    page.locator('[contenteditable="true"]').first()
+  ];
+  let editorFilled = false;
+  let lastEditorError: unknown = null;
+  for (const editor of editorCandidates) {
+    try {
+      await typeIntoEditor(page, editor, description, tags);
+      editorFilled = true;
+      break;
+    } catch (err) {
+      if (isBrowserClosedError(err)) throw err;
+      lastEditorError = err;
+    }
+  }
+  if (!editorFilled) {
+    throw lastEditorError instanceof Error
+      ? lastEditorError
+      : new Error('未找到作品描述编辑区');
+  }
 
-  const editor = section
-    .locator('.zone-container[contenteditable="true"]')
-    .first();
-  await editor.waitFor({ state: 'visible', timeout: 15_000 });
-  await editor.click();
-  const mod = modKey();
-  await page.keyboard.press(`${mod}+A`);
-  await page.keyboard.press('Delete');
-  await page.keyboard.type(description);
-
-  for (const tag of tags.slice(0, 5)) {
-    await page.keyboard.type(` #${tag.replace(/^#/, '')}`);
-    await page.keyboard.press('Space');
+  // Title is best-effort: some layouts (image posts) may not expose a text
+  // input next to the description — never fail the whole publish for it.
+  if (title.trim()) {
+    const titleCandidates = [
+      section.locator('input[type="text"]').first(),
+      page.locator('input[placeholder*="标题"]').first()
+    ];
+    for (const input of titleCandidates) {
+      try {
+        await input.waitFor({ state: 'visible', timeout: 5_000 });
+        await input.fill(title.slice(0, 30), { timeout: 5_000 });
+        break;
+      } catch (err) {
+        if (isBrowserClosedError(err)) throw err;
+      }
+    }
   }
 }
 
@@ -267,7 +320,7 @@ async function clickPublish(
           const raw = await workListResp.text();
           // Quote ≥16-digit integer literals so item_id survives parsing.
           const safe = raw.replace(
-            /(?<=[:\[,]\s*)-?\d{16,}(?=\s*[,\]\}])/g,
+            /(?<=[:[,]\s*)-?\d{16,}(?=\s*[,\]}])/g,
             (m) => `"${m}"`
           );
           const json = JSON.parse(safe) as Record<string, unknown>;
@@ -428,8 +481,19 @@ async function publishDouyinImages(
   const desc = input.content || input.title;
   try {
     await fillTitleAndDescription(page, input.title, desc, input.tags ?? []);
-  } catch {
-    if (!(await page.getByText('作品描述', { exact: true }).count())) {
+  } catch (err) {
+    if (isBrowserClosedError(err)) {
+      throw new Error(
+        '浏览器在发布过程中被关闭（窗口被手动关闭或浏览器退出）。请重试，并在发布完成前保持浏览器窗口打开'
+      );
+    }
+    // Keep this diagnostic safe — a bare locator.count() on a dead page
+    // rethrows and masks the original fill error.
+    const descLabelCount = await page
+      .getByText('作品描述', { exact: true })
+      .count()
+      .catch(() => 0);
+    if (descLabelCount === 0) {
       throw new Error(
         onImageTab
           ? '图文素材已上传，但未找到「作品描述」编辑区'

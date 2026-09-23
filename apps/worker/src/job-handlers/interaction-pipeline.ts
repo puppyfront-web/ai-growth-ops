@@ -7,7 +7,11 @@
  * queue handlers. Called from the sync handlers after creating each Interaction row.
  */
 
-import type { DatabaseClient } from '@ai-growth-ops/database';
+import {
+  ensureCustomerFromInteraction,
+  trySyncCustomerToFeishu,
+  type DatabaseClient
+} from '@ai-growth-ops/database';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import { getQueue, QUEUE_NAMES } from '../queue.js';
 import type {
@@ -368,7 +372,9 @@ async function convertInteractionToLead(
       platformAccountId: true,
       externalUserId: true,
       externalUserName: true,
-      publishJobId: true
+      publishJobId: true,
+      conversationId: true,
+      content: true
     }
   });
   if (!interaction) return;
@@ -439,6 +445,42 @@ async function convertInteractionToLead(
       : { summary: classification.summary || undefined }
   });
 
+  if (!interaction.organizationId) return;
+
+  const customerLink = await ensureCustomerFromInteraction(db, {
+    organizationId: interaction.organizationId,
+    userId: interaction.userId,
+    interactionId,
+    leadId: lead.id,
+    platform: interaction.platform,
+    platformAccountId: interaction.platformAccountId,
+    externalUserId: interaction.externalUserId,
+    externalUserName: interaction.externalUserName,
+    conversationId: interaction.conversationId,
+    content: interaction.content,
+    intent: classification.intent,
+    summary: classification.summary,
+    leadLevel: newLevel,
+    source: 'auto_pipeline'
+  }).catch((err) => {
+    console.error('[pipeline] Customer link failed:', err);
+    return null;
+  });
+
+  await db.interaction.update({
+    where: { id: interactionId },
+    data: { status: 'CONVERTED_TO_LEAD' }
+  });
+
+  if (customerLink) {
+    await trySyncCustomerToFeishu(
+      db,
+      customerLink.customer.id,
+      interaction.organizationId,
+      'system'
+    );
+  }
+
   // Only fan out (activity / notify / sync) for freshly-created leads.
   if (existing) {
     console.log(
@@ -468,17 +510,21 @@ async function convertInteractionToLead(
         level: newLevel === 'A' ? 'warning' : 'info',
         userId: interaction.userId,
         organizationId: interaction.organizationId,
-        actionUrl: `/leads/${lead.id}`
+        actionUrl: customerLink
+          ? `/customers/${customerLink.customer.id}`
+          : `/customers`
       }
     } as never)
     .catch(() => {
       /* notification write is best-effort */
     });
 
-  // Enqueue sync to any enabled external sink (Feishu bitable / WeCom).
-  await enqueueLeadSinkSync(db, lead.id, interaction.organizationId).catch(
-    (err) => console.error('[pipeline] Lead sink enqueue failed:', err)
-  );
+  // 客户已写入 CRM 时走客户飞书同步，避免同一条互动在多维表格里重复建两行。
+  if (!customerLink) {
+    await enqueueLeadSinkSync(db, lead.id, interaction.organizationId).catch(
+      (err) => console.error('[pipeline] Lead sink enqueue failed:', err)
+    );
+  }
 
   console.log(
     `[pipeline] Lead ${lead.id} created (${newLevel}) from interaction ${interactionId}`

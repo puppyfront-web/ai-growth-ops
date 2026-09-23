@@ -3,7 +3,8 @@ import type { DatabaseClient } from './client';
 
 export const INITIAL_ADMIN_EMAIL =
   process.env.ADMIN_EMAIL || 'admin@ai-growth-ops.local';
-const INITIAL_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123';
+const INITIAL_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ||
+  (process.env.NODE_ENV === 'production' ? '' : 'changeme123');
 const INITIAL_ADMIN_NAME = process.env.ADMIN_NAME || 'Admin';
 
 function hashPassword(password: string): string {
@@ -20,6 +21,9 @@ function hashPassword(password: string): string {
  * Configure via env: ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME
  */
 export async function seedDatabase(db: DatabaseClient): Promise<void> {
+  if (!INITIAL_ADMIN_PASSWORD) {
+    throw new Error('ADMIN_PASSWORD is required when seeding production');
+  }
   const existing = await db.user.findFirst({
     where: { email: INITIAL_ADMIN_EMAIL }
   });
@@ -59,7 +63,6 @@ export async function seedDatabase(db: DatabaseClient): Promise<void> {
   });
 
   console.log(`[seed] Created admin user: ${INITIAL_ADMIN_EMAIL}`);
-  console.log(`[seed] Default password: ${INITIAL_ADMIN_PASSWORD}`);
   console.log(`[seed] Default organization: ${org.id}`);
   console.log(`[seed] ⚠️  Change the password immediately after first login.`);
 }

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   generateContentWithMedia,
-  generatePlatformVariants,
   checkContentCompliance,
   runAiContentPipeline
 } from '@/lib/api/content';

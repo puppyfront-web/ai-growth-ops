@@ -14,6 +14,8 @@ export interface HealthCheckResult {
   platform: string;
   error?: string;
   expiresAt?: string;
+  /** True when invalid because the stored session is gone — user must re-authorize (QR login). */
+  authExpired?: boolean;
 }
 
 export interface PlatformProvider {

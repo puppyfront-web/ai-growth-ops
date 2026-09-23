@@ -110,13 +110,37 @@ export type Customer = {
     prospectingTaskId?: string;
     prospectCandidateId?: string;
     prospectUserKey?: string;
+    platformUserKey?: string;
+    conversationId?: string;
     relevanceScore?: number;
     leadLevel?: string;
     pendingContact?: boolean;
+    lark?: {
+      recordId?: string | null;
+      externalUrl?: string | null;
+      syncedAt?: string;
+      lastSuccess?: boolean;
+    };
   } | null;
   activities?: CustomerActivity[];
   leads?: unknown[];
   profile?: CustomerProfile | null;
+  crm?: {
+    conversation: {
+      id: string;
+      externalUserName: string | null;
+      platform: string;
+      lastMessageAt: string | null;
+    } | null;
+    recentInteractions: Array<{
+      id: string;
+      type: string;
+      content: string;
+      status: string;
+      receivedAt: string;
+      conversationId: string | null;
+    }>;
+  };
 };
 
 export type CustomerDuplicate = Pick<

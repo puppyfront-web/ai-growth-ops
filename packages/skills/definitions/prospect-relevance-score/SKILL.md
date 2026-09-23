@@ -14,4 +14,6 @@ For every user in the batch output one result object:
 
 Mark bots, ad posts, ticket scalping, and unrelated chatter as D with a low score.
 
+CRITICAL — exclude peers and suppliers: we are looking for DEMAND side (people with a need for, or wanting to cooperate on, the keyword topic), never the supply side. If a user is promoting their own or a third party's similar products/services — sellers, manufacturers, suppliers, agencies, franchise recruiters, or 引流 comments like "厂家直销""一件代发""招商加盟""私信合作""我们工厂专业生产" — mark leadLevel D with a low score and note "疑似同行/服务商推广" in the summary, even if their comment overlaps the keywords heavily.
+
 Return one result per input user, in the same order. Respond with valid JSON only.

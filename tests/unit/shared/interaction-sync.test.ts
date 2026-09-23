@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   dedupeByKey,
+  isOfficialDouyinInboxNoise,
   isPublishedTodayInShanghai,
+  officialDouyinInboxNoiseWhere,
+  officialDouyinInboxNoticeNoiseConditions,
   parsePublishedAt,
   selectTodayOrRecent
 } from '../../../packages/shared/src/interaction-sync';
@@ -89,5 +92,58 @@ describe('selectTodayOrRecent', () => {
     expect(selected).toHaveLength(10);
     expect(selected[0]?.id).toBe('c-0');
     expect(selected[9]?.id).toBe('c-9');
+  });
+});
+
+describe('isOfficialDouyinInboxNoise', () => {
+  it('flags official nicknames and notice payloads', () => {
+    expect(
+      isOfficialDouyinInboxNoise({
+        userNickname: '抖音官方',
+        content: 'hello'
+      })
+    ).toBe(true);
+    expect(
+      isOfficialDouyinInboxNoise({
+        userNickname: '采购',
+        content: '平台通知：账号规范'
+      })
+    ).toBe(true);
+    expect(
+      isOfficialDouyinInboxNoise({
+        userNickname: '采购',
+        content: '想了解报价',
+        rawPayload: { notice_type: 'platform_notice' }
+      })
+    ).toBe(true);
+    expect(
+      isOfficialDouyinInboxNoise({
+        userNickname: '采购',
+        content: '想了解报价'
+      })
+    ).toBe(false);
+  });
+});
+
+describe('officialDouyinInboxNoiseWhere', () => {
+  it('builds null-safe text noise plus separate notice-path conditions', () => {
+    const where = officialDouyinInboxNoiseWhere() as {
+      OR: Array<Record<string, unknown>>;
+    };
+    expect(where.OR.some((clause) => 'externalUserName' in clause)).toBe(true);
+    expect(where.OR.some((clause) => 'content' in clause)).toBe(true);
+    // JSON-path conditions live in their own export: negating them without a
+    // rawPayload null guard drops NULL-payload rows via SQL three-valued logic.
+    expect(where.OR.some((clause) => 'rawPayload' in clause)).toBe(false);
+
+    const notice = officialDouyinInboxNoticeNoiseConditions();
+    expect(
+      notice.some((clause) => {
+        const raw = clause.rawPayload as
+          | { path?: string[]; string_contains?: string }
+          | undefined;
+        return raw?.path?.[0] === 'notice_type' && raw.string_contains === 'official';
+      })
+    ).toBe(true);
   });
 });

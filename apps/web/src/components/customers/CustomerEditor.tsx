@@ -53,6 +53,7 @@ export type CustomerFormValues = {
   channel: AcquisitionChannel;
   sourceNote: string;
   status: CustomerStatus;
+  assignedTo: string;
 };
 
 export const emptyCustomerForm = (
@@ -65,7 +66,8 @@ export const emptyCustomerForm = (
   intent: '',
   channel,
   sourceNote: '',
-  status: 'active'
+  status: 'active',
+  assignedTo: ''
 });
 
 export function formFromCustomer(customer: Customer): CustomerFormValues {
@@ -77,7 +79,8 @@ export function formFromCustomer(customer: Customer): CustomerFormValues {
     intent: customer.intent,
     channel: customer.channel,
     sourceNote: customer.sourceNote ?? '',
-    status: customer.status
+    status: customer.status,
+    assignedTo: customer.assignedTo ?? ''
   };
 }
 
@@ -85,12 +88,16 @@ export function CustomerEditor({
   value,
   onChange,
   showStatus = false,
+  showAssignee = false,
+  assigneeOptions = [],
   idPrefix,
   onPhoneBlur
 }: {
   value: CustomerFormValues;
   onChange: (next: CustomerFormValues) => void;
   showStatus?: boolean;
+  showAssignee?: boolean;
+  assigneeOptions?: { id: string; name: string }[];
   idPrefix: string;
   onPhoneBlur?: () => void;
 }) {
@@ -191,6 +198,23 @@ export function CustomerEditor({
             className="mt-1 w-full rounded border bg-background px-2 py-1.5 text-sm"
             placeholder="如：关键词获客 / 展会"
           />
+        </Field>
+      )}
+      {showAssignee && (
+        <Field label="负责人" htmlFor={`${idPrefix}-assignee`}>
+          <select
+            id={`${idPrefix}-assignee`}
+            value={value.assignedTo}
+            onChange={(e) => set({ assignedTo: e.target.value })}
+            className="mt-1 w-full rounded border bg-background px-2 py-1.5 text-sm md:max-w-xs"
+          >
+            <option value="">未分配</option>
+            {assigneeOptions.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
         </Field>
       )}
       <Field label="需求 *" htmlFor={`${idPrefix}-intent`}>

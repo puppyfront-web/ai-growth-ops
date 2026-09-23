@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import { clampAcquisitionDays } from '@ai-growth-ops/shared';
@@ -71,7 +72,7 @@ export const analyticsRoutes: Array<{
           entityType: body.entityType ? String(body.entityType) : null,
           entityId: body.entityId ? String(body.entityId) : null,
           value: body.value ? Number(body.value) : null,
-          metadata: (body.metadata ?? null) as any,
+          metadata: (body.metadata as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
           occurredAt: body.occurredAt
             ? new Date(body.occurredAt as string)
             : new Date()
@@ -118,7 +119,7 @@ export async function trackEvent(
       entityType: data.entityType || null,
       entityId: data.entityId || null,
       value: data.value || null,
-      metadata: (data.metadata || null) as any,
+      metadata: (data.metadata as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
       occurredAt: new Date()
     }
   });

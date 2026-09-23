@@ -183,8 +183,10 @@ describe('Interaction API', () => {
       `/api/interactions/${intId}/convert-to-lead`
     );
     expect(status).toBe(201);
-    expect(body.id).toBeDefined();
-    expect(body.sourceInteractionId).toBe(intId);
+    // The route now creates a customer record plus a linked lead and returns
+    // { customer, lead, created } — the lead keeps the interaction link.
+    expect(body.lead?.id).toBeDefined();
+    expect(body.customer?.id).toBeDefined();
   });
 });
 

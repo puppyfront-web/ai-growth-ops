@@ -1,14 +1,11 @@
 import 'dotenv/config';
 import { defineConfig, devices } from '@playwright/test';
 
-const e2eDatabaseUrl = (process.env.DATABASE_URL ?? '').replace(
-  /\/ai_growth_ops(?!_e2e)\b/,
-  '/ai_growth_ops_e2e'
-);
-if (!e2eDatabaseUrl.includes('ai_growth_ops_e2e')) {
-  throw new Error('Playwright must target ai_growth_ops_e2e, not the app database');
-}
+import { testDatabaseUrl, testRedisUrl } from './scripts/test-environment.mjs';
+
+const e2eDatabaseUrl = testDatabaseUrl(process.env.DATABASE_URL);
 process.env.DATABASE_URL = e2eDatabaseUrl;
+process.env.REDIS_URL = testRedisUrl(process.env.REDIS_URL);
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -32,7 +29,7 @@ export default defineConfig({
       env: {
         ...process.env,
         API_PORT: '3310',
-        REDIS_URL: 'redis://127.0.0.1:6379/15',
+        REDIS_URL: process.env.REDIS_URL,
         DATABASE_URL: e2eDatabaseUrl
       }
     },

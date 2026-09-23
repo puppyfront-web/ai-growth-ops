@@ -1,58 +1,49 @@
 # 部署指南
 
-## 一键部署 (Docker Compose)
+当前容器部署面向单机受控试用或小团队生产环境。正式启用真实平台发布前，还必须完成 [交付规范](./delivery/crm-release-spec.md) 中的真实平台与恢复验收。
 
-### 1. 准备服务器
+## 环境与密钥
 
-- Ubuntu 22.04+ / macOS
-- Docker 24+ & Docker Compose v2
-- 最低 4GB RAM, 2 CPU
+服务器建议 Ubuntu 22.04+、Docker 24+、Docker Compose v2、至少 4 GB 内存和 2 CPU。复制模板并填写配置：
 
-### 2. 克隆仓库
-
-```bash
-git clone <repo-url> /opt/ai-growth-ops
-cd /opt/ai-growth-ops
+```sh
+cp .env.example .env
+chmod 600 .env
 ```
 
-### 3. 配置环境变量
-
-```bash
-cp .env.template .env
-```
-
-必须修改的变量:
+生产至少要替换下列值；不要保留 `CHANGE_ME`、`postgres`、`minioadmin` 或开发管理员密码：
 
 ```env
-POSTGRES_PASSWORD=<strong-password>
-AUTH_SECRET=<random-32-char-secret>
-EMAIL_PROVIDER=resend
-RESEND_API_KEY=re_xxx
-EMAIL_FROM="AI Growth Ops <noreply@yourdomain.com>"
+POSTGRES_PASSWORD=<可安全放入连接串的强密码>
+AUTH_SECRET=<openssl rand -hex 32>
+TOKEN_ENCRYPTION_KEY=<openssl rand -hex 32>
+INTERNAL_API_SECRET=<openssl rand -hex 32>
+BROWSER_RUNNER_SECRET=<openssl rand -hex 32>
+MINIO_ROOT_PASSWORD=<强密码>
+ADMIN_PASSWORD=<首次管理员强密码>
 APP_URL=https://yourdomain.com
-NEXT_PUBLIC_API_URL=https://yourdomain.com/api
 ```
 
-### 4. 构建并启动
+`TOKEN_ENCRYPTION_KEY` 用于解密已保存的平台和模型凭据，备份后不得随意更换。API、Web 及 Browser Runner 的内部地址由生产 Compose 固定为容器服务名。
 
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
+## 构建与启动
+
+```sh
+pnpm install --frozen-lockfile
+pnpm verify:release
+docker compose -f docker-compose.prod.yml config
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d postgres redis minio
+docker compose -f docker-compose.prod.yml run --rm api pnpm db:deploy
+docker compose -f docker-compose.prod.yml run --rm api pnpm db:seed
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-### 5. 初始化数据库
+数据库只能用 `prisma migrate deploy`。禁止在生产运行 `db push`、`db:reset:test` 或 `migrate reset`。已有数据库升级前执行 [数据库升级流程](./delivery/database-upgrade.md)。
 
-```bash
-docker compose -f docker-compose.prod.yml exec api npx prisma db push
-```
+## 反向代理与健康检查
 
-### 6. 验证部署
-
-```bash
-curl http://localhost:3100/health
-# 应返回 {"status":"ok","checks":{"database":{"status":"ok"},...}}
-```
-
-## SSL 配置 (Nginx 反向代理)
+Compose 仅把 Web 与 API 绑定在宿主机回环地址。Nginx 示例：
 
 ```nginx
 server {
@@ -62,16 +53,21 @@ server {
     ssl_certificate /etc/ssl/yourdomain.crt;
     ssl_certificate_key /etc/ssl/yourdomain.key;
 
-    location / {
-        proxy_pass http://127.0.0.1:3000;
+    location /api/ {
+        proxy_pass http://127.0.0.1:3100;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /api/ {
+    location /uploads/ {
         proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -80,40 +76,22 @@ server {
 }
 ```
 
-## 备份策略
-
-### PostgreSQL 备份
-
-```bash
-# 每日备份
-docker compose exec postgres pg_dump -U postgres ai_growth_ops > backup_$(date +%Y%m%d).sql
-
-# 自动备份 (cron)
-0 3 * * * docker compose -f /opt/ai-growth-ops/docker-compose.prod.yml exec -T postgres pg_dump -U postgres ai_growth_ops | gzip > /backup/db_$(date +\%Y\%m\%d).sql.gz
+```sh
+curl --fail http://127.0.0.1:3100/health
+curl --fail http://127.0.0.1:3000/login
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs --tail=100 api worker browser-runner
 ```
 
-### 恢复
+PostgreSQL、Redis、MinIO 和 Browser Runner 不对公网开放。需要查看 MinIO 控制台时使用 SSH 隧道或临时、受控的回环端口映射。
 
-```bash
-gunzip -c /backup/db_20260601.sql.gz | docker compose exec -T postgres psql -U postgres ai_growth_ops
+## 备份、恢复与回滚
+
+每天备份 PostgreSQL、上传文件和 `.env` 中的加密密钥，并把备份放到应用服务器之外：
+
+```sh
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > ai-growth-ops.sql.gz
 ```
 
-## 常见问题
-
-### 服务无法启动
-
-1. 检查 `.env` 配置是否正确
-2. 检查端口是否被占用: `ss -tlnp | grep -E '3000|3100|5432|6379'`
-3. 查看日志: `docker compose logs api`
-
-### 数据库连接失败
-
-1. 确认 postgres 容器健康: `docker compose ps postgres`
-2. 检查 DATABASE_URL 格式: `postgresql://user:pass@postgres:5432/dbname`
-3. 进入 postgres 容器测试: `docker compose exec postgres psql -U postgres`
-
-### Worker 任务不执行
-
-1. 确认 redis 连接正常
-2. 检查 worker 日志: `docker compose logs worker`
-3. 确认 BullMQ 队列: `docker compose exec redis redis-cli LLEN bull:publish.execute`
+恢复必须先在隔离环境验证：新建空数据库，导入备份，使用同一 `TOKEN_ENCRYPTION_KEY` 启动，核对客户、线索、发布记录、平台账号和一条加密凭据，再演练 Worker 重启恢复。代码回滚不能反向猜测数据库结构；涉及迁移时按升级文档准备专门回滚 SQL 或恢复快照。

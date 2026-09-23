@@ -9,7 +9,10 @@ export * from './schema-metadata';
 export * from './seed';
 export * from './customer-profile';
 export * from './customer-playbook';
+export * from './llm-config';
 export * from './prospecting';
+export * from './customer-crm';
+export * from './customer-feishu-sync';
 export * from './prospect-guard';
 export * from './schema-guard';
 
