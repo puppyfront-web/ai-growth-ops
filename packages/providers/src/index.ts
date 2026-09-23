@@ -1,4 +1,9 @@
-export { encryptToken, decryptToken } from './crypto';
+export {
+  encryptToken,
+  decryptToken,
+  isLocalSecretReference,
+  moveTokenToLocalStorage
+} from './crypto';
 export { getPlatformProvider, getSupportedAuthTypes } from './registry';
 export type {
   AuthType,
