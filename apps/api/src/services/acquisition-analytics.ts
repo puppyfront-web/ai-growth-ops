@@ -22,6 +22,7 @@ export async function getAcquisitionAnalytics(
         id: true,
         platform: true,
         keywords: true,
+        requirement: true,
         status: true,
         totalVideos: true,
         totalComments: true,
@@ -36,6 +37,7 @@ export async function getAcquisitionAnalytics(
         prospectingTaskId: true,
         platform: true,
         keyword: true,
+        attributions: true,
         relevanceScore: true,
         leadLevel: true,
         customerId: true,
@@ -79,7 +81,9 @@ export async function getAcquisitionAnalytics(
     tasks: tasks.map((task) => ({
       id: task.id,
       platform: task.platform,
-      keywords: asKeywordList(task.keywords),
+      keywords: task.requirement
+        ? [task.requirement]
+        : asKeywordList(task.keywords),
       status: task.status,
       totalVideos: task.totalVideos,
       totalComments: task.totalComments,
@@ -87,14 +91,16 @@ export async function getAcquisitionAnalytics(
     })),
     candidates: candidates.map((row) => {
       const metadata =
-        row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+        row.metadata &&
+        typeof row.metadata === 'object' &&
+        !Array.isArray(row.metadata)
           ? (row.metadata as Record<string, unknown>)
           : {};
       return {
         id: row.id,
         taskId: row.prospectingTaskId,
         platform: row.platform,
-        keyword: row.keyword,
+        keyword: firstStrategyType(row.attributions) ?? row.keyword,
         relevanceScore: row.relevanceScore,
         leadLevel: row.leadLevel,
         customerId: row.customerId,
@@ -114,4 +120,12 @@ export async function getAcquisitionAnalytics(
       createdAt: row.createdAt.toISOString()
     }))
   });
+}
+
+function firstStrategyType(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const first = value[0];
+  if (!first || typeof first !== 'object') return null;
+  const type = (first as { strategyType?: unknown }).strategyType;
+  return typeof type === 'string' ? type : null;
 }

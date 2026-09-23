@@ -285,6 +285,7 @@ model User {
   workflows                Workflow[]
   customers                Customer[]
   prospectingTasks         ProspectingTask[]
+  prospectingPlanDrafts    ProspectingPlanDraft[]
 }
 
 model TokenBlacklist {
@@ -367,6 +368,7 @@ model Organization {
   workflows            Workflow[]
   customers            Customer[]
   prospectingTasks     ProspectingTask[]
+  prospectingPlanDrafts ProspectingPlanDraft[]
   prospectCandidates   ProspectCandidate[]
   prospectingLedgers   ProspectingGuardLedger[]
   prospectingVideos    ProspectingCrawledVideo[]
@@ -443,6 +445,8 @@ model PlatformAccount {
   conversations        Conversation[]
   interactions         Interaction[]
   prospectingLedgers   ProspectingGuardLedger[]
+  prospectingTasks     ProspectingTask[]
+  prospectingPlanDrafts ProspectingPlanDraft[]
 
   @@unique([userId, platform, name])
   @@index([organizationId])
@@ -1017,7 +1021,12 @@ model ProspectingTask {
   organizationId       String
   userId               String
   platform             Platform
+  platformAccountId    String?
   keywords             Json
+  requirement          String?
+  intent               Json?
+  strategyPlan         Json?
+  planVersion          Int                   @default(1)
   status               ProspectingTaskStatus @default(draft)
   executionToken       String?
   topNVideos           Int                   @default(5)
@@ -1036,10 +1045,12 @@ model ProspectingTask {
 
   organization Organization       @relation(fields: [organizationId], references: [id])
   user         User               @relation(fields: [userId], references: [id])
+  platformAccount PlatformAccount? @relation(fields: [platformAccountId], references: [id], onDelete: SetNull)
   candidates   ProspectCandidate[]
 
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
+  @@index([platformAccountId])
   @@map("prospecting_tasks")
 }
 
@@ -1067,6 +1078,10 @@ model ProspectCandidate {
   intent             String?
   summary            String?
   matchedKeywords    Json?
+  attributions       Json?
+  buyingStage        String?
+  confidence         Int?
+  riskFlags          Json?
   customerId         String?
   createdAt          DateTime  @default(now())
   metadata           Json?
@@ -1080,6 +1095,28 @@ model ProspectCandidate {
   @@index([organizationId, createdAt])
   @@index([customerId])
   @@map("prospect_candidates")
+}
+
+model ProspectingPlanDraft {
+  id                String    @id @default(uuid())
+  organizationId    String
+  userId            String
+  platform          Platform
+  platformAccountId String?
+  requirement       String
+  intent            Json
+  strategyPlan      Json
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformAccount PlatformAccount? @relation(fields: [platformAccountId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, userId, expiresAt])
+  @@index([platformAccountId])
+  @@map("prospecting_plan_drafts")
 }
 
 model ProspectingGuardLedger {

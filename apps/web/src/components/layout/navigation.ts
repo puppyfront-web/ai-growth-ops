@@ -31,7 +31,7 @@ export const hiddenSectionPrefixes = [
 ] as const;
 
 export const navItems: NavItem[] = [
-  { label: '关键词获客', href: '/prospecting', icon: Search },
+  { label: '智能获客', href: '/prospecting', icon: Search },
   { label: '客户管理', href: '/customers', icon: UserCheck },
   { label: '线索管理', href: '/leads', icon: UserCheck, hidden: true },
   { label: '内容运营', href: '/content', icon: FileText },

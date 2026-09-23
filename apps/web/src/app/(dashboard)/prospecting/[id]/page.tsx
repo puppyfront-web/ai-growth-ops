@@ -77,10 +77,13 @@ function formatCount(value: number | null | undefined): string {
 function ProfileSummary({ profile }: { profile: ProspectUserProfile }) {
   return (
     <div className="mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs space-y-1">
-      {profile.signature && <p className="whitespace-pre-wrap">{profile.signature}</p>}
+      {profile.signature && (
+        <p className="whitespace-pre-wrap">{profile.signature}</p>
+      )}
       <p className="text-muted-foreground">
         粉丝 {formatCount(profile.followerCount)} · 关注{' '}
-        {formatCount(profile.followingCount)} · 获赞 {formatCount(profile.likeCount)}
+        {formatCount(profile.followingCount)} · 获赞{' '}
+        {formatCount(profile.likeCount)}
         {profile.location ? ` · ${profile.location}` : ''}
       </p>
     </div>
@@ -278,15 +281,17 @@ function enrichBusy(candidate: ProspectCandidate, enrichingId: string | null) {
 }
 
 function CaptchaSolveDialog({
+  platformAccountId,
   onClose,
   onSolved
 }: {
+  platformAccountId: string;
   onClose: () => void;
   onSolved: () => void;
 }) {
-  const [status, setStatus] = useState<'starting' | 'waiting' | 'solved' | 'error'>(
-    'starting'
-  );
+  const [status, setStatus] = useState<
+    'starting' | 'waiting' | 'solved' | 'error'
+  >('starting');
   const [error, setError] = useState('');
   const onSolvedRef = useRef(onSolved);
   onSolvedRef.current = onSolved;
@@ -298,7 +303,7 @@ function CaptchaSolveDialog({
 
     const start = async () => {
       try {
-        await startProspectingCaptcha();
+        await startProspectingCaptcha(platformAccountId);
         if (cancelled) return;
         setStatus('waiting');
         timer = setInterval(async () => {
@@ -336,7 +341,7 @@ function CaptchaSolveDialog({
         cancelProspectingCaptcha().catch(() => undefined);
       }
     };
-  }, []);
+  }, [platformAccountId]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -362,7 +367,7 @@ function CaptchaSolveDialog({
               type="button"
               onClick={async () => {
                 skipCancelRef.current = true;
-                await resolveProspectingCaptcha();
+                await resolveProspectingCaptcha(platformAccountId);
                 onSolved();
               }}
               className="rounded border px-3 py-1.5 text-sm hover:bg-accent"
@@ -458,8 +463,13 @@ export default function ProspectingDetailPage() {
   });
 
   const { data: guard } = useQuery({
-    queryKey: ['prospecting', 'guard'],
-    queryFn: () => getProspectingGuard()
+    queryKey: ['prospecting', 'guard', task?.platformAccountId],
+    queryFn: () =>
+      getProspectingGuard(
+        task?.platform ?? 'douyin',
+        task?.platformAccountId ?? undefined
+      ),
+    enabled: Boolean(task)
   });
 
   const runMutation = useMutation({
@@ -515,7 +525,6 @@ export default function ProspectingDetailPage() {
     );
   }
 
-  const keywords = (task.keywords as string[]) ?? [];
   const allCandidates = task.candidates ?? [];
   const candidates =
     minScoreFilter > 0
@@ -523,7 +532,8 @@ export default function ProspectingDetailPage() {
       : allCandidates;
   const userGroups = groupByUser(candidates);
   const convertedCount = allCandidates.filter((c) => c.customerId).length;
-  const plannedVideos = keywords.length * task.topNVideos;
+  const isLegacyTask = !task.strategyPlan;
+  const plannedVideos = task.strategyPlan?.limits.maxTotalVideos ?? 0;
   const allowedVideos = guard
     ? Math.min(plannedVideos, guard.videosRemaining)
     : plannedVideos;
@@ -548,7 +558,7 @@ export default function ProspectingDetailPage() {
     <div>
       <Breadcrumb />
       <PageHeader
-        title={keywords.join('、') || '获客任务'}
+        title={task.requirement || '历史获客任务'}
         description={`状态：${statusLabels[task.status] ?? task.status} · 潜客 ${task.totalCandidates} · 已转客户 ${convertedCount} · 评论 ${task.totalComments}`}
         actions={
           <div className="flex gap-2">
@@ -565,7 +575,7 @@ export default function ProspectingDetailPage() {
             >
               {exportMutation.isPending ? '导出中…' : '导出 CSV'}
             </button>
-            {task.status !== 'running' && (
+            {task.status !== 'running' && !isLegacyTask && (
               <button
                 onClick={() => {
                   if (guard?.needsLogin) {
@@ -583,6 +593,12 @@ export default function ProspectingDetailPage() {
           </div>
         }
       />
+
+      {isLegacyTask && (
+        <div className="mb-4 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+          这是旧版获客任务，仅保留历史结果查看；请新建智能获客任务执行多策略采集。
+        </div>
+      )}
 
       {convertNotice && (
         <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -620,7 +636,7 @@ export default function ProspectingDetailPage() {
           <p className="text-xs text-blue-700/80">
             已爬取 {task.totalVideos} 个视频 · {task.totalComments} 条评论
             {task.metadata?.videoTotal
-              ? ` · 当前关键词视频 ${task.metadata.videoIndex ?? 0}/${task.metadata.videoTotal}`
+              ? ` · 当前策略视频 ${task.metadata.videoIndex ?? 0}/${task.metadata.videoTotal}`
               : ''}
           </p>
         </div>
@@ -657,14 +673,20 @@ export default function ProspectingDetailPage() {
       {guard && (
         <div className="mb-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            账号{guard.platformAccountName ? `「${guard.platformAccountName}」` : '未登录'}
-            ：今日还可爬 {guard.videosRemaining} 个视频、采集 {guard.profilesRemaining}{' '}
-            次主页。本次约 {allowedVideos} 个视频 / {estimatedMinutes} 分钟
+            账号
+            {guard.platformAccountName
+              ? `「${guard.platformAccountName}」`
+              : '未登录'}
+            ：今日还可爬 {guard.videosRemaining} 个视频、采集{' '}
+            {guard.profilesRemaining} 次主页。本次约 {allowedVideos} 个视频 /{' '}
+            {estimatedMinutes} 分钟
             {plannedVideos > guard.videosRemaining && guard.videosRemaining > 0
               ? '（额度不足，将自动裁剪）'
               : ''}
             。默认跳过近 {guard.skipTtlDays} 天已抓视频，视频间隔 8–18 秒。
-            {guard.health ? ` 健康分 ${guard.health.score}（${guard.health.label}）。` : ''}
+            {guard.health
+              ? ` 健康分 ${guard.health.score}（${guard.health.label}）。`
+              : ''}
             {guard.captchaWaitMs > 0
               ? ` 验证码冷却中，${Math.ceil(guard.captchaWaitMs / 60000)} 分钟后再跑，或立刻打开浏览器过码。`
               : ''}
@@ -715,7 +737,10 @@ export default function ProspectingDetailPage() {
 
       <div className="mb-3 flex flex-wrap gap-3 items-center text-sm">
         <div className="flex items-center gap-2">
-          <label htmlFor="score-filter" className="text-muted-foreground text-xs">
+          <label
+            htmlFor="score-filter"
+            className="text-muted-foreground text-xs"
+          >
             最低相关度
           </label>
           <input
@@ -757,7 +782,9 @@ export default function ProspectingDetailPage() {
           {userGroups.map((group) => {
             const c = group.best;
             const comments = candidateComments(c);
-            const converted = group.all.find((item) => item.customerId)?.customerId;
+            const converted = group.all.find(
+              (item) => item.customerId
+            )?.customerId;
             return (
               <div
                 key={group.key}
@@ -876,7 +903,17 @@ export default function ProspectingDetailPage() {
                           </div>
                           <p className="whitespace-pre-wrap">{item.content}</p>
                           <p className="text-xs mt-1 text-muted-foreground">
-                            关键词：{c.keyword}
+                            命中策略：
+                            {c.attributions
+                              ?.map(
+                                (item) =>
+                                  task.strategyPlan?.strategies.find(
+                                    (strategy) =>
+                                      strategy.id === item.strategyId
+                                  )?.title
+                              )
+                              .filter(Boolean)
+                              .join('、') || '历史任务'}
                             {item.sourceVideoTitle
                               ? ` · 来源：${item.sourceVideoTitle}`
                               : ''}
@@ -931,7 +968,9 @@ export default function ProspectingDetailPage() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          disabled={!c.userHomepage || enrichBusy(c, enrichingId)}
+                          disabled={
+                            !c.userHomepage || enrichBusy(c, enrichingId)
+                          }
                           onClick={() => enrichMutation.mutate(c.id)}
                           className="flex-shrink-0"
                           title="点击采集主页资料"
@@ -985,7 +1024,18 @@ export default function ProspectingDetailPage() {
                           {c.summary}
                         </p>
                       )}
-                      <p className="text-xs mt-1">关键词：{c.keyword}</p>
+                      <p className="text-xs mt-1">
+                        命中策略：
+                        {c.attributions
+                          ?.map(
+                            (item) =>
+                              task.strategyPlan?.strategies.find(
+                                (strategy) => strategy.id === item.strategyId
+                              )?.title
+                          )
+                          .filter(Boolean)
+                          .join('、') || '历史任务'}
+                      </p>
                     </td>
                     <td className="px-4 py-3 max-w-[180px]">
                       <p>{c.sourceVideoTitle ?? '-'}</p>
@@ -1033,8 +1083,9 @@ export default function ProspectingDetailPage() {
         </div>
       )}
 
-      {captchaOpen && (
+      {captchaOpen && task.platformAccountId && (
         <CaptchaSolveDialog
+          platformAccountId={task.platformAccountId}
           onClose={() => setCaptchaOpen(false)}
           onSolved={() => {
             setCaptchaOpen(false);

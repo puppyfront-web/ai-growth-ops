@@ -1,7 +1,9 @@
 {
   "type": "object",
   "properties": {
-    "keywords": { "type": "array", "items": { "type": "string" } },
+    "requirement": { "type": "string" },
+    "intent": { "type": "object" },
+    "searchQueries": { "type": "array", "items": { "type": "string" } },
     "highIntentKeywords": { "type": "array", "items": { "type": "string" } },
     "users": {
       "type": "array",
@@ -17,5 +19,5 @@
       }
     }
   },
-  "required": ["keywords", "users"]
+  "required": ["requirement", "intent", "users"]
 }

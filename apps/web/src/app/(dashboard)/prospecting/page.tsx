@@ -1,20 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   createProspectingTask,
+  analyzeProspectingRequirement,
   runProspectingTask,
   listProspectingTasks,
-  getProspectingGuard,
-  estimateProspectingMinutes,
+  listProspectingAccounts,
   PROSPECTING_SUPPORTED_PLATFORMS,
   formatProspectingProgress,
   getProspectingProgressPercent,
   isAccountLoginRequiredError,
-  type ProspectingPlatform
+  type ProspectingPlatform,
+  type ProspectingPlanAnalysis
 } from '@/lib/api/prospecting';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
@@ -44,15 +45,34 @@ export default function ProspectingPage() {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   const [platform, setPlatform] = useState<ProspectingPlatform>('douyin');
-  const [keywordsText, setKeywordsText] = useState('');
-  const [topNVideos, setTopNVideos] = useState(5);
+  const [requirement, setRequirement] = useState('');
+  const [platformAccountId, setPlatformAccountId] = useState('');
+  const [analysis, setAnalysis] = useState<ProspectingPlanAnalysis | null>(
+    null
+  );
+  const [enabledStrategyIds, setEnabledStrategyIds] = useState<string[]>([]);
   const [minScore, setMinScore] = useState(40);
   const [page, setPage] = useState(1);
 
-  const { data: guard } = useQuery({
-    queryKey: ['prospecting', 'guard'],
-    queryFn: () => getProspectingGuard()
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['prospecting', 'accounts', platform],
+    queryFn: () => listProspectingAccounts(platform)
   });
+  const guard = accounts.find(
+    (account) => account.platformAccountId === platformAccountId
+  );
+
+  useEffect(() => {
+    if (accounts.length === 1) {
+      setPlatformAccountId(accounts[0]?.platformAccountId ?? '');
+    } else if (
+      !accounts.some(
+        (account) => account.platformAccountId === platformAccountId
+      )
+    ) {
+      setPlatformAccountId('');
+    }
+  }, [accounts, platformAccountId]);
 
   const { data: llmConfig } = useQuery({
     queryKey: ['settings', 'llm'],
@@ -70,6 +90,19 @@ export default function ProspectingPage() {
         : false
   });
 
+  const analyzeMutation = useMutation({
+    mutationFn: () =>
+      analyzeProspectingRequirement(requirement, platform, platformAccountId),
+    onSuccess: (result) => {
+      setAnalysis(result);
+      setEnabledStrategyIds(
+        result.plan.strategies
+          .filter((strategy) => strategy.enabled)
+          .map((strategy) => strategy.id)
+      );
+    }
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       // 未登录自媒体账号时直接引导去账号配置页，不再创建注定失败的任务
@@ -77,23 +110,16 @@ export default function ProspectingPage() {
         router.push('/integrations/platforms');
         throw new Error('请先扫码登录自媒体账号');
       }
-      const keywords = keywordsText
-        .split(/[\s,，、]+/)
-        .map((k) => k.trim())
-        .filter(Boolean);
+      if (!analysis) throw new Error('请先分析获客需求');
       const task = await createProspectingTask({
-        platform,
-        keywords,
-        topNVideos,
+        planId: analysis.planId,
+        enabledStrategyIds,
         minRelevanceScore: minScore
       });
       try {
         await runProspectingTask(task.id);
       } catch (err) {
-        if (
-          err instanceof Error &&
-          isAccountLoginRequiredError(err.message)
-        ) {
+        if (err instanceof Error && isAccountLoginRequiredError(err.message)) {
           router.push('/integrations/platforms');
           throw err;
         }
@@ -103,31 +129,20 @@ export default function ProspectingPage() {
     },
     onSuccess: (task) => {
       setShowCreate(false);
-      setKeywordsText('');
+      setRequirement('');
+      setAnalysis(null);
+      setEnabledStrategyIds([]);
       qc.invalidateQueries({ queryKey: ['prospecting'] });
       window.location.href = `/prospecting/${task.id}`;
     }
   });
 
-  const keywords = keywordsText
-    .split(/[\s,，、]+/)
-    .map((k) => k.trim())
-    .filter(Boolean);
-  const plannedVideos = keywords.length * topNVideos;
-  const allowedVideos = guard
-    ? Math.min(plannedVideos, guard.videosRemaining)
-    : plannedVideos;
-  const estimatedMinutes = estimateProspectingMinutes(
-    allowedVideos,
-    guard?.limits
-  );
-
   return (
     <div>
       <Breadcrumb />
       <PageHeader
-        title="关键词获客"
-        description="设置主题关键词，爬取社交平台内容，分析并输出高相关潜客"
+        title="智能获客"
+        description="描述目标客户和业务需求，由系统组合多种策略发现高意向潜客"
         actions={
           <button
             onClick={() => setShowCreate((v) => !v)}
@@ -142,11 +157,11 @@ export default function ProspectingPage() {
         <div className="mb-6 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-amber-800">
-              尚未配置 LLM，潜客判断将只依赖关键词规则
+              尚未配置 LLM，无法分析获客需求
             </p>
             <p className="text-xs text-amber-600 mt-0.5">
-              关键词规则难以区分「有需求的客户」和「同行/行业解说」，容易误入低质潜客。配置 API
-              Key 后系统会用语义模型逐条判断真实意向。
+              配置 API Key
+              后，系统会识别目标客户、购买信号与排除对象，并生成多策略采集计划。
             </p>
           </div>
           <Link
@@ -171,9 +186,11 @@ export default function ProspectingPage() {
               <select
                 id="prospecting-platform"
                 value={platform}
-                onChange={(e) =>
-                  setPlatform(e.target.value as ProspectingPlatform)
-                }
+                onChange={(e) => {
+                  setPlatform(e.target.value as ProspectingPlatform);
+                  setPlatformAccountId('');
+                  setAnalysis(null);
+                }}
                 className="w-full rounded border bg-background px-2 py-1.5 text-sm"
               >
                 {PROSPECTING_SUPPORTED_PLATFORMS.map((value) => (
@@ -185,20 +202,32 @@ export default function ProspectingPage() {
             </div>
             <div>
               <label
-                htmlFor="prospecting-video-count"
+                htmlFor="prospecting-account"
                 className="block text-xs text-muted-foreground mb-1"
               >
-                爬取视频数
+                执行账号
               </label>
-              <input
-                id="prospecting-video-count"
-                type="number"
-                min={1}
-                max={10}
-                value={topNVideos}
-                onChange={(e) => setTopNVideos(Number(e.target.value))}
+              <select
+                id="prospecting-account"
+                value={platformAccountId}
+                onChange={(event) => {
+                  setPlatformAccountId(event.target.value);
+                  setAnalysis(null);
+                }}
                 className="w-full rounded border bg-background px-2 py-1.5 text-sm"
-              />
+              >
+                <option value="">
+                  {accounts.length > 1 ? '请选择抖音账号' : '暂无可用账号'}
+                </option>
+                {accounts.map((account) => (
+                  <option
+                    key={account.platformAccountId}
+                    value={account.platformAccountId ?? ''}
+                  >
+                    {account.platformAccountName}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label
@@ -220,48 +249,112 @@ export default function ProspectingPage() {
           </div>
           <div>
             <label
-              htmlFor="prospecting-keywords"
+              htmlFor="prospecting-requirement"
               className="block text-xs text-muted-foreground mb-1"
             >
-              主题关键词（逗号或换行分隔）*
+              描述你想寻找的客户*
             </label>
             <textarea
-              id="prospecting-keywords"
-              value={keywordsText}
-              onChange={(e) => setKeywordsText(e.target.value)}
-              rows={3}
-              placeholder="例如：企业版 SaaS, 采购经理, 数字化转型"
+              id="prospecting-requirement"
+              value={requirement}
+              onChange={(e) => {
+                setRequirement(e.target.value);
+                setAnalysis(null);
+              }}
+              rows={4}
+              placeholder="例如：寻找正在考虑采购私域运营工具的中小企业负责人，优先零售和教育行业，排除同行、代运营服务商和求职者。"
               className="w-full rounded border bg-background px-3 py-2 text-sm"
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            大批量靠「分天增量」而不是一次拉满。单任务最多 10 个视频、8
-            个关键词；账号每天最多爬 {guard?.limits.dailyVideoLimit ?? 60}{' '}
-            个视频、采集 {guard?.limits.dailyProfileLimit ?? 24} 次主页。
+            系统会识别目标客户、业务场景、购买信号和排除对象，再组合多种采集策略。账号每天最多爬{' '}
+            {guard?.limits.dailyVideoLimit ?? 60} 个视频、采集{' '}
+            {guard?.limits.dailyProfileLimit ?? 24} 次主页。
             {guard?.platformAccountName
               ? ` 当前账号「${guard.platformAccountName}」${guard.health ? ` · ${guard.health.label} ${guard.health.score}` : ''}。`
               : ''}
             今日剩余 {guard?.videosRemaining ?? '-'} 个视频额度
-            {keywords.length > 0
-              ? `，本次约 ${allowedVideos} 个视频 / ${estimatedMinutes} 分钟`
-              : ''}
-            {guard && plannedVideos > guard.videosRemaining && guard.videosRemaining > 0
-              ? '（额度不足，将自动裁剪）'
+            {analysis
+              ? `，本次最多 ${analysis.plan.limits.maxTotalVideos} 个视频 / 约 ${analysis.guard.estimatedMinutes} 分钟`
               : ''}
             {guard && guard.captchaWaitMs > 0
               ? `，验证码冷却 ${Math.ceil(guard.captchaWaitMs / 60000)} 分钟`
               : ''}
-            {guard?.needsLogin ? '。请先在「集成配置」完成抖音扫码登录' : ''}
+            {accounts.length === 0
+              ? '。请先在「集成配置」完成抖音扫码登录'
+              : ''}
             。近 {guard?.skipTtlDays ?? 7} 天已抓视频默认跳过。
           </p>
+          {analysis && (
+            <div className="space-y-3 rounded-lg border bg-background p-4">
+              <div>
+                <p className="text-sm font-medium">需求理解</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {analysis.plan.intent.summary}
+                </p>
+              </div>
+              {analysis.plan.intent.ambiguities.length > 0 && (
+                <p className="text-xs text-amber-700">
+                  待确认：{analysis.plan.intent.ambiguities.join('；')}
+                </p>
+              )}
+              <div className="grid gap-2 md:grid-cols-2">
+                {analysis.plan.strategies.map((strategy) => {
+                  const checked = enabledStrategyIds.includes(strategy.id);
+                  return (
+                    <label
+                      key={strategy.id}
+                      className="flex gap-3 rounded-md border p-3 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setEnabledStrategyIds((current) =>
+                            checked
+                              ? current.filter((id) => id !== strategy.id)
+                              : [...current, strategy.id]
+                          )
+                        }
+                      />
+                      <span>
+                        <span className="font-medium">{strategy.title}</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {strategy.rationale} · 最多{' '}
+                          {strategy.budget.maxVideos} 个视频
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
-            <button
-              onClick={() => keywords.length && createMutation.mutate()}
-              disabled={!keywords.length || createMutation.isPending}
-              className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-            >
-              {createMutation.isPending ? '创建中…' : '创建并开始执行'}
-            </button>
+            {!analysis ? (
+              <button
+                onClick={() => analyzeMutation.mutate()}
+                disabled={
+                  requirement.trim().length < 20 ||
+                  !platformAccountId ||
+                  analyzeMutation.isPending ||
+                  llmMissing
+                }
+                className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              >
+                {analyzeMutation.isPending ? '分析中…' : '分析需求'}
+              </button>
+            ) : (
+              <button
+                onClick={() => createMutation.mutate()}
+                disabled={
+                  enabledStrategyIds.length < 2 || createMutation.isPending
+                }
+                className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              >
+                {createMutation.isPending ? '创建中…' : '确认并开始获客'}
+              </button>
+            )}
             <button
               onClick={() => setShowCreate(false)}
               className="rounded border px-4 py-2 text-sm hover:bg-accent"
@@ -272,6 +365,11 @@ export default function ProspectingPage() {
           {createMutation.isError && (
             <p className="text-sm text-destructive">
               {(createMutation.error as Error).message}
+            </p>
+          )}
+          {analyzeMutation.isError && (
+            <p className="text-sm text-destructive">
+              {(analyzeMutation.error as Error).message}
             </p>
           )}
         </div>
@@ -292,7 +390,7 @@ export default function ProspectingPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium">关键词</th>
+                  <th className="text-left px-4 py-3 font-medium">获客需求</th>
                   <th className="text-left px-4 py-3 font-medium">平台</th>
                   <th className="text-left px-4 py-3 font-medium">状态</th>
                   <th className="text-left px-4 py-3 font-medium">进度</th>
@@ -311,7 +409,7 @@ export default function ProspectingPage() {
                         href={`/prospecting/${task.id}`}
                         className="font-medium hover:underline"
                       >
-                        {(task.keywords as string[]).join('、')}
+                        {task.requirement || '历史获客任务'}
                       </Link>
                     </td>
                     <td className="px-4 py-3">

@@ -1,4 +1,11 @@
 import { apiDownload, apiGet, apiPost } from './client';
+import type {
+  ProspectingIntent,
+  ProspectingPlan,
+  ProspectingStrategy
+} from '@ai-growth-ops/shared';
+
+export type { ProspectingIntent, ProspectingPlan, ProspectingStrategy };
 
 /** Platforms the crawler actually supports; keep in sync with the API schema. */
 export const PROSPECTING_SUPPORTED_PLATFORMS = ['douyin'] as const;
@@ -57,6 +64,15 @@ export type ProspectCandidate = {
   intent: string | null;
   summary: string | null;
   matchedKeywords: string[] | null;
+  attributions: Array<{
+    strategyId: string;
+    strategyType: string;
+    query: string;
+    evidenceIds: string[];
+  }> | null;
+  buyingStage: string | null;
+  confidence: number | null;
+  riskFlags: string[] | null;
   customerId: string | null;
   metadata?: {
     profile?: ProspectUserProfile;
@@ -80,6 +96,9 @@ export type ProspectingTaskProgress = {
   currentKeyword?: string;
   keywordIndex?: number;
   keywordTotal?: number;
+  currentStrategy?: string;
+  strategyIndex?: number;
+  strategyTotal?: number;
   videoIndex?: number;
   videoTotal?: number;
   currentVideoTitle?: string;
@@ -95,7 +114,11 @@ export type ProspectingTask = {
   organizationId: string;
   userId: string;
   platform: ProspectingPlatform;
+  platformAccountId: string | null;
   keywords: string[];
+  requirement: string | null;
+  intent: ProspectingIntent | null;
+  strategyPlan: ProspectingPlan | null;
   status: ProspectingTaskStatus;
   topNVideos: number;
   maxCommentsPerVideo: number;
@@ -118,22 +141,25 @@ export function getProspectingProgressPercent(task: ProspectingTask): number {
   if (task.status === 'completed') return 100;
   if (task.status !== 'running' || !meta?.phase) return 0;
 
-  const keywordTotal = meta.keywordTotal ?? 1;
-  const keywordIndex = Math.max(0, (meta.keywordIndex ?? 1) - 1);
+  const strategyTotal = meta.strategyTotal ?? meta.keywordTotal ?? 1;
+  const strategyIndex = Math.max(
+    0,
+    (meta.strategyIndex ?? meta.keywordIndex ?? 1) - 1
+  );
   const videoTotal = meta.videoTotal ?? 0;
   const videoIndex = meta.videoIndex ?? 0;
-  const keywordSlice = 75 / keywordTotal;
-  const keywordBase = keywordIndex * keywordSlice;
+  const strategySlice = 75 / strategyTotal;
+  const strategyBase = strategyIndex * strategySlice;
 
   switch (meta.phase) {
     case 'starting':
       return 3;
     case 'searching':
-      return Math.min(74, keywordBase + keywordSlice * 0.15);
+      return Math.min(74, strategyBase + strategySlice * 0.15);
     case 'crawling': {
       const videoPart =
-        videoTotal > 0 ? (videoIndex / videoTotal) * keywordSlice * 0.85 : 0;
-      return Math.min(74, keywordBase + keywordSlice * 0.15 + videoPart);
+        videoTotal > 0 ? (videoIndex / videoTotal) * strategySlice * 0.85 : 0;
+      return Math.min(74, strategyBase + strategySlice * 0.15 + videoPart);
     }
     case 'scoring': {
       const batchTotal = meta.scoringBatchTotal ?? 0;
@@ -154,11 +180,12 @@ export function getProspectingProgressPercent(task: ProspectingTask): number {
 export function formatProspectingProgress(task: ProspectingTask): string {
   const meta = task.metadata;
   if (task.status === 'running' && meta?.phase) {
-    const keywordPart =
-      meta.keywordTotal && meta.keywordIndex
-        ? `关键词 ${meta.keywordIndex}/${meta.keywordTotal}`
+    const strategyPart =
+      (meta.strategyTotal ?? meta.keywordTotal) &&
+      (meta.strategyIndex ?? meta.keywordIndex)
+        ? `策略 ${meta.strategyIndex ?? meta.keywordIndex}/${meta.strategyTotal ?? meta.keywordTotal}`
         : '';
-    const current = meta.currentKeyword ? `「${meta.currentKeyword}」` : '';
+    const current = meta.currentStrategy ? `「${meta.currentStrategy}」` : '';
     const videoPart =
       meta.videoTotal && meta.videoIndex !== undefined
         ? ` · 视频 ${meta.videoIndex}/${meta.videoTotal}`
@@ -170,19 +197,19 @@ export function formatProspectingProgress(task: ProspectingTask): string {
       case 'starting':
         return '准备中…';
       case 'searching':
-        return `搜索视频中 ${keywordPart} ${current}`.trim();
+        return `搜索视频中 ${strategyPart} ${current}`.trim();
       case 'crawling': {
         const title = meta.currentVideoTitle
           ? `：${meta.currentVideoTitle.slice(0, 24)}`
           : '';
-        return `爬取评论中 ${keywordPart}${videoPart}${title}`.trim();
+        return `爬取评论中 ${strategyPart}${videoPart}${title}`.trim();
       }
       case 'scoring': {
         const batchPart =
           meta.scoringBatchTotal && meta.scoringBatchIndex
             ? ` · 批次 ${meta.scoringBatchIndex}/${meta.scoringBatchTotal}`
             : '';
-        return `分析潜客 ${keywordPart}${batchPart}`.trim();
+        return `分析潜客 ${strategyPart}${batchPart}`.trim();
       }
       case 'saving':
         return '保存结果…';
@@ -201,12 +228,15 @@ export function formatProspectingProgress(task: ProspectingTask): string {
 }
 
 export type CreateProspectingTaskInput = {
-  platform: ProspectingPlatform;
-  keywords: string[];
-  topNVideos?: number;
-  maxCommentsPerVideo?: number;
-  commentScrollRounds?: number;
+  planId: string;
+  enabledStrategyIds: string[];
   minRelevanceScore?: number;
+};
+
+export type ProspectingPlanAnalysis = {
+  planId: string;
+  plan: ProspectingPlan;
+  guard: { videosRemaining: number; estimatedMinutes: number };
 };
 
 export type ProspectingGuard = {
@@ -251,10 +281,34 @@ export function estimateProspectingMinutes(
   return Math.max(1, Math.ceil((videoCount * perVideoSec) / 60));
 }
 
-export function getProspectingGuard(platform = 'douyin') {
+export function getProspectingGuard(
+  platform = 'douyin',
+  platformAccountId?: string
+) {
+  const accountQuery = platformAccountId
+    ? `&platformAccountId=${encodeURIComponent(platformAccountId)}`
+    : '';
   return apiGet<ProspectingGuard>(
-    `/api/prospecting/guard?platform=${encodeURIComponent(platform)}`
+    `/api/prospecting/guard?platform=${encodeURIComponent(platform)}${accountQuery}`
   );
+}
+
+export function listProspectingAccounts(platform = 'douyin') {
+  return apiGet<ProspectingGuard[]>(
+    `/api/prospecting/accounts?platform=${encodeURIComponent(platform)}`
+  );
+}
+
+export function analyzeProspectingRequirement(
+  requirement: string,
+  platform: ProspectingPlatform,
+  platformAccountId: string
+) {
+  return apiPost<ProspectingPlanAnalysis>('/api/prospecting/plan', {
+    requirement,
+    platform,
+    platformAccountId
+  });
 }
 
 export function listProspectingTasks(page = 1, pageSize = 20) {
@@ -316,9 +370,9 @@ export function enrichProspectProfile(candidateId: string) {
   );
 }
 
-export function startProspectingCaptcha() {
+export function startProspectingCaptcha(platformAccountId: string) {
   return apiPost<{ sessionId: string; status: string }>(
-    '/api/prospecting/captcha/start',
+    `/api/prospecting/captcha/start?platformAccountId=${encodeURIComponent(platformAccountId)}`,
     {}
   );
 }
@@ -334,8 +388,11 @@ export function cancelProspectingCaptcha() {
   return apiPost<{ ok: boolean }>('/api/prospecting/captcha/cancel', {});
 }
 
-export function resolveProspectingCaptcha() {
-  return apiPost<{ ok: boolean }>('/api/prospecting/captcha/resolved', {});
+export function resolveProspectingCaptcha(platformAccountId: string) {
+  return apiPost<{ ok: boolean }>(
+    `/api/prospecting/captcha/resolved?platformAccountId=${encodeURIComponent(platformAccountId)}`,
+    {}
+  );
 }
 
 /** Matches the API's "platform account not logged in" family of errors. */

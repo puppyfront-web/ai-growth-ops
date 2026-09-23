@@ -11,7 +11,14 @@
           "leadLevel": { "type": "string", "enum": ["A", "B", "C", "D"] },
           "intent": { "type": "string" },
           "summary": { "type": "string" },
-          "matchedKeywords": { "type": "array", "items": { "type": "string" } }
+          "matchedKeywords": { "type": "array", "items": { "type": "string" } },
+          "audienceFit": { "type": "number", "minimum": 0, "maximum": 30 },
+          "needStrength": { "type": "number", "minimum": 0, "maximum": 30 },
+          "buyingIntent": { "type": "number", "minimum": 0, "maximum": 30 },
+          "evidenceQuality": { "type": "number", "minimum": 0, "maximum": 10 },
+          "buyingStage": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 100 },
+          "riskFlags": { "type": "array", "items": { "type": "string" } }
         },
         "required": ["userKey", "relevanceScore", "leadLevel"]
       }

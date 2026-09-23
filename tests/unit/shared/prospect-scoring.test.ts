@@ -108,11 +108,19 @@ describe('mergeSemanticScore', () => {
       leadLevel: 'A',
       intent: '采购意向',
       summary: '明确询问企业版采购',
-      matchedKeywords: ['企业版']
+      matchedKeywords: ['企业版'],
+      audienceFit: 24,
+      needStrength: 20,
+      buyingIntent: 28,
+      evidenceQuality: 8,
+      buyingStage: 'purchasing',
+      confidence: 90
     });
 
     expect(merged.relevanceScore).toBe(88);
     expect(merged.intent).toBe('采购意向');
+    expect(merged.buyingIntent).toBe(28);
+    expect(merged.buyingStage).toBe('purchasing');
     expect(merged.scoreSource).toBe('skill');
   });
 

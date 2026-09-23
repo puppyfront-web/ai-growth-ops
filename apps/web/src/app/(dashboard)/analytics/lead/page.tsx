@@ -67,7 +67,7 @@ export default function LeadAnalyticsPage() {
       <Breadcrumb />
       <PageHeader
         title="获客分析"
-        description="看关键词获客的产出、潜客质量和转入客户转化"
+        description="查看智能获客策略的产出、潜客质量和转入客户转化"
         actions={
           <div className="flex rounded-md border overflow-hidden">
             {RANGE_DAYS.map((value) => (
@@ -89,15 +89,31 @@ export default function LeadAnalyticsPage() {
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6 mb-6">
-        <Kpi label="获客任务" value={data.kpis.tasks} hint={`${data.kpis.completedTasks} 已完成`} />
-        <Kpi label="潜客" value={data.kpis.candidates} hint={`均分 ${data.kpis.avgScore}`} />
-        <Kpi label="高意向" value={data.kpis.highIntent} hint="A 级，或 B 且分≥70" />
+        <Kpi
+          label="获客任务"
+          value={data.kpis.tasks}
+          hint={`${data.kpis.completedTasks} 已完成`}
+        />
+        <Kpi
+          label="潜客"
+          value={data.kpis.candidates}
+          hint={`均分 ${data.kpis.avgScore}`}
+        />
+        <Kpi
+          label="高意向"
+          value={data.kpis.highIntent}
+          hint="A 级，或 B 且分≥70"
+        />
         <Kpi
           label="转入客户"
           value={data.kpis.convertedCustomers}
           hint={`转化率 ${data.kpis.conversionRate}%`}
         />
-        <Kpi label="成交" value={data.kpis.wonCustomers} hint="获客转入后成交" />
+        <Kpi
+          label="成交"
+          value={data.kpis.wonCustomers}
+          hint="获客转入后成交"
+        />
         <Kpi
           label="采集规模"
           value={data.kpis.videos}
@@ -108,8 +124,11 @@ export default function LeadAnalyticsPage() {
       {!hasActivity ? (
         <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
           这 {days} 天还没有获客任务或潜客。
-          <Link href="/prospecting" className="ml-1 text-primary hover:underline">
-            去创建关键词获客任务
+          <Link
+            href="/prospecting"
+            className="ml-1 text-primary hover:underline"
+          >
+            去创建智能获客任务
           </Link>
         </div>
       ) : (
@@ -164,8 +183,18 @@ export default function LeadAnalyticsPage() {
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="candidates" name="潜客" fill="#0f766e" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="converted" name="转入客户" fill="#7c3aed" radius={[3, 3, 0, 0]} />
+                  <Bar
+                    dataKey="candidates"
+                    name="潜客"
+                    fill="#0f766e"
+                    radius={[3, 3, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="converted"
+                    name="转入客户"
+                    fill="#7c3aed"
+                    radius={[3, 3, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </section>
@@ -177,7 +206,11 @@ export default function LeadAnalyticsPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={data.byLevel} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    tick={{ fontSize: 11 }}
+                  />
                   <YAxis
                     type="category"
                     dataKey="label"
@@ -185,8 +218,18 @@ export default function LeadAnalyticsPage() {
                     width={40}
                   />
                   <Tooltip />
-                  <Bar dataKey="count" name="潜客" fill="#0f766e" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="converted" name="已转入" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                  <Bar
+                    dataKey="count"
+                    name="潜客"
+                    fill="#0f766e"
+                    radius={[0, 4, 4, 0]}
+                  />
+                  <Bar
+                    dataKey="converted"
+                    name="已转入"
+                    fill="#7c3aed"
+                    radius={[0, 4, 4, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </section>
@@ -199,8 +242,18 @@ export default function LeadAnalyticsPage() {
                   <XAxis dataKey="key" tick={{ fontSize: 12 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="count" name="潜客" fill="#0891b2" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="converted" name="已转入" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="count"
+                    name="潜客"
+                    fill="#0891b2"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="converted"
+                    name="已转入"
+                    fill="#7c3aed"
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </section>
@@ -208,17 +261,17 @@ export default function LeadAnalyticsPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
             <section className="rounded-xl border bg-card p-5">
-              <h3 className="font-semibold mb-1">关键词产出</h3>
+              <h3 className="font-semibold mb-1">策略产出</h3>
               <p className="text-xs text-muted-foreground mb-4">
                 按转入客户数排序
               </p>
               {data.byKeyword.length === 0 ? (
-                <p className="text-sm text-muted-foreground">暂无关键词数据</p>
+                <p className="text-sm text-muted-foreground">暂无策略数据</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-2 font-medium">关键词</th>
+                      <th className="py-2 font-medium">策略</th>
                       <th className="py-2 px-2 font-medium text-right">潜客</th>
                       <th className="py-2 px-2 font-medium text-right">均分</th>
                       <th className="py-2 px-2 font-medium text-right">转入</th>
@@ -229,10 +282,18 @@ export default function LeadAnalyticsPage() {
                     {data.byKeyword.map((row) => (
                       <tr key={row.keyword} className="border-b last:border-0">
                         <td className="py-2">{row.keyword}</td>
-                        <td className="py-2 px-2 text-right tabular-nums">{row.candidates}</td>
-                        <td className="py-2 px-2 text-right tabular-nums">{row.avgScore}</td>
-                        <td className="py-2 px-2 text-right tabular-nums">{row.converted}</td>
-                        <td className="py-2 text-right tabular-nums">{row.conversionRate}%</td>
+                        <td className="py-2 px-2 text-right tabular-nums">
+                          {row.candidates}
+                        </td>
+                        <td className="py-2 px-2 text-right tabular-nums">
+                          {row.avgScore}
+                        </td>
+                        <td className="py-2 px-2 text-right tabular-nums">
+                          {row.converted}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {row.conversionRate}%
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -255,7 +316,9 @@ export default function LeadAnalyticsPage() {
                     <div className="text-xs text-muted-foreground">
                       {CUSTOMER_STATUS_LABELS[row.status] ?? row.status}
                     </div>
-                    <div className="text-xl font-semibold tabular-nums">{row.count}</div>
+                    <div className="text-xl font-semibold tabular-nums">
+                      {row.count}
+                    </div>
                   </Link>
                 ))}
               </div>
@@ -287,7 +350,7 @@ export default function LeadAnalyticsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-2 font-medium">关键词</th>
+                    <th className="py-2 font-medium">获客需求</th>
                     <th className="py-2 px-2 font-medium">平台</th>
                     <th className="py-2 px-2 font-medium">状态</th>
                     <th className="py-2 px-2 font-medium text-right">潜客</th>
@@ -303,7 +366,7 @@ export default function LeadAnalyticsPage() {
                           href={`/prospecting/${task.id}`}
                           className="text-primary hover:underline"
                         >
-                          {task.keywords.join('、') || '未命名任务'}
+                          {task.keywords[0] || '历史获客任务'}
                         </Link>
                       </td>
                       <td className="py-2 px-2 text-muted-foreground">
@@ -312,8 +375,12 @@ export default function LeadAnalyticsPage() {
                       <td className="py-2 px-2">
                         {TASK_STATUS_LABELS[task.status] ?? task.status}
                       </td>
-                      <td className="py-2 px-2 text-right tabular-nums">{task.candidates}</td>
-                      <td className="py-2 px-2 text-right tabular-nums">{task.converted}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {task.candidates}
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {task.converted}
+                      </td>
                       <td className="py-2 text-right text-muted-foreground">
                         {formatDate(task.createdAt)}
                       </td>

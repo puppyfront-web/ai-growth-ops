@@ -32,7 +32,7 @@ export async function login(page: Page): Promise<void> {
   await page.waitForURL('**/prospecting', { waitUntil: 'domcontentloaded' });
 }
 
-export async function seedProspectingAccount(): Promise<void> {
+export async function seedProspectingAccount(): Promise<string> {
   requireE2eDatabaseUrl();
   const db = createDatabaseClient();
   try {
@@ -42,7 +42,7 @@ export async function seedProspectingAccount(): Promise<void> {
     const membership = await db.organizationMember.findFirstOrThrow({
       where: { userId: admin.id, status: 'active' }
     });
-    await db.platformAccount.create({
+    const account = await db.platformAccount.create({
       data: {
         organizationId: membership.organizationId,
         userId: admin.id,
@@ -53,6 +53,86 @@ export async function seedProspectingAccount(): Promise<void> {
         cookieRef: 'e2e-cookie-reference'
       }
     });
+    return account.id;
+  } finally {
+    await db.$disconnect();
+  }
+}
+
+export async function seedProspectingPlan(platformAccountId?: string) {
+  requireE2eDatabaseUrl();
+  const db = createDatabaseClient();
+  try {
+    const admin = await db.user.findFirstOrThrow({
+      where: { email: 'admin@ai-growth-ops.local' }
+    });
+    const membership = await db.organizationMember.findFirstOrThrow({
+      where: { userId: admin.id, status: 'active' }
+    });
+    const requirement =
+      '寻找正在采购企业获客工具的中小企业负责人，排除同行服务商和求职者';
+    const plan = {
+      version: 1,
+      requirement,
+      intent: {
+        version: 1,
+        summary: '寻找有企业获客工具采购意向的中小企业负责人',
+        offering: '企业获客工具',
+        targetAudience: {
+          roles: ['负责人'],
+          industries: [],
+          organizationTypes: ['中小企业'],
+          regions: []
+        },
+        painPoints: ['获客效率低'],
+        useCases: ['企业获客'],
+        buyingSignals: ['采购', '选型'],
+        exclusions: ['同行服务商', '求职者'],
+        ambiguities: []
+      },
+      strategies: [
+        {
+          id: 'pain',
+          type: 'pain_help',
+          title: '痛点求助',
+          rationale: '发现主动求助者',
+          enabled: true,
+          priority: 1,
+          queries: ['企业获客困难'],
+          negativeSignals: ['同行推广'],
+          budget: { maxQueries: 1, maxVideos: 2 }
+        },
+        {
+          id: 'purchase',
+          type: 'purchase_evaluation',
+          title: '采购选型',
+          rationale: '发现正在选型的客户',
+          enabled: true,
+          priority: 1,
+          queries: ['获客工具怎么选'],
+          negativeSignals: [],
+          budget: { maxQueries: 1, maxVideos: 2 }
+        }
+      ],
+      limits: {
+        maxTotalQueries: 8,
+        maxTotalVideos: 4,
+        maxCommentsPerVideo: 30
+      }
+    } as const;
+    const draft = await db.prospectingPlanDraft.create({
+      data: {
+        organizationId: membership.organizationId,
+        userId: admin.id,
+        platform: 'douyin',
+        platformAccountId,
+        requirement,
+        intent: plan.intent,
+        strategyPlan: plan,
+        expiresAt: new Date(Date.now() + 60_000)
+      }
+    });
+    return { planId: draft.id, plan };
   } finally {
     await db.$disconnect();
   }

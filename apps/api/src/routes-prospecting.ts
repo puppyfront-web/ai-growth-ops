@@ -1,12 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { decryptToken } from '@ai-growth-ops/providers';
 import {
-  decryptToken
-} from '@ai-growth-ops/providers';
-import {
+  compileProspectingPlan,
   clearCaptchaBlock,
   findProspectingAccount,
+  listProspectingAccounts,
   loadProspectGuard,
+  resolveLlmClientFromDb,
   type DatabaseClient
 } from '@ai-growth-ops/database';
 import {
@@ -14,6 +15,7 @@ import {
   isProspectingTaskRunnable,
   planCrawlQuota,
   PROSPECT_GUARD,
+  prospectingPlanSchema,
   remainingMs,
   scoreAccountHealth
 } from '@ai-growth-ops/shared';
@@ -33,6 +35,7 @@ import { validateBody } from './middleware/validate.js';
 import { hasPermission } from './middleware/rbac.js';
 import {
   runProspectingTaskSchema,
+  analyzeProspectingPlanSchema,
   convertProspectSchema,
   createProspectingTaskSchema
 } from './schemas/prospecting.js';
@@ -62,9 +65,13 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
 async function buildGuardPayload(
   db: DatabaseClient,
   organizationId: string,
-  platform: string
+  platform: string,
+  platformAccountId?: string
 ) {
-  const account = await findProspectingAccount(db, organizationId, platform);
+  // 未指定账号时不再自动回退到最老账号：返回 needsLogin 引导先选账号
+  const account = platformAccountId
+    ? await findProspectingAccount(db, organizationId, platform, platformAccountId)
+    : null;
   const state = account
     ? await loadProspectGuard(db, organizationId, account.id)
     : emptyProspectGuardState();
@@ -107,6 +114,117 @@ export const prospectingRoutes: Array<{
   ) => Promise<void>;
 }> = [
   {
+    method: 'POST',
+    pattern: '/api/prospecting/plan',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'research:create')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const bodyResult = validateBody(analyzeProspectingPlanSchema, ctx.body);
+      if (!bodyResult.success) {
+        return sendJson(res, 400, {
+          error: '请输入完整的获客需求',
+          errors: bodyResult.errors
+        });
+      }
+
+      const llmClient = await resolveLlmClientFromDb(
+        ctx.db,
+        orgCtx.organization.id
+      ).catch(() => undefined);
+      if (!llmClient) {
+        return sendJson(res, 409, {
+          error: '请先在「集成 → LLM」配置 AI 服务后再分析需求'
+        });
+      }
+      const platform = bodyResult.data.platform ?? 'douyin';
+      const account = await findProspectingAccount(
+        ctx.db,
+        orgCtx.organization.id,
+        platform,
+        bodyResult.data.platformAccountId
+      );
+      if (!account) {
+        return sendJson(res, 409, {
+          error: '所选抖音账号不可用，请重新选择或扫码登录'
+        });
+      }
+      const guard = await buildGuardPayload(
+        ctx.db,
+        orgCtx.organization.id,
+        platform,
+        account.id
+      );
+      try {
+        const plan = await compileProspectingPlan({
+          requirement: bodyResult.data.requirement,
+          availableVideos: guard.videosRemaining,
+          llmClient
+        });
+        const draft = await ctx.db.prospectingPlanDraft.create({
+          data: {
+            organizationId: orgCtx.organization.id,
+            userId: orgCtx.user.id,
+            platform,
+            platformAccountId: account.id,
+            requirement: plan.requirement,
+            intent: plan.intent as never,
+            strategyPlan: plan as never,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+          }
+        });
+        sendJson(res, 200, {
+          planId: draft.id,
+          plan,
+          guard: {
+            videosRemaining: guard.videosRemaining,
+            estimatedMinutes: planCrawlQuota(
+              plan.limits.maxTotalVideos,
+              guard.videosRemaining
+            ).estimatedMinutes
+          }
+        });
+      } catch (error) {
+        sendJson(res, 422, {
+          error: error instanceof Error ? error.message : '需求分析失败，请重试'
+        });
+      }
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/prospecting/accounts',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'research:view')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const platform = ctx.url.searchParams.get('platform') || 'douyin';
+      const accounts = await listProspectingAccounts(
+        ctx.db,
+        orgCtx.organization.id,
+        platform
+      );
+      sendJson(
+        res,
+        200,
+        await Promise.all(
+          accounts.map((account) =>
+            buildGuardPayload(
+              ctx.db,
+              orgCtx.organization.id,
+              platform,
+              account.id
+            )
+          )
+        )
+      );
+    }
+  },
+  {
     method: 'GET',
     pattern: '/api/prospecting/guard',
     handler: async (req, res, ctx) => {
@@ -116,10 +234,12 @@ export const prospectingRoutes: Array<{
         return sendJson(res, 403, { error: '权限不足' });
       }
       const platform = ctx.url.searchParams.get('platform') || 'douyin';
+      const platformAccountId = ctx.url.searchParams.get('platformAccountId');
       const payload = await buildGuardPayload(
         ctx.db,
         orgCtx.organization.id,
-        platform
+        platform,
+        platformAccountId || undefined
       );
       sendJson(res, 200, payload);
     }
@@ -134,14 +254,19 @@ export const prospectingRoutes: Array<{
         return sendJson(res, 403, { error: '权限不足' });
       }
       const platform = ctx.url.searchParams.get('platform') || 'douyin';
+      const platformAccountId = ctx.url.searchParams.get('platformAccountId');
+      if (!platformAccountId) {
+        return sendJson(res, 400, { error: '请先选择执行账号' });
+      }
       const account = await findProspectingAccount(
         ctx.db,
         orgCtx.organization.id,
-        platform
+        platform,
+        platformAccountId
       );
       if (!account) {
         return sendJson(res, 400, {
-          error: '未找到已登录账号，请先在集成配置中扫码登录'
+          error: '所选账号不可用，请重新选择或扫码登录'
         });
       }
       const existing = getCaptchaSolveSession(orgCtx.organization.id);
@@ -200,7 +325,10 @@ export const prospectingRoutes: Array<{
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const session = getCaptchaSolveSession(orgCtx.organization.id);
       if (!session) {
-        return sendJson(res, 200, { status: 'expired', error: '没有进行中的过码会话' });
+        return sendJson(res, 200, {
+          status: 'expired',
+          error: '没有进行中的过码会话'
+        });
       }
       try {
         const statusRes = await fetchWithTimeout(
@@ -266,13 +394,18 @@ export const prospectingRoutes: Array<{
         return sendJson(res, 403, { error: '权限不足' });
       }
       const platform = ctx.url.searchParams.get('platform') || 'douyin';
+      const platformAccountId = ctx.url.searchParams.get('platformAccountId');
+      if (!platformAccountId) {
+        return sendJson(res, 400, { error: '请先选择执行账号' });
+      }
       const account = await findProspectingAccount(
         ctx.db,
         orgCtx.organization.id,
-        platform
+        platform,
+        platformAccountId
       );
       if (!account) {
-        return sendJson(res, 400, { error: '未找到已登录账号' });
+        return sendJson(res, 400, { error: '所选账号不可用，请重新选择或扫码登录' });
       }
       const session = getCaptchaSolveSession(orgCtx.organization.id);
       if (session) {
@@ -340,38 +473,66 @@ export const prospectingRoutes: Array<{
         });
       }
 
-      // Space/comma-separated entries arrive as one string from some clients;
-      // an unsplit keyword never matches comment text, silently gutting the
-      // scoring. Split every entry on whitespace and separators.
-      const keywords = [
-        ...new Set(
-          bodyResult.data.keywords
-            .flatMap((keyword) => keyword.split(/[\s,，、;；]+/))
-            .map((keyword) => keyword.trim())
-            .filter(Boolean)
-        )
-      ];
-      if (keywords.length === 0) {
-        return sendJson(res, 400, { error: '至少一个关键词' });
+      const enabledStrategyIds = new Set(bodyResult.data.enabledStrategyIds);
+      if (
+        enabledStrategyIds.size !== bodyResult.data.enabledStrategyIds.length
+      ) {
+        return sendJson(res, 400, { error: '策略选择不能重复' });
       }
-      if (keywords.length > 8) {
-        return sendJson(res, 400, {
-          error: '单次最多 8 个关键词，大批量请分天增量执行'
-        });
-      }
-
-      const task = await ctx.db.prospectingTask.create({
-        data: {
+      const draft = await ctx.db.prospectingPlanDraft.findFirst({
+        where: {
+          id: bodyResult.data.planId,
           organizationId: orgCtx.organization.id,
           userId: orgCtx.user.id,
-          platform: bodyResult.data.platform ?? 'douyin',
-          keywords: keywords as never,
-          topNVideos: bodyResult.data.topNVideos,
-          maxCommentsPerVideo: bodyResult.data.maxCommentsPerVideo,
-          commentScrollRounds: bodyResult.data.commentScrollRounds,
-          minRelevanceScore: bodyResult.data.minRelevanceScore,
-          status: 'draft'
+          consumedAt: null,
+          expiresAt: { gt: new Date() }
         }
+      });
+      if (!draft) {
+        return sendJson(res, 404, { error: '需求分析已失效，请重新分析' });
+      }
+      const parsedPlan = prospectingPlanSchema.safeParse(draft.strategyPlan);
+      if (!parsedPlan.success) {
+        return sendJson(res, 409, { error: '需求分析计划已损坏，请重新分析' });
+      }
+      const availableIds = new Set(
+        parsedPlan.data.strategies.map((strategy) => strategy.id)
+      );
+      if ([...enabledStrategyIds].some((id) => !availableIds.has(id))) {
+        return sendJson(res, 400, { error: '包含无效的获客策略' });
+      }
+      const plan = prospectingPlanSchema.parse({
+        ...parsedPlan.data,
+        strategies: parsedPlan.data.strategies.map((strategy) => ({
+          ...strategy,
+          enabled: enabledStrategyIds.has(strategy.id)
+        }))
+      });
+
+      const task = await ctx.db.$transaction(async (tx) => {
+        const consumed = await tx.prospectingPlanDraft.updateMany({
+          where: { id: draft.id, consumedAt: null },
+          data: { consumedAt: new Date() }
+        });
+        if (consumed.count !== 1) throw new Error('需求分析已被使用');
+        return tx.prospectingTask.create({
+          data: {
+            organizationId: orgCtx.organization.id,
+            userId: orgCtx.user.id,
+            platform: draft.platform,
+            platformAccountId: draft.platformAccountId,
+            keywords: [],
+            requirement: plan.requirement,
+            intent: plan.intent as never,
+            strategyPlan: plan as never,
+            planVersion: plan.version,
+            topNVideos: 1,
+            maxCommentsPerVideo: plan.limits.maxCommentsPerVideo,
+            commentScrollRounds: 8,
+            minRelevanceScore: bodyResult.data.minRelevanceScore,
+            status: 'draft'
+          }
+        });
       });
 
       sendJson(res, 201, task);
@@ -434,9 +595,8 @@ export const prospectingRoutes: Array<{
         orderBy: { relevanceScore: 'desc' }
       });
 
-      const { exportToCSV, PROSPECT_EXPORT_COLUMNS } = await import(
-        './services/export-service.js'
-      );
+      const { exportToCSV, PROSPECT_EXPORT_COLUMNS } =
+        await import('./services/export-service.js');
       const csv = exportToCSV(
         candidates as unknown as Record<string, unknown>[],
         PROSPECT_EXPORT_COLUMNS
@@ -476,7 +636,7 @@ export const prospectingRoutes: Array<{
           id: ctx.params.id,
           organizationId: orgCtx.organization.id
         },
-        select: { id: true, status: true, platform: true }
+        select: { id: true, status: true, platform: true, platformAccountId: true }
       });
       if (!task) return sendJson(res, 404, { error: '任务不存在' });
       if (!isProspectingTaskRunnable(task.status)) {
@@ -485,14 +645,18 @@ export const prospectingRoutes: Array<{
         });
       }
 
+      // 额度/验证码检查必须针对任务绑定的账号，不能用其他账号的配额放行
       const guard = await buildGuardPayload(
         ctx.db,
         orgCtx.organization.id,
-        task.platform
+        task.platform,
+        task.platformAccountId ?? undefined
       );
       if (guard.needsLogin) {
         return sendJson(res, 400, {
-          error: `未找到 ${task.platform} 平台的已登录账号，请先在集成配置中扫码登录`
+          error: task.platformAccountId
+            ? '任务绑定的账号不可用（可能已下线或 Cookie 过期），请重新绑定后再执行'
+            : `任务未绑定执行账号，请重新创建获客任务`
         });
       }
       if (guard.captchaWaitMs > 0) {

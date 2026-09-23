@@ -23,7 +23,11 @@ import {
   passesProspectThreshold,
   PROSPECT_GUARD,
   remainingMs,
-  scoreProspectUser
+  scoreProspectUser,
+  mergeProspectAttributions,
+  prospectingPlanSchema,
+  type ProspectAttribution,
+  type ProspectingIntent
 } from '@ai-growth-ops/shared';
 import { loadIcpConfig } from './customer-profile.js';
 import { resolveLlmClientFromDb } from './llm-config.js';
@@ -45,16 +49,10 @@ const SEMANTIC_BATCH_SIZE = 8;
 const SEMANTIC_SCORING_TIMEOUT_MS = 90_000;
 
 type TaskProgress = {
-  phase:
-    | 'starting'
-    | 'searching'
-    | 'crawling'
-    | 'scoring'
-    | 'saving'
-    | 'done';
-  currentKeyword?: string;
-  keywordIndex?: number;
-  keywordTotal?: number;
+  phase: 'starting' | 'searching' | 'crawling' | 'scoring' | 'saving' | 'done';
+  currentStrategy?: string;
+  strategyIndex?: number;
+  strategyTotal?: number;
   videoIndex?: number;
   videoTotal?: number;
   currentVideoTitle?: string;
@@ -63,6 +61,10 @@ type TaskProgress = {
   updatedAt: string;
   warning?: string;
 };
+
+function evidenceKey(item: { content: string; sourceVideoUrl: string | null }) {
+  return `${item.sourceVideoUrl ?? ''}:${item.content.slice(0, 120)}`;
+}
 
 async function runWithTimeout<T>(
   promise: Promise<T>,
@@ -155,11 +157,11 @@ async function fetchWithTimeout(
   }
 }
 
-async function crawlKeywordComments(
+async function crawlSearchQueryComments(
   params: {
     platform: string;
     cookie: string;
-    keyword: string;
+    query: string;
     topNVideos: number;
     maxCommentsPerVideo: number;
     commentScrollRounds: number;
@@ -178,7 +180,6 @@ async function crawlKeywordComments(
   await onProgress?.({
     progress: {
       phase: 'searching',
-      currentKeyword: params.keyword,
       updatedAt: new Date().toISOString()
     }
   });
@@ -196,7 +197,7 @@ async function crawlKeywordComments(
   }>('/assist/search-videos', {
     platform: params.platform,
     cookie: params.cookie,
-    keyword: params.keyword,
+    keyword: params.query,
     topN: params.topNVideos,
     headed: false
   });
@@ -216,7 +217,6 @@ async function crawlKeywordComments(
   await onProgress?.({
     progress: {
       phase: 'crawling',
-      currentKeyword: params.keyword,
       videoTotal: items.length,
       videoIndex: 0,
       updatedAt: new Date().toISOString()
@@ -233,7 +233,6 @@ async function crawlKeywordComments(
     await onProgress?.({
       progress: {
         phase: 'crawling',
-        currentKeyword: params.keyword,
         videoIndex: i + 1,
         videoTotal: items.length,
         currentVideoTitle: item.title || `视频 ${i + 1}`,
@@ -288,7 +287,6 @@ async function crawlKeywordComments(
     await onProgress?.({
       progress: {
         phase: 'crawling',
-        currentKeyword: params.keyword,
         videoIndex: i + 1,
         videoTotal: items.length,
         currentVideoTitle: item.title || `视频 ${i + 1}`,
@@ -321,6 +319,13 @@ type SemanticScore = {
   intent?: unknown;
   summary?: unknown;
   matchedKeywords?: unknown;
+  audienceFit?: unknown;
+  needStrength?: unknown;
+  buyingIntent?: unknown;
+  evidenceQuality?: unknown;
+  buyingStage?: unknown;
+  confidence?: unknown;
+  riskFlags?: unknown;
 };
 
 /**
@@ -333,7 +338,9 @@ async function scoreProspectsSemantically(
   db: DatabaseClient,
   organizationId: string,
   prospects: AggregatedProspect[],
-  keywords: string[],
+  requirement: string,
+  intent: ProspectingIntent,
+  searchQueries: string[],
   highIntentKeywords: string[],
   onBatchProgress?: (batchIndex: number, batchTotal: number) => Promise<void>
 ): Promise<{
@@ -341,7 +348,8 @@ async function scoreProspectsSemantically(
   llmUnavailable: boolean;
 }> {
   const byUserKey = new Map<string, SemanticScore>();
-  if (prospects.length === 0) return { scores: byUserKey, llmUnavailable: false };
+  if (prospects.length === 0)
+    return { scores: byUserKey, llmUnavailable: false };
 
   let runner: {
     run: <I, O>(req: {
@@ -376,7 +384,9 @@ async function scoreProspectsSemantically(
         runner.run<unknown, { results?: SemanticScore[] }>({
           skillName: 'prospect-relevance-score',
           input: {
-            keywords,
+            requirement,
+            intent,
+            searchQueries,
             highIntentKeywords,
             users: batch.map((prospect) => ({
               userKey: prospect.userKey,
@@ -411,7 +421,10 @@ async function scoreProspectsSemantically(
         '[prospecting] 语义打分调用失败，本批次沿用规则评分:',
         err instanceof Error ? err.message : String(err)
       );
-      if (err instanceof Error && err.message.includes(LLM_NOT_CONFIGURED_MESSAGE)) {
+      if (
+        err instanceof Error &&
+        err.message.includes(LLM_NOT_CONFIGURED_MESSAGE)
+      ) {
         llmUnavailable = true;
       }
     }
@@ -462,19 +475,51 @@ export async function executeProspectingTask(
       }
     }
 
-    const keywords = Array.isArray(task.keywords)
-      ? task.keywords.map(String).filter(Boolean)
-      : [];
-    if (keywords.length === 0) throw new Error('请至少设置一个关键词');
+    const parsedPlan = prospectingPlanSchema.safeParse(task.strategyPlan);
+    if (!parsedPlan.success || !task.requirement) {
+      throw new Error('获客策略计划无效，请重新创建任务');
+    }
+    const plan = parsedPlan.data;
+    const enabledStrategies = plan.strategies.filter(
+      (strategy) => strategy.enabled
+    );
+    const executionUnits = enabledStrategies.flatMap((strategy) => {
+      const queries = strategy.queries.slice(0, strategy.budget.maxQueries);
+      return queries
+        .map((query, index) => ({
+          strategy,
+          query,
+          maxVideos:
+            Math.floor(strategy.budget.maxVideos / queries.length) +
+            (index < strategy.budget.maxVideos % queries.length ? 1 : 0)
+        }))
+        .filter((unit) => unit.maxVideos > 0);
+    });
+    if (executionUnits.length === 0) throw new Error('没有可执行的获客策略');
+    const searchQueries = executionUnits.map((unit) => unit.query);
 
+    if (!task.platformAccountId) {
+      throw new Error('获客任务未绑定执行账号，请重新创建任务');
+    }
     const account = await findProspectingAccount(
       db,
       organizationId,
-      task.platform
+      task.platform,
+      task.platformAccountId
     );
     if (!account) {
+      const bound = await db.platformAccount.findFirst({
+        where: {
+          id: task.platformAccountId,
+          organizationId,
+          platform: task.platform as never
+        },
+        select: { name: true, status: true }
+      });
       throw new Error(
-        `未找到 ${task.platform} 平台的已登录账号，请先在集成配置中扫码登录`
+        bound
+          ? `任务绑定的账号「${bound.name}」当前不可用（状态：${bound.status}），请重新绑定账号后再执行`
+          : `任务绑定的账号已不存在，请重新创建获客任务`
       );
     }
     accountId = account.id;
@@ -492,6 +537,13 @@ export async function executeProspectingTask(
       icp.excludedKeywords.length > 0
         ? icp.excludedKeywords
         : DEFAULT_ICP_FOR_PROSPECTING.excludedKeywords;
+    const excludedSignals = [
+      ...new Set([
+        ...icpExcludedKeywords,
+        ...plan.intent.exclusions,
+        ...enabledStrategies.flatMap((strategy) => strategy.negativeSignals)
+      ])
+    ];
 
     const existingCandidates = await db.prospectCandidate.findMany({
       where: { prospectingTaskId: task.id }
@@ -510,43 +562,38 @@ export async function executeProspectingTask(
     }
 
     const guard = await loadProspectGuard(db, organizationId, account.id);
-    const plannedVideos =
-      keywords.length *
-      Math.min(task.topNVideos, PROSPECT_GUARD.maxVideosPerTask);
+    const plannedVideos = executionUnits.reduce(
+      (total, unit) => total + unit.maxVideos,
+      0
+    );
     assertCrawlAllowed(guard, plannedVideos);
     const remainingVideos = Math.max(
       0,
       PROSPECT_GUARD.dailyVideoLimit - guard.videosCrawled
     );
-    const topNVideos = Math.min(
-      task.topNVideos,
-      PROSPECT_GUARD.maxVideosPerTask,
-      remainingVideos
-    );
-
     let quotaExhausted = false;
 
-    await updateTaskProgress(
-      db,
-      task.id,
-      organizationId,
-      executionToken,
-      {
-        phase: 'starting',
-        keywordTotal: keywords.length,
-        updatedAt: new Date().toISOString()
-      }
-    );
+    await updateTaskProgress(db, task.id, organizationId, executionToken, {
+      phase: 'starting',
+      strategyTotal: enabledStrategies.length,
+      updatedAt: new Date().toISOString()
+    });
 
     const prospectsByUser = new Map<
       string,
-      { prospect: AggregatedProspect; score: ProspectUserScoreResult }
+      {
+        prospect: AggregatedProspect;
+        score: ProspectUserScoreResult;
+        attributions: ProspectAttribution[];
+      }
     >();
 
     let semanticLlmUnavailable = false;
 
-    for (let keywordIndex = 0; keywordIndex < keywords.length; keywordIndex++) {
-      const keyword = keywords[keywordIndex]!;
+    for (const unit of executionUnits) {
+      const strategyIndex = enabledStrategies.findIndex(
+        (strategy) => strategy.id === unit.strategy.id
+      );
       await updateTaskProgress(
         db,
         task.id,
@@ -554,20 +601,20 @@ export async function executeProspectingTask(
         executionToken,
         {
           phase: 'crawling',
-          currentKeyword: keyword,
-          keywordIndex: keywordIndex + 1,
-          keywordTotal: keywords.length,
+          currentStrategy: unit.strategy.title,
+          strategyIndex: strategyIndex + 1,
+          strategyTotal: enabledStrategies.length,
           updatedAt: new Date().toISOString()
         },
         { totalVideos, totalComments, totalCandidates }
       );
 
-      const videos = await crawlKeywordComments(
+      const videos = await crawlSearchQueryComments(
         {
           platform: task.platform,
           cookie,
-          keyword,
-          topNVideos,
+          query: unit.query,
+          topNVideos: Math.min(unit.maxVideos, remainingVideos),
           maxCommentsPerVideo: Math.min(
             task.maxCommentsPerVideo,
             PROSPECT_GUARD.maxCommentsPerVideo
@@ -575,11 +622,7 @@ export async function executeProspectingTask(
           commentScrollRounds: task.commentScrollRounds,
           skipContentIds,
           claimVideoSlot: async () => {
-            const ok = await claimVideoCrawl(
-              db,
-              organizationId,
-              account.id
-            );
+            const ok = await claimVideoCrawl(db, organizationId, account.id);
             if (!ok) quotaExhausted = true;
             return ok;
           }
@@ -592,9 +635,9 @@ export async function executeProspectingTask(
             executionToken,
             {
               ...progress,
-              keywordIndex: keywordIndex + 1,
-              keywordTotal: keywords.length,
-              currentKeyword: keyword,
+              strategyIndex: strategyIndex + 1,
+              strategyTotal: enabledStrategies.length,
+              currentStrategy: unit.strategy.title,
               updatedAt: new Date().toISOString()
             } as TaskProgress,
             {
@@ -633,20 +676,22 @@ export async function executeProspectingTask(
         executionToken,
         {
           phase: 'scoring',
-          currentKeyword: keyword,
-          keywordIndex: keywordIndex + 1,
-          keywordTotal: keywords.length,
+          currentStrategy: unit.strategy.title,
+          strategyIndex: strategyIndex + 1,
+          strategyTotal: enabledStrategies.length,
           updatedAt: new Date().toISOString()
         },
         { totalVideos, totalComments, totalCandidates }
       );
 
-      const prospects = aggregateProspectComments(videos, keyword);
+      const prospects = aggregateProspectComments(videos, unit.query);
       const semantic = await scoreProspectsSemantically(
         db,
         organizationId,
         prospects,
-        keywords,
+        task.requirement,
+        plan.intent,
+        searchQueries,
         icp.highIntentKeywords,
         async (batchIndex, batchTotal) => {
           await updateTaskProgress(
@@ -656,9 +701,9 @@ export async function executeProspectingTask(
             executionToken,
             {
               phase: 'scoring',
-              currentKeyword: keyword,
-              keywordIndex: keywordIndex + 1,
-              keywordTotal: keywords.length,
+              currentStrategy: unit.strategy.title,
+              strategyIndex: strategyIndex + 1,
+              strategyTotal: enabledStrategies.length,
               scoringBatchIndex: batchIndex,
               scoringBatchTotal: batchTotal,
               updatedAt: new Date().toISOString()
@@ -673,11 +718,15 @@ export async function executeProspectingTask(
       for (const prospect of prospects) {
         const ruleScore = scoreProspectUser({
           contents: prospect.evidence.map((item) => item.content),
-          keywords,
+          keywords: [
+            ...plan.intent.buyingSignals,
+            ...plan.intent.painPoints,
+            ...plan.intent.targetAudience.roles
+          ],
           icpHighIntentKeywords: icp.highIntentKeywords,
           icpTargetRoles: icp.targetRoles,
           icpTargetIndustries: icp.targetIndustries,
-          icpExcludedKeywords,
+          icpExcludedKeywords: excludedSignals,
           videoTitle: prospect.sourceVideoTitle ?? undefined,
           profileText: prospect.userNickname ?? undefined
         });
@@ -688,12 +737,29 @@ export async function executeProspectingTask(
 
         if (!passesProspectThreshold(score, task.minRelevanceScore)) continue;
 
-        // The same user can surface under several keywords; keep their best hit.
+        const attribution: ProspectAttribution = {
+          strategyId: unit.strategy.id,
+          strategyType: unit.strategy.type,
+          query: unit.query,
+          evidenceIds: prospect.evidence.map(evidenceKey)
+        };
         const existing = prospectsByUser.get(prospect.userKey);
-        if (existing && existing.score.relevanceScore >= score.relevanceScore) {
+        if (existing) {
+          existing.prospect.evidence = mergeProspectEvidence(
+            existing.prospect.evidence,
+            prospect.evidence
+          );
+          existing.attributions.push(attribution);
+          if (existing.score.relevanceScore < score.relevanceScore) {
+            existing.score = score;
+          }
           continue;
         }
-        prospectsByUser.set(prospect.userKey, { prospect, score });
+        prospectsByUser.set(prospect.userKey, {
+          prospect,
+          score,
+          attributions: [attribution]
+        });
       }
     }
 
@@ -704,19 +770,20 @@ export async function executeProspectingTask(
       executionToken,
       {
         phase: 'saving',
-        keywordTotal: keywords.length,
+        strategyTotal: enabledStrategies.length,
         updatedAt: new Date().toISOString()
       },
       { totalVideos, totalComments, totalCandidates }
     );
 
-    for (const { prospect, score } of prospectsByUser.values()) {
+    for (const { prospect, score, attributions } of prospectsByUser.values()) {
       await upsertProspectCandidate(db, {
         taskId: task.id,
         organizationId,
         platform: task.platform,
         prospect,
         score,
+        attributions,
         existing: existingByUserKey.get(prospect.userKey)
       });
     }
@@ -736,7 +803,7 @@ export async function executeProspectingTask(
     }
     if (semanticLlmUnavailable) {
       warnings.push(
-        'LLM 未配置，本轮仅用关键词规则评分，同行/行业解说类评论可能误入。请在「集成 → LLM」配置 API Key 后重新执行'
+        '语义评估未完成，本轮结果仅供复核。请检查 LLM 配置后重新执行'
       );
     }
     if (totalCandidates === 0) {
@@ -759,7 +826,7 @@ export async function executeProspectingTask(
         totalCandidates,
         metadata: {
           phase: 'done',
-          keywordTotal: keywords.length,
+          strategyTotal: enabledStrategies.length,
           updatedAt: new Date().toISOString(),
           ...(zeroResultWarning ? { warning: zeroResultWarning } : {})
         } as never
@@ -839,6 +906,7 @@ async function upsertProspectCandidate(
     platform: string;
     prospect: AggregatedProspect;
     score: ProspectUserScoreResult;
+    attributions: ProspectAttribution[];
     existing?: {
       id: string;
       customerId: string | null;
@@ -850,17 +918,18 @@ async function upsertProspectCandidate(
       userHomepage: string | null;
       avatarUrl: string | null;
       metadata: unknown;
+      attributions: unknown;
     };
   }
 ) {
-  const { prospect, score, existing } = input;
+  const { prospect, score, existing, attributions } = input;
   if (!existing) {
     await db.prospectCandidate.create({
       data: {
         prospectingTaskId: input.taskId,
         organizationId: input.organizationId,
         platform: input.platform as never,
-        keyword: prospect.keyword,
+        keyword: '',
         userKey: prospect.userKey,
         externalUserId: prospect.externalUserId,
         userNickname: prospect.userNickname,
@@ -878,7 +947,11 @@ async function upsertProspectCandidate(
         scoreSource: score.scoreSource,
         intent: score.intent,
         summary: score.summary,
-        matchedKeywords: score.matchedKeywords as never
+        matchedKeywords: score.matchedKeywords as never,
+        attributions: attributions as never,
+        buyingStage: score.buyingStage,
+        confidence: score.confidence,
+        riskFlags: score.riskFlags as never
       }
     });
     return;
@@ -889,6 +962,10 @@ async function upsertProspectCandidate(
     prospect.evidence
   );
   const keepExistingScore = existing.relevanceScore >= score.relevanceScore;
+  const mergedAttributions = mergeProspectAttributions(
+    asAttributions(existing.attributions),
+    attributions
+  );
 
   await db.prospectCandidate.update({
     where: { id: existing.id },
@@ -910,9 +987,24 @@ async function upsertProspectCandidate(
       summary: keepExistingScore ? undefined : score.summary,
       matchedKeywords: keepExistingScore
         ? undefined
-        : (score.matchedKeywords as never)
+        : (score.matchedKeywords as never),
+      attributions: mergedAttributions as never,
+      buyingStage: keepExistingScore ? undefined : score.buyingStage,
+      confidence: keepExistingScore ? undefined : score.confidence,
+      riskFlags: keepExistingScore ? undefined : (score.riskFlags as never)
     }
   });
+}
+
+function asAttributions(value: unknown): ProspectAttribution[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is ProspectAttribution =>
+      item != null &&
+      typeof item === 'object' &&
+      typeof (item as ProspectAttribution).strategyId === 'string' &&
+      typeof (item as ProspectAttribution).query === 'string'
+  );
 }
 
 function candidateHomepage(candidate: {
@@ -938,18 +1030,36 @@ export type ProspectUserProfile = {
   fetchedAt: string;
 };
 
-async function loadPlatformAccount(
+/**
+ * 画像增强账号解析：优先复用产生该潜客的任务所绑定的账号；
+ * 没有任务绑定的潜客（如外部导入）退回该平台最老的活跃账号。
+ * 入队时把结果快照到 metadata.enrichAccountId，执行期不再重新选择。
+ */
+async function resolveEnrichAccountId(
   db: DatabaseClient,
   organizationId: string,
-  platform: string
-) {
-  const account = await findProspectingAccount(db, organizationId, platform);
-  if (!account) {
-    throw new Error(
-      `未找到 ${platform} 平台的已登录账号，请先在集成配置中扫码登录`
-    );
+  candidate: { platform: string; prospectingTaskId: string | null }
+): Promise<string | null> {
+  if (candidate.prospectingTaskId) {
+    const task = await db.prospectingTask.findFirst({
+      where: { id: candidate.prospectingTaskId, organizationId },
+      select: { platformAccountId: true }
+    });
+    if (task?.platformAccountId) return task.platformAccountId;
   }
-  return account;
+  const fallback = await db.platformAccount.findFirst({
+    where: {
+      organizationId,
+      platform: candidate.platform as never,
+      mode: 'browser_assist',
+      status: 'active',
+      deletedAt: null,
+      cookieRef: { not: '' }
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true }
+  });
+  return fallback?.id ?? null;
 }
 
 async function patchCandidateMetadata(
@@ -982,6 +1092,16 @@ export async function queueProspectProfileEnrich(
   if (!candidateHomepage(candidate)) {
     throw new Error('该用户没有可打开的主页链接');
   }
+  const enrichAccountId = await resolveEnrichAccountId(
+    db,
+    organizationId,
+    candidate
+  );
+  if (!enrichAccountId) {
+    throw new Error(
+      `未找到 ${candidate.platform} 平台的可用账号，请先在集成配置中扫码登录`
+    );
+  }
   await db.prospectCandidate.update({
     where: { id: candidate.id },
     data: {
@@ -989,7 +1109,8 @@ export async function queueProspectProfileEnrich(
         ...asRecord(candidate.metadata),
         enrichStatus: 'queued',
         enrichError: null,
-        enrichQueuedAt: new Date().toISOString()
+        enrichQueuedAt: new Date().toISOString(),
+        enrichAccountId
       } as never
     }
   });
@@ -1033,11 +1154,27 @@ export async function enrichProspectProfile(
   const homepage = candidateHomepage(candidate);
   if (!homepage) throw new Error('该用户没有可打开的主页链接');
 
-  const account = await loadPlatformAccount(
+  const queuedAccountId = asRecord(candidate.metadata).enrichAccountId;
+  const boundAccountId =
+    typeof queuedAccountId === 'string' && queuedAccountId
+      ? queuedAccountId
+      : await resolveEnrichAccountId(db, organizationId, candidate);
+  if (!boundAccountId) {
+    throw new Error(
+      `未找到 ${candidate.platform} 平台的可用账号，请先在集成配置中扫码登录`
+    );
+  }
+  const account = await findProspectingAccount(
     db,
     organizationId,
-    candidate.platform
+    candidate.platform,
+    boundAccountId
   );
+  if (!account) {
+    throw new Error(
+      '绑定的采集账号已失效（可能已下线或 Cookie 过期），请重新发起画像增强'
+    );
+  }
   const guard = await loadProspectGuard(db, organizationId, account.id);
   const captchaWait = remainingMs(guard.captchaBlockedUntil);
   if (captchaWait > 0) {
@@ -1060,7 +1197,9 @@ export async function enrichProspectProfile(
   if (profileGap > 0) await sleep(profileGap);
   const claimed = await claimProfileFetch(db, organizationId, account.id);
   if (!claimed) {
-    assertProfileAllowed(await loadProspectGuard(db, organizationId, account.id));
+    assertProfileAllowed(
+      await loadProspectGuard(db, organizationId, account.id)
+    );
     throw new Error(
       `今日主页采集额度已用完（${PROSPECT_GUARD.dailyProfileLimit} 次/天），请明天继续`
     );
@@ -1199,13 +1338,17 @@ export async function convertProspectToCustomer(
     const evidence = asProspectEvidenceList(candidate.evidence);
     const commentsNote = evidence
       .map((item, index) => {
-        const source = item.sourceVideoTitle ? `（${item.sourceVideoTitle}）` : '';
+        const source = item.sourceVideoTitle
+          ? `（${item.sourceVideoTitle}）`
+          : '';
         return `${index + 1}. ${item.content}${source}`;
       })
       .join('\n');
     const profile = asRecord(asRecord(candidate.metadata).profile);
     const profileNote = [
-      typeof profile.signature === 'string' ? `简介：${profile.signature}` : null,
+      typeof profile.signature === 'string'
+        ? `简介：${profile.signature}`
+        : null,
       typeof profile.followerCount === 'number'
         ? `粉丝 ${profile.followerCount}`
         : null,
@@ -1234,9 +1377,7 @@ export async function convertProspectToCustomer(
           channel: (channelMap[candidate.platform] ?? 'other') as never,
           sourceNote: [
             `关键词获客：${candidate.keyword}`,
-            candidate.userHomepage
-              ? `主页：${candidate.userHomepage}`
-              : null,
+            candidate.userHomepage ? `主页：${candidate.userHomepage}` : null,
             candidate.sourceVideoTitle
               ? `来源视频：${candidate.sourceVideoTitle}`
               : null,

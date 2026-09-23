@@ -105,7 +105,23 @@ export const PROSPECT_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'userNickname', label: '用户昵称' },
   { key: 'externalUserId', label: '平台用户ID' },
   { key: 'userHomepage', label: '主页链接' },
-  { key: 'keyword', label: '命中关键词' },
+  {
+    key: 'attributions',
+    label: '命中策略',
+    transform: (v) =>
+      Array.isArray(v)
+        ? v
+            .map((item) =>
+              item && typeof item === 'object'
+                ? String(
+                    (item as { strategyType?: unknown }).strategyType ?? ''
+                  )
+                : ''
+            )
+            .filter(Boolean)
+            .join(';')
+        : ''
+  },
   { key: 'relevanceScore', label: '相关度' },
   {
     key: 'leadLevel',
@@ -116,7 +132,7 @@ export const PROSPECT_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'summary', label: '判断依据' },
   {
     key: 'matchedKeywords',
-    label: '匹配关键词',
+    label: '匹配信号',
     transform: (v) => (Array.isArray(v) ? v.join(';') : String(v ?? ''))
   },
   { key: 'commentCount', label: '评论条数' },

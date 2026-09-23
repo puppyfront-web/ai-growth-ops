@@ -28,6 +28,13 @@ export type ProspectScoreSource = 'rules' | 'skill';
 
 export type ProspectUserScoreResult = ProspectScoreResult & {
   scoreSource: ProspectScoreSource;
+  audienceFit?: number;
+  needStrength?: number;
+  buyingIntent?: number;
+  evidenceQuality?: number;
+  buyingStage?: string;
+  confidence?: number;
+  riskFlags?: string[];
 };
 
 export type ProspectUserScoreInput = {
@@ -47,6 +54,13 @@ export type SemanticProspectScore = {
   intent?: unknown;
   summary?: unknown;
   matchedKeywords?: unknown;
+  audienceFit?: unknown;
+  needStrength?: unknown;
+  buyingIntent?: unknown;
+  evidenceQuality?: unknown;
+  buyingStage?: unknown;
+  confidence?: unknown;
+  riskFlags?: unknown;
 };
 
 /**
@@ -256,7 +270,12 @@ export function scoreProspectCandidate(
   };
 }
 
-const LEVEL_RANK: Record<ProspectLeadLevel, number> = { D: 0, C: 1, B: 2, A: 3 };
+const LEVEL_RANK: Record<ProspectLeadLevel, number> = {
+  D: 0,
+  C: 1,
+  B: 2,
+  A: 3
+};
 
 /**
  * Scores a user from every comment they left: the strongest comment decides the
@@ -300,7 +319,9 @@ export function scoreProspectUser(
       : strongest;
   });
 
-  const matchedKeywords = [...new Set(scores.flatMap((s) => s.matchedKeywords))];
+  const matchedKeywords = [
+    ...new Set(scores.flatMap((s) => s.matchedKeywords))
+  ];
   const repeatBonus =
     best.leadLevel === 'D' ? 0 : Math.min(12, (contents.length - 1) * 6);
 
@@ -360,8 +381,28 @@ export function mergeSemanticScore(
     matchedKeywords: [
       ...new Set([...ruleScore.matchedKeywords, ...semanticKeywords])
     ],
+    audienceFit: boundedScore(semantic.audienceFit, 30),
+    needStrength: boundedScore(semantic.needStrength, 30),
+    buyingIntent: boundedScore(semantic.buyingIntent, 30),
+    evidenceQuality: boundedScore(semantic.evidenceQuality, 10),
+    buyingStage:
+      typeof semantic.buyingStage === 'string'
+        ? semantic.buyingStage.trim()
+        : undefined,
+    confidence: boundedScore(semantic.confidence, 100),
+    riskFlags: Array.isArray(semantic.riskFlags)
+      ? semantic.riskFlags.filter(
+          (flag): flag is string => typeof flag === 'string'
+        )
+      : undefined,
     scoreSource: 'skill'
   };
+}
+
+function boundedScore(value: unknown, max: number): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(max, Math.round(value)))
+    : undefined;
 }
 
 export function passesProspectThreshold(

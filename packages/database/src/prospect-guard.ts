@@ -41,10 +41,12 @@ function ledgerToState(row: {
 export async function findProspectingAccount(
   db: DatabaseClient,
   organizationId: string,
-  platform: string
+  platform: string,
+  platformAccountId: string
 ): Promise<ProspectingAccountRef | null> {
   const account = await db.platformAccount.findFirst({
     where: {
+      id: platformAccountId,
       organizationId,
       platform: platform as never,
       mode: 'browser_assist',
@@ -61,6 +63,29 @@ export async function findProspectingAccount(
     platform: account.platform,
     cookieRef: account.cookieRef
   };
+}
+
+export async function listProspectingAccounts(
+  db: DatabaseClient,
+  organizationId: string,
+  platform: string
+): Promise<ProspectingAccountRef[]> {
+  const accounts = await db.platformAccount.findMany({
+    where: {
+      organizationId,
+      platform: platform as never,
+      mode: 'browser_assist',
+      status: 'active',
+      deletedAt: null,
+      cookieRef: { not: '' }
+    },
+    select: { id: true, name: true, platform: true, cookieRef: true },
+    orderBy: [{ name: 'asc' }, { createdAt: 'asc' }]
+  });
+  return accounts.filter(
+    (account): account is typeof account & { cookieRef: string } =>
+      Boolean(account.cookieRef)
+  );
 }
 
 async function ensureLedger(
@@ -123,7 +148,9 @@ async function seedLedgerFromLegacyConfig(
           ? new Date(state.captchaBlockedUntil)
           : null,
         lastVideoAt: state.lastVideoAt ? new Date(state.lastVideoAt) : null,
-        lastProfileAt: state.lastProfileAt ? new Date(state.lastProfileAt) : null,
+        lastProfileAt: state.lastProfileAt
+          ? new Date(state.lastProfileAt)
+          : null,
         captchaHits: state.captchaHits
       }
     });

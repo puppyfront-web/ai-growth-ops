@@ -13,7 +13,7 @@ const labelMap: Record<string, string> = {
   conversations: '评论私信',
   leads: '线索管理',
   customers: '客户管理',
-  prospecting: '关键词获客',
+  prospecting: '智能获客',
   analytics: '数据复盘',
   lead: '获客分析',
   integrations: '集成配置',
