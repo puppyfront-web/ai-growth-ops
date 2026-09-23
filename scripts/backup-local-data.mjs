@@ -8,8 +8,9 @@ import { resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { createGzip } from 'node:zlib';
+import { resolveLocalDataRoot, sha256File } from './local-data-utils.mjs';
 
-const root = resolve(process.env.LOCAL_DATA_DIR?.trim() || '.local-data');
+const root = resolveLocalDataRoot(process.env.LOCAL_DATA_DIR);
 const stamp = new Date()
   .toISOString()
   .replaceAll(':', '-')
@@ -32,6 +33,17 @@ function compose(args, options = {}) {
   });
   if (result.status !== 0)
     throw new Error(`docker compose ${args.join(' ')} failed`);
+}
+
+function runningServices() {
+  const result = spawnSync(
+    'docker',
+    [...composeArgs, 'ps', '--services', '--status', 'running'],
+    { cwd: process.cwd(), env: process.env, encoding: 'utf8' }
+  );
+  if (result.status !== 0)
+    throw new Error('Unable to inspect running services');
+  return new Set(result.stdout.split('\n').filter(Boolean));
 }
 
 async function dumpDatabase() {
@@ -62,10 +74,14 @@ async function dumpDatabase() {
   if (code !== 0) throw new Error('PostgreSQL backup failed');
 }
 
-compose(['stop', 'api', 'worker', 'web', 'browser-runner']);
+const running = runningServices();
+const writeServices = ['api', 'worker', 'web', 'browser-runner'].filter(
+  (name) => running.has(name)
+);
+if (writeServices.length > 0) compose(['stop', ...writeServices]);
 try {
   await dumpDatabase();
-  compose(['stop', 'minio']);
+  if (running.has('minio')) compose(['stop', 'minio']);
   const paths = ['objects', 'secrets', 'uploads'].filter((name) =>
     existsSync(resolve(root, name))
   );
@@ -77,12 +93,26 @@ try {
     );
     if (archive.status !== 0) throw new Error('Local file backup failed');
   }
+  const checksums = {
+    'database.sql.gz': await sha256File(
+      resolve(destination, 'database.sql.gz')
+    ),
+    ...(paths.length > 0
+      ? {
+          'files.tar.gz': await sha256File(resolve(destination, 'files.tar.gz'))
+        }
+      : {})
+  };
   writeFileSync(
     resolve(destination, 'manifest.json'),
-    `${JSON.stringify({ createdAt: new Date().toISOString(), formatVersion: 1, includes: ['database', ...paths] }, null, 2)}\n`,
+    `${JSON.stringify({ createdAt: new Date().toISOString(), formatVersion: 2, includes: ['database', ...paths], checksums }, null, 2)}\n`,
     { mode: 0o600 }
   );
   console.log(`Backup created: ${destination}`);
 } finally {
-  compose(['up', '-d']);
+  const stopped = [
+    ...writeServices,
+    ...(running.has('minio') ? ['minio'] : [])
+  ];
+  if (stopped.length > 0) compose(['up', '-d', ...stopped]);
 }

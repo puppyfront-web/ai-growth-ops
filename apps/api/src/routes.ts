@@ -27,13 +27,7 @@ import { Prisma } from '@prisma/client';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
 import type { SkillRunResult } from '@ai-growth-ops/skills';
 import type { LLMClient } from '@ai-growth-ops/ai';
-import {
-  resolveLlmClientFromDb,
-  resolveLlmConfigFromDb,
-  loadStoredLlmConfig,
-  saveOrgLlmConfig,
-  type StoredLlmConfig
-} from '@ai-growth-ops/database';
+import { resolveLlmClientFromDb, resolveLlmConfigFromDb, loadStoredLlmConfig, saveOrgLlmConfig, type StoredLlmConfig } from '@ai-growth-ops/database';
 import { isInternalApiAuthorized } from './services/internal-api-auth.js';
 import { localDataPath } from './local-paths.js';
 import { llmSettingsSchema } from './schemas/llm-settings.js';
@@ -96,10 +90,7 @@ import {
   ResearchExecutionError
 } from './research-executor.js';
 import { classifyByRules, generateRuleBasedReply } from './rule-classifier.js';
-import {
-  generateMediaAsset,
-  loadAiConfigValue
-} from './services/media-generation.js';
+import { generateMediaAsset, loadAiConfigValue } from './services/media-generation.js';
 import {
   isMaskedSecret,
   mergeMediaGeneration,
@@ -1275,15 +1266,11 @@ const routes: Route[] = [
           issues?: Array<{ rule: string; message: string; severity: string }>;
           riskLevel?: 'low' | 'medium' | 'high';
           suggestedFixes?: Array<{ issue: string; suggestion: string }>;
-        }>(
-          'compliance-check',
-          {
-            title: item.title,
-            body: item.body,
-            contentType: item.type
-          },
-          llmClient
-        );
+        }>('compliance-check', {
+          title: item.title,
+          body: item.body,
+          contentType: item.type
+        }, llmClient);
 
         if (skillResult?.status === 'success' && skillResult.output) {
           const out = skillResult.output;
@@ -1408,16 +1395,12 @@ const routes: Route[] = [
               body?: string;
               tags?: string[];
               cta?: string;
-            }>(
-              'platform-rewrite',
-              {
-                sourceTitle: contentItem.title,
-                sourceBody: contentItem.body,
-                platform,
-                contentType: contentItem.type
-              },
-              llmClient
-            );
+            }>('platform-rewrite', {
+              sourceTitle: contentItem.title,
+              sourceBody: contentItem.body,
+              platform,
+              contentType: contentItem.type
+            }, llmClient);
 
             if (skillResult?.status === 'success' && skillResult.output) {
               const out = skillResult.output;
@@ -1520,18 +1503,14 @@ const routes: Route[] = [
           issues?: Array<{ rule: string; message: string; severity: string }>;
           riskLevel?: 'low' | 'medium' | 'high';
           suggestedFixes?: Array<{ issue: string; suggestion: string }>;
-        }>(
-          'compliance-check',
-          {
-            title: variant.title,
-            body: variant.body,
-            platform: variant.platform,
-            contentType: variant.contentType,
-            tags: variant.tags,
-            cta: variant.cta
-          },
-          await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id)
-        );
+        }>('compliance-check', {
+          title: variant.title,
+          body: variant.body,
+          platform: variant.platform,
+          contentType: variant.contentType,
+          tags: variant.tags,
+          cta: variant.cta
+        }, await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id));
 
         if (skillResult?.status === 'success' && skillResult.output) {
           const out = skillResult.output;
@@ -1796,7 +1775,8 @@ const routes: Route[] = [
             fileSize: body.fileSize as number | undefined,
             sourceType: String(body.sourceType ?? 'uploaded') as never,
             sourceUrl: (body.sourceUrl ?? body.storageUrl) as
-              string | undefined,
+              | string
+              | undefined,
             reviewStatus: 'pending_review',
             metadata: ((body.metadata as Record<string, unknown>) ??
               {}) as never
@@ -1861,12 +1841,10 @@ const routes: Route[] = [
         sendJson(res, 201, asset);
       } catch (err: unknown) {
         console.error('Media generation error:', err);
-        const message = err instanceof Error ? err.message : '素材生成失败';
-        const status = /未配置/.test(message)
-          ? 503
-          : /失败|无法|为空|未返回/.test(message)
-            ? 502
-            : 500;
+        const message =
+          err instanceof Error ? err.message : '素材生成失败';
+        const status =
+          /未配置/.test(message) ? 503 : /失败|无法|为空|未返回/.test(message) ? 502 : 500;
         sendJson(res, status, { error: message });
       }
     }
@@ -2591,16 +2569,12 @@ const routes: Route[] = [
         riskLevel?: string;
         summary?: string;
         tags?: string[];
-      }>(
-        'lead-classification',
-        {
-          interactionId: interaction.id,
-          content: interaction.content,
-          platform: interaction.platform,
-          externalUserName: interaction.externalUserName
-        },
-        await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id)
-      );
+      }>('lead-classification', {
+        interactionId: interaction.id,
+        content: interaction.content,
+        platform: interaction.platform,
+        externalUserName: interaction.externalUserName
+      }, await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id));
 
       if (skillResult?.status === 'success' && skillResult.output) {
         intentLevel = skillResult.output.intentLevel ?? intentLevel;
@@ -2725,16 +2699,12 @@ const routes: Route[] = [
           suggestedText: string;
           tone: string;
           confidence: number;
-        }>(
-          'reply-suggestion',
-          {
-            interactionId: interaction.id,
-            content: interaction.content,
-            platform: interaction.platform,
-            externalUserName: interaction.externalUserName
-          },
-          await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id)
-        );
+        }>('reply-suggestion', {
+          interactionId: interaction.id,
+          content: interaction.content,
+          platform: interaction.platform,
+          externalUserName: interaction.externalUserName
+        }, await resolveLlmClientFromDb(ctx.db, orgCtx.organization.id));
 
         if (
           skillResult?.status === 'success' &&
@@ -2792,8 +2762,9 @@ const routes: Route[] = [
         return sendJson(res, 403, { error: '权限不足' });
       }
       try {
-        const { convertInteractionToCustomerRecord } =
-          await import('./services/customer-from-interaction.js');
+        const { convertInteractionToCustomerRecord } = await import(
+          './services/customer-from-interaction.js'
+        );
         const result = await convertInteractionToCustomerRecord(
           ctx.db,
           ctx.params.id,
@@ -2824,8 +2795,9 @@ const routes: Route[] = [
         return sendJson(res, 403, { error: '权限不足' });
       }
       try {
-        const { convertInteractionToCustomerRecord } =
-          await import('./services/customer-from-interaction.js');
+        const { convertInteractionToCustomerRecord } = await import(
+          './services/customer-from-interaction.js'
+        );
         const result = await convertInteractionToCustomerRecord(
           ctx.db,
           ctx.params.id,
@@ -2969,7 +2941,10 @@ const routes: Route[] = [
         });
       }
 
-      if (!sourceContentId && (syncType === 'comments' || syncType === 'all')) {
+      if (
+        !sourceContentId &&
+        (syncType === 'comments' || syncType === 'all')
+      ) {
         const latestPublish = await ctx.db.publishJob.findFirst({
           where: {
             platformAccountId,
@@ -3231,12 +3206,8 @@ const routes: Route[] = [
         }
         // Validate level against the enum — a bad value would 500 on insert.
         const VALID_LEVELS = ['A', 'B', 'C', 'D'];
-        const rawCsvLevel = String(row[ci('level')] ?? 'C')
-          .trim()
-          .toUpperCase();
-        const csvLevel = (
-          VALID_LEVELS.includes(rawCsvLevel) ? rawCsvLevel : 'C'
-        ) as 'A' | 'B' | 'C' | 'D';
+        const rawCsvLevel = String(row[ci('level')] ?? 'C').trim().toUpperCase();
+        const csvLevel = (VALID_LEVELS.includes(rawCsvLevel) ? rawCsvLevel : 'C') as 'A' | 'B' | 'C' | 'D';
         try {
           await ctx.db.lead.upsert({
             where: {
@@ -3823,11 +3794,8 @@ const routes: Route[] = [
       const encryptedRefresh = body.refreshToken
         ? encryptToken(String(body.refreshToken))
         : null;
-      const cookie = body.cookie
-        ? validatePlatformCookie(platform, String(body.cookie))
-        : null;
-      if (cookie && !cookie.valid)
-        return sendJson(res, 400, { error: cookie.error });
+      const cookie = body.cookie ? validatePlatformCookie(platform, String(body.cookie)) : null;
+      if (cookie && !cookie.valid) return sendJson(res, 400, { error: cookie.error });
       const cookieRef = cookie?.valid ? encryptToken(cookie.cookie) : null;
 
       const account = await ctx.db.platformAccount.create({
@@ -3974,7 +3942,8 @@ const routes: Route[] = [
             ? decryptToken(account.cookieRef)
             : undefined,
           appId: (account.metadata as Record<string, unknown>)?.appId as
-            string | undefined,
+            | string
+            | undefined,
           appSecret: (account.metadata as Record<string, unknown>)
             ?.appSecret as string | undefined
         };
@@ -4132,7 +4101,8 @@ const routes: Route[] = [
       } catch (err) {
         const msg = (err as Error).message || '';
         const cause = (err as Error).cause as
-          { message?: string; code?: string } | undefined;
+          | { message?: string; code?: string }
+          | undefined;
         const causeMsg = cause?.message || cause?.code || '';
         const detail = causeMsg || msg || 'unknown error';
         const hint = msg.includes('abort')
@@ -4193,10 +4163,7 @@ const routes: Route[] = [
         if (data.status === 'logged_in') {
           const cookie = data.cookies
             ? validatePlatformCookie(account.platform, data.cookies)
-            : {
-                valid: false as const,
-                error: '登录成功但未获取到 Cookie，请完成扫码后稍等或重试'
-              };
+            : { valid: false as const, error: '登录成功但未获取到 Cookie，请完成扫码后稍等或重试' };
           if (!cookie.valid) {
             clearSession(accountId);
             await ctx.db.platformAccount.update({
@@ -4438,16 +4405,13 @@ const routes: Route[] = [
       });
 
       // Load saved config from database, fallback to env vars
-      const saved = await loadAiConfigValue(
-        ctx.db,
-        orgCtx.user.id,
-        orgCtx.organization.id
-      );
+      const saved = await loadAiConfigValue(ctx.db, orgCtx.user.id, orgCtx.organization.id);
       const llmRow = await loadStoredLlmConfig(ctx.db, orgCtx.organization.id);
       const llm = llmRow?.value as StoredLlmConfig | null;
 
       sendJson(res, 200, {
-        provider: llm?.provider ?? process.env.AI_PROVIDER ?? 'openai',
+        provider:
+          llm?.provider ?? process.env.AI_PROVIDER ?? 'openai',
         baseUrl: llm?.baseUrl ?? process.env.AI_BASE_URL ?? '',
         model: llm?.model ?? process.env.AI_MODEL ?? 'gpt-4o',
         temperature:
@@ -4468,13 +4432,13 @@ const routes: Route[] = [
         mediaGeneration: publicMediaGeneration({
           ...((saved?.mediaGeneration as StoredMediaGeneration) ?? {}),
           mode:
-            ((saved?.mediaGeneration as StoredMediaGeneration)
-              ?.mode as string) ??
+            ((saved?.mediaGeneration as StoredMediaGeneration)?.mode as string) ??
             process.env.MEDIA_GEN_MODE ??
             'llm_provider',
           provider:
             ((saved?.mediaGeneration as StoredMediaGeneration)?.provider as
-              string | undefined) ??
+              | string
+              | undefined) ??
             process.env.MEDIA_GEN_PROVIDER ??
             'openai',
           apiKey:
@@ -4483,12 +4447,14 @@ const routes: Route[] = [
             '',
           baseUrl:
             ((saved?.mediaGeneration as StoredMediaGeneration)?.baseUrl as
-              string | undefined) ??
+              | string
+              | undefined) ??
             process.env.MEDIA_GEN_BASE_URL ??
             '',
           model:
             ((saved?.mediaGeneration as StoredMediaGeneration)?.model as
-              string | undefined) ??
+              | string
+              | undefined) ??
             process.env.MEDIA_GEN_MODEL ??
             'dall-e-3',
           videoApiKey:
@@ -4511,14 +4477,10 @@ const routes: Route[] = [
     method: 'GET',
     pattern: '/api/settings/ai/internal',
     handler: async (req, res, ctx) => {
-      if (!isInternalApiAuthorized(req))
-        return sendJson(res, 403, { error: '仅允许服务端访问' });
+      if (!isInternalApiAuthorized(req)) return sendJson(res, 403, { error: '仅允许服务端访问' });
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const config = await resolveLlmConfigFromDb(
-        ctx.db,
-        orgCtx.organization.id
-      );
+      const config = await resolveLlmConfigFromDb(ctx.db, orgCtx.organization.id);
       sendJson(res, 200, config ?? {});
     }
   },
@@ -4534,20 +4496,13 @@ const routes: Route[] = [
       const body = ctx.body as Record<string, unknown> | null;
       if (!body) return sendJson(res, 400, { error: '请求体为空' });
 
-      const existing = await loadAiConfigValue(
-        ctx.db,
-        orgCtx.user.id,
-        orgCtx.organization.id
-      );
+      const existing = await loadAiConfigValue(ctx.db, orgCtx.user.id, orgCtx.organization.id);
       const parsed = llmSettingsSchema.safeParse(body);
-      if (!parsed.success)
-        return sendJson(res, 400, { error: '无效的模型配置' });
+      if (!parsed.success) return sendJson(res, 400, { error: '无效的模型配置' });
       if (Object.keys(parsed.data).length > 0) {
         await saveOrgLlmConfig(ctx.db, orgCtx.organization.id, orgCtx.user.id, {
           ...parsed.data,
-          apiKey: isMaskedSecret(parsed.data.apiKey)
-            ? undefined
-            : parsed.data.apiKey
+          apiKey: isMaskedSecret(parsed.data.apiKey) ? undefined : parsed.data.apiKey
         });
       }
       const configValue = {
@@ -4565,12 +4520,7 @@ const routes: Route[] = [
       };
 
       await ctx.db.appConfig.upsert({
-        where: {
-          userId_key: {
-            userId: orgCtx.user.id,
-            key: `ai_config:${orgCtx.organization.id}`
-          }
-        },
+        where: { userId_key: { userId: orgCtx.user.id, key: `ai_config:${orgCtx.organization.id}` } },
         create: {
           userId: orgCtx.user.id,
           organizationId: orgCtx.organization.id,
@@ -5030,8 +4980,7 @@ const routes: Route[] = [
     pattern: '/api/leads/webhook/ingest',
     handler: async (req, res, ctx) => {
       const token = (req.headers['x-webhook-token'] as string) || '';
-      if (!token)
-        return sendJson(res, 401, { error: 'missing X-Webhook-Token' });
+      if (!token) return sendJson(res, 401, { error: 'missing X-Webhook-Token' });
       const source = await ctx.db.leadSourceConfig.findUnique({
         where: { token }
       });
@@ -5049,9 +4998,7 @@ const routes: Route[] = [
       };
       const name = String(body.externalUserName || body.name || '');
       if (!name) {
-        return sendJson(res, 400, {
-          error: 'externalUserName (or name) required'
-        });
+        return sendJson(res, 400, { error: 'externalUserName (or name) required' });
       }
       const platform = (source.defaultPlatform || 'douyin') as never;
       const externalUserId =
@@ -5060,11 +5007,8 @@ const routes: Route[] = [
         `webhook-${source.id.slice(0, 8)}-${Date.now()}`;
       // Validate level against the enum — a bad value would 500 on insert.
       const VALID_LEVELS = ['A', 'B', 'C', 'D'];
-      const rawLevel = String(
-        body.level || source.defaultLevel || 'B'
-      ).toUpperCase();
-      const level = (VALID_LEVELS.includes(rawLevel) ? rawLevel : 'B') as
-        'A' | 'B' | 'C' | 'D';
+      const rawLevel = String(body.level || source.defaultLevel || 'B').toUpperCase();
+      const level = (VALID_LEVELS.includes(rawLevel) ? rawLevel : 'B') as 'A' | 'B' | 'C' | 'D';
       const lead = await ctx.db.lead.upsert({
         where: {
           sourcePlatform_sourceAccountId_externalUserId: {
@@ -5903,17 +5847,12 @@ const routes: Route[] = [
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const row = await loadStoredLlmConfig(ctx.db, orgCtx.organization.id);
       const cfg = (row?.value ?? {}) as StoredLlmConfig;
-      const envKey =
-        (cfg.provider ?? 'openai') === 'anthropic'
-          ? process.env.ANTHROPIC_API_KEY
-          : process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
+      const envKey = (cfg.provider ?? 'openai') === 'anthropic'
+        ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
       sendJson(res, 200, {
-        provider: cfg.provider ?? 'openai',
-        baseUrl: cfg.baseUrl ?? '',
-        model: cfg.model ?? '',
+        provider: cfg.provider ?? 'openai', baseUrl: cfg.baseUrl ?? '', model: cfg.model ?? '',
         hasApiKey: !!cfg.apiKeyEncrypted,
-        effectiveConfigured:
-          !!cfg.apiKeyEncrypted || (!!envKey && !/CHANGE_ME/i.test(envKey)),
+        effectiveConfigured: !!cfg.apiKeyEncrypted || (!!envKey && !/CHANGE_ME/i.test(envKey)),
         updatedAt: cfg.updatedAt ?? null
       });
     }
@@ -5924,23 +5863,13 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      if (!hasPermission(orgCtx.memberRole, 'settings:manage'))
-        return sendJson(res, 403, { error: '权限不足' });
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) return sendJson(res, 403, { error: '权限不足' });
       const parsed = llmSettingsSchema.safeParse(ctx.body);
-      if (!parsed.success)
-        return sendJson(res, 400, { error: '无效的模型配置' });
-      const cfg = await saveOrgLlmConfig(
-        ctx.db,
-        orgCtx.organization.id,
-        orgCtx.user.id,
-        parsed.data
-      );
+      if (!parsed.success) return sendJson(res, 400, { error: '无效的模型配置' });
+      const cfg = await saveOrgLlmConfig(ctx.db, orgCtx.organization.id, orgCtx.user.id, parsed.data);
       sendJson(res, 200, {
-        provider: cfg.provider,
-        baseUrl: cfg.baseUrl,
-        model: cfg.model,
-        hasApiKey: !!cfg.apiKeyEncrypted,
-        updatedAt: cfg.updatedAt
+        provider: cfg.provider, baseUrl: cfg.baseUrl, model: cfg.model,
+        hasApiKey: !!cfg.apiKeyEncrypted, updatedAt: cfg.updatedAt
       });
     }
   },
@@ -5958,12 +5887,18 @@ const routes: Route[] = [
       // First cut: only L1 and L2 are available. L3_FULL_AUTOPILOT is a
       // future goal (per spec), not a first-cut lever. Reject unknown /
       // non-string values with 400.
-      const ALLOWED_AUTONOMY = new Set(['L1_COPILOT', 'L2_AUTOPILOT_LIGHT']);
+      const ALLOWED_AUTONOMY = new Set([
+        'L1_COPILOT',
+        'L2_AUTOPILOT_LIGHT'
+      ]);
       const autonomy =
         body.autonomyLevel === undefined
           ? 'L2_AUTOPILOT_LIGHT'
           : body.autonomyLevel;
-      if (typeof autonomy !== 'string' || !ALLOWED_AUTONOMY.has(autonomy)) {
+      if (
+        typeof autonomy !== 'string' ||
+        !ALLOWED_AUTONOMY.has(autonomy)
+      ) {
         return sendJson(res, 400, {
           error:
             'invalid autonomyLevel: first cut allows L1_COPILOT or L2_AUTOPILOT_LIGHT only'
@@ -5984,7 +5919,8 @@ const routes: Route[] = [
       let queued = false;
       try {
         const { Queue } = await import('bullmq');
-        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+        const redisUrl =
+          process.env.REDIS_URL || 'redis://localhost:6379';
         const queue = new Queue('agent.run', {
           connection: { url: redisUrl }
         });
@@ -6130,8 +6066,10 @@ const routes: Route[] = [
           }
         }
       }
-      const meta = ((run.metadata as Record<string, unknown> | null) ??
-        {}) as Record<string, unknown>;
+      const meta = ((run.metadata as Record<string, unknown> | null) ?? {}) as Record<
+        string,
+        unknown
+      >;
       await ctx.db.agentRun.update({
         where: { id: run.id },
         data: {

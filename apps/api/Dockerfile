@@ -16,7 +16,6 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
 FROM deps AS build
-# "...": 同时构建目标包的全部工作区依赖，避免运行时缺少子包 dist
 RUN pnpm --filter @ai-growth-ops/database db:generate && \
     pnpm --filter "@ai-growth-ops/api..." build
 

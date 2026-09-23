@@ -5,7 +5,13 @@ import {
   randomUUID,
   scryptSync
 } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -65,6 +71,7 @@ export function encryptToken(plaintext: string): string {
   const target = join(secretsDir, `${id}.secret`);
   const temporary = `${target}.tmp`;
   mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
+  chmodSync(secretsDir, 0o700);
   writeFileSync(temporary, encryptValue(plaintext), {
     encoding: 'utf8',
     flag: 'wx',

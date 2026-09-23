@@ -1,7 +1,8 @@
 import { chmodSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { resolveLocalDataRoot } from './local-data-utils.mjs';
 
-const root = resolve(process.env.LOCAL_DATA_DIR?.trim() || '.local-data');
+const root = resolveLocalDataRoot(process.env.LOCAL_DATA_DIR);
 const directories = [
   'postgres',
   'redis',

@@ -1,20 +1,28 @@
-import { createReadStream, existsSync, readFileSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
+import {
+  assertSafeArchiveEntries,
+  assertSafeArchiveEntryTypes,
+  resolveLocalDataRoot,
+  sha256File
+} from './local-data-utils.mjs';
 
-const sourceArgument = process.argv.find(
-  (value) =>
-    !value.startsWith('--') &&
-    value !== process.argv[0] &&
-    value !== process.argv[1]
-);
+const sourceArgument = process.argv[2];
 if (!sourceArgument || !process.argv.includes('--confirm')) {
   throw new Error('Usage: pnpm local:restore -- <backup-directory> --confirm');
 }
 
-const root = resolve(process.env.LOCAL_DATA_DIR?.trim() || '.local-data');
+const root = resolveLocalDataRoot(process.env.LOCAL_DATA_DIR);
 const source = resolve(sourceArgument);
 const databaseBackup = resolve(source, 'database.sql.gz');
 const filesBackup = resolve(source, 'files.tar.gz');
@@ -25,7 +33,42 @@ if (!existsSync(databaseBackup) || !existsSync(manifestPath)) {
 }
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-if (manifest.formatVersion !== 1) throw new Error('Unsupported backup format');
+if (manifest.formatVersion !== 2) throw new Error('Unsupported backup format');
+if (
+  !manifest.checksums ||
+  typeof manifest.checksums['database.sql.gz'] !== 'string'
+) {
+  throw new Error('Backup manifest is missing checksums');
+}
+
+async function verifyFile(name, path) {
+  const expected = manifest.checksums[name];
+  if (typeof expected !== 'string' || (await sha256File(path)) !== expected) {
+    throw new Error(`Backup checksum mismatch: ${name}`);
+  }
+}
+
+await verifyFile('database.sql.gz', databaseBackup);
+const expectsFiles = Object.hasOwn(manifest.checksums, 'files.tar.gz');
+if (expectsFiles !== existsSync(filesBackup)) {
+  throw new Error('Backup file set does not match its manifest');
+}
+if (existsSync(filesBackup)) {
+  await verifyFile('files.tar.gz', filesBackup);
+  const listed = spawnSync('tar', ['-tzf', filesBackup], { encoding: 'utf8' });
+  if (listed.status !== 0)
+    throw new Error('Unable to inspect local file backup');
+  assertSafeArchiveEntries(listed.stdout.split('\n').filter(Boolean));
+  const verbose = spawnSync('tar', ['-tvzf', filesBackup], {
+    encoding: 'utf8'
+  });
+  if (verbose.status !== 0)
+    throw new Error('Unable to inspect local file backup');
+  assertSafeArchiveEntryTypes(verbose.stdout.split('\n').filter(Boolean));
+}
+
+mkdirSync(root, { recursive: true, mode: 0o700 });
+chmodSync(root, 0o700);
 
 const composeArgs = ['compose', '-f', 'docker-compose.prod.yml'];
 function compose(args) {

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -37,6 +37,10 @@ describe('local secret storage', () => {
       'utf8'
     );
     expect(stored).not.toContain(plaintext);
+    expect(statSync(join(dataDir, 'secrets')).mode & 0o777).toBe(0o700);
+    expect(
+      statSync(join(dataDir, 'secrets', `${id}.secret`)).mode & 0o777
+    ).toBe(0o600);
   });
 
   it('rejects forged local paths', () => {
