@@ -27,6 +27,7 @@ import {
   missingMediaMessage
 } from '@/components/content/ContentMediaPanel';
 import { platformLabels, platformIcons } from '@/lib/constants';
+import { mediaBlockedPlatforms } from '@/lib/platform-media';
 import type { Platform } from '@/types/enums';
 import { useState, useMemo, useEffect } from 'react';
 
@@ -107,6 +108,14 @@ export default function ContentDetailPage() {
   const mediaReq = item ? mediaRequirement(item.type) : null;
   const needsMedia = Boolean(mediaReq?.required);
 
+  // 抖音/小红书/视频号不支持纯文字发布：无素材时在选择阶段就拦截，
+  // 避免发布任务执行到平台侧才失败
+  const blockedPlatforms = useMemo(
+    () => mediaBlockedPlatforms(selectedPlatforms, mediaAssetIds.length),
+    [selectedPlatforms, mediaAssetIds.length]
+  );
+  const platformsNeedMediaMessage = `${blockedPlatforms.map((p) => platformLabels[p]).join('、')} 不支持纯文字发布，请先在「内容编辑」上传或生成素材，或取消勾选这些平台`;
+
   const accountMap = useMemo(() => {
     const map = new Map<string, PlatformAccount>();
     for (const a of accounts ?? []) {
@@ -167,6 +176,9 @@ export default function ContentDetailPage() {
     mutationFn: () => {
       if (needsMedia && mediaAssetIds.length === 0) {
         return Promise.reject(new Error(missingMediaMessage(item?.type ?? '')));
+      }
+      if (blockedPlatforms.length > 0) {
+        return Promise.reject(new Error(platformsNeedMediaMessage));
       }
       const platformAccountIds = Array.from(selectedPlatforms)
         .map((p) => accountMap.get(p)?.id)
@@ -497,6 +509,12 @@ export default function ContentDetailPage() {
             );
           })}
 
+          {blockedPlatforms.length > 0 && (
+            <div className="rounded-md bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-700">
+              {platformsNeedMediaMessage}
+            </div>
+          )}
+
           {publishError && (
             <div className="rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700">
               {publishError}
@@ -526,13 +544,16 @@ export default function ContentDetailPage() {
                 disabled={
                   publishMutation.isPending ||
                   selectedPlatforms.size === 0 ||
-                  (needsMedia && mediaAssetIds.length === 0)
+                  (needsMedia && mediaAssetIds.length === 0) ||
+                  blockedPlatforms.length > 0
                 }
                 className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
                 title={
-                  needsMedia && mediaAssetIds.length === 0
-                    ? missingMediaMessage(item.type)
-                    : undefined
+                  blockedPlatforms.length > 0
+                    ? platformsNeedMediaMessage
+                    : needsMedia && mediaAssetIds.length === 0
+                      ? missingMediaMessage(item.type)
+                      : undefined
                 }
               >
                 {publishMutation.isPending
