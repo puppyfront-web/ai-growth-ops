@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "build": "pnpm lint && pnpm -r --if-present build",
     "db:generate": "pnpm prisma generate --schema packages/database/prisma/schema.prisma",
@@ -11,6 +14,9 @@
     "db:prune-migrations": "node scripts/prune-migration-ghosts.mjs",
     "db:push": "pnpm prisma db push --schema packages/database/prisma/schema.prisma",
     "db:seed": "tsx --env-file=.env packages/database/prisma/seed.ts",
+    "control:generate": "pnpm --filter @ai-growth-ops/database control:generate",
+    "control:deploy": "pnpm --filter @ai-growth-ops/database control:deploy",
+    "control:validate": "pnpm --filter @ai-growth-ops/database control:validate",
     "db:reset:test": "node scripts/with-e2e-database.mjs pnpm prisma migrate reset --force --skip-seed --schema packages/database/prisma/schema.prisma",
     "dev": "pnpm --filter @ai-growth-ops/api dev",
     "dev:web": "pnpm --filter @ai-growth-ops/web dev",
@@ -19,9 +25,10 @@
     "docker:up": "docker compose up -d",
     "e2e": "playwright test",
     "format:check": "prettier --check .",
+    "secrets:migrate-local": "tsx --env-file=.env scripts/migrate-secrets-to-local.ts",
     "lint": "eslint .",
     "test": "node --test scripts/test-database-url.test.mjs && vitest run && pnpm test:web",
-    "test:architecture": "tsx scripts/check-architecture-drift.ts && vitest run tests/unit/harness/architecture-drift.test.ts",
+    "test:architecture": "CONTROL_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/control pnpm control:validate && tsx scripts/check-architecture-drift.ts && vitest run tests/unit/harness/architecture-drift.test.ts tests/unit/database/control-plane-boundary.test.ts",
     "test:unit": "vitest run tests/unit",
     "test:integration": "node scripts/with-e2e-database.mjs pnpm db:push && vitest run tests/integration",
     "test:e2e": "playwright test",

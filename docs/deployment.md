@@ -4,7 +4,7 @@
 
 ## 环境与密钥
 
-服务器建议 Ubuntu 22.04+、Docker 24+、Docker Compose v2、至少 4 GB 内存和 2 CPU。复制模板并填写配置：
+服务器建议 Ubuntu 22.04+、Docker 24+、Docker Compose v2、至少 4 GB 内存和 2 CPU。构建机上如需直接执行 `pnpm install` / `pnpm verify:release`，要求 Node.js 22.12+（仓库 `.nvmrc` 与 `engines` 已钉住）与 pnpm 10.33.0。复制模板并填写配置：
 
 ```sh
 cp .env.example .env
@@ -22,9 +22,10 @@ BROWSER_RUNNER_SECRET=<openssl rand -hex 32>
 MINIO_ROOT_PASSWORD=<强密码>
 ADMIN_PASSWORD=<首次管理员强密码>
 APP_URL=https://yourdomain.com
+LOCAL_DATA_DIR=/srv/ai-growth-ops/local-data
 ```
 
-`TOKEN_ENCRYPTION_KEY` 用于解密已保存的平台和模型凭据，备份后不得随意更换。API、Web 及 Browser Runner 的内部地址由生产 Compose 固定为容器服务名。
+`TOKEN_ENCRYPTION_KEY` 用于解密本地保存的平台和模型凭据，备份后不得随意更换。`LOCAL_DATA_DIR` 必须位于用户控制的持久磁盘，API 与 Worker 共享该目录；不要放入公开目录或未经确认的云盘同步目录。API、Web 及 Browser Runner 的内部地址由生产 Compose 固定为容器服务名。
 
 ## 构建与启动
 
@@ -37,6 +38,13 @@ docker compose -f docker-compose.prod.yml up -d postgres redis minio
 docker compose -f docker-compose.prod.yml run --rm api pnpm db:deploy
 docker compose -f docker-compose.prod.yml run --rm api pnpm db:seed
 docker compose -f docker-compose.prod.yml up -d
+```
+
+已有凭据迁移到用户本地目录时，先备份数据库和 `LOCAL_DATA_DIR`，再执行：
+
+```sh
+pnpm secrets:migrate-local
+pnpm secrets:migrate-local --apply
 ```
 
 数据库只能用 `prisma migrate deploy`。禁止在生产运行 `db push`、`db:reset:test` 或 `migrate reset`。已有数据库升级前执行 [数据库升级流程](./delivery/database-upgrade.md)。
@@ -87,7 +95,7 @@ PostgreSQL、Redis、MinIO 和 Browser Runner 不对公网开放。需要查看 
 
 ## 备份、恢复与回滚
 
-每天备份 PostgreSQL、上传文件和 `.env` 中的加密密钥，并把备份放到应用服务器之外：
+每天备份 PostgreSQL、`LOCAL_DATA_DIR`、上传文件和 `.env` 中的加密密钥，并把备份放到应用服务器之外：
 
 ```sh
 docker compose -f docker-compose.prod.yml exec -T postgres \

@@ -279,7 +279,6 @@ export const orgRoutes: Array<{
         }
       });
 
-      // TODO: Send invitation email (Week 4)
       console.log(`[ORG] Invitation token for ${email}: ${token}`);
 
       // Send invitation email (non-blocking)
