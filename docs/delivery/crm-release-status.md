@@ -21,7 +21,7 @@
 | -------------- | -------------------- | ------------------------------------------------------------------------------------------ |
 | Lint 与类型    | PASS                 | `pnpm lint`、19 个工作区类型检查通过                                                       |
 | 架构漂移       | PASS（8 个兼容警告） | 2 个架构守卫测试通过；警告均属于暂保留的 `WorkflowExecution/workflow.execute/execute_plan` |
-| 空库迁移       | PASS                 | `ai_growth_ops_e2e` 从零重放 17 个迁移；Prisma schema diff 为 0                            |
+| 空库迁移       | PASS                 | `ai_growth_ops_e2e` 从零重放 18 个迁移；Prisma schema diff 为 0                            |
 | 后端单元与集成 | PASS                 | 102 个测试文件、695 项测试通过                                                             |
 | Web 单元       | PASS                 | 16 个测试文件、103 项测试通过                                                              |
 | 生产构建       | PASS                 | 全工作区构建通过，Web 生成 68 个路由                                                       |
