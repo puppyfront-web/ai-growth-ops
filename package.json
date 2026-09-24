@@ -13,7 +13,7 @@
     "db:deploy": "pnpm prisma migrate deploy --schema packages/database/prisma/schema.prisma",
     "db:prune-migrations": "node scripts/prune-migration-ghosts.mjs",
     "db:push": "pnpm prisma db push --schema packages/database/prisma/schema.prisma",
-    "db:seed": "tsx --env-file=.env packages/database/prisma/seed.ts",
+    "db:seed": "tsx --env-file-if-exists=.env packages/database/prisma/seed.ts",
     "db:reset:test": "node scripts/with-e2e-database.mjs pnpm prisma migrate reset --force --skip-seed --schema packages/database/prisma/schema.prisma",
     "dev": "pnpm --filter @ai-growth-ops/api dev",
     "dev:web": "pnpm --filter @ai-growth-ops/web dev",

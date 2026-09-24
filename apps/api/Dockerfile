@@ -22,6 +22,8 @@ RUN pnpm --filter @ai-growth-ops/database db:generate && \
 # Production
 FROM base AS production
 ENV NODE_ENV=production
+# 根 package.json 供容器内 pnpm db:deploy / db:seed 脚本解析
+COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/package.json ./apps/api/
 COPY --from=build /app/packages ./packages

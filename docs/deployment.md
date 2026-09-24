@@ -27,7 +27,32 @@ LOCAL_DATA_DIR=/absolute/path/to/ai-growth-ops-data
 
 `TOKEN_ENCRYPTION_KEY` 用于解密本地保存的平台和模型凭据，备份后不得随意更换。`LOCAL_DATA_DIR` 必须位于用户控制的持久磁盘；不要放入公开目录或未经确认的云盘同步目录。PostgreSQL、Redis、MinIO、API、Worker 和 Browser Runner 都使用这个目录，不再配置云端控制面数据库。
 
-## 构建与启动
+## 阿里云 ECS 快速部署（推荐）
+
+服务器上只需要 Docker 和 Git，构建、迁移、初始化全部在容器内完成：
+
+```sh
+# 1. 服务器初始化（一次性；Docker 走阿里云源，可选传镜像加速器地址）
+sudo bash scripts/deploy/setup-server.sh [https://<你的ID>.mirror.aliyuncs.com]
+
+# 2. 克隆代码并生成生产 .env（随机强密钥 + 数据目录）
+git clone https://github.com/puppyfront-web/ai-growth-ops.git && cd ai-growth-ops
+bash scripts/deploy/init-env.sh
+
+# 3.（可选）只做环境预检，不改系统
+bash scripts/deploy/deploy.sh --check
+
+# 4. 部署：构建镜像 → 启动基础设施 → 迁移+初始化 → 全量启动 → 健康检查
+bash scripts/deploy/deploy.sh
+
+# 日常更新
+bash scripts/deploy/update.sh
+```
+
+安全组不要放行 3000/3100/3200 等端口；远程访问走 SSH 隧道
+（`ssh -L 3001:127.0.0.1:3001 <user>@<服务器IP>`）。脚本细节见 `scripts/deploy/` 内注释。
+
+## 构建与启动（手动方式）
 
 ```sh
 pnpm install --frozen-lockfile
