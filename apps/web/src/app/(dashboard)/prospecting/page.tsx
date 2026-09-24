@@ -216,9 +216,11 @@ export default function ProspectingPage() {
                 }}
                 className="w-full rounded border bg-background px-2 py-1.5 text-sm"
               >
-                <option value="">
-                  {accounts.length > 1 ? '请选择抖音账号' : '暂无可用账号'}
-                </option>
+                {accounts.length === 0 ? (
+                  <option value="">暂无可用账号，请先在「集成配置」扫码登录</option>
+                ) : (
+                  !platformAccountId && <option value="">请选择抖音账号</option>
+                )}
                 {accounts.map((account) => (
                   <option
                     key={account.platformAccountId}
