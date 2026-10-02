@@ -13,6 +13,7 @@ export const PROSPECT_GUARD = {
   minProfileGapMs: 25_000,
   captchaCooldownMs: 30 * 60_000,
   videoSkipTtlDays: 7,
+  candidateDedupeTtlDays: 30,
   captchaSolveTimeoutMs: 180_000
 } as const;
 

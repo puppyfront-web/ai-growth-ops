@@ -40,6 +40,8 @@ const statusLabels: Record<string, string> = {
   cancelled: '已取消'
 };
 
+const AUTO_ACCOUNT_ID = 'auto';
+
 export default function ProspectingPage() {
   const qc = useQueryClient();
   const router = useRouter();
@@ -65,7 +67,10 @@ export default function ProspectingPage() {
   useEffect(() => {
     if (accounts.length === 1) {
       setPlatformAccountId(accounts[0]?.platformAccountId ?? '');
+    } else if (accounts.length > 1 && !platformAccountId) {
+      setPlatformAccountId(AUTO_ACCOUNT_ID);
     } else if (
+      platformAccountId !== AUTO_ACCOUNT_ID &&
       !accounts.some(
         (account) => account.platformAccountId === platformAccountId
       )
@@ -106,7 +111,7 @@ export default function ProspectingPage() {
   const createMutation = useMutation({
     mutationFn: async () => {
       // 未登录自媒体账号时直接引导去账号配置页，不再创建注定失败的任务
-      if (guard?.needsLogin) {
+      if (accounts.length === 0 || guard?.needsLogin) {
         router.push('/integrations/platforms');
         throw new Error('请先扫码登录自媒体账号');
       }
@@ -217,9 +222,20 @@ export default function ProspectingPage() {
                 className="w-full rounded border bg-background px-2 py-1.5 text-sm"
               >
                 {accounts.length === 0 ? (
-                  <option value="">暂无可用账号，请先在「集成配置」扫码登录</option>
+                  <option value="">
+                    暂无可用账号，请先在「集成配置」扫码登录
+                  </option>
                 ) : (
-                  !platformAccountId && <option value="">请选择抖音账号</option>
+                  <>
+                    {accounts.length > 1 && (
+                      <option value={AUTO_ACCOUNT_ID}>
+                        自动选择可用账号（推荐）
+                      </option>
+                    )}
+                    {!platformAccountId && (
+                      <option value="">请选择抖音账号</option>
+                    )}
+                  </>
                 )}
                 {accounts.map((account) => (
                   <option
@@ -274,8 +290,14 @@ export default function ProspectingPage() {
             {guard?.limits.dailyProfileLimit ?? 24} 次主页。
             {guard?.platformAccountName
               ? ` 当前账号「${guard.platformAccountName}」${guard.health ? ` · ${guard.health.label} ${guard.health.score}` : ''}。`
-              : ''}
-            今日剩余 {guard?.videosRemaining ?? '-'} 个视频额度
+              : analysis?.guard.autoSelected
+                ? ` 已自动选择「${analysis.guard.platformAccountName}」。`
+                : platformAccountId === AUTO_ACCOUNT_ID
+                  ? ' 将自动选择剩余额度最多且无验证码冷却的账号。'
+                  : ''}
+            今日剩余{' '}
+            {guard?.videosRemaining ?? analysis?.guard.videosRemaining ?? '-'}{' '}
+            个视频额度
             {analysis
               ? `，本次最多 ${analysis.plan.limits.maxTotalVideos} 个视频 / 约 ${analysis.guard.estimatedMinutes} 分钟`
               : ''}

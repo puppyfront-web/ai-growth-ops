@@ -236,7 +236,13 @@ export type CreateProspectingTaskInput = {
 export type ProspectingPlanAnalysis = {
   planId: string;
   plan: ProspectingPlan;
-  guard: { videosRemaining: number; estimatedMinutes: number };
+  guard: {
+    platformAccountId: string;
+    platformAccountName: string;
+    autoSelected: boolean;
+    videosRemaining: number;
+    estimatedMinutes: number;
+  };
 };
 
 export type ProspectingGuard = {

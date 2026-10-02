@@ -334,6 +334,21 @@ type SemanticScore = {
  */
 const LLM_NOT_CONFIGURED_MESSAGE = 'AI 服务未配置';
 
+export function filterPreviouslySeenProspects<T extends { userKey: string }>(
+  prospects: T[],
+  previouslySeen: ReadonlySet<string>
+): { prospects: T[]; skippedUserKeys: Set<string> } {
+  const skippedUserKeys = new Set<string>();
+  return {
+    prospects: prospects.filter((prospect) => {
+      if (!previouslySeen.has(prospect.userKey)) return true;
+      skippedUserKeys.add(prospect.userKey);
+      return false;
+    }),
+    skippedUserKeys
+  };
+}
+
 async function scoreProspectsSemantically(
   db: DatabaseClient,
   organizationId: string,
@@ -551,6 +566,24 @@ export async function executeProspectingTask(
     const existingByUserKey = new Map(
       existingCandidates.map((row) => [row.userKey, row])
     );
+    const recentCandidates = await db.prospectCandidate.findMany({
+      where: {
+        organizationId,
+        platform: task.platform,
+        prospectingTaskId: { not: task.id },
+        createdAt: {
+          gte: new Date(
+            Date.now() -
+              PROSPECT_GUARD.candidateDedupeTtlDays * 24 * 60 * 60 * 1000
+          )
+        }
+      },
+      select: { userKey: true }
+    });
+    const previouslySeenUserKeys = new Set(
+      recentCandidates.map((candidate) => candidate.userKey)
+    );
+    const skippedDuplicateUserKeys = new Set<string>();
     const skipContentIds = collectedVideoIds(existingCandidates);
     if (!options.forceRecrawl) {
       const recentIds = await loadRecentCrawledVideoIds(
@@ -684,7 +717,14 @@ export async function executeProspectingTask(
         { totalVideos, totalComments, totalCandidates }
       );
 
-      const prospects = aggregateProspectComments(videos, unit.query);
+      const filtered = filterPreviouslySeenProspects(
+        aggregateProspectComments(videos, unit.query),
+        previouslySeenUserKeys
+      );
+      for (const userKey of filtered.skippedUserKeys) {
+        skippedDuplicateUserKeys.add(userKey);
+      }
+      const prospects = filtered.prospects;
       const semantic = await scoreProspectsSemantically(
         db,
         organizationId,
@@ -806,7 +846,12 @@ export async function executeProspectingTask(
         '语义评估未完成，本轮结果仅供复核。请检查 LLM 配置后重新执行'
       );
     }
-    if (totalCandidates === 0) {
+    if (skippedDuplicateUserKeys.size > 0) {
+      warnings.push(
+        `已跳过 ${skippedDuplicateUserKeys.size} 个近 ${PROSPECT_GUARD.candidateDedupeTtlDays} 天重复潜客`
+      );
+    }
+    if (totalCandidates === 0 && skippedDuplicateUserKeys.size === 0) {
       warnings.push(
         totalComments === 0
           ? '未抓取到评论，可能是 Cookie 失效、触发验证码或搜索无结果，请检查抖音登录后重新执行'

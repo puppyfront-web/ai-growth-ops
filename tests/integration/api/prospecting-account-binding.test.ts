@@ -8,6 +8,7 @@ import {
   queueProspectProfileEnrich,
   resetDatabase,
   saveOrgLlmConfig,
+  selectProspectingAccount,
   seedDatabase
 } from '@ai-growth-ops/database';
 import { createApiServer } from '../../../apps/api/src';
@@ -166,6 +167,62 @@ afterAll(async () => {
 });
 
 describe('prospecting account binding', () => {
+  it('automatically selects the healthy account with the most remaining quota', async () => {
+    await db.prospectingGuardLedger.upsert({
+      where: {
+        organizationId_platformAccountId_date: {
+          organizationId,
+          platformAccountId: olderAccountId,
+          date: new Date().toISOString().slice(0, 10)
+        }
+      },
+      create: {
+        organizationId,
+        platformAccountId: olderAccountId,
+        date: new Date().toISOString().slice(0, 10),
+        videosCrawled: 50
+      },
+      update: { videosCrawled: 50 }
+    });
+
+    const selected = await selectProspectingAccount(
+      db,
+      organizationId,
+      'douyin'
+    );
+    expect(selected?.id).toBe(boundAccountId);
+
+    const response = await api.post('/api/prospecting/plan', {
+      platform: 'douyin',
+      platformAccountId: 'auto',
+      requirement
+    });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.guard).toMatchObject({
+      platformAccountId: boundAccountId,
+      autoSelected: true
+    });
+
+    await db.prospectingGuardLedger.updateMany({
+      where: { organizationId, platformAccountId: boundAccountId },
+      data: { captchaBlockedUntil: new Date(Date.now() + 60_000) }
+    });
+    const fallback = await selectProspectingAccount(
+      db,
+      organizationId,
+      'douyin'
+    );
+    expect(fallback?.id).toBe(olderAccountId);
+
+    await db.prospectingGuardLedger.deleteMany({
+      where: { platformAccountId: olderAccountId }
+    });
+    await db.prospectingGuardLedger.updateMany({
+      where: { organizationId, platformAccountId: boundAccountId },
+      data: { captchaBlockedUntil: null }
+    });
+  });
+
   it('rejects plan analysis for accounts outside the organization', async () => {
     const otherOrg = await db.organization.create({
       data: { name: '其他组织', slug: `other-org-${Date.now()}` }
