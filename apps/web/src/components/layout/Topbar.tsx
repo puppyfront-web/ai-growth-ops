@@ -18,7 +18,10 @@ export function Topbar() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-6">
-      <div className="flex items-center gap-3">
+      <div
+        className="flex items-center gap-3"
+        data-user-guide-tour="global-search"
+      >
         <GlobalSearch />
         <span
           className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${envColor}`}
@@ -26,7 +29,10 @@ export function Topbar() {
           {envLabel}
         </span>
       </div>
-      <div className="flex items-center gap-3">
+      <div
+        className="flex items-center gap-3"
+        data-user-guide-tour="topbar-actions"
+      >
         <button
           onClick={toggleTheme}
           className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"

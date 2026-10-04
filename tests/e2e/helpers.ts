@@ -24,12 +24,28 @@ export async function resetAndSeedDatabase(): Promise<void> {
   }
 }
 
-export async function login(page: Page): Promise<void> {
+const USER_GUIDE_DIALOG = 'div[role="dialog"][aria-modal="true"]';
+
+async function dismissUserGuide(page: Page): Promise<void> {
+  const dialog = page.locator(USER_GUIDE_DIALOG);
+  await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+  await page.getByRole('button', { name: '跳过引导' }).click();
+  await dialog.waitFor({ state: 'hidden', timeout: 5_000 });
+}
+
+export async function login(
+  page: Page,
+  options: { dismissGuide?: boolean } = {}
+): Promise<void> {
+  const { dismissGuide = true } = options;
   await page.goto('/login');
   await page.getByLabel('邮箱').fill('admin@ai-growth-ops.local');
   await page.getByLabel('密码').fill('changeme123');
   await page.getByRole('button', { name: '登录' }).click();
   await page.waitForURL('**/prospecting', { waitUntil: 'domcontentloaded' });
+  if (dismissGuide) {
+    await dismissUserGuide(page);
+  }
 }
 
 export async function seedProspectingAccount(): Promise<string> {
