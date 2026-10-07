@@ -5,6 +5,7 @@ import {
   extractProspectVideoId,
   normalizeProspectGuardState,
   PROSPECT_GUARD,
+  remainingMs,
   todayStamp,
   type ProspectGuardState
 } from '@ai-growth-ops/shared';
@@ -86,6 +87,40 @@ export async function listProspectingAccounts(
     (account): account is typeof account & { cookieRef: string } =>
       Boolean(account.cookieRef)
   );
+}
+
+export async function selectProspectingAccount(
+  db: DatabaseClient,
+  organizationId: string,
+  platform: string
+): Promise<ProspectingAccountRef | null> {
+  const accounts = await listProspectingAccounts(db, organizationId, platform);
+  const candidates = await Promise.all(
+    accounts.map(async (account) => {
+      const state = await loadProspectGuard(db, organizationId, account.id);
+      return {
+        account,
+        videosRemaining: Math.max(
+          0,
+          PROSPECT_GUARD.dailyVideoLimit - state.videosCrawled
+        ),
+        captchaWaitMs: remainingMs(state.captchaBlockedUntil),
+        captchaHits: state.captchaHits
+      };
+    })
+  );
+  const available = candidates
+    .filter(
+      (candidate) =>
+        candidate.videosRemaining > 0 && candidate.captchaWaitMs === 0
+    )
+    .sort(
+      (left, right) =>
+        right.videosRemaining - left.videosRemaining ||
+        left.captchaHits - right.captchaHits ||
+        left.account.id.localeCompare(right.account.id)
+    );
+  return available[0]?.account ?? null;
 }
 
 async function ensureLedger(

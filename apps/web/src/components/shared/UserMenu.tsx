@@ -1,7 +1,8 @@
 'use client';
 
-import { LogOut, User } from 'lucide-react';
+import { Compass, LogOut, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
+import { reopenUserGuide } from '@/components/shared/UserGuide';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -20,7 +21,10 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 rounded-md p-1 hover:bg-accent transition-colors outline-none">
+        <button
+          aria-label="用户菜单"
+          className="flex items-center gap-2 rounded-md p-1 hover:bg-accent transition-colors outline-none"
+        >
           <Avatar className="h-8 w-8">
             <AvatarImage src="" alt={email} />
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
@@ -38,6 +42,10 @@ export function UserMenu() {
         <DropdownMenuItem disabled>
           <User className="mr-2 h-4 w-4" />
           个人设置
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={reopenUserGuide}>
+          <Compass className="mr-2 h-4 w-4" />
+          功能引导
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem destructive onClick={logout}>

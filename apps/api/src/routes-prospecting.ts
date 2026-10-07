@@ -6,6 +6,7 @@ import {
   clearCaptchaBlock,
   findProspectingAccount,
   listProspectingAccounts,
+  selectProspectingAccount,
   loadProspectGuard,
   resolveLlmClientFromDb,
   type DatabaseClient
@@ -70,7 +71,12 @@ async function buildGuardPayload(
 ) {
   // 未指定账号时不再自动回退到最老账号：返回 needsLogin 引导先选账号
   const account = platformAccountId
-    ? await findProspectingAccount(db, organizationId, platform, platformAccountId)
+    ? await findProspectingAccount(
+        db,
+        organizationId,
+        platform,
+        platformAccountId
+      )
     : null;
   const state = account
     ? await loadProspectGuard(db, organizationId, account.id)
@@ -140,15 +146,24 @@ export const prospectingRoutes: Array<{
         });
       }
       const platform = bodyResult.data.platform ?? 'douyin';
-      const account = await findProspectingAccount(
-        ctx.db,
-        orgCtx.organization.id,
-        platform,
-        bodyResult.data.platformAccountId
-      );
+      const autoSelect = bodyResult.data.platformAccountId === 'auto';
+      const account = autoSelect
+        ? await selectProspectingAccount(
+            ctx.db,
+            orgCtx.organization.id,
+            platform
+          )
+        : await findProspectingAccount(
+            ctx.db,
+            orgCtx.organization.id,
+            platform,
+            bodyResult.data.platformAccountId
+          );
       if (!account) {
         return sendJson(res, 409, {
-          error: '所选抖音账号不可用，请重新选择或扫码登录'
+          error: autoSelect
+            ? '当前没有可自动调度的抖音账号，请检查登录、验证码冷却和今日额度'
+            : '所选抖音账号不可用，请重新选择或扫码登录'
         });
       }
       const guard = await buildGuardPayload(
@@ -179,6 +194,9 @@ export const prospectingRoutes: Array<{
           planId: draft.id,
           plan,
           guard: {
+            platformAccountId: account.id,
+            platformAccountName: account.name,
+            autoSelected: autoSelect,
             videosRemaining: guard.videosRemaining,
             estimatedMinutes: planCrawlQuota(
               plan.limits.maxTotalVideos,
@@ -405,7 +423,9 @@ export const prospectingRoutes: Array<{
         platformAccountId
       );
       if (!account) {
-        return sendJson(res, 400, { error: '所选账号不可用，请重新选择或扫码登录' });
+        return sendJson(res, 400, {
+          error: '所选账号不可用，请重新选择或扫码登录'
+        });
       }
       const session = getCaptchaSolveSession(orgCtx.organization.id);
       if (session) {
@@ -636,7 +656,12 @@ export const prospectingRoutes: Array<{
           id: ctx.params.id,
           organizationId: orgCtx.organization.id
         },
-        select: { id: true, status: true, platform: true, platformAccountId: true }
+        select: {
+          id: true,
+          status: true,
+          platform: true,
+          platformAccountId: true
+        }
       });
       if (!task) return sendJson(res, 404, { error: '任务不存在' });
       if (!isProspectingTaskRunnable(task.status)) {

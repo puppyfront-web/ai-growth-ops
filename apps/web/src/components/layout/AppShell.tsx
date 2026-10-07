@@ -5,6 +5,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { MobileNav } from './MobileNav';
+import { UserGuide } from '@/components/shared/UserGuide';
 import { hiddenSectionPrefixes } from './navigation';
 
 const PUBLIC_PATHS = [
@@ -66,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <MobileNav />
+      <UserGuide />
     </div>
   );
 }

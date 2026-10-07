@@ -11,7 +11,7 @@ export const createProspectingTaskSchema = z.object({
 
 export const analyzeProspectingPlanSchema = z.object({
   platform: platformSchema.default('douyin'),
-  platformAccountId: z.string().uuid(),
+  platformAccountId: z.union([z.string().uuid(), z.literal('auto')]),
   requirement: z.string().trim().min(20).max(2000)
 });
 

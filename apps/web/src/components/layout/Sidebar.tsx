@@ -22,6 +22,7 @@ export function Sidebar() {
   return (
     <TooltipProvider>
       <aside
+        data-user-guide-tour="sidebar"
         className={cn(
           'flex flex-col border-r bg-background transition-all duration-200',
           sidebarCollapsed ? 'w-16' : 'w-60'
@@ -56,6 +57,7 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                data-user-guide-tour={`nav-${item.href}`}
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   isActive

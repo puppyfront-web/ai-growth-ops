@@ -53,6 +53,8 @@ function DropdownMenuTrigger({
       children as React.ReactElement<Record<string, unknown>>,
       {
         ref: triggerRef,
+        'aria-haspopup': 'menu',
+        'aria-expanded': open,
         onClick: () => setOpen(!open)
       }
     );
@@ -61,6 +63,8 @@ function DropdownMenuTrigger({
   return (
     <button
       ref={triggerRef}
+      aria-haspopup="menu"
+      aria-expanded={open}
       className={cn('outline-none', className)}
       onClick={() => setOpen(!open)}
       {...props}
@@ -79,19 +83,49 @@ function DropdownMenuContent({
   align = 'end',
   ...props
 }: DropdownMenuContentProps) {
-  const { open } = React.useContext(DropdownContext);
+  const { open, triggerRef } = React.useContext(DropdownContext);
+  const [anchor, setAnchor] = React.useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const updateAnchor = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      setAnchor(
+        align === 'end'
+          ? { top: rect.bottom + 4, left: rect.right }
+          : { top: rect.bottom + 4, left: rect.left }
+      );
+    };
+    updateAnchor();
+    window.addEventListener('resize', updateAnchor);
+    window.addEventListener('scroll', updateAnchor, true);
+    return () => {
+      window.removeEventListener('resize', updateAnchor);
+      window.removeEventListener('scroll', updateAnchor, true);
+    };
+  }, [open, triggerRef, align]);
 
   if (!open) return null;
 
   return createPortal(
     <div
       id="dropdown-menu-content"
+      role="menu"
       className={cn(
-        'absolute right-0 z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',
-        align === 'end' ? 'right-0' : 'left-0',
+        'z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',
         className
       )}
-      style={{ position: 'fixed' }}
+      style={{
+        position: 'fixed',
+        top: anchor?.top,
+        left: anchor?.left,
+        transform: align === 'end' ? 'translateX(-100%)' : undefined
+      }}
       {...props}
     />,
     document.body
@@ -110,6 +144,8 @@ function DropdownMenuItem({
   const { setOpen } = React.useContext(DropdownContext);
   return (
     <button
+      {...props}
+      role="menuitem"
       className={cn(
         'relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
         destructive && 'text-destructive hover:text-destructive',
@@ -119,7 +155,6 @@ function DropdownMenuItem({
         props.onClick?.(e);
         setOpen(false);
       }}
-      {...props}
     />
   );
 }
