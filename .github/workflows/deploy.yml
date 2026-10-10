@@ -1,0 +1,238 @@
+# =============================================================
+# AI Growth Ops — CI/CD：构建镜像 → 推送阿里云 ACR → SSH 部署到 ECS
+# 触发：push 到 main 或手动 workflow_dispatch
+# 服务器端动作（建数据目录/自动建库/迁移/seed/滚动重启/健康检查）
+# 见 scripts/deploy/server-deploy.sh。
+# 所需 GitHub Secrets 见 docs/deployment.md「GitHub Actions 自动部署」。
+# =============================================================
+name: Deploy to Aliyun ECS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-aliyun-ecs
+  cancel-in-progress: false
+
+env:
+  REGISTRY_HOST: ${{ secrets.ACR_REGISTRY_HOST }} # 例：registry.cn-hangzhou.aliyuncs.com
+  NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+
+jobs:
+  build-push:
+    name: Build & push ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        app: [api, web, worker, browser-runner]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check ACR secrets
+        env:
+          ACR_REGISTRY_HOST: ${{ secrets.ACR_REGISTRY_HOST }}
+          ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          missing=0
+          for name in ACR_REGISTRY_HOST ACR_NAMESPACE ACR_USERNAME ACR_PASSWORD; do
+            [ -n "${!name:-}" ] || { echo "✖ 缺少 GitHub Secret：$name"; missing=1; }
+          done
+          if [ "$missing" = "1" ]; then
+            echo "配置方法见 docs/deployment.md「GitHub Actions 自动部署」"
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Aliyun ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY_HOST }}/${{ env.NAMESPACE }}/ai-growth-ops-${{ matrix.app }}:${{ github.sha }}
+            ${{ env.REGISTRY_HOST }}/${{ env.NAMESPACE }}/ai-growth-ops-${{ matrix.app }}:latest
+          # web 需要 API_BASE_URL 构建参数；其余 Dockerfile 未声明该 ARG，会自动忽略
+          build-args: |
+            API_BASE_URL=http://api:3100
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build-push
+    env:
+      DEPLOY_DIR: ${{ secrets.ECS_DEPLOY_DIR || '/srv/ai-growth-ops' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        env:
+          ACR_REGISTRY_HOST: ${{ secrets.ACR_REGISTRY_HOST }}
+          ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_USER: ${{ secrets.ECS_USER }}
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          BROWSER_RUNNER_SECRET: ${{ secrets.BROWSER_RUNNER_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          APP_URL: ${{ secrets.APP_URL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          missing=0
+          for name in ACR_REGISTRY_HOST ACR_NAMESPACE ACR_USERNAME ACR_PASSWORD \
+                      ECS_HOST ECS_USER ECS_SSH_KEY \
+                      AUTH_SECRET TOKEN_ENCRYPTION_KEY INTERNAL_API_SECRET BROWSER_RUNNER_SECRET \
+                      POSTGRES_PASSWORD MINIO_ROOT_PASSWORD APP_URL ADMIN_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "✖ 缺少 GitHub Secret：$name"
+              missing=1
+            fi
+          done
+          case "$DEPLOY_DIR" in
+            /*) ;;
+            *) echo "✖ ECS_DEPLOY_DIR 必须是绝对路径：$DEPLOY_DIR"; missing=1 ;;
+          esac
+          case "$DEPLOY_DIR" in
+            *" "*|*"'"*|*'"'*) echo "✖ ECS_DEPLOY_DIR 不能包含空格或引号：$DEPLOY_DIR"; missing=1 ;;
+          esac
+          if [ "$missing" = "1" ]; then
+            echo "请按 docs/deployment.md「GitHub Actions 自动部署」配置全部 Secrets"
+            exit 1
+          fi
+
+      - name: Set up SSH
+        env:
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          install -m 600 /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "$ECS_SSH_KEY" > ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.ECS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          cat > ~/.ssh/config <<EOF
+          Host ecs
+            HostName ${{ secrets.ECS_HOST }}
+            User ${{ secrets.ECS_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+            BatchMode yes
+            ConnectTimeout 15
+          EOF
+
+      - name: Render bootstrap .env（仅在服务器缺失时上传）
+        env:
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          BROWSER_RUNNER_SECRET: ${{ secrets.BROWSER_RUNNER_SECRET }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'ai_growth_ops' }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'postgres' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER || 'minioadmin' }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL || 'admin@ai-growth-ops.local' }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_NAME: ${{ secrets.ADMIN_NAME || 'Admin' }}
+          APP_URL: ${{ secrets.APP_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+          VISION_API_KEY: ${{ secrets.VISION_API_KEY }}
+          VISION_BASE_URL: ${{ secrets.VISION_BASE_URL }}
+          VISION_MODEL: ${{ secrets.VISION_MODEL }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          AGENT_DAILY_DRY_RUN: ${{ secrets.AGENT_DAILY_DRY_RUN }}
+          FEISHU_DAILY_REPORT_WEBHOOK: ${{ secrets.FEISHU_DAILY_REPORT_WEBHOOK }}
+        run: |
+          umask 077
+          # 生成完整的 bootstrap .env：compose 里所有 :? 必填项都在其中
+          {
+            echo "# 由 GitHub Actions 引导生成于 $(date -u '+%F %T')Z"
+            echo "LOCAL_DATA_DIR=${DEPLOY_DIR}/data"
+            echo "POSTGRES_DB=${POSTGRES_DB}"
+            echo "POSTGRES_USER=${POSTGRES_USER}"
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            echo "MINIO_ROOT_USER=${MINIO_ROOT_USER}"
+            echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}"
+            echo "AUTH_SECRET=${AUTH_SECRET}"
+            echo "TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}"
+            echo "INTERNAL_API_SECRET=${INTERNAL_API_SECRET}"
+            echo "BROWSER_RUNNER_SECRET=${BROWSER_RUNNER_SECRET}"
+            echo "ADMIN_EMAIL=${ADMIN_EMAIL}"
+            echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}"
+            echo "ADMIN_NAME=${ADMIN_NAME}"
+            echo "APP_URL=${APP_URL}"
+            echo "REGISTRY=${REGISTRY_HOST}/${NAMESPACE}"
+            # 可选项：Secrets 里配了才写入
+            for key in OPENAI_API_KEY OPENAI_BASE_URL OPENAI_MODEL \
+                       ANTHROPIC_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
+                       VISION_API_KEY VISION_BASE_URL VISION_MODEL \
+                       EMAIL_PROVIDER RESEND_API_KEY EMAIL_FROM \
+                       AGENT_DAILY_DRY_RUN FEISHU_DAILY_REPORT_WEBHOOK; do
+              val="${!key:-}"
+              [ -n "$val" ] && printf '%s=%s\n' "$key" "$val"
+            done
+          } > bootstrap.env
+          # 本次部署的一次性凭据（镜像 tag + ACR 登录），server-deploy.sh 用完即删
+          {
+            echo "IMAGE_TAG=${GITHUB_SHA}"
+            echo "REGISTRY_HOST=${REGISTRY_HOST}"
+            echo "ACR_USERNAME=${{ secrets.ACR_USERNAME }}"
+            echo "ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}"
+          } > deploy-credentials.env
+
+      - name: Upload deploy files
+        # 注意：OpenSSH 9+ 的 scp 走 SFTP，远端路径不经过 shell，
+        # 不能加引号（DEPLOY_DIR 已在上一步校验无空格/引号）；
+        # ssh 命令仍经过远端 shell，路径保留单引号。
+        run: |
+          ssh ecs "mkdir -p '${DEPLOY_DIR}/scripts/deploy'"
+          scp docker-compose.prod.yml "ecs:${DEPLOY_DIR}/docker-compose.prod.yml"
+          scp scripts/deploy/server-deploy.sh "ecs:${DEPLOY_DIR}/scripts/deploy/server-deploy.sh"
+          # .env 只在服务器缺失时引导生成，绝不覆盖既有密钥（TOKEN_ENCRYPTION_KEY 不可换）
+          if ssh ecs "test -f '${DEPLOY_DIR}/.env'"; then
+            echo "服务器已有 .env，保留既有配置"
+          else
+            echo "服务器缺少 .env，从 GitHub Secrets 引导生成"
+            scp bootstrap.env "ecs:${DEPLOY_DIR}/.env"
+            ssh ecs "chmod 600 '${DEPLOY_DIR}/.env'"
+          fi
+          scp deploy-credentials.env "ecs:${DEPLOY_DIR}/.deploy-credentials"
+          ssh ecs "chmod 600 '${DEPLOY_DIR}/.deploy-credentials'"
+
+      - name: Deploy（建库/迁移/滚动重启/健康检查）
+        run: |
+          ssh ecs "cd '${DEPLOY_DIR}' && bash scripts/deploy/server-deploy.sh"
+
+      - name: Cleanup one-shot credentials
+        if: always()
+        run: |
+          ssh ecs "rm -f '${DEPLOY_DIR}/.deploy-credentials'" || true

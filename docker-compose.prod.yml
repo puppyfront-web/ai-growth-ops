@@ -3,6 +3,8 @@
 
 services:
   api:
+    # CI 部署时通过 REGISTRY/IMAGE_TAG 指向阿里云 ACR 镜像；服务器本地构建时无需设置
+    image: ${REGISTRY:-local/ai-growth-ops}/ai-growth-ops-api:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -57,6 +59,7 @@ services:
       retries: 10
 
   web:
+    image: ${REGISTRY:-local/ai-growth-ops}/ai-growth-ops-web:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/web/Dockerfile
@@ -75,6 +78,7 @@ services:
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?Set INTERNAL_API_SECRET}
 
   worker:
+    image: ${REGISTRY:-local/ai-growth-ops}/ai-growth-ops-worker:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
@@ -105,6 +109,7 @@ services:
       - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}:/var/lib/ai-growth-ops
 
   browser-runner:
+    image: ${REGISTRY:-local/ai-growth-ops}/ai-growth-ops-browser-runner:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/browser-runner/Dockerfile

@@ -52,6 +52,54 @@ bash scripts/deploy/update.sh
 安全组不要放行 3000/3100/3200 等端口；远程访问走 SSH 隧道
 （`ssh -L 3001:127.0.0.1:3001 <user>@<服务器IP>`）。脚本细节见 `scripts/deploy/` 内注释。
 
+## GitHub Actions 自动部署（CI/CD）
+
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) 在每次 push 到 `main`（或手动 `workflow_dispatch`）时执行：
+
+1. **构建推送**：用 Buildx 并行构建 api / web / worker / browser-runner 四个镜像，打上 `commit-sha` 与 `latest` 两个 tag，推送到阿里云容器镜像服务 ACR（带 GitHub Actions 缓存）。
+2. **SSH 部署**：把 `docker-compose.prod.yml` 和 `scripts/deploy/server-deploy.sh` 同步到服务器 `DEPLOY_DIR`（默认 `/srv/ai-growth-ops`），执行服务器端部署：
+   - 自动创建 `LOCAL_DATA_DIR` 目录结构（0700）；
+   - 拉取本次 tag 的镜像；
+   - 启动 PostgreSQL / Redis / MinIO 并等待健康；
+   - **自动创建数据库**（兜底 `CREATE DATABASE`，首次启动由 `POSTGRES_DB` 自动建库）；
+   - 容器内执行 `prisma migrate deploy`；空库时自动 seed 管理员；
+   - 滚动重启全部服务并做健康检查（API `/health`、Web `/login`）。
+
+服务器上的 `.env` 只在**缺失时**由 GitHub Secrets 引导生成，之后每次部署都保留服务器既有配置——`TOKEN_ENCRYPTION_KEY` 等密钥一旦生成不可更换。ACR 登录凭据通过一次性文件 `.deploy-credentials` 下发，部署结束（无论成败）都会删除。
+
+### 前置条件
+
+1. **开通 ACR**：容器镜像服务（个人版即可）→ 创建命名空间（如 `myteam`），记下访问域名（如 `registry.cn-hangzhou.aliyuncs.com`）与登录凭据。仓库会在首次 push 时自动创建。
+2. **ECS 安装 Docker**：`sudo bash scripts/deploy/setup-server.sh`（一次性）。
+3. **ECS 安全组放行 22 端口**给 GitHub Actions Runner（公网 SSH；建议仅在 CI 时段放行或使用固定出口的自托管 Runner）。
+4. 服务器无需克隆代码，也无需 Node/pnpm。
+
+### 所需 GitHub Secrets
+
+仓库 Settings → Secrets and variables → Actions 中配置：
+
+| Secret | 说明 |
+| --- | --- |
+| `ACR_REGISTRY_HOST` | ACR 域名，如 `registry.cn-hangzhou.aliyuncs.com` |
+| `ACR_NAMESPACE` | ACR 命名空间 |
+| `ACR_USERNAME` / `ACR_PASSWORD` | ACR 登录凭据（CI 推镜像 + 服务器拉镜像） |
+| `ECS_HOST` / `ECS_USER` | 服务器 IP 与 SSH 用户 |
+| `ECS_SSH_KEY` | 私钥 PEM 全文（公钥放入服务器 `~/.ssh/authorized_keys`） |
+| `ECS_DEPLOY_DIR` | 可选，部署目录，默认 `/srv/ai-growth-ops` |
+| `AUTH_SECRET` / `TOKEN_ENCRYPTION_KEY` / `INTERNAL_API_SECRET` / `BROWSER_RUNNER_SECRET` | 服务密钥（`openssl rand -hex 32`；首次部署引导 .env 时使用） |
+| `POSTGRES_PASSWORD` / `MINIO_ROOT_PASSWORD` | 数据库与对象存储密码 |
+| `ADMIN_PASSWORD`（可选 `ADMIN_EMAIL`/`ADMIN_NAME`） | 首次 seed 的管理员 |
+| `APP_URL` | 对外访问地址，如 `https://yourdomain.com` |
+| `OPENAI_API_KEY`、`VISION_API_KEY`、`RESEND_API_KEY` 等 | 可选；配置了才会写入 .env |
+
+### 日常发布与回滚
+
+- **发布**：合并到 `main` 即自动发布；工作流自带并发队列，不会并行部署。
+- **手动重发**：Actions 页面 Run workflow。
+- **回滚**：旧 tag（commit sha）镜像仍保留在 ACR，SSH 到服务器执行：
+  `cd /srv/ai-growth-ops && IMAGE_TAG=<旧sha> bash scripts/deploy/server-deploy.sh`
+  数据库结构变更的回滚请先按「备份、恢复与回滚」恢复数据。
+
 ## 构建与启动（手动方式）
 
 ```sh
