@@ -81,8 +81,21 @@ jobs:
           for img in postgres:16-alpine redis:7-alpine "minio/minio:RELEASE.2025-02-28T09-55-16Z"; do
             name="${img##*/}"
             target="${REGISTRY_HOST}/${NAMESPACE}/${name}"
-            docker pull "$img"
-            docker tag "$img" "$target"
+            # ACR 里已有同名 tag（此前部署推过）就跳过，规避 Docker Hub 匿名限流
+            if docker manifest inspect "$target" >/dev/null 2>&1; then
+              echo "$target 已存在于 ACR，跳过"
+              continue
+            fi
+            src=""
+            for candidate in "$img" "mirror.gcr.io/$img" "docker.1ms.run/$img"; do
+              if docker pull "$candidate"; then src="$candidate"; break; fi
+              echo "拉取失败：$candidate，尝试下一个源"
+            done
+            if [ -z "$src" ]; then
+              echo "✖ 所有镜像源均无法拉取 $img"
+              exit 1
+            fi
+            docker tag "$src" "$target"
             docker push "$target"
           done
 
