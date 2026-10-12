@@ -3,17 +3,27 @@
 # 浏览器只需访问 web（127.0.0.1:${WEB_PORT:-3002}）；/api 与 /uploads
 # 由 Next.js 在服务端 rewrite 到 API 容器，nginx 无需单独转发。
 #
-# 用法（替换 __DOMAIN__ 为你的域名，需提前加 DNS A 记录指向服务器）：
-#   sed "s/__DOMAIN__/ai.puppyfront.com/" scripts/deploy/nginx-vhost.conf.example \
-#     | sudo tee /etc/nginx/conf.d/ai.puppyfront.com.conf
+# 用法（替换 __DOMAIN__，需提前加 DNS A 记录指向服务器）：
+#   sed "s/__DOMAIN__/growth.puppyfront.com/" scripts/deploy/nginx-vhost.conf.example \
+#     | sudo tee /etc/nginx/conf.d/<你的域名>.conf
 #   sudo nginx -t && sudo systemctl reload nginx
+#
+# HTTPS（推荐，登录凭据不应明文传输）：
+#   Ubuntu:  sudo apt install -y certbot python3-certbot-nginx
+#   ALinux3: sudo dnf install -y certbot python3-certbot-nginx
+#            （若报 X509_V_FLAG_CB_ISSUER_CHECK 错误，先
+#             pip3 install --upgrade pyopenssl）
+#   sudo certbot --nginx -d <你的域名> --non-interactive --agree-tos \
+#     -m <邮箱> --redirect
+#   sudo systemctl enable --now certbot-renew.timer   # 自签续期定时器
+#   certbot renew --dry-run --nginx                   # 干跑验证
+#   certbot 会自动改造下方 vhost 为 443 + 80 跳转形态
 # =============================================================
 server {
-    listen 80;
     server_name __DOMAIN__;
 
     access_log /var/log/nginx/ai-growth-ops-access.log;
-    error_log /var/log/nginx/ai-growth-ops-error.log;
+    error_log  /var/log/nginx/ai-growth-ops-error.log;
 
     # 素材上传（/uploads 经 Next.js 转发到 API/MinIO）
     client_max_body_size 100m;
@@ -27,9 +37,25 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        # LLM 流式响应（chat 走 SSE，最长 5 分钟），关闭缓冲并放宽读超时
+        # LLM 流式响应（chat 走 SSE，最长 5 分钟）
         proxy_buffering off;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
     }
+
+    # ↓ 以下由 `certbot --nginx --redirect` 自动生成（生产形态参考）
+    # listen 443 ssl;
+    # ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+    # include /etc/letsencrypt/options-ssl-nginx.conf;
+    # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    if ($host = __DOMAIN__) {
+        return 301 https://$host$request_uri;
+    }
+    listen 80;
+    server_name __DOMAIN__;
+    return 404;
 }

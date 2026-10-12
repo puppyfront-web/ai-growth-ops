@@ -110,7 +110,10 @@ CI 部署**不会**修改 nginx：web/API 只绑定服务器回环地址的固�
    然后 `sudo nginx -t && sudo systemctl reload nginx`；
 3. 更新 `APP_URL`（GitHub Secret 与服务器 `/srv/ai-growth-ops/.env` 中的值）为 `http://<你的域名>`，下一次部署或 `docker compose -f docker-compose.prod.yml up -d` 生效。
 
-模板已含 SSE 流式响应的长超时与 100m 上传限制。需要 HTTPS 时再装 certbot 为该 vhost 加 443 配置即可。
+模板已含 SSE 流式响应的长超时与 100m 上传限制。生产启用 HTTPS：安装 certbot 后执行
+`certbot --nginx -d <域名> --redirect` 并 `systemctl enable --now certbot-renew.timer`（ALinux3
+如遇 pyOpenSSL 报错先 `pip3 install --upgrade pyopenssl`），命令细节见模板文件头注释。
+启用后把 GitHub Secrets 与服务器 `.env` 的 `APP_URL` 更新为 `https://<域名>`。
 
 ## 构建与启动（手动方式）
 
