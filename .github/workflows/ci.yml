@@ -31,14 +31,8 @@ jobs:
         run: pnpm --filter @ai-growth-ops/database db:generate
 
       - name: Build shared packages
-        run: |
-          pnpm --filter @ai-growth-ops/shared build
-          pnpm --filter @ai-growth-ops/shared-types build
-          pnpm --filter @ai-growth-ops/observability build
-          pnpm --filter @ai-growth-ops/providers build
-          pnpm --filter @ai-growth-ops/skills build
-          pnpm --filter @ai-growth-ops/connectors build
-          pnpm --filter @ai-growth-ops/email build
+        # 按目录通配构建全部 workspace 包，避免新增包后清单失修（如 ai-tools）
+        run: pnpm --filter './packages/**' run --if-present build
 
       - name: Typecheck all packages
         run: |
@@ -87,14 +81,8 @@ jobs:
         run: pnpm --filter @ai-growth-ops/database db:generate
 
       - name: Build all packages
-        run: |
-          pnpm --filter @ai-growth-ops/shared build
-          pnpm --filter @ai-growth-ops/shared-types build
-          pnpm --filter @ai-growth-ops/observability build
-          pnpm --filter @ai-growth-ops/providers build
-          pnpm --filter @ai-growth-ops/skills build
-          pnpm --filter @ai-growth-ops/connectors build
-          pnpm --filter @ai-growth-ops/email build
+        # 按目录通配构建全部 workspace 包，避免新增包后清单失修（如 ai-tools）
+        run: pnpm --filter './packages/**' run --if-present build
 
       - name: Build API
         run: pnpm --filter @ai-growth-ops/api build
