@@ -209,6 +209,8 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           AGENT_DAILY_DRY_RUN: ${{ secrets.AGENT_DAILY_DRY_RUN }}
           FEISHU_DAILY_REPORT_WEBHOOK: ${{ secrets.FEISHU_DAILY_REPORT_WEBHOOK }}
+          WEB_PORT: ${{ secrets.WEB_PORT }}
+          API_PORT: ${{ secrets.API_PORT }}
         run: |
           umask 077
           # 生成完整的 bootstrap .env：compose 里所有 :? 必填项都在其中
@@ -256,9 +258,16 @@ jobs:
           ssh ecs "mkdir -p '${DEPLOY_DIR}/scripts/deploy'"
           scp docker-compose.prod.yml "ecs:${DEPLOY_DIR}/docker-compose.prod.yml"
           scp scripts/deploy/server-deploy.sh "ecs:${DEPLOY_DIR}/scripts/deploy/server-deploy.sh"
-          # .env 只在服务器缺失时引导生成，绝不覆盖既有密钥（TOKEN_ENCRYPTION_KEY 不可换）
+          # .env 只在服务器缺失时整份引导生成；已存在时只补缺的 key，绝不覆盖既有值
+          # （TOKEN_ENCRYPTION_KEY 等密钥不可更换）
           if ssh ecs "test -f '${DEPLOY_DIR}/.env'"; then
-            echo "服务器已有 .env，保留既有配置"
+            echo "服务器已有 .env，合并缺失的 key（不覆盖已有值）"
+            cat bootstrap.env | ssh ecs "while IFS= read -r line; do
+              case \"\$line\" in '#'*) continue ;; esac
+              k=\${line%%=*}
+              [ -n \"\$k\" ] || continue
+              grep -q \"^\${k}=\" '${DEPLOY_DIR}/.env' || printf '%s\n' \"\$line\" >> '${DEPLOY_DIR}/.env'
+            done"
           else
             echo "服务器缺少 .env，从 GitHub Secrets 引导生成"
             scp bootstrap.env "ecs:${DEPLOY_DIR}/.env"
