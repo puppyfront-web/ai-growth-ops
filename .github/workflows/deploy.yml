@@ -77,10 +77,11 @@ jobs:
 
       - name: Mirror base images to ACR（国内 ECS 拉 Docker Hub 不可靠）
         if: matrix.app == 'api'
+        env:
+          MINIO_TAG: RELEASE.2025-09-07T16-13-09Z
         run: |
-          for img in postgres:16-alpine redis:7-alpine "minio/minio:RELEASE.2025-02-28T09-55-16Z"; do
-            name="${img##*/}"
-            target="${REGISTRY_HOST}/${NAMESPACE}/${name}"
+          for img in postgres:16-alpine redis:7-alpine; do
+            target="${REGISTRY_HOST}/${NAMESPACE}/${img}"
             # ACR 里已有同名 tag（此前部署推过）就跳过，规避 Docker Hub 匿名限流
             if docker manifest inspect "$target" >/dev/null 2>&1; then
               echo "$target 已存在于 ACR，跳过"
@@ -98,6 +99,14 @@ jobs:
             docker tag "$src" "$target"
             docker push "$target"
           done
+          # minio 已从 Docker Hub 下架，从 fastgpt 的公开 ACR 源中转（多架构）
+          MINIO_TARGET="${REGISTRY_HOST}/${NAMESPACE}/minio:${MINIO_TAG}"
+          if docker manifest inspect "$MINIO_TARGET" >/dev/null 2>&1; then
+            echo "$MINIO_TARGET 已存在于 ACR，跳过"
+          else
+            docker buildx imagetools create -t "$MINIO_TARGET" \
+              "registry.cn-hangzhou.aliyuncs.com/fastgpt/minio:${MINIO_TAG}"
+          fi
 
   deploy:
     name: Deploy to ECS

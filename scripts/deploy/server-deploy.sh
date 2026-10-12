@@ -33,7 +33,7 @@ DATA_ROOT="${LOCAL_DATA_DIR:?请在 .env 中设置 LOCAL_DATA_DIR（绝对路径
 if [ -n "${REGISTRY:-}" ]; then
   export POSTGRES_IMAGE="${REGISTRY}/postgres:16-alpine"
   export REDIS_IMAGE="${REGISTRY}/redis:7-alpine"
-  export MINIO_IMAGE="${REGISTRY}/minio:RELEASE.2025-02-28T09-55-16Z"
+  export MINIO_IMAGE="${REGISTRY}/minio:RELEASE.2025-09-07T16-13-09Z"
 fi
 
 cleanup() { rm -f .deploy-credentials; }

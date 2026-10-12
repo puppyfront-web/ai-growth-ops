@@ -157,7 +157,9 @@ services:
       retries: 5
 
   minio:
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-02-28T09-55-16Z}
+    # minio 已从 Docker Hub 全网下架：默认用 fastgpt 的公开 ACR 镜像源，
+    # CI 部署时由 server-deploy.sh 指向本项目 ACR 的中转副本
+    image: ${MINIO_IMAGE:-registry.cn-hangzhou.aliyuncs.com/fastgpt/minio:RELEASE.2025-09-07T16-13-09Z}
     container_name: ai-growth-ops-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
