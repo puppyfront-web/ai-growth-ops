@@ -100,6 +100,18 @@ bash scripts/deploy/update.sh
   `cd /srv/ai-growth-ops && IMAGE_TAG=<旧sha> bash scripts/deploy/server-deploy.sh`
   数据库结构变更的回滚请先按「备份、恢复与回滚」恢复数据。
 
+### 域名与 nginx（可选，一次性）
+
+CI 部署**不会**修改 nginx：web/API 只绑定服务器回环地址的固定端口（web `127.0.0.1:${WEB_PORT:-3002}`、API `3100`），发布替换的是端口后面的容器，nginx 无感知。域名接入是纯一次性操作：
+
+1. DNS 给域名加 A 记录指向服务器 IP；
+2. 用模板生成 vhost（`/api`、`/uploads` 由 Next.js 服务端 rewrite 到 API 容器，nginx 只需转发 web）：
+   `sed "s/__DOMAIN__/<你的域名>/" scripts/deploy/nginx-vhost.conf.example | sudo tee /etc/nginx/conf.d/<你的域名>.conf`
+   然后 `sudo nginx -t && sudo systemctl reload nginx`；
+3. 更新 `APP_URL`（GitHub Secret 与服务器 `/srv/ai-growth-ops/.env` 中的值）为 `http://<你的域名>`，下一次部署或 `docker compose -f docker-compose.prod.yml up -d` 生效。
+
+模板已含 SSE 流式响应的长超时与 100m 上传限制。需要 HTTPS 时再装 certbot 为该 vhost 加 443 配置即可。
+
 ## 构建与启动（手动方式）
 
 ```sh

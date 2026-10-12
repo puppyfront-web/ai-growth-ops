@@ -1,0 +1,35 @@
+# =============================================================
+# AI Growth Ops — nginx 反向代理模板（一次性配置，CI 部署不修改 nginx）
+# 浏览器只需访问 web（127.0.0.1:${WEB_PORT:-3002}）；/api 与 /uploads
+# 由 Next.js 在服务端 rewrite 到 API 容器，nginx 无需单独转发。
+#
+# 用法（替换 __DOMAIN__ 为你的域名，需提前加 DNS A 记录指向服务器）：
+#   sed "s/__DOMAIN__/ai.puppyfront.com/" scripts/deploy/nginx-vhost.conf.example \
+#     | sudo tee /etc/nginx/conf.d/ai.puppyfront.com.conf
+#   sudo nginx -t && sudo systemctl reload nginx
+# =============================================================
+server {
+    listen 80;
+    server_name __DOMAIN__;
+
+    access_log /var/log/nginx/ai-growth-ops-access.log;
+    error_log /var/log/nginx/ai-growth-ops-error.log;
+
+    # 素材上传（/uploads 经 Next.js 转发到 API/MinIO）
+    client_max_body_size 100m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # LLM 流式响应（chat 走 SSE，最长 5 分钟），关闭缓冲并放宽读超时
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
