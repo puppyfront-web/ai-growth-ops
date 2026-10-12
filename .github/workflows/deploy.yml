@@ -175,6 +175,9 @@ jobs:
             StrictHostKeyChecking accept-new
             BatchMode yes
             ConnectTimeout 15
+            # 服务器端迁移/拉镜像期间可能长时间无输出，防止空闲连接被掐断
+            ServerAliveInterval 30
+            ServerAliveCountMax 40
           EOF
 
       - name: Render bootstrap .env（仅在服务器缺失时上传）
