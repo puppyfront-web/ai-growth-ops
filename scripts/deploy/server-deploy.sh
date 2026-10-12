@@ -29,6 +29,12 @@ fi
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 export IMAGE_TAG
 DATA_ROOT="${LOCAL_DATA_DIR:?请在 .env 中设置 LOCAL_DATA_DIR（绝对路径）}"
+# 国内 ECS 直连 Docker Hub 不可靠：CI 已把基础镜像中转到 ACR，这里指向中转地址
+if [ -n "${REGISTRY:-}" ]; then
+  export POSTGRES_IMAGE="${REGISTRY}/postgres:16-alpine"
+  export REDIS_IMAGE="${REGISTRY}/redis:7-alpine"
+  export MINIO_IMAGE="${REGISTRY}/minio:RELEASE.2025-02-28T09-55-16Z"
+fi
 
 cleanup() { rm -f .deploy-credentials; }
 trap cleanup EXIT
@@ -84,8 +90,16 @@ else
   green "已创建数据库 $POSTGRES_DB"
 fi
 
-# ── 6. 迁移 + 空库初始化管理员 ──────────────────────────────
-step "6/8 数据库迁移 + 空库自动 seed"
+# ── 6. 迁移前数据库备份 ─────────────────────────────────────
+step "6/9 迁移前数据库备份（失败即中止）"
+mkdir -p "$DATA_ROOT/backups"
+$COMPOSE exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  | gzip > "$DATA_ROOT/backups/pre-migrate-${IMAGE_TAG}.sql.gz"
+ls -1t "$DATA_ROOT/backups"/pre-migrate-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+green "已备份（保留最近 10 份）：backups/pre-migrate-${IMAGE_TAG}.sql.gz"
+
+# ── 7. 迁移 + 空库初始化管理员 ──────────────────────────────
+step "7/9 数据库迁移 + 空库自动 seed"
 $COMPOSE run --rm -T api pnpm db:deploy
 if [ "$($COMPOSE exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
   "SELECT count(*) FROM \"User\"" 2>/dev/null | tr -d '[:space:]')" = "0" ]; then
@@ -95,8 +109,8 @@ else
   green "已有用户，跳过 seed"
 fi
 
-# ── 7. 滚动更新全部服务 ─────────────────────────────────────
-step "7/8 滚动更新全部服务"
+# ── 8. 滚动更新全部服务 ─────────────────────────────────────
+step "8/9 滚动更新全部服务"
 $COMPOSE up -d
 # 清理悬挂层与旧版本镜像（保留当前 tag 与 latest），防止 ECS 磁盘被历史镜像占满
 docker image prune -f >/dev/null 2>&1 || true
@@ -108,8 +122,8 @@ if [ -n "${REGISTRY:-}" ]; then
 fi
 green "容器已按镜像 tag=$IMAGE_TAG 重建"
 
-# ── 8. 健康检查 ─────────────────────────────────────────────
-step "8/8 健康检查"
+# ── 9. 健康检查 ─────────────────────────────────────────────
+step "9/9 健康检查"
 API_PORT="${API_PORT:-3100}"
 WEB_PORT="${WEB_PORT:-3000}"
 ok=""

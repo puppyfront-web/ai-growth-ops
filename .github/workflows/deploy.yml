@@ -64,6 +64,8 @@ jobs:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           push: true
+          # 阿里云 ACR 不识别 buildx v6 默认附加的 OCI provenance 空 manifest，推送会被拒
+          provenance: false
           tags: |
             ${{ env.REGISTRY_HOST }}/${{ env.NAMESPACE }}/ai-growth-ops-${{ matrix.app }}:${{ github.sha }}
             ${{ env.REGISTRY_HOST }}/${{ env.NAMESPACE }}/ai-growth-ops-${{ matrix.app }}:latest
@@ -72,6 +74,17 @@ jobs:
             API_BASE_URL=http://api:3100
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Mirror base images to ACR（国内 ECS 拉 Docker Hub 不可靠）
+        if: matrix.app == 'api'
+        run: |
+          for img in postgres:16-alpine redis:7-alpine "minio/minio:RELEASE.2025-02-28T09-55-16Z"; do
+            name="${img##*/}"
+            target="${REGISTRY_HOST}/${NAMESPACE}/${name}"
+            docker pull "$img"
+            docker tag "$img" "$target"
+            docker push "$target"
+          done
 
   deploy:
     name: Deploy to ECS
@@ -196,7 +209,8 @@ jobs:
                        ANTHROPIC_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
                        VISION_API_KEY VISION_BASE_URL VISION_MODEL \
                        EMAIL_PROVIDER RESEND_API_KEY EMAIL_FROM \
-                       AGENT_DAILY_DRY_RUN FEISHU_DAILY_REPORT_WEBHOOK; do
+                       AGENT_DAILY_DRY_RUN FEISHU_DAILY_REPORT_WEBHOOK \
+                       WEB_PORT API_PORT; do
               val="${!key:-}"
               [ -n "$val" ] && printf '%s=%s\n' "$key" "$val"
             done
