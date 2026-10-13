@@ -20,6 +20,7 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { ProspectingGuide } from '@/components/prospecting/ProspectingGuide';
 import { formatDate } from '@/lib/utils';
 import { getLlmConfig } from '@/lib/api/settings';
 
@@ -31,6 +32,12 @@ const platformLabels: Record<ProspectingPlatform, string> = {
   baijiahao: '百家号',
   zhihu: '知乎'
 };
+
+const EXAMPLE_REQUIREMENTS = [
+  '寻找正在考虑采购私域运营工具的中小企业负责人，优先零售和教育行业，排除同行、代运营服务商和求职者。',
+  '寻找关注孩子升学规划、正在比较辅导课程的家长，优先初高中阶段，排除同行机构和老师。',
+  '寻找想开通小程序点单的本地餐饮店老板，优先一二线城市，排除已接入外卖平台的商家。'
+];
 
 const statusLabels: Record<string, string> = {
   draft: '草稿',
@@ -78,6 +85,15 @@ export default function ProspectingPage() {
       setPlatformAccountId('');
     }
   }, [accounts, platformAccountId]);
+
+  const openCreateForm = () => {
+    setShowCreate(true);
+    requestAnimationFrame(() => {
+      document
+        .getElementById('prospecting-create-form')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   const { data: llmConfig } = useQuery({
     queryKey: ['settings', 'llm'],
@@ -179,7 +195,10 @@ export default function ProspectingPage() {
       )}
 
       {showCreate && (
-        <div className="mb-6 rounded-lg border bg-muted/30 p-4 space-y-4">
+        <div
+          id="prospecting-create-form"
+          className="mb-6 scroll-mt-20 rounded-lg border bg-muted/30 p-4 space-y-4"
+        >
           <div className="grid gap-3 md:grid-cols-3">
             <div>
               <label
@@ -283,6 +302,24 @@ export default function ProspectingPage() {
               placeholder="例如：寻找正在考虑采购私域运营工具的中小企业负责人，优先零售和教育行业，排除同行、代运营服务商和求职者。"
               className="w-full rounded border bg-background px-3 py-2 text-sm"
             />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                不知道怎么写？试试示例：
+              </span>
+              {EXAMPLE_REQUIREMENTS.map((example, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => {
+                    setRequirement(example);
+                    setAnalysis(null);
+                  }}
+                  className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  示例 {index + 1}
+                </button>
+              ))}
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             系统会识别目标客户、业务场景、购买信号和排除对象，再组合多种采集策略。账号每天最多爬{' '}
@@ -410,96 +447,107 @@ export default function ProspectingPage() {
         </div>
       ) : (
         <>
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium">获客需求</th>
-                  <th className="text-left px-4 py-3 font-medium">平台</th>
-                  <th className="text-left px-4 py-3 font-medium">状态</th>
-                  <th className="text-left px-4 py-3 font-medium">进度</th>
-                  <th className="text-left px-4 py-3 font-medium">潜客数</th>
-                  <th className="text-left px-4 py-3 font-medium">创建时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.items ?? []).map((task) => (
-                  <tr
-                    key={task.id}
-                    className="border-b last:border-0 hover:bg-muted/20"
-                  >
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/prospecting/${task.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {task.requirement || '历史获客任务'}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      {platformLabels[task.platform] ?? task.platform}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {task.status === 'running' && (
-                          <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                        )}
-                        <span>{statusLabels[task.status] ?? task.status}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 max-w-[260px]">
-                      {task.status === 'running' ? (
-                        <div className="space-y-1.5">
-                          <p className="text-xs text-muted-foreground line-clamp-1">
-                            {formatProspectingProgress(task) || '执行中…'}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-blue-500 transition-all duration-500"
-                                style={{
-                                  width: `${getProspectingProgressPercent(task)}%`
-                                }}
-                              />
-                            </div>
-                            <span className="text-[10px] tabular-nums text-muted-foreground w-8 text-right">
-                              {getProspectingProgressPercent(task)}%
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">
-                            {task.totalVideos} 视频 · {task.totalComments} 评论
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {formatProspectingProgress(task) ||
-                            (task.status === 'completed'
-                              ? `视频 ${task.totalVideos} · 评论 ${task.totalComments}`
-                              : '-')}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums">
-                      {task.totalCandidates}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatDate(task.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-                {(data?.items ?? []).length === 0 && (
+          {(data?.items ?? []).length === 0 && page === 1 ? (
+            <ProspectingGuide onStartCreate={openCreateForm} />
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b">
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-4 py-8 text-center text-muted-foreground"
-                    >
-                      暂无获客任务，点击「新建任务」开始
-                    </td>
+                    <th className="text-left px-4 py-3 font-medium">
+                      获客需求
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium">平台</th>
+                    <th className="text-left px-4 py-3 font-medium">状态</th>
+                    <th className="text-left px-4 py-3 font-medium">进度</th>
+                    <th className="text-left px-4 py-3 font-medium">潜客数</th>
+                    <th className="text-left px-4 py-3 font-medium">
+                      创建时间
+                    </th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {(data?.items ?? []).map((task) => (
+                    <tr
+                      key={task.id}
+                      className="border-b last:border-0 hover:bg-muted/20"
+                    >
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/prospecting/${task.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {task.requirement || '历史获客任务'}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        {platformLabels[task.platform] ?? task.platform}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {task.status === 'running' && (
+                            <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                          )}
+                          <span>
+                            {statusLabels[task.status] ?? task.status}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 max-w-[260px]">
+                        {task.status === 'running' ? (
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-muted-foreground line-clamp-1">
+                              {formatProspectingProgress(task) || '执行中…'}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                  style={{
+                                    width: `${getProspectingProgressPercent(task)}%`
+                                  }}
+                                />
+                              </div>
+                              <span className="text-[10px] tabular-nums text-muted-foreground w-8 text-right">
+                                {getProspectingProgressPercent(task)}%
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              {task.totalVideos} 视频 · {task.totalComments}{' '}
+                              评论
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {formatProspectingProgress(task) ||
+                              (task.status === 'completed'
+                                ? `视频 ${task.totalVideos} · 评论 ${task.totalComments}`
+                                : '-')}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">
+                        {task.totalCandidates}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {formatDate(task.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                  {(data?.items ?? []).length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-4 py-8 text-center text-muted-foreground"
+                      >
+                        本页暂无获客任务，点击「新建任务」开始
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           {(data?.totalPages ?? 0) > 1 && (
             <div className="mt-4 flex items-center justify-end gap-3 text-sm">
               <button

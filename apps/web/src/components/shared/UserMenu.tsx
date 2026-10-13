@@ -26,7 +26,7 @@ export function UserMenu() {
           className="flex items-center gap-2 rounded-md p-1 hover:bg-accent transition-colors outline-none"
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage src="" alt={email} />
+            <AvatarImage src={user?.avatarUrl ?? undefined} alt={email} />
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
         </button>

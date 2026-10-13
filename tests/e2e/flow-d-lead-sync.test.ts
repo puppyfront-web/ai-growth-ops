@@ -14,7 +14,7 @@ test.describe('Intent-driven prospecting', () => {
 
   test('shows the prospecting workspace', async ({ page }) => {
     await expect(page.getByRole('heading', { name: '智能获客' })).toBeVisible();
-    await expect(page.getByText('暂无获客任务')).toBeVisible();
+    await expect(page.getByText('三步开始智能获客')).toBeVisible();
   });
 
   test('creates a prospecting task and opens its detail', async ({ page }) => {
