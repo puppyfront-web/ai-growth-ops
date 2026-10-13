@@ -16,9 +16,9 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { BrowserLoginDialog } from '@/components/integrations/BrowserLoginDialog';
 import {
   platformLabels,
-  platformIcons,
   publishModeLabels
 } from '@/lib/constants';
+import { PlatformIcon } from '@/components/shared/PlatformIcon';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { formatDate } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
@@ -301,7 +301,6 @@ export default function PlatformsPage() {
       <Breadcrumb />
       <PageHeader
         title="平台账号"
-        description="管理6大平台账号授权和能力"
         actions={
           <button
             onClick={() => setDialog(emptyDialog('create'))}
@@ -313,11 +312,11 @@ export default function PlatformsPage() {
       />
 
       {mutationError && (
-        <div className="mb-4 rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 flex items-center justify-between">
+        <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-center justify-between">
           <span>{mutationError}</span>
           <button
             onClick={() => setMutationError(null)}
-            className="text-red-500 hover:text-red-700"
+            className="text-destructive hover:text-destructive"
           >
             &times;
           </button>
@@ -339,11 +338,7 @@ export default function PlatformsPage() {
               {/* Header */}
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">
-                    {platformIcons[
-                      account.platform as keyof typeof platformIcons
-                    ] ?? '🔌'}
-                  </span>
+                  <PlatformIcon platform={account.platform} className="h-7 w-7" />
                   <div>
                     <h3 className="font-semibold leading-tight">
                       {account.name}
@@ -360,7 +355,7 @@ export default function PlatformsPage() {
                 <button
                   onClick={() => handleToggleStatus(account)}
                   disabled={updateMutation.isPending}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${isActive ? 'bg-teal-600' : 'bg-gray-200'} disabled:opacity-50`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${isActive ? 'bg-primary' : 'bg-muted'} disabled:opacity-50`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'}`}
@@ -375,7 +370,7 @@ export default function PlatformsPage() {
                   label={accountStatusLabels[account.status] ?? account.status}
                 />
                 {account.cookieRef && account.mode === 'browser_assist' && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
                     Cookie 已保存
                   </span>
                 )}
@@ -391,8 +386,8 @@ export default function PlatformsPage() {
 
               {/* 登录失效引导横幅 */}
               {account.status === 'expired' && (
-                <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 dark:border-amber-900 dark:bg-amber-950">
-                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-warning/25 bg-warning/10 p-2">
+                  <p className="text-xs text-warning">
                     平台登录已失效，请重新扫码授权后继续获客任务
                   </p>
                   <button
@@ -402,7 +397,7 @@ export default function PlatformsPage() {
                         platform: account.platform
                       })
                     }
-                    className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+                    className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white hover:bg-warning"
                   >
                     重新扫码授权
                   </button>
@@ -430,7 +425,7 @@ export default function PlatformsPage() {
                           )
                         }
                         disabled={updateMutation.isPending}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${cap.enabled ? 'bg-teal-600' : 'bg-gray-200'} disabled:opacity-50`}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${cap.enabled ? 'bg-primary' : 'bg-muted'} disabled:opacity-50`}
                       >
                         <span
                           className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${cap.enabled ? 'translate-x-4' : 'translate-x-0'}`}
@@ -444,7 +439,7 @@ export default function PlatformsPage() {
               {/* Validate result */}
               {validateResult?.accountId === account.id && (
                 <div
-                  className={`mb-2 rounded-md p-2 text-xs ${validateResult.valid ? 'bg-green-50 dark:bg-green-950 text-green-700' : 'bg-red-50 dark:bg-red-950 text-red-700'}`}
+                  className={`mb-2 rounded-md p-2 text-xs ${validateResult.valid ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}
                 >
                   {validateResult.valid
                     ? '凭证有效'
@@ -467,20 +462,20 @@ export default function PlatformsPage() {
                         platform: account.platform
                       })
                     }
-                    className="text-xs text-green-600 hover:underline"
+                    className="text-xs text-success hover:underline"
                   >
                     扫码登录
                   </button>
                   <button
                     onClick={() => handleValidate(account.id)}
                     disabled={validatingId === account.id}
-                    className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                    className="text-xs text-info hover:underline disabled:opacity-50"
                   >
                     {validatingId === account.id ? '验证中...' : '验证'}
                   </button>
                   <button
                     onClick={() => openEditDialog(account)}
-                    className="text-xs text-blue-600 hover:underline"
+                    className="text-xs text-info hover:underline"
                   >
                     编辑
                   </button>
@@ -494,7 +489,7 @@ export default function PlatformsPage() {
                         if (ok) deleteMutation.mutate(account.id);
                       });
                     }}
-                    className="text-xs text-red-600 hover:underline dark:text-red-400"
+                    className="text-xs text-destructive hover:underline"
                   >
                     删除
                   </button>

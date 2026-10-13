@@ -15,24 +15,9 @@ export default function IntegrationsPage() {
       desc: '管理6大平台账号授权'
     },
     {
-      href: '/integrations/feishu',
-      title: '飞书配置',
-      desc: '配置飞书多维表格同步'
-    },
-    {
-      href: '/integrations/wecom',
-      title: '企微配置',
-      desc: '配置企业微信客户联系'
-    },
-    {
-      href: '/integrations/providers',
-      title: 'Provider 配置',
-      desc: '管理各 Provider 状态'
-    },
-    {
-      href: '/integrations/webhooks',
-      title: 'Webhook 管理',
-      desc: '管理 Webhook 订阅和事件推送'
+      href: '/integrations/sync',
+      title: '同步与推送',
+      desc: '飞书多维表格同步 · 企业微信客户联系 · Webhook 事件推送（含配置指引）'
     }
   ];
 
@@ -41,7 +26,6 @@ export default function IntegrationsPage() {
       <Breadcrumb />
       <PageHeader
         title="集成配置"
-        description="管理平台账号、外部系统和 Provider"
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {items.map((item) => (

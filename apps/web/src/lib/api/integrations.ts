@@ -27,13 +27,6 @@ export interface PlatformAccount {
   [key: string]: unknown;
 }
 
-export interface ProviderInfo {
-  name: string;
-  operation: string;
-  runCount: number;
-  avgDurationMs: number;
-}
-
 export function getPlatformAccounts(): Promise<PlatformAccount[]> {
   return apiGet<PlatformAccount[]>('/api/accounts');
 }
@@ -96,10 +89,6 @@ export function cancelBrowserLogin(
     `/api/accounts/${accountId}/browser-login/cancel`,
     {}
   );
-}
-
-export function getProviders(): Promise<ProviderInfo[]> {
-  return apiGet<ProviderInfo[]>('/api/providers');
 }
 
 export function getFeishuConfig(): Promise<Record<string, unknown>> {
