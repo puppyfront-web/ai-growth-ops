@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { PlatformBadge } from '@/components/shared/StatusBadge';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -17,7 +18,7 @@ import type { Platform } from '@/types/enums';
 const priorityStyles: Record<string, string> = {
   high: 'bg-destructive/10 text-destructive border-destructive/25',
   medium: 'bg-warning/10 text-warning border-warning/25',
-  low: 'bg-gray-50 text-muted-foreground border-border'
+  low: 'bg-muted text-muted-foreground border-border'
 };
 const priorityLabels: Record<string, string> = {
   high: '高优先',
@@ -79,16 +80,16 @@ export default function OpportunitiesPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  size="xs"
                   onClick={() => createMutation.mutate(opp.id)}
-                  disabled={createMutation.isPending}
-                  className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+                  loading={createMutation.isPending}
                 >
                   {createMutation.isPending ? '生成中...' : '生成内容'}
-                </button>
-                <button className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent">
+                </Button>
+                <Button variant="outline" size="xs">
                   忽略
-                </button>
+                </Button>
               </div>
             </div>
           </div>

@@ -5,6 +5,7 @@ import { getComplianceRules, updateComplianceRules } from '@/lib/api/settings';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 
 export default function CompliancePage() {
@@ -52,14 +53,17 @@ export default function CompliancePage() {
                   className="rounded-full bg-destructive/10 border border-destructive/25 px-3 py-1 text-sm text-destructive flex items-center gap-1"
                 >
                   {word}
-                  <button
+                  <Button
+                    variant="ghost-destructive"
+                    size="xs"
+                    aria-label={`删除 ${word}`}
                     onClick={() =>
                       setLocalWords((w) => w.filter((x) => x !== word))
                     }
-                    className="ml-1 text-destructive hover:text-destructive"
+                    className="ml-1 h-auto px-1"
                   >
                     &times;
-                  </button>
+                  </Button>
                 </span>
               ))}
             </div>
@@ -76,17 +80,17 @@ export default function CompliancePage() {
                   }
                 }}
               />
-              <button
+              <Button
+                variant="outline"
                 onClick={() => {
                   if (newWord.trim()) {
                     setLocalWords((w) => [...w, newWord.trim()]);
                     setNewWord('');
                   }
                 }}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
               >
                 添加
-              </button>
+              </Button>
             </div>
           </div>
           <div className="rounded-xl border bg-card p-5 space-y-4">
@@ -97,14 +101,15 @@ export default function CompliancePage() {
                 className="flex items-center justify-between rounded-lg border p-3"
               >
                 <span className="text-sm">{phrase}</span>
-                <button
+                <Button
+                  variant="ghost-destructive"
+                  size="xs"
                   onClick={() =>
                     setLocalPhrases((p) => p.filter((x) => x !== phrase))
                   }
-                  className="text-xs text-destructive hover:underline"
                 >
                   删除
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -138,13 +143,12 @@ export default function CompliancePage() {
               ))}
             </div>
           </div>
-          <button
+          <Button
             onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-            className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            loading={saveMutation.isPending}
           >
             {saveMutation.isPending ? '保存中...' : '保存规则'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

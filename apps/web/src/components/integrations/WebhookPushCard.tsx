@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Webhook, Plus, Trash2, Zap, Send, Users, BookOpen } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 const webhookEvents = [
@@ -145,7 +145,7 @@ export function WebhookPushCard() {
                   <span className="text-sm font-medium">{ev.label}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">{ev.desc}</p>
-                <code className="mt-1 block rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                <code className="mt-1 block rounded bg-muted px-1.5 py-0.5 text-xs">
                   {ev.value}
                 </code>
               </div>
@@ -182,7 +182,7 @@ export function WebhookPushCard() {
                       {wh.events.map((ev) => (
                         <span
                           key={ev}
-                          className="rounded-full bg-muted px-2 py-0.5 text-[10px]"
+                          className="rounded-full bg-muted px-2 py-0.5 text-xs"
                         >
                           {ev}
                         </span>
@@ -197,9 +197,12 @@ export function WebhookPushCard() {
                     {wh.status === 'active' ? '已启用' : '已禁用'}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatDate(wh.createdAt)}
+                    {formatDateTime(wh.createdAt)}
                   </span>
-                  <button
+                  <Button
+                    variant="ghost-destructive"
+                    size="icon-sm"
+                    aria-label="删除 Webhook"
                     onClick={() => {
                       confirm({
                         title: '删除 Webhook',
@@ -209,10 +212,9 @@ export function WebhookPushCard() {
                         if (ok) deleteMutation.mutate(wh.id);
                       });
                     }}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}

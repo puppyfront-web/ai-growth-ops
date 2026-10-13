@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import {
   Image,
   Video,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { MediaAsset } from '@/types/media';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const generationTypes = [
   {
@@ -127,7 +128,7 @@ export default function MediaGenerationPage() {
                   <label className="text-xs font-medium text-muted-foreground">
                     风格
                   </label>
-                  <select
+                  <NativeSelect
                     value={style}
                     onChange={(e) => setStyle(e.target.value)}
                     className="rounded-md border p-1.5 text-sm"
@@ -138,13 +139,13 @@ export default function MediaGenerationPage() {
                     <option value="潮流时尚">潮流时尚</option>
                     <option value="简约文艺">简约文艺</option>
                     <option value="可爱卡通">可爱卡通</option>
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-medium text-muted-foreground">
                     尺寸
                   </label>
-                  <select
+                  <NativeSelect
                     value={size}
                     onChange={(e) => setSize(e.target.value)}
                     className="rounded-md border p-1.5 text-sm"
@@ -154,7 +155,7 @@ export default function MediaGenerationPage() {
                         {s}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -267,9 +268,9 @@ export default function MediaGenerationPage() {
                         <div className="text-xs font-medium truncate">
                           {asset.fileName}
                         </div>
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           {asset.generationProvider ?? 'AI'} ·{' '}
-                          {formatDate(asset.createdAt)}
+                          {formatDateTime(asset.createdAt)}
                         </div>
                       </div>
                     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { ShieldAlert, CheckCircle2 } from 'lucide-react';
-import { RiskBadge } from '@/components/shared/RiskBadge';
+import { RiskBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { NODE_ORDER, type NodeName, type NodeResult } from '@/lib/api/agent';
 

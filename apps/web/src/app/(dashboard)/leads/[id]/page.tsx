@@ -24,7 +24,9 @@ import {
   LeadLevelBadge,
   RiskBadge
 } from '@/components/shared/StatusBadge';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 const leadStatusLabels: Record<string, string> = {
   NEW: '新线索',
@@ -109,30 +111,35 @@ export default function LeadDetailPage() {
         title={lead.externalUserName ?? lead.externalUserId}
         actions={
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => syncFeishuMutation.mutate()}
               disabled={syncFeishuMutation.isPending}
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+              loading={syncFeishuMutation.isPending}
             >
               {syncFeishuMutation.isPending ? '同步中...' : '同步飞书'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => syncWecomMutation.mutate()}
               disabled={syncWecomMutation.isPending}
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+              loading={syncWecomMutation.isPending}
             >
               {syncWecomMutation.isPending ? '同步中...' : '同步企微'}
-            </button>
+            </Button>
             {nextStatus && (
-              <button
+              <Button
+                size="sm"
                 onClick={() => statusMutation.mutate(nextStatus)}
                 disabled={statusMutation.isPending}
-                className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+                loading={statusMutation.isPending}
               >
                 {statusMutation.isPending
                   ? '更新中...'
                   : `更新为${leadStatusLabels[nextStatus]}`}
-              </button>
+              </Button>
             )}
           </div>
         }
@@ -146,7 +153,7 @@ export default function LeadDetailPage() {
               <span className="text-muted-foreground">线索等级</span>
               <div className="flex items-center gap-2">
                 <LeadLevelBadge level={lead.level} />
-                <select
+                <NativeSelect
                   value={lead.level}
                   onChange={(e) =>
                     levelMutation.mutate(e.target.value as 'A' | 'B' | 'C' | 'D')
@@ -160,7 +167,7 @@ export default function LeadDetailPage() {
                       {lv} 级
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             </div>
             <div>
@@ -217,7 +224,7 @@ export default function LeadDetailPage() {
             </div>
             <div>
               <span className="text-muted-foreground">创建时间</span>
-              <div>{formatDate(lead.createdAt)}</div>
+              <div>{formatDateTime(lead.createdAt)}</div>
             </div>
           </div>
           {lead.summary && (
@@ -262,7 +269,7 @@ export default function LeadDetailPage() {
 
           {/* Add follow-up entry */}
           <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-2">
-            <select
+            <NativeSelect
               value={followUpAction}
               onChange={(e) => setFollowUpAction(e.target.value)}
               className="rounded border bg-background px-2 py-1 text-xs"
@@ -279,7 +286,7 @@ export default function LeadDetailPage() {
                   {a}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <input
               type="text"
               value={followUp}
@@ -292,13 +299,13 @@ export default function LeadDetailPage() {
                 }
               }}
             />
-            <button
+            <Button
+              size="xs"
               onClick={() => followUp.trim() && activityMutation.mutate()}
               disabled={!followUp.trim() || activityMutation.isPending}
-              className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground disabled:opacity-50"
             >
               添加
-            </button>
+            </Button>
           </div>
 
           {activities && activities.length > 0 ? (
@@ -316,7 +323,7 @@ export default function LeadDetailPage() {
                       </div>
                     )}
                     <div className="text-xs text-muted-foreground mt-1">
-                      {formatDate(activity.createdAt)} · {activity.operator}
+                      {formatDateTime(activity.createdAt)} · {activity.operator}
                     </div>
                   </div>
                 </div>

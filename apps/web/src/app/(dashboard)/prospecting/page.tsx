@@ -21,8 +21,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ProspectingGuide } from '@/components/prospecting/ProspectingGuide';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { getLlmConfig } from '@/lib/api/settings';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const platformLabels: Record<ProspectingPlatform, string> = {
   douyin: '抖音',
@@ -154,7 +156,7 @@ export default function ProspectingPage() {
       setAnalysis(null);
       setEnabledStrategyIds([]);
       qc.invalidateQueries({ queryKey: ['prospecting'] });
-      window.location.href = `/prospecting/${task.id}`;
+      router.push(`/prospecting/${task.id}`);
     }
   });
 
@@ -164,12 +166,7 @@ export default function ProspectingPage() {
       <PageHeader
         title="智能获客"
         actions={
-          <button
-            onClick={() => setShowCreate((v) => !v)}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90"
-          >
-            + 新建任务
-          </button>
+          <Button onClick={() => setShowCreate((v) => !v)}>+ 新建任务</Button>
         }
       />
 
@@ -206,7 +203,7 @@ export default function ProspectingPage() {
               >
                 目标平台
               </label>
-              <select
+              <NativeSelect
                 id="prospecting-platform"
                 value={platform}
                 onChange={(e) => {
@@ -221,7 +218,7 @@ export default function ProspectingPage() {
                     {platformLabels[value]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div>
               <label
@@ -230,7 +227,7 @@ export default function ProspectingPage() {
               >
                 执行账号
               </label>
-              <select
+              <NativeSelect
                 id="prospecting-account"
                 value={platformAccountId}
                 onChange={(event) => {
@@ -263,7 +260,7 @@ export default function ProspectingPage() {
                     {account.platformAccountName}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div>
               <label
@@ -306,17 +303,19 @@ export default function ProspectingPage() {
                 不知道怎么写？试试示例：
               </span>
               {EXAMPLE_REQUIREMENTS.map((example, index) => (
-                <button
+                <Button
                   key={index}
                   type="button"
+                  variant="outline"
+                  size="xs"
                   onClick={() => {
                     setRequirement(example);
                     setAnalysis(null);
                   }}
-                  className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="rounded-full text-muted-foreground hover:text-foreground"
                 >
                   示例 {index + 1}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -392,35 +391,29 @@ export default function ProspectingPage() {
           )}
           <div className="flex gap-2">
             {!analysis ? (
-              <button
+              <Button
                 onClick={() => analyzeMutation.mutate()}
                 disabled={
                   requirement.trim().length < 20 ||
                   !platformAccountId ||
-                  analyzeMutation.isPending ||
                   llmMissing
                 }
-                className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                loading={analyzeMutation.isPending}
               >
                 {analyzeMutation.isPending ? '分析中…' : '分析需求'}
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
                 onClick={() => createMutation.mutate()}
-                disabled={
-                  enabledStrategyIds.length < 2 || createMutation.isPending
-                }
-                className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                disabled={enabledStrategyIds.length < 2}
+                loading={createMutation.isPending}
               >
                 {createMutation.isPending ? '创建中…' : '确认并开始获客'}
-              </button>
+              </Button>
             )}
-            <button
-              onClick={() => setShowCreate(false)}
-              className="rounded border px-4 py-2 text-sm hover:bg-accent"
-            >
+            <Button variant="outline" onClick={() => setShowCreate(false)}>
               取消
-            </button>
+            </Button>
           </div>
           {createMutation.isError && (
             <p className="text-sm text-destructive">
@@ -440,9 +433,14 @@ export default function ProspectingPage() {
       ) : error ? (
         <div className="text-sm text-destructive">
           获客任务加载失败。
-          <button onClick={() => refetch()} className="ml-2 underline">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => refetch()}
+            className="ml-2 underline"
+          >
             重试
-          </button>
+          </Button>
         </div>
       ) : (
         <>
@@ -515,11 +513,11 @@ export default function ProspectingPage() {
                                   }}
                                 />
                               </div>
-                              <span className="text-[10px] tabular-nums text-muted-foreground w-8 text-right">
+                              <span className="text-xs tabular-nums text-muted-foreground w-8 text-right">
                                 {getProspectingProgressPercent(task)}%
                               </span>
                             </div>
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {task.totalVideos} 视频 · {task.totalComments}{' '}
                               评论
                             </p>
@@ -537,7 +535,7 @@ export default function ProspectingPage() {
                         {task.totalCandidates}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                        {formatDate(task.createdAt)}
+                        {formatDateTime(task.createdAt)}
                       </td>
                     </tr>
                   ))}
@@ -557,23 +555,25 @@ export default function ProspectingPage() {
           )}
           {(data?.totalPages ?? 0) > 1 && (
             <div className="mt-4 flex items-center justify-end gap-3 text-sm">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
                 disabled={page <= 1}
-                className="rounded border px-3 py-1.5 disabled:opacity-50"
               >
                 上一页
-              </button>
+              </Button>
               <span>
                 第 {page} / {data?.totalPages} 页
               </span>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((value) => value + 1)}
                 disabled={page >= (data?.totalPages ?? 1)}
-                className="rounded border px-3 py-1.5 disabled:opacity-50"
               >
                 下一页
-              </button>
+              </Button>
             </div>
           )}
         </>

@@ -20,8 +20,10 @@ import {
 } from '@/lib/constants';
 import { PlatformIcon } from '@/components/shared/PlatformIcon';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const capabilityLabels: Record<string, string> = {
   text_image_publish: '图文发布',
@@ -302,24 +304,23 @@ export default function PlatformsPage() {
       <PageHeader
         title="平台账号"
         actions={
-          <button
-            onClick={() => setDialog(emptyDialog('create'))}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-          >
+          <Button onClick={() => setDialog(emptyDialog('create'))}>
             创建账号
-          </button>
+          </Button>
         }
       />
 
       {mutationError && (
         <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-center justify-between">
           <span>{mutationError}</span>
-          <button
+          <Button
+            variant="ghost-destructive"
+            size="icon-sm"
+            aria-label="关闭错误提示"
             onClick={() => setMutationError(null)}
-            className="text-destructive hover:text-destructive"
           >
             &times;
-          </button>
+          </Button>
         </div>
       )}
 
@@ -390,17 +391,19 @@ export default function PlatformsPage() {
                   <p className="text-xs text-warning">
                     平台登录已失效，请重新扫码授权后继续获客任务
                   </p>
-                  <button
+                  <Button
+                    variant="outline"
+                    size="xs"
                     onClick={() =>
                       setBrowserLogin({
                         accountId: account.id,
                         platform: account.platform
                       })
                     }
-                    className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white hover:bg-warning"
+                    className="shrink-0 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
                   >
                     重新扫码授权
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -451,35 +454,43 @@ export default function PlatformsPage() {
               <div className="flex items-center justify-between border-t pt-3 mt-auto">
                 <div className="text-xs text-muted-foreground">
                   {typeof account.lastHealthCheckAt === 'string'
-                    ? `检查: ${formatDate(account.lastHealthCheckAt)}`
+                    ? `检查: ${formatDateTime(account.lastHealthCheckAt)}`
                     : '未检查'}
                 </div>
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={() =>
                       setBrowserLogin({
                         accountId: account.id,
                         platform: account.platform
                       })
                     }
-                    className="text-xs text-success hover:underline"
+                    className="text-success hover:text-success hover:underline"
                   >
                     扫码登录
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={() => handleValidate(account.id)}
-                    disabled={validatingId === account.id}
-                    className="text-xs text-info hover:underline disabled:opacity-50"
+                    loading={validatingId === account.id}
+                    className="text-info hover:text-info hover:underline"
                   >
                     {validatingId === account.id ? '验证中...' : '验证'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={() => openEditDialog(account)}
-                    className="text-xs text-info hover:underline"
+                    className="text-info hover:text-info hover:underline"
                   >
                     编辑
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost-destructive"
+                    size="xs"
                     onClick={() => {
                       confirm({
                         title: '删除账号',
@@ -489,10 +500,10 @@ export default function PlatformsPage() {
                         if (ok) deleteMutation.mutate(account.id);
                       });
                     }}
-                    className="text-xs text-destructive hover:underline"
+                    className="hover:underline"
                   >
                     删除
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -518,7 +529,7 @@ export default function PlatformsPage() {
               {d.mode === 'create' && (
                 <div>
                   <label className="text-sm font-medium">平台</label>
-                  <select
+                  <NativeSelect
                     value={d.platform}
                     onChange={(e) => {
                       const p = e.target.value;
@@ -542,7 +553,7 @@ export default function PlatformsPage() {
                     <option value="wechat_channels">微信视频号</option>
                     <option value="baijiahao">百家号</option>
                     <option value="zhihu">知乎</option>
-                  </select>
+                  </NativeSelect>
                 </div>
               )}
 
@@ -562,7 +573,7 @@ export default function PlatformsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium">发布模式</label>
-                  <select
+                  <NativeSelect
                     value={d.modeValue}
                     onChange={(e) =>
                       setDialog((prev) =>
@@ -575,11 +586,11 @@ export default function PlatformsPage() {
                     <option value="browser_assist">浏览器辅助</option>
                     <option value="manual_confirm">人工确认</option>
                     <option value="manual_import">手动导入</option>
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div>
                   <label className="text-sm font-medium">认证方式</label>
-                  <select
+                  <NativeSelect
                     value={d.authType}
                     onChange={(e) =>
                       setDialog((prev) =>
@@ -594,7 +605,7 @@ export default function PlatformsPage() {
                         {authTypeLabels[t]}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
 
@@ -814,26 +825,18 @@ export default function PlatformsPage() {
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setDialog(null)}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
-              >
+              <Button variant="outline" onClick={() => setDialog(null)}>
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSaveDialog}
-                disabled={
-                  createMutation.isPending ||
-                  updateMutation.isPending ||
-                  !d.name ||
-                  !d.platform
-                }
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                disabled={!d.name || !d.platform}
+                loading={createMutation.isPending || updateMutation.isPending}
               >
                 {createMutation.isPending || updateMutation.isPending
                   ? '保存中...'
                   : '保存'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

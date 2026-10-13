@@ -57,13 +57,13 @@ export function CalendarDayCell({
               getItemColor(item)
             )}
           />
-          <span className="text-[10px] leading-tight truncate">
+          <span className="text-xs leading-tight truncate">
             {getItemLabel(item)}
           </span>
         </div>
       ))}
       {overflow > 0 && (
-        <span className="text-[10px] text-muted-foreground pl-1">
+        <span className="text-xs text-muted-foreground pl-1">
           +{overflow} 更多
         </span>
       )}

@@ -7,7 +7,7 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { publishStatusLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 
 export default function PublishAttemptsPage() {
   const { data: jobs, isLoading } = useQuery({
@@ -39,7 +39,7 @@ export default function PublishAttemptsPage() {
                 <p className="text-sm text-destructive">{job.lastError}</p>
               )}
               <p className="text-xs text-muted-foreground mt-1">
-                {job.finishedAt ? formatDate(job.finishedAt) : ''}
+                {job.finishedAt ? formatDateTime(job.finishedAt) : ''}
               </p>
             </div>
           ))}

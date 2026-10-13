@@ -8,10 +8,11 @@ import { queryKeys } from '@/lib/query-keys';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { platformLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import type { Platform } from '@/types/enums';
 
 const platforms = [
@@ -68,9 +69,10 @@ export default function RepliesPage() {
 
       {/* Replies list */}
       {(interactions ?? []).length === 0 ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          暂无回复记录
-        </div>
+        <EmptyState
+          title="暂无回复记录"
+          description="AI 生成的回复在人工确认后发送，记录会出现在这里。"
+        />
       ) : (
         <div className="space-y-2">
           {interactions!.map((interaction) => (
@@ -94,7 +96,7 @@ export default function RepliesPage() {
                 </div>
               </div>
               <span className="ml-3 flex-shrink-0 text-xs text-muted-foreground">
-                {formatDate(interaction.updatedAt)}
+                {formatDateTime(interaction.updatedAt)}
               </span>
             </Link>
           ))}

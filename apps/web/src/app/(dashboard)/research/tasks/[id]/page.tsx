@@ -12,8 +12,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { Button } from '@/components/ui/button';
 import { researchStatusLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { useState } from 'react';
 
 export default function ResearchTaskDetailPage() {
@@ -71,13 +72,12 @@ export default function ResearchTaskDetailPage() {
         description={`状态: ${researchStatusLabels[task.status]}`}
         actions={
           canRun ? (
-            <button
+            <Button
               onClick={() => runMutation.mutate()}
-              disabled={runMutation.isPending}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              loading={runMutation.isPending}
             >
               {runMutation.isPending ? '运行中...' : '运行任务'}
-            </button>
+            </Button>
           ) : undefined
         }
       />
@@ -130,7 +130,7 @@ export default function ResearchTaskDetailPage() {
             <div>
               <span className="text-sm text-muted-foreground">最近运行</span>
               <div className="font-medium">
-                {task.startedAt ? formatDate(task.startedAt) : '未运行'}
+                {task.startedAt ? formatDateTime(task.startedAt) : '未运行'}
               </div>
             </div>
           </div>
@@ -255,17 +255,16 @@ export default function ResearchTaskDetailPage() {
                         </div>
                       )}
                     </div>
-                    <button
+                    <Button
                       onClick={() =>
                         createContentMutation.mutate(opportunity.id)
                       }
-                      disabled={createContentMutation.isPending}
-                      className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                      loading={createContentMutation.isPending}
                     >
                       {createContentMutation.isPending
                         ? '生成中...'
                         : '生成内容'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))

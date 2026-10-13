@@ -11,11 +11,13 @@ import {
   contentTypeLabels,
   publishModeLabels
 } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { PublishJob } from '@/types/publish';
 import Link from 'next/link';
 import { useState } from 'react';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 const columns: ColumnDef<PublishJob>[] = [
   {
@@ -56,7 +58,7 @@ const columns: ColumnDef<PublishJob>[] = [
     header: '计划时间',
     cell: ({ getValue }) => (
       <span className="text-sm text-muted-foreground">
-        {getValue() ? formatDate(getValue() as string) : '-'}
+        {getValue() ? formatDateTime(getValue() as string) : '-'}
       </span>
     )
   },
@@ -81,9 +83,9 @@ const columns: ColumnDef<PublishJob>[] = [
           详情
         </Link>
         {row.original.status === 'FAILED' && (
-          <button className="text-sm text-warning hover:underline">
+          <Button variant="ghost" size="sm">
             重试
-          </button>
+          </Button>
         )}
       </div>
     )
@@ -121,7 +123,7 @@ export default function PublishPage() {
         }
       />
       <div className="mb-4">
-        <select
+        <NativeSelect
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="rounded-md border p-2 text-sm"
@@ -133,7 +135,7 @@ export default function PublishPage() {
           <option value="WAITING_HUMAN_CONFIRM">等待确认</option>
           <option value="PUBLISHED">已发布</option>
           <option value="FAILED">失败</option>
-        </select>
+        </NativeSelect>
       </div>
       <DataTable
         columns={columns}

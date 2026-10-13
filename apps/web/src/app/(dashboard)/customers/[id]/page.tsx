@@ -15,10 +15,11 @@ import {
   syncCustomerToFeishu
 } from '@/lib/api/customers';
 import { toast } from '@/components/ui/toast';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import type { PlaybookAction } from '@/types/customer';
 import {
   CHANNEL_LABELS,
@@ -167,9 +168,14 @@ export default function CustomerDetailPage() {
     return (
       <div className="p-6 text-sm text-destructive">
         客户数据加载失败。
-        <button onClick={() => refetchCustomer()} className="ml-2 underline">
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => refetchCustomer()}
+          className="ml-2 underline"
+        >
           重试
-        </button>
+        </Button>
       </div>
     );
   }
@@ -221,14 +227,15 @@ export default function CustomerDetailPage() {
                 打开飞书记录
               </a>
             )}
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => feishuSyncMutation.mutate()}
-              disabled={feishuSyncMutation.isPending}
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+              loading={feishuSyncMutation.isPending}
             >
               {feishuSyncMutation.isPending ? '同步中…' : '同步飞书'}
-            </button>
+            </Button>
             {customer.metadata?.lark?.syncedAt &&
               customer.metadata.lark.lastSuccess !== false && (
                 <span className="text-xs text-muted-foreground">
@@ -251,16 +258,17 @@ export default function CustomerDetailPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-medium">基本信息</h2>
               {!editing && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="xs"
                   onClick={() => {
                     setForm(formFromCustomer(customer));
                     setEditing(true);
                   }}
-                  className="rounded border px-2 py-1 text-xs hover:bg-accent"
                 >
                   编辑
-                </button>
+                </Button>
               )}
             </div>
             {editing && form ? (
@@ -277,32 +285,29 @@ export default function CustomerDetailPage() {
                   idPrefix="customer-detail"
                 />
                 <div className="flex gap-2">
-                  <button
+                  <Button
                     type="button"
                     onClick={() =>
                       form.displayName.trim() &&
                       form.intent.trim() &&
                       updateMutation.mutate()
                     }
-                    disabled={
-                      !form.displayName.trim() ||
-                      !form.intent.trim() ||
-                      updateMutation.isPending
-                    }
-                    className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+                    disabled={!form.displayName.trim() || !form.intent.trim()}
+                    loading={updateMutation.isPending}
                   >
                     {updateMutation.isPending ? '保存中…' : '保存'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={() => {
                       setEditing(false);
                       setForm(null);
                     }}
-                    className="rounded border px-3 py-1.5 text-sm hover:bg-accent"
                   >
                     取消
-                  </button>
+                  </Button>
                 </div>
                 {updateMutation.isError && (
                   <p className="text-sm text-destructive">
@@ -400,13 +405,14 @@ export default function CustomerDetailPage() {
           <section className="rounded-lg border p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-medium">客户画像</h2>
-              <button
+              <Button
+                variant="outline"
+                size="xs"
                 onClick={() => profileMutation.mutate()}
-                disabled={profileMutation.isPending}
-                className="rounded border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
+                loading={profileMutation.isPending}
               >
                 {profileMutation.isPending ? '刷新中…' : '刷新画像'}
-              </button>
+              </Button>
             </div>
             {profile ? (
               <div className="space-y-3 text-sm">
@@ -459,7 +465,7 @@ export default function CustomerDetailPage() {
                 <p className="text-xs text-muted-foreground">
                   来源：{profile.source === 'skill' ? 'AI 抽取' : '规则引擎'}
                   {profile.extractedAt &&
-                    ` · 更新于 ${formatDate(profile.extractedAt)}`}
+                    ` · 更新于 ${formatDateTime(profile.extractedAt)}`}
                 </p>
               </div>
             ) : (
@@ -472,13 +478,14 @@ export default function CustomerDetailPage() {
           <section className="rounded-lg border p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-medium">AI 下一步建议</h2>
-              <button
+              <Button
+                variant="outline"
+                size="xs"
                 onClick={() => generatePlaybookMutation.mutate()}
-                disabled={generatePlaybookMutation.isPending}
-                className="rounded border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
+                loading={generatePlaybookMutation.isPending}
               >
                 {generatePlaybookMutation.isPending ? '生成中…' : '生成建议'}
-              </button>
+              </Button>
             </div>
             <p className="mb-3 text-xs text-muted-foreground">
               建议可同步到飞书，跟进在飞书完成。
@@ -534,7 +541,7 @@ export default function CustomerDetailPage() {
                         {item.type === 'message' ? '私信' : '评论'} ·{' '}
                         {item.status}
                       </span>
-                      <span>{formatDate(item.receivedAt)}</span>
+                      <span>{formatDateTime(item.receivedAt)}</span>
                     </div>
                     <p className="mt-1 line-clamp-3">{item.content}</p>
                     {item.conversationId && (
@@ -560,13 +567,13 @@ export default function CustomerDetailPage() {
                 placeholder="添加备注…"
                 className="flex-1 rounded border bg-background px-3 py-1.5 text-sm"
               />
-              <button
+              <Button
+                size="sm"
                 onClick={() => note.trim() && activityMutation.mutate()}
                 disabled={!note.trim() || activityMutation.isPending}
-                className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
               >
                 添加
-              </button>
+              </Button>
             </div>
             <ul className="space-y-2">
               {(customer.activities ?? []).map((activity) => (
@@ -574,7 +581,7 @@ export default function CustomerDetailPage() {
                   <div className="flex justify-between gap-2">
                     <span className="font-medium">{activity.action}</span>
                     <span className="text-muted-foreground text-xs">
-                      {formatDate(activity.createdAt)}
+                      {formatDateTime(activity.createdAt)}
                     </span>
                   </div>
                   {activity.note && (
@@ -613,23 +620,24 @@ export default function CustomerDetailPage() {
             </p>
             <div className="flex flex-wrap gap-2">
               {CUSTOMER_STATUSES.map((status) => (
-                  <button
+                  <Button
                     key={status}
+                    variant="outline"
+                    size="xs"
                     onClick={() => statusMutation.mutate(status)}
                     disabled={
                       customer.status === status || statusMutation.isPending
                     }
-                    className="rounded border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
                   >
                     {STATUS_LABELS[status]}
-                  </button>
+                  </Button>
               ))}
             </div>
           </section>
 
           <section className="rounded-lg border p-4 text-sm text-muted-foreground">
-            <p>创建时间：{formatDate(customer.createdAt)}</p>
-            <p className="mt-1">更新时间：{formatDate(customer.updatedAt)}</p>
+            <p>创建时间：{formatDateTime(customer.createdAt)}</p>
+            <p className="mt-1">更新时间：{formatDateTime(customer.updatedAt)}</p>
           </section>
         </div>
       </div>

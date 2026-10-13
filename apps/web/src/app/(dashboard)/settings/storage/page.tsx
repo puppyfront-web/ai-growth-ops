@@ -8,7 +8,9 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export default function StoragePage() {
   const qc = useQueryClient();
@@ -64,7 +66,7 @@ export default function StoragePage() {
         <CardContent className="space-y-4 pt-6">
           <div>
             <label className="text-sm font-medium">存储方式</label>
-            <select
+            <NativeSelect
               value={storageType}
               onChange={(e) => setStorageType(e.target.value)}
               className="mt-1 w-full rounded-md border p-2 text-sm"
@@ -72,7 +74,7 @@ export default function StoragePage() {
               <option value="local">本地存储</option>
               <option value="minio">MinIO</option>
               <option value="s3">AWS S3</option>
-            </select>
+            </NativeSelect>
           </div>
           <div>
             <label className="text-sm font-medium">存储路径</label>
@@ -116,13 +118,12 @@ export default function StoragePage() {
             </>
           )}
           <div className="flex items-center gap-3">
-            <button
+            <Button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              loading={saveMutation.isPending}
             >
               {saveMutation.isPending ? '保存中...' : '保存'}
-            </button>
+            </Button>
           </div>
         </CardContent>
       </Card>

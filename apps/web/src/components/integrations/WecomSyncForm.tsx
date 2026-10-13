@@ -3,7 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getWecomConfig, updateWecomConfig } from '@/lib/api/integrations';
 import { LoadingState } from '@/components/shared/LoadingState';
-import { formatDate } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { formatDateTime } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { BookOpen, ExternalLink } from 'lucide-react';
 
@@ -106,18 +107,17 @@ export function WecomSyncForm() {
         </div>
         {typeof c.lastSyncAt === 'string' && (
           <div className="text-sm text-muted-foreground">
-            最近同步: {formatDate(c.lastSyncAt)}
+            最近同步: {formatDateTime(c.lastSyncAt)}
           </div>
         )}
       </div>
       <div className="flex gap-2">
-        <button
+        <Button
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+          loading={saveMutation.isPending}
         >
           {saveMutation.isPending ? '保存中...' : '保存配置'}
-        </button>
+        </Button>
       </div>
     </div>
   );

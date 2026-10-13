@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast';
 
 const roleLabels: Record<string, string> = {
@@ -76,13 +77,12 @@ export default function ProfilePage() {
             />
           </div>
           <div className="flex items-center gap-3">
-            <button
+            <Button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              loading={saveMutation.isPending}
             >
               {saveMutation.isPending ? '保存中...' : '保存'}
-            </button>
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import { createResearchTask } from '@/lib/api/research';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 const schema = z.object({
   type: z.enum(['keyword_search', 'competitor_analysis', 'comment_sampling']),
@@ -73,15 +75,14 @@ export default function NewResearchPage() {
           <label htmlFor="research-type" className="text-sm font-medium">
             任务类型
           </label>
-          <select
+          <NativeSelect
             id="research-type"
             {...register('type')}
-            className="w-full rounded-md border p-2 text-sm"
-          >
+           className="w-full">
             <option value="keyword_search">关键词搜索</option>
             <option value="competitor_analysis">竞品账号</option>
             <option value="comment_sampling">评论采样</option>
-          </select>
+          </NativeSelect>
           {errors.type && (
             <p className="text-xs text-destructive">{errors.type.message}</p>
           )}
@@ -198,20 +199,12 @@ export default function NewResearchPage() {
         </div>
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
+          <Button type="submit" loading={submitting}>
             {submitting ? '创建中...' : '创建任务'}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="rounded-md border px-6 py-2 text-sm hover:bg-accent"
-          >
+          </Button>
+          <Button type="button" variant="outline" onClick={() => router.back()}>
             取消
-          </button>
+          </Button>
         </div>
       </form>
     </div>

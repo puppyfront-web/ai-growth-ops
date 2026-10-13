@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
+import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
 const checklistItems = [
@@ -52,12 +53,9 @@ export default function ManualPublishPage() {
           ))}
         </div>
         <div className="mt-6">
-          <button
-            disabled={!Object.keys(checked).every((k) => checked[k])}
-            className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50"
-          >
+          <Button disabled={!Object.keys(checked).every((k) => checked[k])}>
             标记发布完成
-          </button>
+          </Button>
         </div>
       </div>
     </div>

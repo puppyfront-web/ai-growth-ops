@@ -11,12 +11,12 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { Button } from '@/components/ui/button';
 import { contentTypeLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import type { ContentItem } from '@/types/content';
 import type { ContentStatus } from '@/types/enums';
 
 const columns: { key: ContentStatus; label: string; color: string }[] = [
-  { key: 'draft', label: '草稿', color: 'bg-gray-50 border-border' },
+  { key: 'draft', label: '草稿', color: 'bg-muted border-border' },
   {
     key: 'ready',
     label: '就绪',
@@ -47,7 +47,7 @@ function PlanCard({ item }: { item: ContentItem }) {
         </span>
       </div>
       <div className="mt-1 text-xs text-muted-foreground">
-        {formatDate(item.createdAt)}
+        {formatDateTime(item.createdAt)}
       </div>
     </Link>
   );

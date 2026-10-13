@@ -7,8 +7,9 @@ import {
   updateFeishuConfig
 } from '@/lib/api/integrations';
 import { toast } from '@/components/ui/toast';
+import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/LoadingState';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { BookOpen, ExternalLink } from 'lucide-react';
 
@@ -174,26 +175,25 @@ export function FeishuSyncForm() {
         </div>
         {typeof c.lastSyncAt === 'string' && (
           <div className="text-sm text-muted-foreground">
-            最近同步: {formatDate(c.lastSyncAt)}
+            最近同步: {formatDateTime(c.lastSyncAt)}
           </div>
         )}
       </div>
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={() => testMutation.mutate()}
-          disabled={testMutation.isPending}
-          className="rounded-md border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"
+          loading={testMutation.isPending}
         >
           {testMutation.isPending ? '测试中...' : '测试连接'}
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+          loading={saveMutation.isPending}
         >
           {saveMutation.isPending ? '保存中...' : '保存配置'}
-        </button>
+        </Button>
       </div>
     </div>
   );

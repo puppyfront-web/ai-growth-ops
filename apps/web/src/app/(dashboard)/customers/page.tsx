@@ -15,7 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { DataTable } from '@/components/shared/DataTable';
 import { LoadingState } from '@/components/shared/LoadingState';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 import type { ColumnDef } from '@tanstack/react-table';
 import type {
   Customer,
@@ -44,6 +44,8 @@ import {
   isUnfilled,
   type CustomerFormValues
 } from '@/components/customers/CustomerEditor';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 
 function DuplicateList({ items }: { items: CustomerDuplicate[] }) {
   if (items.length === 0) return null;
@@ -309,7 +311,7 @@ export default function CustomersPage() {
             : [];
           return (
             <div className="flex items-center gap-1 flex-wrap">
-              <select
+              <NativeSelect
                 aria-label={`${row.original.displayName} 跟进状态`}
                 value={row.original.status}
                 disabled={statusMutation.isPending}
@@ -326,14 +328,14 @@ export default function CustomersPage() {
                     {STATUS_LABELS[status]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               {tags.includes('待跟进') && (
-                <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">
+                <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-xs text-warning">
                   待跟进
                 </span>
               )}
               {tags.includes('获客转入') && (
-                <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] text-success">
+                <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-xs text-success">
                   获客转入
                 </span>
               )}
@@ -346,7 +348,7 @@ export default function CustomersPage() {
         header: '创建时间',
         cell: ({ getValue }) => (
           <span className="text-sm text-muted-foreground">
-            {formatDate(getValue() as string)}
+            {formatDateTime(getValue() as string)}
           </span>
         )
       },
@@ -354,13 +356,15 @@ export default function CustomersPage() {
         id: 'actions',
         header: '',
         cell: ({ row }) => (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => startEdit(row.original)}
-            className="text-xs text-primary hover:underline"
+            className="text-primary hover:text-primary hover:underline"
           >
             编辑
-          </button>
+          </Button>
         )
       }
     ],
@@ -376,16 +380,15 @@ export default function CustomersPage() {
         actions={
           <div className="flex items-center gap-2">
             <CustomerImportPanel />
-            <button
+            <Button
               onClick={() => {
                 setEditingId(null);
                 setForm(emptyCustomerForm());
                 setShowCreate((v) => !v);
               }}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90"
             >
               + 新建客户
-            </button>
+            </Button>
           </div>
         }
       />
@@ -419,28 +422,25 @@ export default function CustomersPage() {
 
           <div className="flex gap-2">
             {editingId ? (
-              <button
+              <Button
                 onClick={() => canUpdate && updateMutation.mutate()}
-                disabled={!canUpdate || updateMutation.isPending}
-                className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                disabled={!canUpdate}
+                loading={updateMutation.isPending}
               >
                 {updateMutation.isPending ? '保存中…' : '保存修改'}
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
                 onClick={() => canCreate && createMutation.mutate(undefined)}
-                disabled={!canCreate || createMutation.isPending}
-                className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                disabled={!canCreate}
+                loading={createMutation.isPending}
               >
                 {createMutation.isPending ? '保存中…' : '保存客户'}
-              </button>
+              </Button>
             )}
-            <button
-              onClick={resetForm}
-              className="rounded border px-4 py-2 text-sm hover:bg-accent"
-            >
+            <Button variant="outline" onClick={resetForm}>
               取消
-            </button>
+            </Button>
           </div>
           {createMutation.isError &&
             !(createMutation.error instanceof CustomerDuplicateError) && (
@@ -492,7 +492,7 @@ export default function CustomersPage() {
           placeholder="搜索姓名、公司、手机号、需求…"
           className="w-64 rounded border bg-background px-3 py-1.5 text-sm"
         />
-        <select
+        <NativeSelect
           value={filters.channel ?? ''}
           onChange={(e) => {
             setPage(1);
@@ -509,8 +509,8 @@ export default function CustomersPage() {
               {label}
             </option>
           ))}
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={filters.source ?? ''}
           onChange={(e) => {
             setPage(1);
@@ -524,8 +524,8 @@ export default function CustomersPage() {
         >
           <option value="">全部客户</option>
           <option value="prospecting">获客转入</option>
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={filters.pending ?? ''}
           onChange={(e) => {
             setPage(1);
@@ -539,8 +539,8 @@ export default function CustomersPage() {
         >
           <option value="">全部待办</option>
           <option value="contact">待补联系方式</option>
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={filters.status ?? ''}
           onChange={(e) => {
             setPage(1);
@@ -558,7 +558,7 @@ export default function CustomersPage() {
               {STATUS_LABELS[status]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {isLoading ? (
@@ -566,32 +566,39 @@ export default function CustomersPage() {
       ) : error ? (
         <div className="text-sm text-destructive">
           加载失败，请重试。
-          <button onClick={() => refetch()} className="ml-2 underline">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => refetch()}
+            className="ml-2 underline"
+          >
             刷新
-          </button>
+          </Button>
         </div>
       ) : (
         <>
           <DataTable columns={columns} data={data?.items ?? []} />
           {(data?.totalPages ?? 0) > 1 && (
             <div className="mt-4 flex items-center justify-end gap-3 text-sm">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
                 disabled={page <= 1}
-                className="rounded border px-3 py-1.5 disabled:opacity-50"
               >
                 上一页
-              </button>
+              </Button>
               <span>
                 第 {page} / {data?.totalPages} 页
               </span>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((value) => value + 1)}
                 disabled={page >= (data?.totalPages ?? 1)}
-                className="rounded border px-3 py-1.5 disabled:opacity-50"
               >
                 下一页
-              </button>
+              </Button>
             </div>
           )}
         </>

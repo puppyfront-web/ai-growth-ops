@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 
 export default function SkillsPage() {
   const { data: skills, isLoading } = useQuery({
@@ -61,7 +61,7 @@ export default function SkillsPage() {
                 </td>
                 <td className="px-4 py-3 text-sm text-muted-foreground">
                   {skill.lastRunAt
-                    ? formatDate(String(skill.lastRunAt))
+                    ? formatDateTime(String(skill.lastRunAt))
                     : '从未'}
                 </td>
                 <td className="px-4 py-3 text-sm">{skill.totalRuns}</td>

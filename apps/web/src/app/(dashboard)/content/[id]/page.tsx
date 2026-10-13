@@ -29,6 +29,7 @@ import {
 import { platformLabels } from '@/lib/constants';
 import { AlertTriangle } from 'lucide-react';
 import { PlatformIcon } from '@/components/shared/PlatformIcon';
+import { Button } from '@/components/ui/button';
 import { mediaBlockedPlatforms } from '@/lib/platform-media';
 import type { Platform } from '@/types/enums';
 import { useState, useMemo, useEffect } from 'react';
@@ -255,33 +256,37 @@ export default function ContentDetailPage() {
         title={item.title}
         actions={
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+              loading={saveMutation.isPending}
             >
               {saveMutation.isPending ? '保存中...' : '保存'}
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
               onClick={() => generateMutation.mutate(undefined)}
               disabled={generateMutation.isPending}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+              loading={generateMutation.isPending}
             >
               {generateMutation.isPending ? '生成中...' : '生成全部版本'}
-            </button>
+            </Button>
           </div>
         }
       />
 
       <div className="flex gap-2 border-b mb-6">
         {tabs.map((tab) => (
-          <button
+          <Button
             key={tab.key}
+            variant="ghost"
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
           >
             {tab.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -377,26 +382,27 @@ export default function ContentDetailPage() {
                   {platformsToGenerate.map((p) => platformLabels[p]).join('、')}
                 </p>
               </div>
-              <button
+              <Button
+                size="sm"
+                className="bg-info text-info-foreground hover:bg-info"
                 onClick={() => generateMutation.mutate(platformsToGenerate)}
                 disabled={generateMutation.isPending}
-                className="rounded-md bg-info px-3 py-1.5 text-sm text-white hover:bg-info disabled:opacity-50"
               >
                 补充生成
-              </button>
+              </Button>
             </div>
           )}
 
           {variants.length === 0 && (
             <div className="rounded-xl border bg-card p-8 text-center">
               <p className="text-sm text-muted-foreground">尚未生成平台版本</p>
-              <button
+              <Button
+                className="mt-3"
                 onClick={() => generateMutation.mutate(undefined)}
                 disabled={generateMutation.isPending}
-                className="mt-3 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
               >
                 生成全部平台版本
-              </button>
+              </Button>
             </div>
           )}
 
@@ -461,21 +467,23 @@ export default function ContentDetailPage() {
                         placeholder="标签，用逗号分隔"
                       />
                       <div className="flex gap-2">
-                        <button
+                        <Button
+                          size="xs"
                           onClick={() => saveVariant(v.id)}
                           disabled={updateVariantMutation.isPending}
-                          className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+                          loading={updateVariantMutation.isPending}
                         >
                           {updateVariantMutation.isPending
                             ? '保存中...'
                             : '保存'}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="xs"
                           onClick={() => setEditingVariantId(null)}
-                          className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent"
                         >
                           取消
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : (
@@ -496,12 +504,14 @@ export default function ContentDetailPage() {
                           ))}
                         </div>
                       )}
-                      <button
+                      <Button
+                        variant="link"
+                        size="xs"
+                        className="mt-2"
                         onClick={() => startEditVariant(v)}
-                        className="mt-2 text-xs text-primary hover:underline"
                       >
                         编辑
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>
@@ -539,7 +549,7 @@ export default function ContentDetailPage() {
                   />
                 </div>
               </div>
-              <button
+              <Button
                 onClick={() => publishMutation.mutate()}
                 disabled={
                   publishMutation.isPending ||
@@ -547,7 +557,7 @@ export default function ContentDetailPage() {
                   (needsMedia && mediaAssetIds.length === 0) ||
                   blockedPlatforms.length > 0
                 }
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                loading={publishMutation.isPending}
                 title={
                   blockedPlatforms.length > 0
                     ? platformsNeedMediaMessage
@@ -559,7 +569,7 @@ export default function ContentDetailPage() {
                 {publishMutation.isPending
                   ? '发布中...'
                   : `发布到 ${selectedPlatforms.size} 个平台`}
-              </button>
+              </Button>
             </div>
           )}
         </div>

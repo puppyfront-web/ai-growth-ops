@@ -34,7 +34,7 @@ export default function ContentAnalyticsPage() {
           <h3 className="font-semibold mb-4">内容线索排行</h3>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis type="number" tick={{ fontSize: 12 }} />
               <YAxis
                 dataKey="title"
@@ -42,9 +42,9 @@ export default function ContentAnalyticsPage() {
                 width={150}
                 tick={{ fontSize: 12 }}
               />
-              <Tooltip />
-              <Bar dataKey="publishCount" fill="#0f766e" name="发布数" />
-              <Bar dataKey="publishedCount" fill="#dc2626" name="已发布数" />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", backgroundColor: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }} />
+              <Bar dataKey="publishCount" fill="hsl(var(--chart-1))" name="发布数" />
+              <Bar dataKey="publishedCount" fill="hsl(var(--chart-2))" name="已发布数" />
             </BarChart>
           </ResponsiveContainer>
         </div>

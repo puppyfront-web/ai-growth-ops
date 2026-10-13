@@ -25,9 +25,10 @@ import {
 } from '@/components/ui/dialog';
 import { Users, Plus, Shield, UserCog, Eye, Copy } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuth } from '@/providers/AuthProvider';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const roleLabels: Record<OrgRole, string> = {
   owner: '所有者',
@@ -247,27 +248,31 @@ export default function TeamPage() {
                       {roleMenuId === member.id && (
                         <div className="absolute right-0 top-8 z-10 min-w-[140px] rounded-lg border bg-card p-1 shadow-lg">
                           {assignableRoles.map((r) => (
-                            <button
+                            <Button
                               key={r}
+                              variant="ghost"
+                              size="sm"
                               onClick={() =>
                                 roleMutation.mutate({ id: member.id, role: r })
                               }
-                              className="w-full rounded px-3 py-1.5 text-left text-sm hover:bg-accent"
+                              className="w-full justify-start"
                             >
                               {roleLabels[r]}
                               <span className="ml-1 text-xs text-muted-foreground">
                                 {roleDescriptions[r]}
                               </span>
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      加入于 {formatDate(member.joinedAt)}
+                      加入于 {formatDateTime(member.joinedAt)}
                     </span>
                     {canRemove && (
-                      <button
+                      <Button
+                        variant="ghost-destructive"
+                        size="xs"
                         onClick={() => {
                           confirm({
                             title: '移除成员',
@@ -277,10 +282,9 @@ export default function TeamPage() {
                             if (ok) removeMutation.mutate(member.id);
                           });
                         }}
-                        className="rounded-md p-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-destructive"
                       >
                         移除
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -350,7 +354,7 @@ export default function TeamPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium">角色</label>
-                  <select
+                  <NativeSelect
                     value={inviteRole}
                     onChange={(e) =>
                       setInviteRole(
@@ -364,7 +368,7 @@ export default function TeamPage() {
                         {roleLabels[r]} — {roleDescriptions[r]}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   对方将通过邮箱收到邀请链接，注册或登录后即可加入。邀请有效期
