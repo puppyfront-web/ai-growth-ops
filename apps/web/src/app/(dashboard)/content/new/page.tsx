@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   createContentItem,
   generatePlatformVariants,
@@ -25,6 +25,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, Circle, Loader2, Sparkles } from 'lucide-react';
 import { PlatformIcon } from '@/components/shared/PlatformIcon';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 const allPlatforms: Platform[] = [
   'douyin',
@@ -141,9 +143,30 @@ function PipelineProgress({ currentStep }: { currentStep: PipelineStep | null })
   );
 }
 
+/**
+ * useSearchParams 需要 Suspense 边界（Next.js 静态预渲染约束），
+ * 表单本体拆到独立组件中。
+ */
 export default function NewContentPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewContentForm />
+    </Suspense>
+  );
+}
+
+function NewContentForm() {
   const router = useRouter();
-  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
+  const searchParams = useSearchParams();
+  // 跨模块预填（docs/ui-ux-upgrade-plan.md B4）：支持 topic/title/body 参数，
+  // 如获客任务详情页「生成内容」会带上任务需求上下文。
+  const prefillTopic = searchParams.get('topic') ?? '';
+  const prefillTitle = searchParams.get('title') ?? '';
+  const prefillBody = searchParams.get('body') ?? '';
+  const prefillSource = searchParams.get('source');
+  const [mode, setMode] = useState<'ai' | 'manual'>(
+    prefillTitle || prefillBody ? 'manual' : 'ai'
+  );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pipelineStep, setPipelineStep] = useState<PipelineStep | null>(null);
@@ -155,12 +178,17 @@ export default function NewContentPage() {
 
   const manualForm = useForm<ManualFormData>({
     resolver: zodResolver(manualSchema),
-    defaultValues: { type: 'text_image' }
+    defaultValues: {
+      type: 'text_image',
+      title: prefillTitle,
+      body: prefillBody || undefined
+    }
   });
 
   const aiForm = useForm<AiFormData>({
     resolver: zodResolver(aiSchema),
     defaultValues: {
+      topic: prefillTopic,
       contentType: 'text_image',
       brandTone: '专业、友好',
       imageStyle: '清新自然，适合社交媒体'
@@ -270,6 +298,12 @@ export default function NewContentPage() {
         description="AI 一键生成或手动创建，自动串联多平台改写与合规检查"
       />
 
+      {prefillTopic && prefillSource === 'prospecting' && (
+        <div className="mb-4 rounded-md border border-info/25 bg-info/10 px-4 py-3 text-sm text-info">
+          已带入获客任务的需求上下文作为创作主题，可继续调整后生成。
+        </div>
+      )}
+
       <Tabs value={mode} onValueChange={(v) => setMode(v as 'ai' | 'manual')}>
         <TabsList className="mb-6">
           <TabsTrigger value="ai" className="gap-1.5">
@@ -314,16 +348,15 @@ export default function NewContentPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">内容类型</label>
-                <select
+                <NativeSelect
                   {...aiForm.register('contentType')}
                   disabled={submitting}
-                  className="w-full rounded-md border p-2 text-sm disabled:opacity-50"
-                >
+                 className="w-full">
                   <option value="text_image">图文</option>
                   <option value="video">视频</option>
                   <option value="article">文章</option>
                   <option value="answer">问答</option>
-                </select>
+                </NativeSelect>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -373,31 +406,30 @@ export default function NewContentPage() {
               )}
 
               <div className="flex gap-3">
-                <button
+                <Button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  loading={submitting}
+                  className="px-6"
                 >
                   {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      生成中…
-                    </>
+                    '生成中…'
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4" />
                       一键 AI 生成
                     </>
                   )}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => router.back()}
                   disabled={submitting}
-                  className="rounded-md border px-6 py-2 text-sm hover:bg-accent disabled:opacity-50"
+                  className="px-6"
                 >
                   取消
-                </button>
+                </Button>
               </div>
             </form>
           </TabsContent>
@@ -423,15 +455,14 @@ export default function NewContentPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">内容类型</label>
-                <select
+                <NativeSelect
                   {...manualForm.register('type')}
-                  className="w-full rounded-md border p-2 text-sm"
-                >
+                 className="w-full">
                   <option value="text_image">图文</option>
                   <option value="video">视频</option>
                   <option value="article">文章</option>
                   <option value="answer">问答</option>
-                </select>
+                </NativeSelect>
               </div>
 
               <ContentMediaPanel
@@ -460,20 +491,22 @@ export default function NewContentPage() {
               )}
 
               <div className="flex gap-3">
-                <button
+                <Button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  loading={submitting}
+                  className="px-6"
                 >
                   {submitting ? '创建中...' : '创建'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => router.back()}
-                  className="rounded-md border px-6 py-2 text-sm hover:bg-accent"
+                  className="px-6"
                 >
                   取消
-                </button>
+                </Button>
               </div>
             </form>
           </TabsContent>

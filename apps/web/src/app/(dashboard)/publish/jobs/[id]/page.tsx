@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api/client';
 import {
   getPublishJob,
@@ -21,7 +22,7 @@ import {
   publishModeLabels,
   contentTypeLabels
 } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { PublishProgressInline } from '@/components/publish/PublishProgressInline';
 
 const timelineStatuses = [
@@ -135,36 +136,45 @@ export default function PublishJobDetailPage() {
       <PageHeader
         title="发布任务详情"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {job.status === 'PUBLISHED' && (
+              <Button variant="secondary" asChild>
+                <Link href="/conversations">查看评论互动</Link>
+              </Button>
+            )}
             {job.status === 'FAILED' && (
-              <button
+              <Button
+                variant="outline"
+                className="border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
                 onClick={() => retryMutation.mutate()}
                 disabled={retryMutation.isPending}
-                className="rounded-md bg-warning px-4 py-2 text-sm text-white disabled:opacity-50"
+                loading={retryMutation.isPending}
               >
-                {retryMutation.isPending ? '重试中...' : '重试'}
-              </button>
+                {retryMutation.isPending ? '重试中…' : '重试'}
+              </Button>
             )}
             {job.status === 'WAITING_HUMAN_CONFIRM' && (
-              <button
+              <Button
                 onClick={() => retryMutation.mutate()}
                 disabled={retryMutation.isPending}
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                loading={retryMutation.isPending}
               >
                 确认发布
-              </button>
+              </Button>
             )}
             {(job.status === 'DRAFT' || job.status === 'SCHEDULED') && (
-              <button
+              <Button
+                variant="destructive"
                 onClick={() => cancelMutation.mutate()}
                 disabled={cancelMutation.isPending}
-                className="rounded-md bg-destructive px-4 py-2 text-sm text-white disabled:opacity-50"
+                loading={cancelMutation.isPending}
               >
-                {cancelMutation.isPending ? '取消中...' : '取消'}
-              </button>
+                {cancelMutation.isPending ? '取消中…' : '取消'}
+              </Button>
             )}
             {job.status !== 'RUNNING' && (
-              <button
+              <Button
+                variant="ghost-destructive"
                 onClick={() => {
                   confirm({
                     title: '删除发布任务',
@@ -174,10 +184,10 @@ export default function PublishJobDetailPage() {
                   });
                 }}
                 disabled={deleteMutation.isPending}
-                className="rounded-md border border-destructive/25 px-4 py-2 text-sm text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                loading={deleteMutation.isPending}
               >
-                {deleteMutation.isPending ? '删除中...' : '删除'}
-              </button>
+                {deleteMutation.isPending ? '删除中…' : '删除'}
+              </Button>
             )}
           </div>
         }
@@ -219,7 +229,7 @@ export default function PublishJobDetailPage() {
             </div>
             <div>
               <span className="text-muted-foreground">计划时间</span>
-              <div>{job.scheduledAt ? formatDate(job.scheduledAt) : '-'}</div>
+              <div>{job.scheduledAt ? formatDateTime(job.scheduledAt) : '-'}</div>
             </div>
             <div>
               <span className="text-muted-foreground">重试次数</span>
@@ -313,7 +323,7 @@ export default function PublishJobDetailPage() {
                     {a.error ?? '-'}
                   </td>
                   <td className="py-2 text-sm text-muted-foreground">
-                    {formatDate(a.startedAt)}
+                    {formatDateTime(a.startedAt)}
                   </td>
                 </tr>
               ))}
