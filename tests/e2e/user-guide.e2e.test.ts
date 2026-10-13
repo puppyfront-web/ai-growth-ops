@@ -3,7 +3,7 @@ import { login, resetAndSeedDatabase } from './helpers';
 
 test.beforeEach(async () => resetAndSeedDatabase());
 
-test('first login shows the tour, spotlight steps work, skip persists', async ({
+test('first login shows the single-screen module guide and dismissal persists', async ({
   page
 }) => {
   await login(page, { dismissGuide: false });
@@ -12,23 +12,20 @@ test('first login shows the tour, spotlight steps work, skip persists', async ({
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('欢迎使用 AI Growth Ops');
 
-  await page.getByRole('button', { name: '开始引导' }).click();
-  await expect(dialog).toContainText('主导航');
+  // 单屏总览：每个可见模块的入口都在同一屏内
+  await expect(dialog.getByText('智能获客')).toBeVisible();
+  await expect(dialog.getByText('内容运营')).toBeVisible();
+  await expect(dialog.getByText('集成配置')).toBeVisible();
 
-  await page.getByRole('button', { name: '下一步' }).click();
-  await expect(dialog).toContainText('智能获客');
-
-  await page.getByRole('button', { name: '上一步' }).click();
-  await expect(dialog).toContainText('主导航');
-
-  await page.getByRole('button', { name: '跳过引导' }).click();
+  // 主行动关闭引导并持久化，刷新后不再出现
+  await page.getByRole('button', { name: '开始使用' }).click();
   await expect(dialog).toBeHidden();
   await page.reload();
   await page.waitForURL('**/prospecting');
   await expect(dialog).toBeHidden();
 });
 
-test('the tour can be reopened from the avatar menu after completion', async ({
+test('the guide can be reopened from the avatar menu after completion', async ({
   page
 }) => {
   await login(page);
