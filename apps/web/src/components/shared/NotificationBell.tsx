@@ -1,45 +1,19 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, CheckCheck, ExternalLink } from 'lucide-react';
+import { Bell, Check, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   listNotifications,
   getUnreadCount,
   markNotificationRead,
-  markAllNotificationsRead
+  markAllNotificationsRead,
+  type Notification
 } from '@/lib/api/notifications';
-
-interface NotificationItem {
-  id: string;
-  type: string;
-  title: string;
-  content: string;
-  level: string;
-  readAt: string | null;
-  actionUrl: string | null;
-  createdAt: string;
-}
-
-function cn(...inputs: (string | undefined | false | null)[]) {
-  return inputs.filter(Boolean).join(' ');
-}
-
-function timeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return '刚刚';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} 分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  return date.toLocaleDateString('zh-CN');
-}
+import { cn, formatRelativeTime } from '@/lib/utils';
 
 function levelColor(level: string): string {
   switch (level) {
@@ -48,7 +22,6 @@ function levelColor(level: string): string {
     case 'warning':
       return 'bg-warning';
     case 'error':
-      return 'bg-destructive';
     case 'critical':
       return 'bg-destructive';
     default:
@@ -59,6 +32,7 @@ function levelColor(level: string): string {
 export function NotificationBell({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   // Poll unread count every 30s
@@ -130,14 +104,14 @@ export function NotificationBell({ className }: { className?: string }) {
   }, [markAllReadMutation]);
 
   const handleNotificationClick = useCallback(
-    (n: NotificationItem) => {
+    (n: Notification) => {
       if (!n.readAt) handleMarkRead(n.id);
       if (n.actionUrl) {
         setOpen(false);
-        window.location.href = n.actionUrl;
+        router.push(n.actionUrl);
       }
     },
-    [handleMarkRead]
+    [handleMarkRead, router]
   );
 
   return (
@@ -146,12 +120,14 @@ export function NotificationBell({ className }: { className?: string }) {
         variant="ghost"
         size="icon"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-haspopup="true"
         className="relative"
         aria-label={`通知${unreadCount > 0 ? ` (${unreadCount} 条未读)` : ''}`}
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-xs leading-none text-destructive-foreground">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -163,13 +139,15 @@ export function NotificationBell({ className }: { className?: string }) {
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h3 className="text-sm font-semibold">通知</h3>
             {unreadCount > 0 && (
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={handleMarkAllRead}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground"
               >
                 <CheckCheck className="h-3 w-3" />
                 全部已读
-              </button>
+              </Button>
             )}
           </div>
 
@@ -180,7 +158,7 @@ export function NotificationBell({ className }: { className?: string }) {
                 暂无通知
               </div>
             ) : (
-              (notifications as NotificationItem[]).map((n) => (
+              notifications.map((n) => (
                 <div
                   key={n.id}
                   onClick={() => handleNotificationClick(n)}
@@ -202,8 +180,8 @@ export function NotificationBell({ className }: { className?: string }) {
                       <p className={cn('text-sm', !n.readAt && 'font-medium')}>
                         {n.title}
                       </p>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {timeAgo(n.createdAt)}
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatRelativeTime(n.createdAt)}
                       </span>
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
@@ -211,19 +189,21 @@ export function NotificationBell({ className }: { className?: string }) {
                     </p>
                     <div className="mt-1 flex items-center gap-2">
                       {!n.readAt && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="xs"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMarkRead(n.id);
                           }}
-                          className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground"
                         >
                           <Check className="h-3 w-3" /> 已读
-                        </button>
+                        </Button>
                       )}
                       {n.actionUrl && (
-                        <span className="flex items-center gap-0.5 text-[11px] text-primary">
-                          <ExternalLink className="h-3 w-3" /> 查看详情
+                        <span className="flex items-center gap-0.5 text-xs text-primary">
+                          查看详情
                         </span>
                       )}
                     </div>
@@ -232,6 +212,15 @@ export function NotificationBell({ className }: { className?: string }) {
               ))
             )}
           </div>
+
+          {/* Footer */}
+          <Link
+            href="/notifications"
+            onClick={() => setOpen(false)}
+            className="block border-t px-4 py-2.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          >
+            查看全部通知
+          </Link>
         </div>
       )}
     </div>
