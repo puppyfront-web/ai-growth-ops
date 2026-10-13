@@ -11,6 +11,7 @@ import { hiddenSectionPrefixes } from './navigation';
 const PUBLIC_PATHS = [
   '/login',
   '/register',
+  '/accept-invite',
   '/forgot-password',
   '/reset-password',
   '/verify-email'

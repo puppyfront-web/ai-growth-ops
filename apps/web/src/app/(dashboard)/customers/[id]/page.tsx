@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getTeamMembers } from '@/lib/api/settings';
+import { useOrgMembers } from '@/hooks/use-org-members';
 import {
   getCustomer,
   addCustomerActivity,
@@ -86,10 +86,7 @@ export default function CustomerDetailPage() {
     queryKey: ['customers', id],
     queryFn: () => getCustomer(id)
   });
-  const { data: teamMembers = [] } = useQuery({
-    queryKey: ['team', 'members'],
-    queryFn: getTeamMembers
-  });
+  const { data: teamMembers = [] } = useOrgMembers();
   const assigneeName =
     teamMembers.find((m) => m.id === customer?.assignedTo)?.name ?? null;
 

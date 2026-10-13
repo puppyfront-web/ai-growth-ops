@@ -4753,7 +4753,12 @@ const routes: Route[] = [
         name: orgCtx.user.name,
         email: orgCtx.user.email,
         role: orgCtx.user.role,
-        createdAt: orgCtx.user.createdAt
+        createdAt: orgCtx.user.createdAt,
+        organization: {
+          id: orgCtx.organization.id,
+          name: orgCtx.organization.name
+        },
+        organizationRole: orgCtx.memberRole
       });
     }
   },
@@ -4779,117 +4784,6 @@ const routes: Route[] = [
         role: updated.role,
         createdAt: updated.createdAt
       });
-    }
-  },
-
-  // ── Team Management ───────────────────────────────────────────
-  {
-    method: 'GET',
-    pattern: '/api/team/members',
-    handler: async (req, res, ctx) => {
-      const orgCtx = await getOrganizationContext(req, ctx.db);
-      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const members = await ctx.db.user.findMany({
-        where: { deletedAt: null },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true
-        },
-        orderBy: { createdAt: 'asc' }
-      });
-      sendJson(res, 200, members);
-    }
-  },
-  {
-    method: 'POST',
-    pattern: '/api/team/invite',
-    handler: async (req, res, ctx) => {
-      const orgCtx = await getOrganizationContext(req, ctx.db);
-      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
-        return sendJson(res, 403, { error: '权限不足' });
-      }
-      const body = ctx.body as Record<string, unknown> | null;
-      if (!body?.email) return sendJson(res, 400, { error: '邮箱必填' });
-      const existing = await ctx.db.user.findUnique({
-        where: { email: body.email as string }
-      });
-      if (existing) return sendJson(res, 409, { error: '该邮箱已存在' });
-      const role =
-        body.role === 'admin' ||
-        body.role === 'operator' ||
-        body.role === 'viewer'
-          ? body.role
-          : 'operator';
-      const member = await ctx.db.user.create({
-        data: {
-          email: body.email as string,
-          name: (body.name as string) || (body.email as string).split('@')[0],
-          role: role as string,
-          passwordHash: hashPassword(randomBytes(16).toString('hex')) // random temp password
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true
-        }
-      });
-      sendJson(res, 201, member);
-    }
-  },
-  {
-    method: 'PATCH',
-    pattern: '/api/team/members/:id/role',
-    handler: async (req, res, ctx) => {
-      const orgCtx = await getOrganizationContext(req, ctx.db);
-      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
-        return sendJson(res, 403, { error: '权限不足' });
-      }
-      const targetId = (ctx.params as Record<string, string>)?.id;
-      if (!targetId) return sendJson(res, 400, { error: '缺少成员 ID' });
-      const body = ctx.body as Record<string, unknown> | null;
-      if (!body?.role) return sendJson(res, 400, { error: '角色必填' });
-      const role = body.role as string;
-      if (!['admin', 'operator', 'viewer'].includes(role))
-        return sendJson(res, 400, { error: '无效角色' });
-      const updated = await ctx.db.user.update({
-        where: { id: targetId },
-        data: { role },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true
-        }
-      });
-      sendJson(res, 200, updated);
-    }
-  },
-  {
-    method: 'DELETE',
-    pattern: '/api/team/members/:id',
-    handler: async (req, res, ctx) => {
-      const orgCtx = await getOrganizationContext(req, ctx.db);
-      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      if (!hasPermission(orgCtx.memberRole, 'team:manage')) {
-        return sendJson(res, 403, { error: '权限不足' });
-      }
-      const targetId = (ctx.params as Record<string, string>)?.id;
-      if (!targetId) return sendJson(res, 400, { error: '缺少成员 ID' });
-      if (targetId === orgCtx.user.id)
-        return sendJson(res, 400, { error: '不能删除自己' });
-      await ctx.db.user.update({
-        where: { id: targetId },
-        data: { deletedAt: new Date() }
-      });
-      sendJson(res, 200, { ok: true });
     }
   },
 

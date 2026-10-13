@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -34,8 +34,13 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
+  const rawNext = useSearchParams().get('next');
+  const nextPath =
+    rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//')
+      ? rawNext
+      : '/prospecting';
   const { setAuthFromRegister } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -51,7 +56,7 @@ export default function RegisterPage() {
     setServerError(null);
     try {
       await setAuthFromRegister(data);
-      router.push('/prospecting');
+      router.push(nextPath);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 409) {
@@ -136,7 +141,10 @@ export default function RegisterPage() {
 
             <p className="text-center text-sm text-muted-foreground">
               已有账号？{' '}
-              <Link href="/login" className="text-primary hover:underline">
+              <Link
+                href={nextPath === '/prospecting' ? '/login' : `/login?next=${encodeURIComponent(nextPath)}`}
+                className="text-primary hover:underline"
+              >
                 登录
               </Link>
             </p>
@@ -144,5 +152,13 @@ export default function RegisterPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterPageContent />
+    </Suspense>
   );
 }

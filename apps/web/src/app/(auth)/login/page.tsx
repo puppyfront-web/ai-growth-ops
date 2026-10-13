@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,8 +27,13 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
+function safeNext(raw: string | null): string {
+  return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/prospecting';
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const nextPath = safeNext(useSearchParams().get('next'));
   const { login, isAuthenticated } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -40,9 +45,9 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema)
   });
 
-  // If already authenticated, redirect to CRM home
+  // If already authenticated, redirect to target page
   if (isAuthenticated) {
-    router.replace('/prospecting');
+    router.replace(nextPath);
     return null;
   }
 
@@ -50,7 +55,7 @@ export default function LoginPage() {
     setServerError(null);
     try {
       await login(data.email, data.password);
-      router.push('/prospecting');
+      router.push(nextPath);
     } catch (err) {
       if (err instanceof ApiError) {
         setServerError(err.message);
@@ -116,7 +121,10 @@ export default function LoginPage() {
 
             <p className="text-center text-sm text-muted-foreground">
               还没有账号？{' '}
-              <Link href="/register" className="text-primary hover:underline">
+              <Link
+                href={nextPath === '/prospecting' ? '/register' : `/register?next=${encodeURIComponent(nextPath)}`}
+                className="text-primary hover:underline"
+              >
                 注册
               </Link>
             </p>
@@ -124,5 +132,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageContent />
+    </Suspense>
   );
 }

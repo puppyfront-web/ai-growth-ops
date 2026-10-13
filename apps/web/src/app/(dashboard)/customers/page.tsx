@@ -33,7 +33,7 @@ import {
   AlertDialogAction
 } from '@/components/ui/alert-dialog';
 import { CustomerImportPanel } from '@/components/customers/CustomerImportPanel';
-import { getTeamMembers } from '@/lib/api/settings';
+import { useOrgMembers } from '@/hooks/use-org-members';
 import {
   CHANNEL_LABELS,
   CUSTOMER_STATUSES,
@@ -111,10 +111,7 @@ export default function CustomersPage() {
     queryKey: ['customers', 'follow-ups'],
     queryFn: listCustomerFollowUps
   });
-  const { data: teamMembers = [] } = useQuery({
-    queryKey: ['team', 'members'],
-    queryFn: getTeamMembers
-  });
+  const { data: teamMembers = [] } = useOrgMembers();
 
   const resetForm = () => {
     setForm(emptyCustomerForm());

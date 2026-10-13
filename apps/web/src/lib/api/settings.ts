@@ -94,6 +94,8 @@ export interface UserProfile {
   email: string;
   role: string;
   createdAt: string;
+  organization?: { id: string; name: string };
+  organizationRole?: string;
 }
 
 export function getProfile(): Promise<UserProfile> {
@@ -107,36 +109,76 @@ export function updateProfile(data: {
   return apiPut<UserProfile>('/api/user/profile', data);
 }
 
-// ── Team ───────────────────────────────────────────────────────
+// ── Team（org 端点）────────────────────────────────────────────
+export type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
+
 export interface TeamMember {
   id: string;
+  userId: string;
   name: string;
   email: string;
-  role: 'admin' | 'operator' | 'viewer';
-  createdAt: string;
+  avatarUrl: string | null;
+  role: OrgRole;
+  joinedAt: string;
 }
 
-export function getTeamMembers(): Promise<TeamMember[]> {
-  return apiGet<TeamMember[]>('/api/team/members');
-}
-
-export function inviteTeamMember(data: {
+export interface InviteResult {
+  id: string;
   email: string;
-  role?: string;
-  name?: string;
-}): Promise<TeamMember> {
-  return apiPost<TeamMember>('/api/team/invite', data);
+  role: string;
+  expiresAt: string;
+  emailSent: boolean;
+  /** 邮件未发出时返回，供管理员手动转发 */
+  acceptUrl?: string;
+}
+
+export function getOrgMembers(orgId: string): Promise<TeamMember[]> {
+  return apiGet<{ members: TeamMember[] }>(
+    `/api/org/${orgId}/members`
+  ).then((r) => r.members);
+}
+
+export function inviteTeamMember(
+  orgId: string,
+  data: { email: string; role?: string }
+): Promise<InviteResult> {
+  return apiPost<InviteResult>(`/api/org/${orgId}/invite`, data);
 }
 
 export function updateMemberRole(
+  orgId: string,
   memberId: string,
-  role: string
-): Promise<TeamMember> {
-  return apiPut<TeamMember>(`/api/team/members/${memberId}/role`, { role });
+  role: OrgRole
+): Promise<{ success: boolean }> {
+  return apiPut(`/api/org/${orgId}/members/${memberId}/role`, { role });
 }
 
-export function removeTeamMember(memberId: string): Promise<{ ok: boolean }> {
-  return apiDelete<{ ok: boolean }>(`/api/team/members/${memberId}`);
+export function removeOrgMember(
+  orgId: string,
+  memberId: string
+): Promise<{ success: boolean }> {
+  return apiDelete(`/api/org/${orgId}/members/${memberId}`);
+}
+
+// ── 邀请（公开信息，供接受邀请页使用）────────────────────────
+export interface InvitationInfo {
+  organizationName: string;
+  inviterName: string;
+  inviteeEmail: string;
+  role: string;
+  status: 'pending' | 'accepted' | 'expired';
+  expiresAt: string;
+}
+
+export function getInvitationInfo(token: string): Promise<InvitationInfo> {
+  return apiGet<InvitationInfo>(`/api/invitations/${token}`);
+}
+
+export function acceptInvitation(
+  orgId: string,
+  token: string
+): Promise<{ success: boolean; message: string }> {
+  return apiPost(`/api/org/${orgId}/accept-invite`, { token });
 }
 
 // ── Webhooks ───────────────────────────────────────────────────

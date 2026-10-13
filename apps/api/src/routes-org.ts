@@ -231,6 +231,40 @@ export const orgRoutes: Array<{
     }
   },
 
+  // ── GET /api/invitations/:token — Public invitation info (no auth) ──────
+  {
+    method: 'GET',
+    pattern: '/api/invitations/:token',
+    handler: async (req, res, ctx) => {
+      const token = (ctx.params as Record<string, string>)?.token;
+      if (!token) return sendJson(res, 400, { error: '缺少邀请令牌' });
+
+      const invitation = await ctx.db.organizationInvitation.findUnique({
+        where: { token },
+        include: {
+          organization: { select: { name: true } },
+          invitedBy: { select: { name: true, email: true } }
+        }
+      });
+      if (!invitation) return sendJson(res, 404, { error: '邀请不存在' });
+
+      const expired = invitation.expiresAt < new Date();
+      sendJson(res, 200, {
+        organizationName: invitation.organization.name,
+        inviterName: invitation.invitedBy.name,
+        inviteeEmail: invitation.inviteeEmail,
+        role: invitation.role,
+        status:
+          invitation.status !== 'pending'
+            ? invitation.status
+            : expired
+              ? 'expired'
+              : 'pending',
+        expiresAt: invitation.expiresAt
+      });
+    }
+  },
+
   // ── POST /api/org/:orgId/invite — Invite member ──────────────────────────
   {
     method: 'POST',
@@ -279,10 +313,7 @@ export const orgRoutes: Array<{
         }
       });
 
-      console.log(`[ORG] Invitation token for ${email}: ${token}`);
-
-      // Send invitation email (non-blocking)
-      const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+      const baseUrl = process.env.APP_URL || 'http://localhost:3001';
       const acceptUrl = `${baseUrl}/accept-invite?token=${token}&orgId=${ctx.params.orgId}`;
       const emailProvider = getEmailProvider();
       const emailContent = inviteMemberEmail({
@@ -290,22 +321,27 @@ export const orgRoutes: Array<{
         orgName: orgCtx.organization.name,
         acceptUrl
       });
-      emailProvider
-        .send({
+      let emailSent = true;
+      try {
+        await emailProvider.send({
           to: email,
           subject: emailContent.subject,
           html: emailContent.html,
           text: emailContent.text
-        })
-        .catch((err) => {
-          console.error(`[ORG] Failed to send invite email to ${email}:`, err);
         });
+      } catch (err) {
+        emailSent = false;
+        console.error(`[ORG] Failed to send invite email to ${email}:`, err);
+      }
 
       sendJson(res, 201, {
         id: invitation.id,
         email: invitation.inviteeEmail,
         role: invitation.role,
-        expiresAt: invitation.expiresAt
+        expiresAt: invitation.expiresAt,
+        emailSent,
+        // 邮件未发出时（如开发环境 console provider 之外的场景），让管理员可手动转发
+        ...(emailSent ? {} : { acceptUrl })
       });
     }
   },
