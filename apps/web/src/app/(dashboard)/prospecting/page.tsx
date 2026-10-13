@@ -163,7 +163,6 @@ export default function ProspectingPage() {
       <Breadcrumb />
       <PageHeader
         title="智能获客"
-        description="描述目标客户和业务需求，由系统组合多种策略发现高意向潜客"
         actions={
           <button
             onClick={() => setShowCreate((v) => !v)}
@@ -175,19 +174,19 @@ export default function ProspectingPage() {
       />
 
       {llmMissing && (
-        <div className="mb-6 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-center justify-between gap-4">
+        <div className="mb-6 rounded-lg border border-warning/25 bg-warning/10 p-4 flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-amber-800">
+            <p className="text-sm font-medium text-warning">
               尚未配置 LLM，无法分析获客需求
             </p>
-            <p className="text-xs text-amber-600 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               配置 API Key
               后，系统会识别目标客户、购买信号与排除对象，并生成多策略采集计划。
             </p>
           </div>
           <Link
             href="/integrations/llm"
-            className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs text-white hover:bg-amber-700"
+            className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs text-warning-foreground hover:opacity-90"
           >
             去配置 LLM →
           </Link>
@@ -355,7 +354,7 @@ export default function ProspectingPage() {
                 </p>
               </div>
               {analysis.plan.intent.ambiguities.length > 0 && (
-                <p className="text-xs text-amber-700">
+                <p className="text-xs text-warning">
                   待确认：{analysis.plan.intent.ambiguities.join('；')}
                 </p>
               )}
@@ -454,14 +453,22 @@ export default function ProspectingPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 border-b">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium">
+                    <th className="whitespace-nowrap text-left px-4 py-3 font-medium">
                       获客需求
                     </th>
-                    <th className="text-left px-4 py-3 font-medium">平台</th>
-                    <th className="text-left px-4 py-3 font-medium">状态</th>
-                    <th className="text-left px-4 py-3 font-medium">进度</th>
-                    <th className="text-left px-4 py-3 font-medium">潜客数</th>
-                    <th className="text-left px-4 py-3 font-medium">
+                    <th className="whitespace-nowrap text-left px-4 py-3 font-medium">
+                      平台
+                    </th>
+                    <th className="whitespace-nowrap text-left px-4 py-3 font-medium">
+                      状态
+                    </th>
+                    <th className="whitespace-nowrap text-left px-4 py-3 font-medium">
+                      进度
+                    </th>
+                    <th className="whitespace-nowrap text-left px-4 py-3 font-medium">
+                      潜客数
+                    </th>
+                    <th className="whitespace-nowrap text-left px-4 py-3 font-medium">
                       创建时间
                     </th>
                   </tr>
@@ -480,13 +487,13 @@ export default function ProspectingPage() {
                           {task.requirement || '历史获客任务'}
                         </Link>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="whitespace-nowrap px-4 py-3">
                         {platformLabels[task.platform] ?? task.platform}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex items-center gap-2">
                           {task.status === 'running' && (
-                            <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                            <span className="inline-block h-2 w-2 rounded-full bg-info animate-pulse" />
                           )}
                           <span>
                             {statusLabels[task.status] ?? task.status}
@@ -502,7 +509,7 @@ export default function ProspectingPage() {
                             <div className="flex items-center gap-2">
                               <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
                                 <div
-                                  className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                  className="h-full rounded-full bg-info transition-all duration-500"
                                   style={{
                                     width: `${getProspectingProgressPercent(task)}%`
                                   }}
@@ -526,10 +533,10 @@ export default function ProspectingPage() {
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-3 tabular-nums">
+                      <td className="whitespace-nowrap px-4 py-3 tabular-nums">
                         {task.totalCandidates}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                         {formatDate(task.createdAt)}
                       </td>
                     </tr>

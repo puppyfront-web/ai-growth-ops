@@ -82,7 +82,7 @@ export default function ReportsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="运营报告" description="生成和管理运营报告" />
+      <PageHeader title="运营报告" />
 
       {/* Report type cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">

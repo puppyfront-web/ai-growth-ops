@@ -67,7 +67,6 @@ export default function LeadAnalyticsPage() {
       <Breadcrumb />
       <PageHeader
         title="获客分析"
-        description="查看智能获客策略的产出、潜客质量和转入客户转化"
         actions={
           <div className="flex rounded-md border overflow-hidden">
             {RANGE_DAYS.map((value) => (

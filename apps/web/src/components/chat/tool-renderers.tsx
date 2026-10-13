@@ -1,6 +1,13 @@
 'use client';
 
 import { makeAssistantToolUI } from '@assistant-ui/react';
+import {
+  AlertTriangle,
+  ClipboardList,
+  Lightbulb,
+  Loader2,
+  Target
+} from 'lucide-react';
 
 // ─── Tool Label Mapping (shared) ────────────────────────────────
 
@@ -91,10 +98,10 @@ const CheckComplianceTool = makeAssistantToolUI({
       <div className="mt-1 text-xs">
         <span
           className={
-            passed ? 'text-green-600 font-medium' : 'text-red-600 font-medium'
+            passed ? 'text-success font-medium' : 'text-destructive font-medium'
           }
         >
-          {passed ? '✅ 合规通过' : `❌ ${issues.length} 个问题`}
+          {passed ? '合规通过' : `${issues.length} 个问题`}
         </span>
         {!passed && issues.length > 0 && (
           <ul className="mt-1 list-inside list-disc text-muted-foreground">
@@ -145,7 +152,7 @@ const ListAccountsTool = makeAssistantToolUI({
             <span>{String(a.platform)}</span>
             <span
               className={
-                a.hasCookie !== false ? 'text-green-600' : 'text-orange-500'
+                a.hasCookie !== false ? 'text-success' : 'text-warning'
               }
             >
               {a.hasCookie !== false ? '✓' : '✗ 未登录'}
@@ -165,9 +172,9 @@ const CheckLoginStatusTool = makeAssistantToolUI({
     const r = result as Record<string, unknown>;
     if (!r.status) return <ToolResultFallback result={result} />;
     const statusMap: Record<string, string> = {
-      waiting_scan: '⏳ 等待扫码',
-      logged_in: '✅ 已登录',
-      expired: '❌ 已过期'
+      waiting_scan: '等待扫码',
+      logged_in: '已登录',
+      expired: '已过期'
     };
     return (
       <div className="mt-1 font-medium text-xs">
@@ -227,10 +234,10 @@ const ClassifyInteractionTool = makeAssistantToolUI({
     const c = r.classification as Record<string, unknown> | undefined;
     if (!c) return <ToolResultFallback result={result} />;
     const levelColors: Record<string, string> = {
-      A: 'text-green-600',
-      B: 'text-blue-600',
-      C: 'text-yellow-600',
-      D: 'text-gray-500'
+      A: 'text-success',
+      B: 'text-info',
+      C: 'text-warning',
+      D: 'text-muted-foreground'
     };
     return (
       <div className="mt-1 text-xs">
@@ -358,11 +365,6 @@ const GetCampaignDetailTool = makeAssistantToolUI({
           ?.slice(0, 3)
           .map((run, i) => (
             <div key={i} className="text-muted-foreground text-xs">
-              {run.status === 'completed'
-                ? '✅'
-                : run.status === 'failed'
-                  ? '❌'
-                  : '⏳'}{' '}
               {String(run.status)} {String(run.createdAt)?.slice(0, 10)}
             </div>
           ))}
@@ -390,11 +392,6 @@ const GetWorkflowStatusTool = makeAssistantToolUI({
         )}
         {executions.slice(0, 3).map((exec, i) => (
           <div key={i} className="text-muted-foreground text-xs">
-            {exec.status === 'completed'
-              ? '✅'
-              : exec.status === 'failed'
-                ? '❌'
-                : '⏳'}{' '}
             {String(exec.status)} 步骤 {String(exec.currentStepIndex || 0)}
           </div>
         ))}
@@ -437,13 +434,13 @@ const GetProactiveSuggestionsTool = makeAssistantToolUI({
       <div className="mt-1 space-y-1 text-xs">
         {suggestions.map((s, i) => (
           <div key={i} className="flex items-start gap-2 text-muted-foreground">
-            <span>
-              {s.priority === 'high'
-                ? '⚠️'
-                : s.priority === 'medium'
-                  ? '📋'
-                  : '💡'}
-            </span>
+            {s.priority === 'high' ? (
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            ) : s.priority === 'medium' ? (
+              <ClipboardList className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
             <div>
               <span className="text-foreground font-medium">{s.title}</span>
               <span className="ml-1 opacity-60">{s.description}</span>
@@ -451,7 +448,7 @@ const GetProactiveSuggestionsTool = makeAssistantToolUI({
           </div>
         ))}
         {suggestions.length === 0 && (
-          <div className="text-green-600">✅ 一切正常，暂无待办事项</div>
+          <div className="text-success">一切正常，暂无待办事项</div>
         )}
       </div>
     );
@@ -501,7 +498,7 @@ const ExecutePlanTool = makeAssistantToolUI({
     return (
       <div className="mt-1 text-xs">
         <div className="font-medium text-foreground">
-          📋 {String(r.planName)}
+          {String(r.planName)}
         </div>
         <div className="text-muted-foreground">
           共 {String(r.totalSteps)} 步
@@ -540,29 +537,30 @@ const SearchVideoCommentsTool = makeAssistantToolUI({
           🔍 挖掘报告：{String(r.keyword || '')}
         </div>
         <div className="flex gap-3 text-muted-foreground">
-          <span>📹 {totalVideos} 个视频</span>
-          <span>💬 {totalComments} 条评论</span>
+          <span>{totalVideos} 个视频</span>
+          <span>{totalComments} 条评论</span>
           {levelCounts && (
             <>
-              <span className="text-green-600">A级 {levelCounts.A || 0}</span>
-              <span className="text-blue-600">B级 {levelCounts.B || 0}</span>
+              <span className="text-destructive">A级 {levelCounts.A || 0}</span>
+              <span className="text-info">B级 {levelCounts.B || 0}</span>
               <span>C级 {levelCounts.C || 0}</span>
-              <span className="text-gray-400">D级 {levelCounts.D || 0}</span>
+              <span className="text-muted-foreground">D级 {levelCounts.D || 0}</span>
             </>
           )}
         </div>
         {prospects.length > 0 ? (
           <div className="space-y-1">
-            <div className="font-medium text-foreground">
-              🎯 意向客户 ({prospects.length}):
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <Target className="h-4 w-4" />
+              意向客户 ({prospects.length}):
             </div>
             {prospects.slice(0, 10).map((p, i) => (
               <div key={i} className="bg-accent/50 rounded px-2 py-1">
                 <span
                   className={
                     p.leadLevel === 'A'
-                      ? 'text-green-600 font-medium'
-                      : 'text-blue-600 font-medium'
+                      ? 'text-destructive font-medium'
+                      : 'text-info font-medium'
                   }
                 >
                   {p.leadLevel}级
@@ -600,7 +598,7 @@ const SearchVideoCommentsTool = makeAssistantToolUI({
 function ToolLoading({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span className="animate-spin">⏳</span>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
       <span>{label}...</span>
     </div>
   );
@@ -634,7 +632,7 @@ function AutoReplyConfig({ result }: { result: unknown }) {
   const r = result as Record<string, unknown>;
   return (
     <div className="mt-1 space-y-0.5 text-muted-foreground text-xs">
-      <div>启用: {r.enabled ? '✅ 是' : '❌ 否'}</div>
+      <div>启用: {r.enabled ? '是' : '否'}</div>
       <div>每日上限: {String(r.maxDailyAutoReplies)}</div>
       <div>置信度阈值: {String(r.confidenceThreshold)}</div>
       <div>允许类型: {(r.allowedReplyTypes as string[])?.join(', ')}</div>
@@ -650,8 +648,8 @@ function ExecutionTriggered({ result }: { result: unknown }) {
   const r = result as Record<string, unknown>;
   if (!r.ok) return <ToolResultFallback result={result} />;
   return (
-    <div className="mt-1 text-green-600 font-medium text-xs">
-      ✅ 已触发执行{' '}
+    <div className="mt-1 text-success font-medium text-xs">
+      已触发执行{' '}
       {r.executionId
         ? `(ID: ${String(r.executionId).slice(0, 8)}…)`
         : r.runId
@@ -666,8 +664,8 @@ function PreferencesDisplay({ result }: { result: unknown }) {
   const r = result as Record<string, unknown>;
   if (r.message) {
     return (
-      <div className="mt-1 text-green-600 font-medium text-xs">
-        ✅ {String(r.message)}
+      <div className="mt-1 text-success font-medium text-xs">
+        {String(r.message)}
       </div>
     );
   }

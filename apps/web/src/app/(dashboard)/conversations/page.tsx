@@ -107,7 +107,6 @@ export default function ConversationsPage() {
     <div>
       <PageHeader
         title="评论私信"
-        description="统一管理所有平台的评论和私信"
         actions={
           <Link
             href="/conversations/review"

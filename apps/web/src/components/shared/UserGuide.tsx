@@ -1,17 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/providers/AuthProvider';
 import { navItems } from '@/components/layout/navigation';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-
-interface GuideStep {
-  id: string;
-  selector?: string;
-  title: string;
-  description: string;
-}
 
 export const USER_GUIDE_REOPEN_EVENT = 'user-guide:reopen';
 
@@ -44,113 +37,25 @@ export function hasCompletedUserGuide(userId: string): boolean {
   }
 }
 
-function buildSteps(): GuideStep[] {
-  const navSteps = navItems
-    .filter((item) => !item.hidden)
-    .map((item) => ({
-      id: `nav-${item.href}`,
-      selector: `[data-user-guide-tour="nav-${item.href}"]`,
-      title: item.label,
-      description: MODULE_DESCRIPTIONS[item.href] ?? '常用功能入口。'
-    }));
-
-  return [
-    {
-      id: 'welcome',
-      title: '欢迎使用 AI Growth Ops',
-      description:
-        '这是一站式 AI 增长运营平台：自动获客、AI 内容创作、多平台发布与互动转化。跟着这份引导快速了解核心功能。'
-    },
-    {
-      id: 'sidebar',
-      selector: '[data-user-guide-tour="sidebar"]',
-      title: '主导航',
-      description: '左侧导航是所有功能模块的入口，点击即可随时切换。'
-    },
-    ...navSteps,
-    {
-      id: 'global-search',
-      selector: '[data-user-guide-tour="global-search"]',
-      title: '全局搜索',
-      description: '快速定位客户、内容与任务，无需在菜单间来回查找。'
-    },
-    {
-      id: 'topbar-actions',
-      selector: '[data-user-guide-tour="topbar-actions"]',
-      title: '主题、通知与账号',
-      description:
-        '切换明暗主题、查看通知；点击右侧头像菜单可随时重新打开这份功能引导。'
-    },
-    {
-      id: 'finish',
-      title: '引导完成',
-      description:
-        '你已经了解全部核心模块。之后想重看，随时点击头像菜单中的「功能引导」。'
-    }
-  ];
-}
-
-interface TooltipPosition {
-  top: number;
-  left: number;
-  width: number;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(value, max));
-}
-
-const GUIDE_CARD_MAX_WIDTH = 600;
-
-function computeTooltipPosition(rect: DOMRect): TooltipPosition {
-  const width = Math.min(GUIDE_CARD_MAX_WIDTH, window.innerWidth - 32);
-  const gap = 12;
-  const fitsRight =
-    rect.width <= 260 && rect.right + gap + width <= window.innerWidth - 16;
-  if (fitsRight) {
-    return {
-      left: rect.right + gap,
-      top: clamp(
-        rect.top + rect.height / 2 - 100,
-        16,
-        window.innerHeight - 236
-      ),
-      width
-    };
-  }
-  const centeredLeft = clamp(
-    rect.left + rect.width / 2 - width / 2,
-    16,
-    Math.max(16, window.innerWidth - width - 16)
-  );
-  if (window.innerHeight - rect.bottom > 250) {
-    return { left: centeredLeft, top: rect.bottom + gap, width };
-  }
-  return { left: centeredLeft, top: Math.max(16, rect.top - 236), width };
-}
+const visibleModules = navItems.filter((item) => !item.hidden);
 
 export function UserGuide() {
   const { user } = useAuth();
-  const steps = useMemo(buildSteps, []);
-  const [stepIndex, setStepIndex] = useState<number | null>(null);
-  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const primaryRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!user?.id || hasCompletedUserGuide(user.id)) {
-      setStepIndex(null);
-      return;
-    }
-    setStepIndex(0);
+    if (!user?.id || hasCompletedUserGuide(user.id)) return;
+    setOpen(true);
   }, [user?.id]);
 
   useEffect(() => {
-    const reopen = () => setStepIndex(0);
+    const reopen = () => setOpen(true);
     window.addEventListener(USER_GUIDE_REOPEN_EVENT, reopen);
     return () => window.removeEventListener(USER_GUIDE_REOPEN_EVENT, reopen);
   }, []);
 
-  const finish = useCallback(() => {
+  const dismiss = useCallback(() => {
     if (user?.id) {
       try {
         localStorage.setItem(getUserGuideStorageKey(user.id), 'true');
@@ -158,154 +63,64 @@ export function UserGuide() {
         // Closing the guide must not depend on storage availability.
       }
     }
-    setStepIndex(null);
+    setOpen(false);
   }, [user?.id]);
 
   useEffect(() => {
-    if (stepIndex == null) return;
+    if (!open) return;
+    primaryRef.current?.focus();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') finish();
+      if (e.key === 'Escape') dismiss();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [stepIndex, finish]);
+  }, [open, dismiss]);
 
-  const step = stepIndex == null ? null : steps[stepIndex];
-
-  useEffect(() => {
-    if (stepIndex == null) return;
-    cardRef.current
-      ?.querySelector<HTMLButtonElement>('[data-user-guide-primary]')
-      ?.focus();
-  }, [stepIndex]);
-
-  useEffect(() => {
-    const selector = step?.selector;
-    if (!selector) {
-      setTargetRect(null);
-      return;
-    }
-    const measure = () => {
-      const el = document.querySelector<HTMLElement>(selector);
-      if (!el || el.offsetParent === null) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn(`[UserGuide] anchor not found: ${selector}`);
-        }
-        setTargetRect(null);
-        return;
-      }
-      const r = el.getBoundingClientRect();
-      setTargetRect(r.width === 0 && r.height === 0 ? null : r);
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
-    return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
-    };
-  }, [step?.selector]);
-
-  if (!step || stepIndex == null) return null;
-
-  const isFirst = stepIndex === 0;
-  const isLast = stepIndex === steps.length - 1;
-  const goNext = () => (isLast ? finish() : setStepIndex(stepIndex + 1));
-  const goPrev = () => setStepIndex(Math.max(0, stepIndex - 1));
-  const keepFocusInDialog = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab' || !cardRef.current) return;
-    const buttons = Array.from(
-      cardRef.current.querySelectorAll<HTMLButtonElement>(
-        'button:not(:disabled)'
-      )
-    );
-    const first = buttons[0];
-    const last = buttons.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last?.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first?.focus();
-    }
-  };
-
-  const card = (
-    <div
-      ref={cardRef}
-      className="w-full max-w-[600px] rounded-xl border bg-card p-5 shadow-xl"
-    >
-      <p className="text-xs font-medium text-primary">
-        第 {stepIndex + 1} / {steps.length} 步
-      </p>
-      <h3 className="mt-1 text-base font-semibold">{step.title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {step.description}
-      </p>
-
-      <div className="mt-3 flex items-center gap-1.5">
-        {steps.map((s, i) => (
-          <span
-            key={s.id}
-            className={cn(
-              'h-1.5 w-1.5 rounded-full',
-              i === stepIndex
-                ? 'bg-primary'
-                : i < stepIndex
-                  ? 'bg-primary/40'
-                  : 'bg-muted'
-            )}
-          />
-        ))}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={finish}>
-          跳过引导
-        </Button>
-        <div className="flex items-center gap-2">
-          {!isFirst && (
-            <Button variant="outline" size="sm" onClick={goPrev}>
-              上一步
-            </Button>
-          )}
-          <Button size="sm" onClick={goNext} data-user-guide-primary>
-            {isFirst ? '开始引导' : isLast ? '完成' : '下一步'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[100]"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/40 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={step.title}
-      onKeyDown={keepFocusInDialog}
+      aria-label="功能引导"
     >
-      {targetRect ? (
-        <>
-          <div
-            className="pointer-events-none fixed rounded-lg border-2 border-primary transition-all duration-300"
-            style={{
-              top: targetRect.top - 4,
-              left: targetRect.left - 4,
-              width: targetRect.width + 8,
-              height: targetRect.height + 8,
-              boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.6)'
-            }}
-          />
-          <div className="fixed" style={computeTooltipPosition(targetRect)}>
-            {card}
-          </div>
-        </>
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 p-4">
-          {card}
+      <div className="w-full max-w-[560px] rounded-xl border bg-card p-6 shadow-xl">
+        <h3 className="text-lg font-semibold tracking-tight">
+          欢迎使用 AI Growth Ops
+        </h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+          自动获客、AI 内容创作、多平台发布与互动转化。从这些模块开始：
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-1 sm:grid-cols-2">
+          {visibleModules.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={dismiss}
+              className="flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-accent"
+            >
+              <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">{item.label}</span>
+                <span className="block text-xs leading-relaxed text-muted-foreground">
+                  {MODULE_DESCRIPTIONS[item.href] ?? '常用功能入口。'}
+                </span>
+              </span>
+            </Link>
+          ))}
         </div>
-      )}
+
+        <div className="mt-5 flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            随时可在头像菜单中重新打开此引导
+          </p>
+          <Button ref={primaryRef} size="sm" onClick={dismiss}>
+            开始使用
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

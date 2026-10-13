@@ -72,7 +72,7 @@ function ResetPasswordForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-700 text-lg font-bold text-white">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white">
               AI
             </div>
           </div>
@@ -132,7 +132,7 @@ function ResetPasswordForm() {
               </Button>
 
               <p className="text-center text-sm text-muted-foreground">
-                <Link href="/login" className="text-teal-700 hover:underline">
+                <Link href="/login" className="text-primary hover:underline">
                   返回登录
                 </Link>
               </p>

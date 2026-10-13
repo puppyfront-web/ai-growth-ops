@@ -110,7 +110,7 @@ export function DataTable<TData, TValue>({
                   <th
                     key={header.id}
                     className={cn(
-                      'px-4 py-3 text-left text-sm font-medium text-muted-foreground',
+                      'whitespace-nowrap px-4 py-3 text-left text-sm font-medium text-muted-foreground',
                       header.column.columnDef.meta?.headerClassName as
                         | string
                         | undefined

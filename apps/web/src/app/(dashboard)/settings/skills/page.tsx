@@ -21,7 +21,6 @@ export default function SkillsPage() {
       <Breadcrumb />
       <PageHeader
         title="Skill 管理"
-        description="管理 AI 技能模块的运行状态和性能"
       />
       <div className="rounded-xl border bg-card">
         <table className="w-full">

@@ -3,7 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plug } from 'lucide-react';
 import type { PlatformAnalytics } from '@/types/analytics';
-import { platformLabels, platformIcons } from '@/lib/constants';
+import { platformLabels } from '@/lib/constants';
+import { PlatformIcon } from '@/components/shared/PlatformIcon';
 import { formatNumber } from '@/lib/utils';
 
 export type PlatformBreakdownCardProps = {
@@ -20,7 +21,7 @@ export function PlatformBreakdownCard({
       <Card className={className}>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <Plug className="h-4 w-4 text-purple-500" />
+            <Plug className="h-4 w-4 text-muted-foreground" />
             <CardTitle className="text-base font-semibold">平台分布</CardTitle>
           </div>
         </CardHeader>
@@ -37,7 +38,7 @@ export function PlatformBreakdownCard({
     <Card className={className}>
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
-          <Plug className="h-4 w-4 text-purple-500" />
+          <Plug className="h-4 w-4 text-muted-foreground" />
           <CardTitle className="text-base font-semibold">平台分布</CardTitle>
         </div>
       </CardHeader>
@@ -49,10 +50,7 @@ export function PlatformBreakdownCard({
               className="flex items-center justify-between rounded-lg border p-2.5"
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">
-                  {platformIcons[p.platform as keyof typeof platformIcons] ??
-                    '📱'}
-                </span>
+                <PlatformIcon platform={p.platform} className="h-5 w-5" />
                 <span className="text-sm font-medium">
                   {platformLabels[p.platform as keyof typeof platformLabels] ??
                     p.platform}

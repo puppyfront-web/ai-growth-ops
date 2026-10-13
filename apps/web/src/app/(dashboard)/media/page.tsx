@@ -1,5 +1,6 @@
 'use client';
 
+import { Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { listMediaAssets } from '@/lib/api/media';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -26,7 +27,6 @@ export default function MediaPage() {
       <Breadcrumb />
       <PageHeader
         title="素材库"
-        description="管理图片、视频等素材资源"
         actions={
           <div className="flex gap-2">
             <Link
@@ -87,8 +87,12 @@ export default function MediaPage() {
               key={asset.id}
               className="rounded-xl border bg-card overflow-hidden"
             >
-              <div className="aspect-square bg-muted flex items-center justify-center text-2xl">
-                {(asset.fileType ?? '').startsWith('image') ? '🖼️' : '🎬'}
+              <div className="aspect-square bg-muted flex items-center justify-center text-muted-foreground">
+                {(asset.fileType ?? '').startsWith('image') ? (
+                  <ImageIcon className="h-8 w-8" />
+                ) : (
+                  <VideoIcon className="h-8 w-8" />
+                )}
               </div>
               <div className="p-3">
                 <p className="text-sm font-medium truncate">{asset.fileName}</p>

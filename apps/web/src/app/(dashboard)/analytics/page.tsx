@@ -51,7 +51,7 @@ export default function AnalyticsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="数据复盘" description="运营数据总览与分析" />
+      <PageHeader title="数据复盘" />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-6">
         {metrics.map((m) => (

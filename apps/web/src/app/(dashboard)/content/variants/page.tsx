@@ -26,7 +26,6 @@ export default function VariantsPage() {
       <Breadcrumb />
       <PageHeader
         title="平台版本"
-        description="查看和管理各平台的内容适配版本"
       />
       <div className="mb-4">
         <select

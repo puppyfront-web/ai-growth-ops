@@ -39,26 +39,26 @@ const STATE_STYLE: Record<
   done: {
     icon: <Check className="h-4 w-4" />,
     ring: 'border-green-500',
-    bg: 'bg-green-500 text-white',
-    text: 'text-green-700 dark:text-green-300'
+    bg: 'bg-success text-white',
+    text: 'text-success'
   },
   running: {
     icon: <Loader2 className="h-4 w-4 animate-spin" />,
     ring: 'border-blue-500',
-    bg: 'bg-blue-500 text-white',
-    text: 'text-blue-700 dark:text-blue-300'
+    bg: 'bg-info text-white',
+    text: 'text-info'
   },
   need_input: {
     icon: <Pause className="h-4 w-4" />,
     ring: 'border-amber-500',
-    bg: 'bg-amber-500 text-white',
-    text: 'text-amber-700 dark:text-amber-300'
+    bg: 'bg-warning text-white',
+    text: 'text-warning'
   },
   blocked: {
     icon: <X className="h-4 w-4" />,
     ring: 'border-red-500',
-    bg: 'bg-red-500 text-white',
-    text: 'text-red-700 dark:text-red-300'
+    bg: 'bg-destructive text-white',
+    text: 'text-destructive'
   },
   empty: {
     icon: <Circle className="h-4 w-4" />,
@@ -126,7 +126,7 @@ export function RunTimeline({
                   {STATE_LABEL[state]}
                 </span>
                 {hasEscalation && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-1.5 py-0.5 text-xs text-warning">
                     <AlertTriangle className="h-3 w-3" />
                     {result!.escalatedItems!.length} 项待审
                   </span>

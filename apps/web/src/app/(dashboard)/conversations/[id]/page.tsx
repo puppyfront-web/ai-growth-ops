@@ -219,14 +219,14 @@ export default function ConversationDetailPage() {
                   <span className="text-sm text-muted-foreground block mb-2">
                     建议回复
                   </span>
-                  <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 text-sm">
+                  <div className="rounded-lg bg-info/10 border border-info/25 p-3 text-sm">
                     {suggestion.suggestedReply || '风险过高，不建议自动回复'}
                   </div>
                   {suggestion.suggestedReply && (
                     <div className="mt-2 flex gap-2">
                       <button
                         onClick={() => setReplyText(suggestion.suggestedReply)}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-info hover:underline"
                       >
                         采纳此回复
                       </button>
@@ -239,7 +239,7 @@ export default function ConversationDetailPage() {
             )}
           </div>
 
-          <div className="rounded-xl border bg-blue-50 dark:bg-blue-950 p-4 text-xs text-blue-700">
+          <div className="rounded-xl border bg-info/10 p-4 text-xs text-info">
             所有 AI 输出均可编辑、可采纳、可拒绝。高风险回复不会自动发送。
           </div>
         </div>

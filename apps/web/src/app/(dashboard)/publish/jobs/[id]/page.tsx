@@ -118,7 +118,7 @@ export default function PublishJobDetailPage() {
           <p className="mt-2 text-sm text-muted-foreground">{message}</p>
           <Link
             href="/publish/queue"
-            className="mt-6 inline-block text-sm text-blue-600 hover:underline"
+            className="mt-6 inline-block text-sm text-info hover:underline"
           >
             返回发布队列
           </Link>
@@ -140,7 +140,7 @@ export default function PublishJobDetailPage() {
               <button
                 onClick={() => retryMutation.mutate()}
                 disabled={retryMutation.isPending}
-                className="rounded-md bg-orange-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="rounded-md bg-warning px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 {retryMutation.isPending ? '重试中...' : '重试'}
               </button>
@@ -158,7 +158,7 @@ export default function PublishJobDetailPage() {
               <button
                 onClick={() => cancelMutation.mutate()}
                 disabled={cancelMutation.isPending}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="rounded-md bg-destructive px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 {cancelMutation.isPending ? '取消中...' : '取消'}
               </button>
@@ -174,7 +174,7 @@ export default function PublishJobDetailPage() {
                   });
                 }}
                 disabled={deleteMutation.isPending}
-                className="rounded-md border border-red-300 dark:border-red-800 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:bg-red-950 disabled:opacity-50"
+                className="rounded-md border border-destructive/25 px-4 py-2 text-sm text-destructive hover:bg-destructive/20 disabled:opacity-50"
               >
                 {deleteMutation.isPending ? '删除中...' : '删除'}
               </button>
@@ -233,7 +233,7 @@ export default function PublishJobDetailPage() {
                 <a
                   href={job.externalUrl}
                   target="_blank"
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-info hover:underline"
                 >
                   {job.externalUrl}
                 </a>
@@ -249,9 +249,9 @@ export default function PublishJobDetailPage() {
               const stepState = getTimelineStepState(job.status, status);
               const dotClass =
                 stepState === 'done'
-                  ? 'bg-green-500'
+                  ? 'bg-success'
                   : stepState === 'current'
-                    ? 'bg-blue-500'
+                    ? 'bg-info'
                     : 'bg-muted';
               return (
                 <div
@@ -265,8 +265,8 @@ export default function PublishJobDetailPage() {
             })}
             {job.status === 'FAILED' && (
               <div className="flex items-center gap-3 text-foreground">
-                <div className="h-3 w-3 rounded-full bg-red-500" />
-                <span className="text-sm font-medium text-red-600">
+                <div className="h-3 w-3 rounded-full bg-destructive" />
+                <span className="text-sm font-medium text-destructive">
                   发布失败（未到达平台已发布）
                 </span>
               </div>
@@ -276,9 +276,9 @@ export default function PublishJobDetailPage() {
       </div>
 
       {job.lastError && (
-        <div className="mt-6 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-5">
-          <h3 className="font-semibold text-red-700">错误信息</h3>
-          <p className="mt-1 text-sm text-red-600">{job.lastError}</p>
+        <div className="mt-6 rounded-xl border border-destructive/25 bg-destructive/10 p-5">
+          <h3 className="font-semibold text-destructive">错误信息</h3>
+          <p className="mt-1 text-sm text-destructive">{job.lastError}</p>
         </div>
       )}
 

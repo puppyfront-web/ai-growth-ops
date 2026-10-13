@@ -95,7 +95,7 @@ export default function LeadSyncPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="线索同步" description="管理飞书和企微的线索同步状态" />
+      <PageHeader title="线索同步" />
 
       <div className="max-w-3xl space-y-6">
         <Tabs defaultValue="feishu">
@@ -108,7 +108,7 @@ export default function LeadSyncPage() {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-blue-500" />
+                  <Database className="h-4 w-4 text-info" />
                   <CardTitle className="text-base font-semibold">
                     飞书多维表格配置
                   </CardTitle>
@@ -157,7 +157,7 @@ export default function LeadSyncPage() {
                 )}
                 <div className="flex items-center justify-between">
                   <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${feishuConfig?.enabled ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${feishuConfig?.enabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}
                   >
                     {feishuConfig?.enabled ? '已启用' : '未启用'}
                   </span>
@@ -177,7 +177,7 @@ export default function LeadSyncPage() {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-green-500" />
+                  <Database className="h-4 w-4 text-success" />
                   <CardTitle className="text-base font-semibold">
                     企业微信配置
                   </CardTitle>
@@ -216,7 +216,7 @@ export default function LeadSyncPage() {
                 )}
                 <div className="flex items-center justify-between">
                   <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${wecomConfig?.enabled ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${wecomConfig?.enabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}
                   >
                     {wecomConfig?.enabled ? '已启用' : '未启用'}
                   </span>

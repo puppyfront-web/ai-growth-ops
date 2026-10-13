@@ -116,7 +116,6 @@ export default function MessagesPage() {
     <div>
       <PageHeader
         title="私信管理"
-        description="管理所有平台的私信"
         actions={
           hasAccounts ? (
             <div className="flex items-center gap-2">
@@ -170,8 +169,8 @@ export default function MessagesPage() {
         <div
           className={`mb-4 rounded-md px-4 py-2 text-sm flex items-center justify-between ${
             syncMsg.type === 'error'
-              ? 'bg-red-50 dark:bg-red-950 text-red-700'
-              : 'bg-blue-50 dark:bg-blue-950 text-blue-700'
+              ? 'bg-destructive/10 text-destructive'
+              : 'bg-info/10 text-info'
           }`}
         >
           <span>{syncMsg.text}</span>
@@ -185,7 +184,7 @@ export default function MessagesPage() {
       )}
 
       {!hasAccounts && accounts !== undefined && (
-        <div className="mb-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 text-sm text-amber-800">
+        <div className="mb-4 rounded-xl border border-warning/25 bg-warning/10 p-4 text-sm text-warning">
           尚未配置平台账号。请先前往
           <Link
             href="/integrations/platforms"

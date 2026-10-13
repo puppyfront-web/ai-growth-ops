@@ -116,7 +116,7 @@ export default function LeadSourcesPage() {
               </div>
               <button
                 onClick={() => deleteMutation.mutate(s.id)}
-                className="text-xs text-muted-foreground hover:text-red-600"
+                className="text-xs text-muted-foreground hover:text-destructive"
               >
                 删除
               </button>

@@ -109,7 +109,6 @@ export default function IcpSettingsPage() {
       <Breadcrumb />
       <PageHeader
         title="ICP 理想客户"
-        description="配置 Fit 评分规则：目标行业、职位、高意向关键词"
       />
       <div className="max-w-2xl space-y-6 rounded-xl border bg-card p-5">
         <TagEditor

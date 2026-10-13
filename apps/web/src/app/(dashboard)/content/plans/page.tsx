@@ -16,16 +16,16 @@ import type { ContentItem } from '@/types/content';
 import type { ContentStatus } from '@/types/enums';
 
 const columns: { key: ContentStatus; label: string; color: string }[] = [
-  { key: 'draft', label: '草稿', color: 'bg-gray-50 border-gray-200' },
+  { key: 'draft', label: '草稿', color: 'bg-gray-50 border-border' },
   {
     key: 'ready',
     label: '就绪',
-    color: 'bg-blue-50 dark:bg-blue-950 border-blue-200'
+    color: 'bg-info/10 border-info/25'
   },
   {
     key: 'archived',
     label: '已归档',
-    color: 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200'
+    color: 'bg-success/10 border-success/25'
   }
 ];
 
@@ -69,7 +69,6 @@ export default function ContentPlansPage() {
       <Breadcrumb />
       <PageHeader
         title="内容计划"
-        description="按状态管理内容创作进度"
         actions={
           <Button size="sm" asChild>
             <Link href="/content/new">

@@ -70,7 +70,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-700 text-lg font-bold text-white">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white">
               AI
             </div>
           </div>
@@ -136,7 +136,7 @@ export default function RegisterPage() {
 
             <p className="text-center text-sm text-muted-foreground">
               已有账号？{' '}
-              <Link href="/login" className="text-teal-700 hover:underline">
+              <Link href="/login" className="text-primary hover:underline">
                 登录
               </Link>
             </p>

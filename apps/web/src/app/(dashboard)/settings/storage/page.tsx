@@ -58,7 +58,7 @@ export default function StoragePage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="存储配置" description="配置素材存储方式" />
+      <PageHeader title="存储配置" />
 
       <Card className="max-w-lg">
         <CardContent className="space-y-4 pt-6">

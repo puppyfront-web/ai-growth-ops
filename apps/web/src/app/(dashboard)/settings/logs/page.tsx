@@ -52,16 +52,16 @@ const entityTypes = [
 ];
 
 const actionColors: Record<string, string> = {
-  create: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
-  update: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  delete: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
+  create: 'bg-success/10 text-success',
+  update: 'bg-info/10 text-info',
+  delete: 'bg-destructive/10 text-destructive',
   publish:
-    'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-  sync: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    'bg-success/10 text-success',
+  sync: 'bg-warning/10 text-warning',
   ai_generate:
-    'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
-  approve: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
-  reject: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+    'bg-muted text-muted-foreground',
+  approve: 'bg-success/10 text-success',
+  reject: 'bg-destructive/10 text-destructive'
 };
 
 export default function LogsPage() {
@@ -94,7 +94,7 @@ export default function LogsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="操作日志" description="查看系统操作日志和变更记录" />
+      <PageHeader title="操作日志" />
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-3">

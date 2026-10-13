@@ -71,7 +71,7 @@ export default function PublishQueuePage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="发布队列" description="管理和监控内容发布任务" />
+      <PageHeader title="发布队列" />
 
       <div className="flex gap-3 mb-4">
         <select
@@ -105,7 +105,7 @@ export default function PublishQueuePage() {
 
       {isLoading && <LoadingState />}
       {error && (
-        <div className="rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700">
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {error.message}
         </div>
       )}
@@ -115,7 +115,7 @@ export default function PublishQueuePage() {
           <p className="text-muted-foreground">还没有发布任务</p>
           <p className="mt-1 text-sm text-muted-foreground">
             从{' '}
-            <Link href="/content" className="text-blue-600 hover:underline">
+            <Link href="/content" className="text-info hover:underline">
               内容运营
             </Link>{' '}
             选择内容，在平台版本中勾选平台发布
@@ -163,7 +163,7 @@ export default function PublishQueuePage() {
                       compact
                     />
                     {job.lastError && job.status !== 'RUNNING' && (
-                      <p className="mt-1 text-xs text-red-500 truncate max-w-[220px]">
+                      <p className="mt-1 text-xs text-destructive truncate max-w-[220px]">
                         {job.lastError}
                       </p>
                     )}
@@ -175,7 +175,7 @@ export default function PublishQueuePage() {
                     <div className="flex gap-2">
                       <Link
                         href={`/publish/jobs/${job.id}`}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-info hover:underline"
                       >
                         详情
                       </Link>
@@ -183,7 +183,7 @@ export default function PublishQueuePage() {
                         <button
                           onClick={() => executeMutation.mutate(job.id)}
                           disabled={executeMutation.isPending}
-                          className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                          className="text-xs text-info hover:underline disabled:opacity-50"
                         >
                           执行发布
                         </button>
@@ -192,7 +192,7 @@ export default function PublishQueuePage() {
                         <button
                           onClick={() => retryMutation.mutate(job.id)}
                           disabled={retryMutation.isPending}
-                          className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                          className="text-xs text-info hover:underline disabled:opacity-50"
                         >
                           重试
                         </button>
@@ -203,7 +203,7 @@ export default function PublishQueuePage() {
                         <button
                           onClick={() => cancelMutation.mutate(job.id)}
                           disabled={cancelMutation.isPending}
-                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                          className="text-xs text-destructive hover:underline disabled:opacity-50"
                         >
                           取消
                         </button>
@@ -220,7 +220,7 @@ export default function PublishQueuePage() {
                             });
                           }}
                           disabled={deleteMutation.isPending}
-                          className="text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                          className="text-xs text-destructive hover:underline disabled:opacity-50"
                         >
                           删除
                         </button>

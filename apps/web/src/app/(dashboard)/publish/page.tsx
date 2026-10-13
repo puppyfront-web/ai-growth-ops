@@ -76,12 +76,12 @@ const columns: ColumnDef<PublishJob>[] = [
       <div className="flex gap-2">
         <Link
           href={`/publish/jobs/${row.original.id}`}
-          className="text-sm text-blue-600 hover:underline"
+          className="text-sm text-info hover:underline"
         >
           详情
         </Link>
         {row.original.status === 'FAILED' && (
-          <button className="text-sm text-orange-600 hover:underline">
+          <button className="text-sm text-warning hover:underline">
             重试
           </button>
         )}
@@ -103,7 +103,6 @@ export default function PublishPage() {
       <Breadcrumb />
       <PageHeader
         title="发布运营"
-        description="管理多平台发布任务"
         actions={
           <div className="flex gap-2">
             <Link

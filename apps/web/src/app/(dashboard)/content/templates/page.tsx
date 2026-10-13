@@ -36,7 +36,6 @@ export default function ContentTemplatesPage() {
       <Breadcrumb />
       <PageHeader
         title="内容模板"
-        description="管理可复用的内容模板"
         actions={
           <Button size="sm" asChild>
             <Link href="/content/new">

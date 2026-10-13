@@ -64,7 +64,6 @@ export default function AiSettingsPage() {
       <Breadcrumb />
       <PageHeader
         title="素材生成配置"
-        description="配置可选的图片与视频生成服务"
       />
       {config && (
         <div className="max-w-2xl space-y-6">
@@ -74,7 +73,7 @@ export default function AiSettingsPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Image className="h-4 w-4 text-emerald-500" />
+                <Image className="h-4 w-4 text-success" />
                 <CardTitle className="text-base font-semibold">
                   素材生成配置
                 </CardTitle>
@@ -86,7 +85,7 @@ export default function AiSettingsPage() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Image className="h-4 w-4 text-emerald-500" />
+                  <Image className="h-4 w-4 text-success" />
                   生图 API
                 </div>
                 <div>
@@ -201,7 +200,7 @@ export default function AiSettingsPage() {
 
               <div className="space-y-4 border-t pt-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Video className="h-4 w-4 text-sky-500" />
+                  <Video className="h-4 w-4 text-muted-foreground" />
                   生视频 API
                 </div>
                 <p className="text-xs text-muted-foreground">

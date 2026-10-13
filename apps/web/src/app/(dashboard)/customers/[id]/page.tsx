@@ -205,12 +205,12 @@ export default function CustomerDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             {customerTags.includes('待跟进') && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+              <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs text-warning">
                 待跟进
               </span>
             )}
             {customerTags.includes('获客转入') && (
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
+              <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">
                 获客转入
               </span>
             )}
@@ -319,7 +319,7 @@ export default function CustomerDetailPage() {
                 <dt className="text-muted-foreground">手机号</dt>
                 <dd>
                   {isUnfilled(customer.phone) ? (
-                    <span className="text-amber-700">待补充（需人工跟进）</span>
+                    <span className="text-warning">待补充（需人工跟进）</span>
                   ) : (
                     customer.phone
                   )}
@@ -337,7 +337,7 @@ export default function CustomerDetailPage() {
                 <dt className="text-muted-foreground">公司</dt>
                 <dd>
                   {isUnfilled(customer.company) ? (
-                    <span className="text-amber-700">待补充</span>
+                    <span className="text-warning">待补充</span>
                   ) : (
                     customer.company
                   )}
@@ -347,7 +347,7 @@ export default function CustomerDetailPage() {
                 <dt className="text-muted-foreground">职位</dt>
                 <dd>
                   {isUnfilled(customer.role) ? (
-                    <span className="text-amber-700">待补充</span>
+                    <span className="text-warning">待补充</span>
                   ) : (
                     customer.role
                   )}

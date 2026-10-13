@@ -141,12 +141,12 @@ export function ProspectingGuide({
             className={cn(
               'flex items-start gap-3 rounded-lg border p-3',
               step.done
-                ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/30'
+                ? 'border-success/25 bg-success/10'
                 : 'border-border'
             )}
           >
             {step.done ? (
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
             ) : (
               <Circle className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
             )}
@@ -159,7 +159,7 @@ export function ProspectingGuide({
               </p>
             </div>
             {step.done ? (
-              <span className="shrink-0 text-xs text-green-600 dark:text-green-400">
+              <span className="shrink-0 text-xs text-success">
                 已完成
               </span>
             ) : (

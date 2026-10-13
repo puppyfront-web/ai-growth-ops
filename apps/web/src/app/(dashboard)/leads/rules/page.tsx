@@ -77,7 +77,6 @@ export default function LeadRulesPage() {
       <Breadcrumb />
       <PageHeader
         title="线索评级规则"
-        description="配置线索自动评级与风险控制规则"
       />
 
       <div className="max-w-4xl space-y-6">
@@ -85,7 +84,7 @@ export default function LeadRulesPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-500" />
+              <Zap className="h-4 w-4 text-warning" />
               <CardTitle className="text-base font-semibold">
                 自动分类流水线
               </CardTitle>
@@ -93,19 +92,19 @@ export default function LeadRulesPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-              <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+              <span className="rounded-full bg-info/10 px-2.5 py-0.5 text-xs font-medium text-info">
                 新互动
               </span>
               <span>→</span>
-              <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+              <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                 AI 分类
               </span>
               <span>→</span>
-              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+              <span className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning">
                 风险检查
               </span>
               <span>→</span>
-              <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+              <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
                 转线索
               </span>
             </div>
@@ -122,7 +121,7 @@ export default function LeadRulesPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-blue-500" />
+              <Shield className="h-4 w-4 text-info" />
               <CardTitle className="text-base font-semibold">
                 风险控制
               </CardTitle>
@@ -131,7 +130,7 @@ export default function LeadRulesPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <AlertTriangle className="h-4 w-4 text-warning" />
                 <div>
                   <div className="text-sm font-medium">
                     高风险内容自动转人工
@@ -148,7 +147,7 @@ export default function LeadRulesPage() {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Brain className="h-4 w-4 text-purple-500" />
+                <Brain className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <div className="text-sm font-medium">低置信度转人工审核</div>
                   <div className="text-xs text-muted-foreground">
@@ -175,7 +174,7 @@ export default function LeadRulesPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Brain className="h-4 w-4 text-emerald-500" />
+              <Brain className="h-4 w-4 text-success" />
               <CardTitle className="text-base font-semibold">
                 线索分级定义
               </CardTitle>

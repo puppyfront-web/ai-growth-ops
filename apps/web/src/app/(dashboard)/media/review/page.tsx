@@ -1,5 +1,6 @@
 'use client';
 
+import { Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listMediaAssets, reviewMedia } from '@/lib/api/media';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -50,8 +51,12 @@ export default function MediaReviewPage() {
               key={asset.id}
               className="rounded-xl border bg-card overflow-hidden"
             >
-              <div className="aspect-video bg-muted flex items-center justify-center text-3xl">
-                {(asset.fileType ?? '').startsWith('image') ? '🖼️' : '🎬'}
+              <div className="aspect-video bg-muted flex items-center justify-center text-muted-foreground">
+                {(asset.fileType ?? '').startsWith('image') ? (
+                  <ImageIcon className="h-9 w-9" />
+                ) : (
+                  <VideoIcon className="h-9 w-9" />
+                )}
               </div>
               <div className="p-4">
                 <p className="font-medium text-sm">{asset.fileName}</p>
@@ -68,13 +73,13 @@ export default function MediaReviewPage() {
                         status: 'approved'
                       })
                     }
-                    className="flex-1 rounded-md bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
+                    className="flex-1 rounded-md bg-success px-3 py-1.5 text-sm text-white hover:bg-success"
                   >
                     通过
                   </button>
                   <button
                     onClick={() => setRejectId(asset.id)}
-                    className="flex-1 rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
+                    className="flex-1 rounded-md bg-destructive px-3 py-1.5 text-sm text-white hover:bg-red-700"
                   >
                     拒绝
                   </button>
@@ -116,7 +121,7 @@ export default function MediaReviewPage() {
                   setRejectId(null);
                   setRejectReason('');
                 }}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm text-white"
+                className="rounded-md bg-destructive px-4 py-2 text-sm text-white"
               >
                 确认拒绝
               </button>

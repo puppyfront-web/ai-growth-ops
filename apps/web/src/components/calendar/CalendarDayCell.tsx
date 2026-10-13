@@ -12,7 +12,7 @@ export type CalendarDayCellProps = {
 
 function getItemColor(item: CalendarItem): string {
   if (item.kind === 'content') return calendarItemColors.content;
-  return calendarItemColors[item.job.status] ?? 'bg-gray-400';
+  return calendarItemColors[item.job.status] ?? 'bg-muted-foreground';
 }
 
 function getItemLabel(item: CalendarItem): string {

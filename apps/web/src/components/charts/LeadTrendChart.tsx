@@ -47,7 +47,7 @@ export function LeadTrendChart({
     return (
       <ChartContainer
         title="线索趋势"
-        icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
+        icon={<TrendingUp className="h-4 w-4 text-success" />}
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
         className={className}
@@ -62,7 +62,7 @@ export function LeadTrendChart({
   return (
     <ChartContainer
       title="线索趋势"
-      icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
+      icon={<TrendingUp className="h-4 w-4 text-success" />}
       dateRange={dateRange}
       onDateRangeChange={onDateRangeChange}
       className={className}

@@ -19,10 +19,10 @@ import type { CalendarItem } from '@/types/calendar';
 import { toDateKey } from '@/lib/utils';
 
 const LEGEND = [
-  { label: '内容创建', dotClass: 'bg-teal-400' },
-  { label: '已发布', dotClass: 'bg-emerald-500' },
-  { label: '已排期', dotClass: 'bg-amber-400' },
-  { label: '失败', dotClass: 'bg-red-500' },
+  { label: '内容创建', dotClass: 'bg-primary' },
+  { label: '已发布', dotClass: 'bg-success' },
+  { label: '已排期', dotClass: 'bg-warning' },
+  { label: '失败', dotClass: 'bg-destructive' },
   { label: '草稿', dotClass: 'bg-gray-400' }
 ];
 
@@ -101,7 +101,7 @@ export default function ContentCalendarPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="运营日历" description="按时间查看内容创作与发布计划" />
+      <PageHeader title="运营日历" />
 
       <label className="mb-4 flex items-center gap-2 text-sm">
         显示事件

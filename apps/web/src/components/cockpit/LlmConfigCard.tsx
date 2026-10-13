@@ -277,7 +277,7 @@ export function LlmConfigCard() {
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             {view?.hasApiKey ? (
               <>
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                 已配置 API Key
                 {view.updatedAt
                   ? `（${new Date(view.updatedAt).toLocaleString('zh-CN', {

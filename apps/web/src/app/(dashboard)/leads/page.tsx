@@ -93,7 +93,7 @@ const columns: ColumnDef<Lead>[] = [
       <div className="flex gap-2">
         <Link
           href={`/leads/${row.original.id}`}
-          className="text-sm text-blue-600 hover:underline"
+          className="text-sm text-info hover:underline"
         >
           查看
         </Link>
@@ -166,7 +166,6 @@ export default function LeadsPage() {
       <Breadcrumb />
       <PageHeader
         title="线索管理"
-        description="管理客户线索和跟进状态"
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -209,7 +208,7 @@ export default function LeadsPage() {
         }
       />
       {importMsg && (
-        <div className="mb-4 rounded-md bg-blue-50 dark:bg-blue-950 px-4 py-2 text-sm text-blue-700">
+        <div className="mb-4 rounded-md bg-info/10 px-4 py-2 text-sm text-info">
           {importMsg}
         </div>
       )}

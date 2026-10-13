@@ -49,7 +49,7 @@ export default function InsightsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="调研洞察" description="从调研数据中提取的 AI 洞察" />
+      <PageHeader title="调研洞察" />
       <DataTable
         columns={columns}
         data={data ?? []}

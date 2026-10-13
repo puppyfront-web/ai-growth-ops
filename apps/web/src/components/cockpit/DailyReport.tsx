@@ -32,7 +32,7 @@ export function DailyReport({
           ? new Date(report.createdAt).toLocaleString('zh-CN')
           : null}
         {report.level === 'warning' && (
-          <span className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+          <span className="rounded-full border border-warning/25 bg-warning/10 px-1.5 py-0.5 text-warning">
             含待处理项
           </span>
         )}

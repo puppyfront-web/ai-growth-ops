@@ -72,7 +72,7 @@ export default function ConversationReviewPage() {
                     })
                   }
                   disabled={reviewMutation.isPending}
-                  className="rounded-md bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                  className="rounded-md bg-success px-4 py-1.5 text-sm text-white hover:bg-success disabled:opacity-50"
                 >
                   通过并发送
                 </button>

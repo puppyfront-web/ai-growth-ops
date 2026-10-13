@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/shared/GlobalSearch';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { UserMenu } from '@/components/shared/UserMenu';
@@ -12,9 +13,6 @@ export function Topbar() {
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_API_MOCKING === 'enabled';
   const envLabel = isMocking ? 'Mock' : 'Live';
-  const envColor = isMocking
-    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-    : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-6">
@@ -23,9 +21,13 @@ export function Topbar() {
         data-user-guide-tour="global-search"
       >
         <GlobalSearch />
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${envColor}`}
-        >
+        <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          <span
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              isMocking ? 'bg-warning' : 'bg-success'
+            )}
+          />
           {envLabel}
         </span>
       </div>

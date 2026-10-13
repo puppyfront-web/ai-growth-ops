@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
-import { platformLabels, platformIcons } from '@/lib/constants';
+import { platformLabels } from '@/lib/constants';
 import type { Platform } from '@/types/enums';
+import { PlatformIcon } from './PlatformIcon';
 
 type PlatformBadgeProps = {
   platform: Platform | string;
@@ -9,7 +10,6 @@ type PlatformBadgeProps = {
 
 export function PlatformBadge({ platform, className }: PlatformBadgeProps) {
   const label = platformLabels[platform as Platform] ?? String(platform);
-  const icon = platformIcons[platform as Platform] ?? '';
 
   return (
     <span
@@ -18,7 +18,7 @@ export function PlatformBadge({ platform, className }: PlatformBadgeProps) {
         className
       )}
     >
-      {icon && <span>{icon}</span>}
+      <PlatformIcon platform={platform} className="h-3 w-3" />
       {label}
     </span>
   );

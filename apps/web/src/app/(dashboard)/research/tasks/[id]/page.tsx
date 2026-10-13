@@ -135,7 +135,7 @@ export default function ResearchTaskDetailPage() {
             </div>
           </div>
           {task.lastError && (
-            <div className="rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700">
+            <div className="rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive">
               失败原因: {task.lastError}
             </div>
           )}
@@ -186,7 +186,7 @@ export default function ResearchTaskDetailPage() {
       {activeTab === 'insights' && (
         <div className="space-y-6">
           {contentCreatedId && (
-            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-4 text-sm text-emerald-700">
+            <div className="rounded-xl border border-success/25 bg-success/10 p-4 text-sm text-success">
               已生成内容。
               <Link href="/content" className="ml-2 font-medium underline">
                 前往内容列表查看
@@ -199,7 +199,7 @@ export default function ResearchTaskDetailPage() {
               <h3 className="text-lg font-semibold">AI 洞察</h3>
               <Link
                 href="/research/insights"
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-info hover:underline"
               >
                 查看全局洞察
               </Link>
@@ -228,7 +228,7 @@ export default function ResearchTaskDetailPage() {
               <h3 className="text-lg font-semibold">选题机会</h3>
               <Link
                 href="/research/opportunities"
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-info hover:underline"
               >
                 查看全部机会
               </Link>

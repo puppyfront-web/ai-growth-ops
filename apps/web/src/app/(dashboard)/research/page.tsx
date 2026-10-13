@@ -87,7 +87,7 @@ export default function ResearchPage() {
           <div className="flex gap-2">
             <Link
               href={`/research/tasks/${row.original.id}`}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-info hover:underline"
             >
               查看
             </Link>
@@ -111,7 +111,6 @@ export default function ResearchPage() {
       <Breadcrumb />
       <PageHeader
         title="市场调研"
-        description="管理调研任务，发现选题机会"
         actions={
           <Link
             href="/research/new"
@@ -123,7 +122,7 @@ export default function ResearchPage() {
       />
 
       {/* Disclaimer */}
-      <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-700">
+      <div className="mb-4 rounded-lg border border-info/25 bg-info/10 p-3 text-sm text-info">
         仅用于单品牌自用的低频公开内容调研。仅采集公开内容和公开评论。不采集私信，不绕过平台风控，不做高频批量采集。
       </div>
 

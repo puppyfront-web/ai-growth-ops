@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import { MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import {
   getLead,
@@ -236,16 +237,16 @@ export default function LeadDetailPage() {
                 {lead.sourceInteractionId && (
                   <Link
                     href={`/conversations/${lead.sourceInteractionId}`}
-                    className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-950 px-2.5 py-1 text-blue-700 hover:bg-blue-100 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-md bg-info/10 px-2.5 py-1 text-info hover:bg-info/20 transition-colors"
                   >
-                    <span>💬</span>
+                    <MessageSquare className="h-3.5 w-3.5" />
                     <span>查看来源互动</span>
                   </Link>
                 )}
                 {lead.sourcePublishJobId && (
                   <Link
                     href={`/publish/jobs/${lead.sourcePublishJobId}`}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2.5 py-1 text-success hover:bg-success/20 transition-colors"
                   >
                     <span>📤</span>
                     <span>查看来源发布</span>

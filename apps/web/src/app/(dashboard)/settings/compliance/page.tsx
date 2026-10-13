@@ -40,7 +40,6 @@ export default function CompliancePage() {
       <Breadcrumb />
       <PageHeader
         title="合规规则"
-        description="配置敏感词、禁用话术和人工确认规则"
       />
       {rules && (
         <div className="max-w-2xl space-y-6">
@@ -50,14 +49,14 @@ export default function CompliancePage() {
               {localWords.map((word) => (
                 <span
                   key={word}
-                  className="rounded-full bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-3 py-1 text-sm text-red-700 flex items-center gap-1"
+                  className="rounded-full bg-destructive/10 border border-destructive/25 px-3 py-1 text-sm text-destructive flex items-center gap-1"
                 >
                   {word}
                   <button
                     onClick={() =>
                       setLocalWords((w) => w.filter((x) => x !== word))
                     }
-                    className="ml-1 text-red-400 hover:text-red-600"
+                    className="ml-1 text-destructive hover:text-destructive"
                   >
                     &times;
                   </button>

@@ -47,7 +47,7 @@ export default function RepliesPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="回复记录" description="查看所有已发送的回复" />
+      <PageHeader title="回复记录" />
 
       {/* Platform filter */}
       <div className="mb-4 flex items-center gap-2 flex-wrap">

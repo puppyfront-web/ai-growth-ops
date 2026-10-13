@@ -1,3 +1,12 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+  BookOpen,
+  Lightbulb,
+  MessageCircle,
+  Music2,
+  Newspaper,
+  Video
+} from 'lucide-react';
 import type {
   Platform,
   PublishJobStatus,
@@ -17,13 +26,13 @@ export const platformLabels: Record<Platform, string> = {
   zhihu: '知乎'
 };
 
-export const platformIcons: Record<Platform, string> = {
-  douyin: '🎵',
-  xiaohongshu: '📕',
-  wechat_official: '💬',
-  wechat_channels: '📹',
-  baijiahao: '📰',
-  zhihu: '💡'
+export const platformIcons: Record<Platform, LucideIcon> = {
+  douyin: Music2,
+  xiaohongshu: BookOpen,
+  wechat_official: MessageCircle,
+  wechat_channels: Video,
+  baijiahao: Newspaper,
+  zhihu: Lightbulb
 };
 
 export const publishStatusLabels: Record<PublishJobStatus, string> = {
@@ -137,16 +146,16 @@ export const contentStatusLabels: Record<string, string> = {
 };
 
 export const calendarItemColors: Record<string, string> = {
-  content: 'bg-teal-400 dark:bg-teal-600',
-  PUBLISHED: 'bg-emerald-500 dark:bg-emerald-600',
-  SCHEDULED: 'bg-amber-400 dark:bg-amber-600',
-  RUNNING: 'bg-blue-500 dark:bg-blue-600',
-  FAILED: 'bg-red-500 dark:bg-red-600',
-  NEED_MANUAL_REPAIR: 'bg-orange-500 dark:bg-orange-600',
-  WAITING_HUMAN_CONFIRM: 'bg-purple-400 dark:bg-purple-600',
-  DRAFT: 'bg-gray-400 dark:bg-gray-500',
-  READY: 'bg-gray-300 dark:bg-gray-600',
-  CANCELLED: 'bg-gray-300 dark:bg-gray-600'
+  content: 'bg-primary',
+  PUBLISHED: 'bg-success',
+  SCHEDULED: 'bg-warning',
+  RUNNING: 'bg-info',
+  FAILED: 'bg-destructive',
+  NEED_MANUAL_REPAIR: 'bg-destructive',
+  WAITING_HUMAN_CONFIRM: 'bg-warning',
+  DRAFT: 'bg-muted-foreground',
+  READY: 'bg-muted-foreground',
+  CANCELLED: 'bg-muted-foreground'
 };
 
 export const platformColorMap: Record<string, string> = {

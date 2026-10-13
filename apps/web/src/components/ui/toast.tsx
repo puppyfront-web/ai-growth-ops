@@ -51,10 +51,10 @@ function ToastContainer() {
               : Info;
         const colors =
           t.type === 'success'
-            ? 'border-green-200 bg-green-50 text-green-800'
+            ? 'border-success/25 bg-success/10 text-success'
             : t.type === 'error'
-              ? 'border-red-200 bg-red-50 text-red-800'
-              : 'border-blue-200 bg-blue-50 text-blue-800';
+              ? 'border-destructive/25 bg-destructive/10 text-destructive'
+              : 'border-info/25 bg-info/10 text-info';
         return (
           <div
             key={t.id}

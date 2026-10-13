@@ -29,9 +29,9 @@ import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 const roleLabels = { admin: '管理员', operator: '运营', viewer: '只读' };
 const roleColors = {
   admin:
-    'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-  operator: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-  viewer: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+    'bg-primary/10 text-primary',
+  operator: 'bg-info/10 text-info',
+  viewer: 'bg-muted text-foreground'
 };
 const roleIcons = { admin: Shield, operator: Edit, viewer: Eye };
 
@@ -95,7 +95,6 @@ export default function TeamPage() {
       <Breadcrumb />
       <PageHeader
         title="团队管理"
-        description="管理团队成员和权限"
         actions={
           <Button size="sm" onClick={() => setInviteOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
@@ -189,7 +188,7 @@ export default function TeamPage() {
                       if (ok) removeMutation.mutate(member.id);
                     });
                   }}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-500 text-xs"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive text-xs"
                 >
                   移除
                 </button>

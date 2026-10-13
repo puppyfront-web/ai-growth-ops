@@ -216,13 +216,13 @@ export function CustomerImportPanel() {
               <h3 className="text-sm font-medium mb-2">导入预览</h3>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs mb-3">
                 <div>总计 {preview.summary.total}</div>
-                <div className="text-green-600">
+                <div className="text-success">
                   可导入 {preview.summary.ready}
                 </div>
-                <div className="text-amber-600">
+                <div className="text-warning">
                   重复(系统) {preview.summary.duplicateDb}
                 </div>
-                <div className="text-amber-600">
+                <div className="text-warning">
                   重复(文件) {preview.summary.duplicateFile}
                 </div>
                 <div className="text-destructive">
@@ -257,9 +257,9 @@ export function CustomerImportPanel() {
                           </td>
                           <td className="py-1 pr-2">
                             {willImport ? (
-                              <span className="text-green-600">将导入</span>
+                              <span className="text-success">将导入</span>
                             ) : (
-                              <span className="text-amber-600">
+                              <span className="text-warning">
                                 {(row.issues as CustomerImportRowIssue[])
                                   .map((i) => IMPORT_ISSUE_LABELS[i])
                                   .join('、')}

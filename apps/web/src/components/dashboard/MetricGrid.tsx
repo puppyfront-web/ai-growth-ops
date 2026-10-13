@@ -1,6 +1,6 @@
 'use client';
 
-import { Send, Eye, Users, Lightbulb } from 'lucide-react';
+import { ClipboardList, Send, Eye, Users, Lightbulb } from 'lucide-react';
 import { MetricCard } from './MetricCard';
 import type { DashboardMetrics } from '@/types/dashboard';
 import type { TrendDataPoint } from '@/types/analytics';
@@ -34,7 +34,7 @@ export function MetricGrid({ metrics, leadTrend }: MetricGridProps) {
     value: number;
     trend?: number;
   }> = [
-    { icon: Send, label: '发布任务', value: metrics.publishJobs },
+    { icon: ClipboardList, label: '发布任务', value: metrics.publishJobs },
     { icon: Send, label: '已发布', value: metrics.publishedJobs },
     { icon: Eye, label: '互动数', value: metrics.interactions },
     {

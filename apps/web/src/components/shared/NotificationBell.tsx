@@ -44,15 +44,15 @@ function timeAgo(dateStr: string): string {
 function levelColor(level: string): string {
   switch (level) {
     case 'success':
-      return 'bg-green-500 dark:bg-green-400';
+      return 'bg-success';
     case 'warning':
-      return 'bg-amber-500 dark:bg-amber-400';
+      return 'bg-warning';
     case 'error':
-      return 'bg-red-500 dark:bg-red-400';
+      return 'bg-destructive';
     case 'critical':
-      return 'bg-red-600 dark:bg-red-400';
+      return 'bg-destructive';
     default:
-      return 'bg-blue-500 dark:bg-blue-400';
+      return 'bg-info';
   }
 }
 
@@ -151,7 +151,7 @@ export function NotificationBell({ className }: { className?: string }) {
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-white">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}

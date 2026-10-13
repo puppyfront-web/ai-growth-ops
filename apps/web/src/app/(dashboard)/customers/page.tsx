@@ -73,7 +73,7 @@ function DuplicateList({ items }: { items: CustomerDuplicate[] }) {
 }
 
 function Unfilled({ text = '待补充' }: { text?: string }) {
-  return <span className="text-xs text-amber-700">{text}</span>;
+  return <span className="text-xs text-warning">{text}</span>;
 }
 
 export default function CustomersPage() {
@@ -331,12 +331,12 @@ export default function CustomersPage() {
                 ))}
               </select>
               {tags.includes('待跟进') && (
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">
+                <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">
                   待跟进
                 </span>
               )}
               {tags.includes('获客转入') && (
-                <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800">
+                <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] text-success">
                   获客转入
                 </span>
               )}
@@ -412,8 +412,8 @@ export default function CustomersPage() {
           />
 
           {duplicateHint.length > 0 && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
+            <div className="rounded-md border border-warning/25 bg-warning/10 p-3">
+              <p className="text-sm text-warning">
                 检测到 {duplicateHint.length} 条相同手机号的客户记录：
               </p>
               <DuplicateList items={duplicateHint} />

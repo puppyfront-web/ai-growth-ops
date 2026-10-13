@@ -25,25 +25,25 @@ const pipelineColumns = [
   {
     key: 'NEW',
     label: '新线索',
-    color: 'bg-blue-50 dark:bg-blue-950 border-blue-200'
+    color: 'bg-info/10 border-info/25'
   },
-  { key: 'ASSIGNED', label: '待联系', color: 'bg-yellow-50 border-yellow-200' },
+  { key: 'ASSIGNED', label: '待联系', color: 'bg-warning/10 border-warning/25' },
   {
     key: 'CONTACTED',
     label: '已联系',
-    color: 'bg-orange-50 border-orange-200'
+    color: 'bg-warning/10 border-warning/25'
   },
   {
     key: 'ADDED_WECOM',
     label: '已加企微',
-    color: 'bg-green-50 dark:bg-green-950 border-green-200'
+    color: 'bg-success/10 border-success/25'
   },
   {
     key: 'WON',
     label: '已成交',
-    color: 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200'
+    color: 'bg-success/10 border-success/25'
   },
-  { key: 'LOST', label: '已流失', color: 'bg-gray-50 border-gray-200' }
+  { key: 'LOST', label: '已流失', color: 'bg-gray-50 border-border' }
 ] as const;
 
 /** A draggable lead card. */
@@ -58,7 +58,7 @@ function LeadCard({ lead }: { lead: Lead }) {
         ref={setNodeRef}
         {...attributes}
         {...listeners}
-        className={`rounded-lg border bg-card p-3 cursor-grab hover:shadow-sm active:cursor-grabbing ${lead.level === 'A' ? 'border-red-200 dark:border-red-800 bg-red-50/30' : ''} ${isDragging ? 'opacity-40' : ''}`}
+        className={`rounded-lg border bg-card p-3 cursor-grab hover:shadow-sm active:cursor-grabbing ${lead.level === 'A' ? 'border-destructive/25 bg-destructive/10' : ''} ${isDragging ? 'opacity-40' : ''}`}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="font-medium text-sm">{lead.externalUserName}</span>
@@ -82,7 +82,7 @@ function LeadCard({ lead }: { lead: Lead }) {
 function CardPreview({ lead }: { lead: Lead }) {
   return (
     <div
-      className={`rounded-lg border bg-card p-3 shadow-lg w-[200px] ${lead.level === 'A' ? 'border-red-300' : ''}`}
+      className={`rounded-lg border bg-card p-3 shadow-lg w-[200px] ${lead.level === 'A' ? 'border-destructive/25' : ''}`}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="font-medium text-sm">{lead.externalUserName}</span>

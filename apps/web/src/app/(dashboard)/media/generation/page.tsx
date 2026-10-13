@@ -80,7 +80,6 @@ export default function MediaGenerationPage() {
       <Breadcrumb />
       <PageHeader
         title="AI 素材生成"
-        description="使用已配置的生图 / 生视频 API 生成营销素材"
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -109,7 +108,7 @@ export default function MediaGenerationPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-500" />
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
                 <CardTitle className="text-base font-semibold">
                   描述你想要生成的素材
                 </CardTitle>
@@ -176,7 +175,7 @@ export default function MediaGenerationPage() {
                   )}
                 </Button>
                 {generateMutation.isError && (
-                  <span className="text-sm text-red-500">
+                  <span className="text-sm text-destructive">
                     {generateMutation.error instanceof Error
                       ? generateMutation.error.message
                       : '生成失败，请检查 AI 配置'}
@@ -188,11 +187,11 @@ export default function MediaGenerationPage() {
 
           {/* Generated preview */}
           {generateMutation.isSuccess && generateMutation.data && (
-            <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/50">
+            <Card className="border-success/25 bg-success/10">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-emerald-500" />
-                  <CardTitle className="text-base font-semibold text-emerald-700">
+                  <Sparkles className="h-4 w-4 text-success" />
+                  <CardTitle className="text-base font-semibold text-success">
                     生成成功
                   </CardTitle>
                 </div>

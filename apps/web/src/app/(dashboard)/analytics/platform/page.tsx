@@ -29,7 +29,7 @@ export default function PlatformAnalyticsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="平台分析" description="按平台对比运营效果" />
+      <PageHeader title="平台分析" />
       {data && (
         <div className="rounded-xl border bg-card p-5">
           <ResponsiveContainer width="100%" height={400}>

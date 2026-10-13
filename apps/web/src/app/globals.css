@@ -2,54 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * 设计方向 A「冷静专业」token 层（docs/ui-redesign-plan.md 第 3 节）
+ * 约束：中性色统一 zinc 色相（240，极低饱和）；全站唯一强调色为去饱和深 teal，
+ * 仅用于交互元素；状态色只允许出现在语义组件（Badge/Alert/Toast）中。
+ * 圆角三级体系：sm 6px（chips）/ md 8px（输入与按钮）/ lg 10px（卡片）。
+ */
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 173 58% 39%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 173 58% 39%;
-    --radius: 0.75rem;
-    --success: 142 76% 36%;
-    --success-foreground: 210 40% 98%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 173 45% 32%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 173 45% 32%;
+    --radius: 0.625rem;
+    --success: 142 45% 32%;
+    --success-foreground: 0 0% 98%;
+    --warning: 32 75% 42%;
+    --warning-foreground: 240 10% 8%;
+    --info: 214 60% 42%;
+    --info-foreground: 0 0% 98%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 173 58% 39%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 173 58% 39%;
+    --background: 240 8% 6%;
+    --foreground: 240 10% 90%;
+    --card: 240 6% 9.5%;
+    --card-foreground: 240 10% 90%;
+    --popover: 240 6% 9.5%;
+    --popover-foreground: 240 10% 90%;
+    --primary: 173 38% 55%;
+    --primary-foreground: 173 65% 12%;
+    --secondary: 240 5% 14%;
+    --secondary-foreground: 240 10% 90%;
+    --muted: 240 5% 14%;
+    --muted-foreground: 240 5% 64%;
+    --accent: 240 5% 15%;
+    --accent-foreground: 240 10% 90%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5% 17%;
+    --input: 240 5% 17%;
+    --ring: 173 38% 55%;
+    --success: 142 35% 50%;
+    --success-foreground: 142 60% 10%;
+    --warning: 32 70% 55%;
+    --warning-foreground: 32 80% 10%;
+    --info: 210 50% 60%;
+    --info-foreground: 214 70% 12%;
   }
 
   * {

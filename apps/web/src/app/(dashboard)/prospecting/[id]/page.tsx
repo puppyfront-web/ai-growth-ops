@@ -233,7 +233,7 @@ function ConvertDialog({
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
         {duplicates.length > 0 && (
-          <ul className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
+          <ul className="space-y-2 rounded-md border border-warning/25 bg-warning/10 p-3 text-sm">
             {duplicates.map((item) => (
               <li key={item.id}>
                 <div className="font-medium">
@@ -412,7 +412,7 @@ function ConvertedBadge({ customerId }: { customerId: string }) {
   return (
     <Link
       href={`/customers/${customerId}`}
-      className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 hover:bg-emerald-200"
+      className="inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success hover:bg-success/20"
     >
       已转客户
     </Link>
@@ -601,7 +601,7 @@ export default function ProspectingDetailPage() {
       )}
 
       {convertNotice && (
-        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <div className="mb-4 rounded-md border border-success/25 bg-success/10 p-3 text-sm text-success">
           {convertNotice.reused
             ? '已关联已有客户。'
             : '已转入客户库，正在生成画像。'}{' '}
@@ -615,10 +615,10 @@ export default function ProspectingDetailPage() {
       )}
 
       {task.status === 'running' && (
-        <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 space-y-3">
+        <div className="mb-4 rounded-md border border-info/25 bg-info/10 p-4 text-sm text-info space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+              <span className="inline-block h-2 w-2 rounded-full bg-info animate-pulse flex-shrink-0" />
               <span className="font-medium truncate">
                 {formatProspectingProgress(task) || '正在爬取与分析，请稍候…'}
               </span>
@@ -627,13 +627,13 @@ export default function ProspectingDetailPage() {
               {getProspectingProgressPercent(task)}%
             </span>
           </div>
-          <div className="h-2 rounded-full bg-blue-100 overflow-hidden">
+          <div className="h-2 rounded-full bg-info/10 overflow-hidden">
             <div
-              className="h-full rounded-full bg-blue-500 transition-all duration-500"
+              className="h-full rounded-full bg-info transition-all duration-500"
               style={{ width: `${getProspectingProgressPercent(task)}%` }}
             />
           </div>
-          <p className="text-xs text-blue-700/80">
+          <p className="text-xs text-info">
             已爬取 {task.totalVideos} 个视频 · {task.totalComments} 条评论
             {task.metadata?.videoTotal
               ? ` · 当前策略视频 ${task.metadata.videoIndex ?? 0}/${task.metadata.videoTotal}`
@@ -643,7 +643,7 @@ export default function ProspectingDetailPage() {
       )}
 
       {task.status === 'completed' && task.metadata?.warning && (
-        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="mb-4 rounded-md border border-warning/25 bg-warning/10 p-3 text-sm text-warning">
           {task.metadata.warning}
         </div>
       )}
@@ -836,11 +836,11 @@ export default function ProspectingDetailPage() {
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
                           c.leadLevel === 'A'
-                            ? 'bg-green-100 text-green-700'
+                            ? 'bg-success/10 text-success'
                             : c.leadLevel === 'B'
-                              ? 'bg-blue-100 text-blue-700'
+                              ? 'bg-info/10 text-info'
                               : c.leadLevel === 'C'
-                                ? 'bg-yellow-100 text-yellow-700'
+                                ? 'bg-warning/10 text-warning'
                                 : 'bg-muted text-muted-foreground'
                         }`}
                       >

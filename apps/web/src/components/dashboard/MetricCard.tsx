@@ -36,8 +36,8 @@ export function MetricCard({
         {trendPercent !== undefined && (
           <div
             className={cn('flex items-center gap-0.5 text-xs font-medium', {
-              'text-emerald-600': isUp,
-              'text-red-500': isDown,
+              'text-success': isUp,
+              'text-destructive': isDown,
               'text-muted-foreground': isNeutral
             })}
           >

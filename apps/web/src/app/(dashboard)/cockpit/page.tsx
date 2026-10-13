@@ -38,11 +38,11 @@ const STATUS_META: Record<
   RunStatus,
   { label: string; cls: string }
 > = {
-  pending: { label: '排队中', cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
-  running: { label: '运行中', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' },
-  success: { label: '已完成', cls: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' },
-  failed: { label: '失败', cls: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' },
-  paused: { label: '待处理', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' }
+  pending: { label: '排队中', cls: 'bg-muted text-foreground' },
+  running: { label: '运行中', cls: 'bg-info/10 text-info' },
+  success: { label: '已完成', cls: 'bg-success/10 text-success' },
+  failed: { label: '失败', cls: 'bg-destructive/10 text-destructive' },
+  paused: { label: '待处理', cls: 'bg-warning/10 text-warning' }
 };
 
 function fmtTime(s: string | null): string {
@@ -140,7 +140,6 @@ export default function CockpitPage() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <PageHeader
         title="运营驾驶舱"
-        description="自主运营 Agent 的每日运行、升级审批与日报，一站式掌控。"
       />
 
       {/* Trigger bar */}
@@ -156,7 +155,7 @@ export default function CockpitPage() {
             </div>
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={dryRun} onCheckedChange={setDryRun} />
-              <span className={dryRun ? 'text-muted-foreground' : 'font-medium text-amber-600 dark:text-amber-400'}>
+              <span className={dryRun ? 'text-muted-foreground' : 'font-medium text-warning'}>
                 {dryRun ? 'Dry-run（演练，不真实发布）' : '真实发布'}
               </span>
             </label>
@@ -206,7 +205,7 @@ export default function CockpitPage() {
                 </Badge>
               </div>
               {run.error && (
-                <div className="col-span-2 sm:col-span-4 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                <div className="col-span-2 sm:col-span-4 rounded-md border border-destructive/25 bg-destructive/10 p-2 text-xs text-destructive">
                   {run.error}
                 </div>
               )}
@@ -233,7 +232,7 @@ export default function CockpitPage() {
               <RunStatusBadge status={it.status} />
               <span className="ml-1">{fmtTime(it.startedAt ?? it.createdAt)}</span>
               {it.escalationCount > 0 && (
-                <span className="text-amber-600 dark:text-amber-400">·{it.escalationCount}待审</span>
+                <span className="text-warning">·{it.escalationCount}待审</span>
               )}
             </button>
           ))}

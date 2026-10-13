@@ -53,7 +53,7 @@ export default function ResearchAnalyticsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="调研分析" description="调研任务效果和选题转化分析" />
+      <PageHeader title="调研分析" />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-6">

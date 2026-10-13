@@ -7,7 +7,9 @@ import {
   getBrowserLoginStatus,
   cancelBrowserLogin
 } from '@/lib/api/integrations';
-import { platformLabels, platformIcons } from '@/lib/constants';
+import { platformLabels } from '@/lib/constants';
+import { Check } from 'lucide-react';
+import { PlatformIcon } from '@/components/shared/PlatformIcon';
 
 interface BrowserLoginDialogProps {
   accountId: string;
@@ -174,8 +176,6 @@ export function BrowserLoginDialog({
 
   const platformName =
     platformLabels[platform as keyof typeof platformLabels] ?? platform;
-  const platformIcon =
-    platformIcons[platform as keyof typeof platformIcons] ?? '🔌';
 
   return (
     <div
@@ -187,7 +187,7 @@ export function BrowserLoginDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-2xl">{platformIcon}</span>
+          <PlatformIcon platform={platform} className="h-7 w-7" />
           <h3 className="text-lg font-semibold">{platformName} · 扫码登录</h3>
         </div>
 
@@ -202,7 +202,7 @@ export function BrowserLoginDialog({
 
         {state === 'waiting_scan' && (
           <div className="flex flex-col items-center py-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-info/10">
               <span className="text-3xl">🌐</span>
             </div>
             <p className="mt-4 text-sm font-medium">
@@ -220,10 +220,10 @@ export function BrowserLoginDialog({
 
         {state === 'logged_in' && (
           <div className="flex flex-col items-center py-8 gap-2">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <span className="text-3xl">✅</span>
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
+              <Check className="h-8 w-8 text-success" />
             </div>
-            <p className="mt-2 text-base font-semibold text-green-700">
+            <p className="mt-2 text-base font-semibold text-success">
               登录成功！Cookie 已加密保存
             </p>
             <p className="text-xs text-muted-foreground text-center">
@@ -232,7 +232,7 @@ export function BrowserLoginDialog({
             <p className="text-xs text-muted-foreground">窗口将自动关闭…</p>
             <button
               onClick={handleClose}
-              className="mt-3 rounded-md bg-green-600 px-6 py-2 text-sm text-white hover:bg-green-700"
+              className="mt-3 rounded-md bg-success px-6 py-2 text-sm text-white hover:bg-success"
             >
               完成
             </button>
@@ -241,10 +241,10 @@ export function BrowserLoginDialog({
 
         {(state === 'expired' || state === 'error') && (
           <div className="flex flex-col items-center py-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-              <span className="text-2xl text-red-600">✗</span>
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+              <span className="text-2xl text-destructive">✗</span>
             </div>
-            <p className="mt-3 text-sm font-medium text-red-700">
+            <p className="mt-3 text-sm font-medium text-destructive">
               {error ?? '登录失败'}
             </p>
             <div className="mt-4 flex gap-2">

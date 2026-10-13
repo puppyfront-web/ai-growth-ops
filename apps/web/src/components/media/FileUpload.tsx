@@ -184,7 +184,7 @@ export function FileUpload({
                 <button
                   type="button"
                   onClick={() => removeFile(file.id)}
-                  className="text-xs text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="text-xs text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   &times;
                 </button>

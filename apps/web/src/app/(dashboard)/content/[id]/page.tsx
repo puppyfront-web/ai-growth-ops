@@ -26,7 +26,9 @@ import {
   mediaRequirement,
   missingMediaMessage
 } from '@/components/content/ContentMediaPanel';
-import { platformLabels, platformIcons } from '@/lib/constants';
+import { platformLabels } from '@/lib/constants';
+import { AlertTriangle } from 'lucide-react';
+import { PlatformIcon } from '@/components/shared/PlatformIcon';
 import { mediaBlockedPlatforms } from '@/lib/platform-media';
 import type { Platform } from '@/types/enums';
 import { useState, useMemo, useEffect } from 'react';
@@ -338,7 +340,7 @@ export default function ContentDetailPage() {
 
             {needsMedia && (
               <div
-                className={`rounded-xl border p-4 text-xs ${mediaAssetIds.length > 0 ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 text-green-700' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-700'}`}
+                className={`rounded-xl border p-4 text-xs ${mediaAssetIds.length > 0 ? 'border-success/25 bg-success/10 text-success' : 'border-warning/25 bg-warning/10 text-warning'}`}
               >
                 {mediaAssetIds.length > 0
                   ? `已准备 ${mediaAssetIds.length} 个${mediaReq?.label ?? '素材'}`
@@ -352,13 +354,13 @@ export default function ContentDetailPage() {
       {activeTab === 'variants' && (
         <div className="space-y-3">
           {needsMedia && mediaAssetIds.length === 0 && (
-            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-start gap-3">
-              <span className="text-amber-500 text-base mt-0.5">⚠</span>
+            <div className="rounded-xl border border-warning/25 bg-warning/10 p-4 flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div>
-                <p className="text-sm font-medium text-amber-800">
+                <p className="text-sm font-medium text-warning">
                   {missingMediaMessage(item.type)}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">
+                <p className="text-xs text-warning mt-0.5">
                   请先在「内容编辑」上传本地文件，或配置生图 / 生视频 API 后生成。
                 </p>
               </div>
@@ -366,19 +368,19 @@ export default function ContentDetailPage() {
           )}
 
           {platformsToGenerate.length > 0 && (
-            <div className="rounded-xl border bg-blue-50 dark:bg-blue-950 p-4 flex items-center justify-between">
+            <div className="rounded-xl border bg-info/10 p-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-800">
+                <p className="text-sm font-medium text-info">
                   未生成版本的平台
                 </p>
-                <p className="text-xs text-blue-600 mt-1">
+                <p className="text-xs text-info mt-1">
                   {platformsToGenerate.map((p) => platformLabels[p]).join('、')}
                 </p>
               </div>
               <button
                 onClick={() => generateMutation.mutate(platformsToGenerate)}
                 disabled={generateMutation.isPending}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-info px-3 py-1.5 text-sm text-white hover:bg-info disabled:opacity-50"
               >
                 补充生成
               </button>
@@ -422,14 +424,12 @@ export default function ContentDetailPage() {
                     checked={selectedPlatforms.has(v.platform)}
                     onChange={() => canSelect && togglePlatform(v.platform)}
                     disabled={!canSelect}
-                    className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-ring disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg">
-                      {platformIcons[v.platform as Platform]}
-                    </span>
+                    <PlatformIcon platform={v.platform} className="h-5 w-5" />
                     <PlatformBadge platform={v.platform} />
                     <StatusBadge status={v.complianceStatus} />
                     {reason && (
@@ -510,13 +510,13 @@ export default function ContentDetailPage() {
           })}
 
           {blockedPlatforms.length > 0 && (
-            <div className="rounded-md bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-700">
+            <div className="rounded-md bg-warning/10 p-3 text-sm text-warning">
               {platformsNeedMediaMessage}
             </div>
           )}
 
           {publishError && (
-            <div className="rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700">
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               {publishError}
             </div>
           )}

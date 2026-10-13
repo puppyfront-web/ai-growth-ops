@@ -143,14 +143,14 @@ export function OnboardingGuide() {
             className={cn(
               'flex items-center gap-3 rounded-lg border p-3 transition-colors',
               step.completed
-                ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/30'
+                ? 'border-success/25 bg-success/10'
                 : nextStep?.id === step.id
                   ? 'border-primary/30 bg-primary/5'
                   : 'border-border opacity-60'
             )}
           >
             {step.completed ? (
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
             ) : (
               <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />
             )}

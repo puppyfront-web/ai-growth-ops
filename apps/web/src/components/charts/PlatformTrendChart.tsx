@@ -60,7 +60,7 @@ export function PlatformTrendChart({
     return (
       <ChartContainer
         title="平台发布趋势"
-        icon={<BarChart3 className="h-4 w-4 text-blue-500" />}
+        icon={<BarChart3 className="h-4 w-4 text-info" />}
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
         className={className}
@@ -75,7 +75,7 @@ export function PlatformTrendChart({
   return (
     <ChartContainer
       title="平台发布趋势"
-      icon={<BarChart3 className="h-4 w-4 text-blue-500" />}
+      icon={<BarChart3 className="h-4 w-4 text-info" />}
       dateRange={dateRange}
       onDateRangeChange={onDateRangeChange}
       className={className}

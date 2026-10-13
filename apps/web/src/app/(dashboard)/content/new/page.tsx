@@ -19,11 +19,12 @@ import {
   ContentMediaPanel,
   missingMediaMessage
 } from '@/components/content/ContentMediaPanel';
-import { platformLabels, platformIcons } from '@/lib/constants';
+import { platformLabels } from '@/lib/constants';
 import type { Platform } from '@/types/enums';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, Circle, Loader2, Sparkles } from 'lucide-react';
+import { PlatformIcon } from '@/components/shared/PlatformIcon';
 
 const allPlatforms: Platform[] = [
   'douyin',
@@ -83,9 +84,9 @@ function PlatformSelector({
               type="checkbox"
               checked={selectedPlatforms.has(p)}
               onChange={() => onToggle(p)}
-              className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
             />
-            <span className="text-lg">{platformIcons[p]}</span>
+            <PlatformIcon platform={p} className="h-5 w-5" />
             <span className="text-sm">{platformLabels[p]}</span>
           </label>
         ))}
@@ -118,7 +119,7 @@ function PipelineProgress({ currentStep }: { currentStep: PipelineStep | null })
           return (
             <li key={step.key} className="flex items-start gap-2 text-sm">
               {done ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
               ) : active ? (
                 <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-primary" />
               ) : (

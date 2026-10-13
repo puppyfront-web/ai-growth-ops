@@ -34,7 +34,7 @@ export default function SettingsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="系统设置" description="管理系统配置" />
+      <PageHeader title="系统设置" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {items.map((item) => (
           <Link

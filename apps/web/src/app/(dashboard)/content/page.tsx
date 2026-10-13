@@ -129,13 +129,13 @@ export default function ContentPage() {
             <div className="flex gap-3">
               <Link
                 href={`/content/${item.id}`}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-info hover:underline"
               >
                 编辑
               </Link>
               <Link
                 href={`/content/${item.id}?tab=variants`}
-                className="text-sm text-green-600 hover:underline"
+                className="text-sm text-success hover:underline"
               >
                 发布
               </Link>
@@ -146,7 +146,7 @@ export default function ContentPage() {
                     pendingItemRef.current = item;
                     setDialog({ type: 'delete', item });
                   }}
-                  className="text-sm text-red-500 hover:underline"
+                  className="text-sm text-destructive hover:underline"
                 >
                   删除
                 </button>
@@ -166,7 +166,6 @@ export default function ContentPage() {
       <Breadcrumb />
       <PageHeader
         title="内容运营"
-        description="管理内容创作和发布"
         actions={
           <Link
             href="/content/new"
@@ -234,11 +233,11 @@ export default function ContentPage() {
       />
 
       {toastError && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-3 text-sm text-red-700 shadow-md">
+        <div className="fixed bottom-4 right-4 z-50 rounded-md border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-md">
           {toastError}
           <button
             onClick={() => setToastError(null)}
-            className="ml-3 text-red-400 hover:text-red-600"
+            className="ml-3 text-destructive hover:text-destructive"
           >
             ×
           </button>

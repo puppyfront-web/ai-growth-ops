@@ -18,7 +18,7 @@ export default function PublishAttemptsPage() {
   return (
     <div>
       <Breadcrumb />
-      <PageHeader title="发布尝试记录" description="查看所有失败的发布尝试" />
+      <PageHeader title="发布尝试记录" />
       {isLoading ? (
         <LoadingState />
       ) : (

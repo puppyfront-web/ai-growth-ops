@@ -61,7 +61,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <Breadcrumb />
-      <PageHeader title="运营工作台" description="运营数据总览" />
+      <PageHeader title="运营工作台" />
 
       {/* Onboarding Guide */}
       <OnboardingGuide />
@@ -99,7 +99,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Send className="h-4 w-4 text-emerald-500" />
+              <Send className="h-4 w-4 text-muted-foreground" />
               <CardTitle className="text-base font-semibold">
                 最近发布任务
               </CardTitle>
@@ -142,7 +142,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-blue-500" />
+              <Users className="h-4 w-4 text-muted-foreground" />
               <CardTitle className="text-base font-semibold">
                 线索概览
               </CardTitle>
@@ -178,7 +178,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Lightbulb className="h-4 w-4 text-amber-500" />
+              <Lightbulb className="h-4 w-4 text-muted-foreground" />
               <CardTitle className="text-base font-semibold">
                 调研洞察
               </CardTitle>
