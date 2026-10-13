@@ -45,8 +45,10 @@ export function UserGuide() {
   const primaryRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!user?.id || hasCompletedUserGuide(user.id)) return;
-    setOpen(true);
+    if (!user?.id) return;
+    // Guide completion is per-user: switching accounts must close a guide
+    // auto-opened for the previous user.
+    setOpen(hasCompletedUserGuide(user.id) ? false : true);
   }, [user?.id]);
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export function UserGuide() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="功能引导"

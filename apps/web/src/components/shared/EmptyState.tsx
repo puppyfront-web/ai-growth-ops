@@ -1,7 +1,7 @@
 import { FileQuestion } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import Link from 'next/link';
 
 type EmptyStateAction = {
@@ -27,13 +27,16 @@ export function EmptyState({
 }: EmptyStateProps) {
   const actionNode =
     action && typeof action === 'object' && 'label' in action ? (
-      <Button asChild={!!action.href}>
-        {action.href ? (
+      action.href ? (
+        <Button asChild>
           <Link href={action.href}>{action.label}</Link>
-        ) : (
-          <button onClick={action.onClick}>{action.label}</button>
-        )}
-      </Button>
+        </Button>
+      ) : (
+        // onClick 形态直接用原生 button 承载按钮样式，避免 Button 套 Button
+        <button className={buttonVariants()} onClick={action.onClick}>
+          {action.label}
+        </button>
+      )
     ) : (
       action
     );

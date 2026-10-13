@@ -36,6 +36,13 @@
     --warning-foreground: 240 10% 8%;
     --info: 214 60% 42%;
     --info-foreground: 0 0% 98%;
+    /* 图表系列色：全部派生自语义色族（teal/info/warning/success/zinc），
+       禁止图表直接写 hex（docs/ui-ux-upgrade-plan.md A4） */
+    --chart-1: 173 45% 32%;
+    --chart-2: 214 45% 45%;
+    --chart-3: 32 65% 45%;
+    --chart-4: 142 40% 35%;
+    --chart-5: 240 4% 46%;
   }
 
   .dark {
@@ -64,6 +71,11 @@
     --warning-foreground: 32 80% 10%;
     --info: 210 50% 60%;
     --info-foreground: 214 70% 12%;
+    --chart-1: 173 38% 55%;
+    --chart-2: 210 50% 62%;
+    --chart-3: 32 70% 55%;
+    --chart-4: 142 35% 50%;
+    --chart-5: 240 5% 64%;
   }
 
   * {
@@ -83,5 +95,10 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* 移动端底部安全区（iOS Home Indicator），配合固定底栏使用 */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }

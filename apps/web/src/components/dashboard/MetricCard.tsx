@@ -3,8 +3,7 @@
 import type { ElementType } from 'react';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { formatNumber } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 
 export type MetricCardProps = {
   icon: ElementType;

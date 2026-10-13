@@ -3,6 +3,7 @@ import '@fontsource-variable/inter';
 import './globals.css';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
+import { getThemeBootstrapScript } from '@/lib/theme-bootstrap';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { ToastContainer } from '@/components/ui/toast';
 
@@ -17,7 +18,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        {/* 首帧前解析主题，避免暗色模式闪白（docs/ui-ux-upgrade-plan.md A3） */}
+        <script
+          dangerouslySetInnerHTML={{ __html: getThemeBootstrapScript() }}
+        />
+      </head>
       <body>
         <QueryProvider>
           <ThemeProvider>
