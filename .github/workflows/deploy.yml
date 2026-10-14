@@ -24,8 +24,9 @@ jobs:
   build-push:
     name: Build & push ${{ matrix.app }}
     runs-on: ubuntu-latest
-    # 依赖层失效后的首次冷构建（pnpm 全量安装 + Chromium 下载）可能接近 1 小时
-    timeout-minutes: 60
+    # 冷构建（依赖全量安装）+ 大镜像跨境推送到 ACR 首跑可能超过 1 小时；
+    # 依赖层建立缓存后日常构建回到分钟级
+    timeout-minutes: 120
     strategy:
       # 单个镜像失败不取消其他矩阵任务：已完成的镜像照常推送并导出缓存，
       # 下次重跑只需补建失败的那个，避免「超时→无缓存→再超时」的恶性循环
