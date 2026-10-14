@@ -100,7 +100,17 @@ green "已备份（保留最近 10 份）：backups/pre-migrate-${IMAGE_TAG}.sql
 
 # ── 7. 迁移 + 空库初始化管理员 ──────────────────────────────
 step "7/9 数据库迁移 + 空库自动 seed"
-$COMPOSE run --rm -T api pnpm db:deploy
+# 共享机上偶发跨容器网络抖动（Prisma P1001：postgres 容器 healthy 但瞬时连不上）。
+# prisma migrate deploy 幂等，可安全重试。
+mig_ok=""
+for attempt in 1 2 3; do
+  if $COMPOSE run --rm -T api pnpm db:deploy; then
+    mig_ok=1; break
+  fi
+  red "第 ${attempt}/3 次迁移失败，15 秒后重试（持续 P1001 请检查服务器 Docker 网络）"
+  sleep 15
+done
+[ -n "$mig_ok" ] || { red "迁移重试 3 次仍失败，中止部署"; exit 1; }
 if [ "$($COMPOSE exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
   "SELECT count(*) FROM \"User\"" 2>/dev/null | tr -d '[:space:]')" = "0" ]; then
   $COMPOSE run --rm -T api pnpm db:seed
