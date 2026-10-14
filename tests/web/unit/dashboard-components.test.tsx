@@ -20,7 +20,7 @@ describe('MetricCard', () => {
     const { container } = render(
       <MetricCard icon={Send} label="发布任务" value={100} trendPercent={25} />
     );
-    expect(container.querySelector('.text-emerald-600')).toBeInTheDocument();
+    expect(container.querySelector('.text-success')).toBeInTheDocument();
     expect(screen.getByText('25%')).toBeInTheDocument();
   });
 
@@ -28,7 +28,7 @@ describe('MetricCard', () => {
     const { container } = render(
       <MetricCard icon={Send} label="发布任务" value={80} trendPercent={-15} />
     );
-    expect(container.querySelector('.text-red-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-destructive')).toBeInTheDocument();
     expect(screen.getByText('15%')).toBeInTheDocument();
   });
 
@@ -125,12 +125,20 @@ describe('LeadFunnelCard', () => {
     expect(screen.getByText('0%')).toBeInTheDocument();
   });
 
-  it('renders 4 funnel level labels', () => {
-    render(<LeadFunnelCard qualifiedLeads={5} totalLeads={10} />);
-    expect(screen.getByText(/A级/)).toBeInTheDocument();
-    expect(screen.getByText(/B级/)).toBeInTheDocument();
-    expect(screen.getByText(/C级/)).toBeInTheDocument();
-    expect(screen.getByText(/D级/)).toBeInTheDocument();
+  it('renders one honest conversion bar instead of a fake funnel', () => {
+    const { container } = render(
+      <LeadFunnelCard qualifiedLeads={5} totalLeads={10} />
+    );
+    // No fake per-level funnel rows (A/B/C/D) without level data.
+    expect(screen.queryByText(/A级/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/B级/)).not.toBeInTheDocument();
+    // Single conversion bar whose width tracks the qualified ratio.
+    const bar = container.querySelector('.bg-primary');
+    expect(bar).toBeInTheDocument();
+    expect(bar).toHaveStyle({ width: '50%' });
+    expect(
+      screen.getByText('全部互动中转化为合格线索的比例')
+    ).toBeInTheDocument();
   });
 });
 

@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Circle, ArrowRight, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { getAnalyticsOverview } from '@/lib/api/analytics';
 import { listPublishJobs } from '@/lib/api/publish';
+import { getLlmConfig } from '@/lib/api/settings';
+import { listProspectingTasks } from '@/lib/api/prospecting';
 import Link from 'next/link';
 
 interface OnboardingStep {
@@ -14,19 +17,40 @@ interface OnboardingStep {
   description: string;
   targetPath: string;
   checkCompleted: (data: {
+    hasLlm: boolean;
     hasPlatformAccounts: boolean;
+    hasProspectingTask: boolean;
     hasContent: boolean;
     hasPublished: boolean;
   }) => boolean;
 }
 
+/**
+ * 新手引导主线（docs/ui-ux-upgrade-plan.md B5）：
+ * 覆盖核心链路 配置 LLM → 连平台 → 首个获客任务 → 首条内容 → 首次发布。
+ * 挂载于工作台（/dashboard），与 /prospecting 的前置检查互补。
+ */
 const STEPS: OnboardingStep[] = [
+  {
+    id: 'configure-llm',
+    title: '配置 AI 模型',
+    description: '配置 LLM 后即可使用智能获客与内容生成能力',
+    targetPath: '/settings/ai',
+    checkCompleted: (d) => d.hasLlm
+  },
   {
     id: 'connect-platform',
     title: '连接平台账号',
     description: '连接你的第一个社交媒体账号，开始自动化运营',
     targetPath: '/integrations/platforms',
     checkCompleted: (d) => d.hasPlatformAccounts
+  },
+  {
+    id: 'first-task',
+    title: '运行首个获客任务',
+    description: '描述目标客户，系统自动挖掘高意向潜客',
+    targetPath: '/prospecting',
+    checkCompleted: (d) => d.hasProspectingTask
   },
   {
     id: 'create-content',
@@ -68,8 +92,22 @@ export function OnboardingGuide() {
     staleTime: 60_000
   });
 
+  const { data: llmConfig } = useQuery({
+    queryKey: ['settings', 'llm'],
+    queryFn: getLlmConfig,
+    staleTime: 60_000
+  });
+
+  const { data: taskData } = useQuery({
+    queryKey: ['prospecting', 'tasks', 1, 1],
+    queryFn: () => listProspectingTasks(1, 1),
+    staleTime: 60_000
+  });
+
   const checks = {
+    hasLlm: llmConfig?.effectiveConfigured === true,
     hasPlatformAccounts: (overview?.platformAccounts ?? 0) > 0,
+    hasProspectingTask: (taskData?.total ?? 0) > 0,
     hasContent: (overview?.totalContentItems ?? 0) > 0,
     hasPublished:
       (overview?.totalPublished ?? 0) > 0 || (publishData?.total ?? 0) > 0
@@ -125,15 +163,18 @@ export function OnboardingGuide() {
             </p>
           </div>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="关闭引导"
           onClick={() => {
             setDismissed(true);
             localStorage.setItem('onboarding-dismissed', 'true');
           }}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          className="text-muted-foreground"
         >
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-2">
@@ -168,12 +209,11 @@ export function OnboardingGuide() {
               </p>
             </div>
             {!step.completed && nextStep?.id === step.id && (
-              <Link
-                href={step.targetPath}
-                className="flex shrink-0 items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                开始 <ArrowRight className="h-3 w-3" />
-              </Link>
+              <Button asChild size="xs" className="shrink-0">
+                <Link href={step.targetPath}>
+                  开始 <ArrowRight className="h-3 w-3" />
+                </Link>
+              </Button>
             )}
           </div>
         ))}

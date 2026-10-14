@@ -16,9 +16,10 @@ import {
   RiskBadge,
   LeadLevelBadge
 } from '@/components/shared/StatusBadge';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { useState } from 'react';
 import { toast } from '@/components/ui/toast';
+import { Button } from '@/components/ui/button';
 import type { ReplySuggestion } from '@/types/interaction';
 
 export default function ConversationDetailPage() {
@@ -131,7 +132,7 @@ export default function ConversationDetailPage() {
                       </span>
                       <PlatformBadge platform={msg.platform} />
                       <span className="text-xs text-muted-foreground">
-                        {formatDate(msg.receivedAt)}
+                        {formatDateTime(msg.receivedAt)}
                       </span>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3 text-sm">
@@ -157,31 +158,31 @@ export default function ConversationDetailPage() {
               已配置官方 token 时走官方回复；扫码账号是尽力而为，发送后请到平台确认。
             </p>
             <div className="mt-3 flex gap-2">
-              <button
+              <Button
                 onClick={() =>
                   replyText.trim() && replyMutation.mutate(replyText)
                 }
-                disabled={!replyText.trim() || replyMutation.isPending}
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                disabled={!replyText.trim()}
+                loading={replyMutation.isPending}
               >
                 {replyMutation.isPending ? '发送中...' : '发送回复'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => transferToHumanMutation.mutate()}
-                disabled={transferToHumanMutation.isPending}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"
+                loading={transferToHumanMutation.isPending}
               >
                 {transferToHumanMutation.isPending ? '处理中...' : '转人工'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => convertToCustomerMutation.mutate()}
-                disabled={convertToCustomerMutation.isPending}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"
+                loading={convertToCustomerMutation.isPending}
               >
                 {convertToCustomerMutation.isPending
                   ? '处理中...'
                   : '转入客户库'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -224,12 +225,14 @@ export default function ConversationDetailPage() {
                   </div>
                   {suggestion.suggestedReply && (
                     <div className="mt-2 flex gap-2">
-                      <button
+                      <Button
+                        variant="link"
+                        size="xs"
                         onClick={() => setReplyText(suggestion.suggestedReply)}
-                        className="text-xs text-info hover:underline"
+                        className="h-auto px-1 text-info hover:text-info"
                       >
                         采纳此回复
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>

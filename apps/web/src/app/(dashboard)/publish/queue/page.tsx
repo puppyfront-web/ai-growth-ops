@@ -18,10 +18,12 @@ import {
   publishModeLabels,
   platformLabels
 } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import Link from 'next/link';
 import { PublishProgressInline } from '@/components/publish/PublishProgressInline';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 export default function PublishQueuePage() {
   const qc = useQueryClient();
@@ -74,7 +76,7 @@ export default function PublishQueuePage() {
       <PageHeader title="发布队列" />
 
       <div className="flex gap-3 mb-4">
-        <select
+        <NativeSelect
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="rounded-md border p-2 text-sm"
@@ -85,8 +87,8 @@ export default function PublishQueuePage() {
               {v}
             </option>
           ))}
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={platformFilter}
           onChange={(e) => setPlatformFilter(e.target.value)}
           className="rounded-md border p-2 text-sm"
@@ -97,7 +99,7 @@ export default function PublishQueuePage() {
               {v}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <span className="self-center text-sm text-muted-foreground">
           {jobs.length} 个任务
         </span>
@@ -169,7 +171,7 @@ export default function PublishQueuePage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {formatDate(job.createdAt)}
+                    {formatDateTime(job.createdAt)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
@@ -180,36 +182,43 @@ export default function PublishQueuePage() {
                         详情
                       </Link>
                       {['DRAFT', 'READY', 'SCHEDULED'].includes(job.status) && (
-                        <button
+                        <Button
+                          variant="link"
+                          size="xs"
+                          className="text-info"
                           onClick={() => executeMutation.mutate(job.id)}
                           disabled={executeMutation.isPending}
-                          className="text-xs text-info hover:underline disabled:opacity-50"
                         >
                           执行发布
-                        </button>
+                        </Button>
                       )}
                       {job.status === 'FAILED' && (
-                        <button
+                        <Button
+                          variant="link"
+                          size="xs"
+                          className="text-info"
                           onClick={() => retryMutation.mutate(job.id)}
                           disabled={retryMutation.isPending}
-                          className="text-xs text-info hover:underline disabled:opacity-50"
                         >
                           重试
-                        </button>
+                        </Button>
                       )}
                       {['DRAFT', 'RUNNING', 'SCHEDULED'].includes(
                         job.status
                       ) && (
-                        <button
+                        <Button
+                          variant="ghost-destructive"
+                          size="xs"
                           onClick={() => cancelMutation.mutate(job.id)}
                           disabled={cancelMutation.isPending}
-                          className="text-xs text-destructive hover:underline disabled:opacity-50"
                         >
                           取消
-                        </button>
+                        </Button>
                       )}
                       {job.status !== 'RUNNING' && (
-                        <button
+                        <Button
+                          variant="ghost-destructive"
+                          size="xs"
                           onClick={() => {
                             confirm({
                               title: '删除发布任务',
@@ -220,10 +229,9 @@ export default function PublishQueuePage() {
                             });
                           }}
                           disabled={deleteMutation.isPending}
-                          className="text-xs text-destructive hover:underline disabled:opacity-50"
                         >
                           删除
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>

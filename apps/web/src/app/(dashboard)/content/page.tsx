@@ -13,8 +13,9 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { Button } from '@/components/ui/button';
 import { contentTypeLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { ContentItem } from '@/types/content';
@@ -115,7 +116,7 @@ export default function ContentPage() {
         header: '更新时间',
         cell: ({ getValue }) => (
           <span className="text-sm text-muted-foreground">
-            {formatDate(getValue() as string)}
+            {formatDateTime(getValue() as string)}
           </span>
         )
       },
@@ -140,16 +141,17 @@ export default function ContentPage() {
                 发布
               </Link>
               {!isArchived && (
-                <button
+                <Button
+                  variant="ghost-destructive"
+                  size="sm"
                   onClick={() => {
                     setToastError(null);
                     pendingItemRef.current = item;
                     setDialog({ type: 'delete', item });
                   }}
-                  className="text-sm text-destructive hover:underline"
                 >
                   删除
-                </button>
+                </Button>
               )}
             </div>
           );
@@ -235,12 +237,15 @@ export default function ContentPage() {
       {toastError && (
         <div className="fixed bottom-4 right-4 z-50 rounded-md border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-md">
           {toastError}
-          <button
+          <Button
+            variant="ghost-destructive"
+            size="icon-sm"
             onClick={() => setToastError(null)}
-            className="ml-3 text-destructive hover:text-destructive"
+            aria-label="关闭错误提示"
+            className="ml-3"
           >
             ×
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -31,23 +31,24 @@ import {
   Select,
   SelectOption
 } from '@/components/ui/select';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Rocket, Play, History, Coins, Clock, CheckCircle2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 
 const STATUS_META: Record<
   RunStatus,
-  { label: string; cls: string }
+  { label: string; variant: 'muted' | 'info' | 'success' | 'danger' | 'warning' }
 > = {
-  pending: { label: '排队中', cls: 'bg-muted text-foreground' },
-  running: { label: '运行中', cls: 'bg-info/10 text-info' },
-  success: { label: '已完成', cls: 'bg-success/10 text-success' },
-  failed: { label: '失败', cls: 'bg-destructive/10 text-destructive' },
-  paused: { label: '待处理', cls: 'bg-warning/10 text-warning' }
+  pending: { label: '排队中', variant: 'muted' },
+  running: { label: '运行中', variant: 'info' },
+  success: { label: '已完成', variant: 'success' },
+  failed: { label: '失败', variant: 'danger' },
+  paused: { label: '待处理', variant: 'warning' }
 };
 
 function fmtTime(s: string | null): string {
   if (!s) return '—';
-  return new Date(s).toLocaleString('zh-CN', { hour12: false });
+  return formatDateTime(s);
 }
 
 function duration(start: string | null, end: string | null): string {
@@ -63,11 +64,7 @@ function duration(start: string | null, end: string | null): string {
 
 function RunStatusBadge({ status }: { status: RunStatus }) {
   const m = STATUS_META[status] ?? STATUS_META.pending;
-  return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', m.cls)}>
-      {m.label}
-    </span>
-  );
+  return <StatusBadge status={status} label={m.label} variant={m.variant} />;
 }
 
 export default function CockpitPage() {

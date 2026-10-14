@@ -24,9 +24,40 @@ describe('Button', () => {
     expect(btn.className).toContain('border');
   });
 
+  it('renders ghost-destructive variant', () => {
+    render(<Button variant="ghost-destructive">删除</Button>);
+    const btn = screen.getByRole('button', { name: '删除' });
+    expect(btn.className).toContain('text-destructive');
+  });
+
   it('renders as disabled', () => {
     render(<Button disabled>禁用</Button>);
     const btn = screen.getByRole('button', { name: '禁用' });
     expect(btn).toBeDisabled();
+  });
+
+  it('loading state disables the button and shows a spinner', () => {
+    render(<Button loading>保存</Button>);
+    const btn = screen.getByRole('button', { name: /保存/ });
+    expect(btn).toBeDisabled();
+    // spinner svg rendered alongside the label
+    expect(btn.querySelector('svg.animate-spin')).toBeInTheDocument();
+  });
+
+  it('renders as a link when asChild with anchor child', () => {
+    render(
+      <Button asChild>
+        <a href="/content/new">新建内容</a>
+      </Button>
+    );
+    const link = screen.getByRole('link', { name: '新建内容' });
+    expect(link).toHaveAttribute('href', '/content/new');
+    expect(link.className).toContain('bg-primary');
+  });
+
+  it('supports xs size', () => {
+    render(<Button size="xs">小按钮</Button>);
+    const btn = screen.getByRole('button', { name: '小按钮' });
+    expect(btn.className).toContain('h-7');
   });
 });

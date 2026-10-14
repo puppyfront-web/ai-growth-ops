@@ -55,9 +55,11 @@ test.describe('Thin customer workbench', () => {
     await page.goto('/customers');
     await page.getByRole('button', { name: /新建客户/ }).click();
     await page.getByLabel('姓名 *').fill('重复手机客户');
-    await page.getByLabel('手机号').fill('13900139000');
+    // exact：避免子串命中表格列头「按手机号排序」按钮
+    await page.getByLabel('手机号', { exact: true }).fill('13900139000');
     await page.getByLabel('公司').fill('另一家公司');
-    await page.getByLabel('职位').fill('经理');
+    // exact：避免子串命中表格列头「按职位排序」按钮
+    await page.getByLabel('职位', { exact: true }).fill('经理');
     await page.getByLabel('需求 *').fill('重复手机号');
     await page.getByRole('button', { name: '保存客户' }).click();
     await expect(page.getByText('发现重复客户')).toBeVisible();

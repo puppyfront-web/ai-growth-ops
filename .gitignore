@@ -20,3 +20,4 @@ uploads/
 .local-data/
 packages/database/generated/
 .cursor/
+gui-test-screenshots/

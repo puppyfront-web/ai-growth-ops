@@ -6,6 +6,8 @@ import { listMediaAssets, reviewMedia } from '@/lib/api/media';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useState } from 'react';
 
 export default function MediaReviewPage() {
@@ -66,23 +68,25 @@ export default function MediaReviewPage() {
                     : '-'}
                 </p>
                 <div className="mt-3 flex gap-2">
-                  <button
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-success/40 text-success hover:bg-success/10 hover:text-success"
                     onClick={() =>
                       reviewMutation.mutate({
                         id: asset.id,
                         status: 'approved'
                       })
                     }
-                    className="flex-1 rounded-md bg-success px-3 py-1.5 text-sm text-white hover:bg-success"
                   >
                     通过
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost-destructive"
+                    className="flex-1"
                     onClick={() => setRejectId(asset.id)}
-                    className="flex-1 rounded-md bg-destructive px-3 py-1.5 text-sm text-white hover:bg-red-700"
                   >
                     拒绝
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -97,21 +101,19 @@ export default function MediaReviewPage() {
           />
           <div className="relative z-50 w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
             <h3 className="text-lg font-semibold">拒绝原因</h3>
-            <textarea
+            <Textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               rows={3}
-              className="mt-3 w-full rounded-md border p-2 text-sm"
+              className="mt-3 w-full"
               placeholder="请填写拒绝原因..."
             />
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setRejectId(null)}
-                className="rounded-md border px-4 py-2 text-sm"
-              >
+              <Button variant="outline" onClick={() => setRejectId(null)}>
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="destructive"
                 onClick={() => {
                   reviewMutation.mutate({
                     id: rejectId,
@@ -121,10 +123,9 @@ export default function MediaReviewPage() {
                   setRejectId(null);
                   setRejectReason('');
                 }}
-                className="rounded-md bg-destructive px-4 py-2 text-sm text-white"
               >
                 确认拒绝
-              </button>
+              </Button>
             </div>
           </div>
         </div>

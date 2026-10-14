@@ -34,13 +34,13 @@ export default function PlatformAnalyticsPage() {
         <div className="rounded-xl border bg-card p-5">
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="platform" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", backgroundColor: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }} />
               <Legend />
-              <Bar dataKey="publishCount" fill="#94a3b8" name="发布数" />
-              <Bar dataKey="leadCount" fill="#dc2626" name="线索数" />
+              <Bar dataKey="publishCount" fill="hsl(var(--chart-1))" name="发布数" />
+              <Bar dataKey="leadCount" fill="hsl(var(--chart-2))" name="线索数" />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -14,7 +14,8 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatDate } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { formatDateTime } from '@/lib/utils';
 import { Database, RefreshCw } from 'lucide-react';
 
 export default function LeadSyncPage() {
@@ -152,7 +153,7 @@ export default function LeadSyncPage() {
                 </div>
                 {feishuConfig?.lastSyncAt && (
                   <div className="text-xs text-muted-foreground">
-                    最近同步: {formatDate(feishuConfig.lastSyncAt)}
+                    最近同步: {formatDateTime(feishuConfig.lastSyncAt)}
                   </div>
                 )}
                 <div className="flex items-center justify-between">
@@ -161,13 +162,12 @@ export default function LeadSyncPage() {
                   >
                     {feishuConfig?.enabled ? '已启用' : '未启用'}
                   </span>
-                  <button
+                  <Button
                     onClick={() => saveFeishu.mutate()}
-                    disabled={saveFeishu.isPending}
-                    className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                    loading={saveFeishu.isPending}
                   >
                     {saveFeishu.isPending ? '保存中...' : '保存配置'}
-                  </button>
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -211,7 +211,7 @@ export default function LeadSyncPage() {
                 </div>
                 {wecomConfig?.lastSyncAt && (
                   <div className="text-xs text-muted-foreground">
-                    最近同步: {formatDate(wecomConfig.lastSyncAt)}
+                    最近同步: {formatDateTime(wecomConfig.lastSyncAt)}
                   </div>
                 )}
                 <div className="flex items-center justify-between">
@@ -220,13 +220,12 @@ export default function LeadSyncPage() {
                   >
                     {wecomConfig?.enabled ? '已启用' : '未启用'}
                   </span>
-                  <button
+                  <Button
                     onClick={() => saveWecom.mutate()}
-                    disabled={saveWecom.isPending}
-                    className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                    loading={saveWecom.isPending}
                   >
                     {saveWecom.isPending ? '保存中...' : '保存配置'}
-                  </button>
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -266,7 +265,7 @@ export default function LeadSyncPage() {
                       <div className="flex items-center gap-2">
                         {mapping?.syncedAt && (
                           <span className="text-xs text-muted-foreground">
-                            {formatDate(mapping.syncedAt)}
+                            {formatDateTime(mapping.syncedAt)}
                           </span>
                         )}
                         <StatusBadge status="synced" label="已同步" />

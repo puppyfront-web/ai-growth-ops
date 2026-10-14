@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { publishStatusLabels, contentTypeLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import type { ContentItem } from '@/types/content';
 import type { PublishJob } from '@/types/publish';
 
@@ -67,7 +67,7 @@ export function DayDetailDialog({
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {formatDate(item.createdAt)}
+                      {formatDateTime(item.createdAt)}
                     </div>
                   </Link>
                 ))}

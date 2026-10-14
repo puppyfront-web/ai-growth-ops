@@ -110,7 +110,7 @@ export function PlatformTrendChart({
               key={key}
               dataKey={key}
               stackId="a"
-              fill={platformColorMap[key] ?? '#6b7280'}
+              fill={platformColorMap[key] ?? 'hsl(var(--chart-5))'}
               radius={
                 platformKeys.indexOf(key) === platformKeys.length - 1
                   ? [4, 4, 0, 0]

@@ -6,6 +6,7 @@ import { getIcpConfig, updateIcpConfig } from '@/lib/api/settings';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { Button } from '@/components/ui/button';
 
 function TagEditor({
   label,
@@ -30,14 +31,16 @@ function TagEditor({
             className="rounded-full border px-3 py-1 text-sm flex items-center gap-1"
           >
             {item}
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               aria-label={`删除 ${item}`}
               onClick={() => onChange(items.filter((x) => x !== item))}
-              className="text-muted-foreground hover:text-foreground"
+              className="h-auto px-1 text-muted-foreground hover:text-foreground"
             >
               ×
-            </button>
+            </Button>
           </span>
         ))}
       </div>
@@ -54,17 +57,18 @@ function TagEditor({
             }
           }}
         />
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => {
             if (!draft.trim()) return;
             onChange([...items, draft.trim()]);
             setDraft('');
           }}
-          className="rounded-md border px-3 py-2 text-sm hover:bg-accent"
         >
           添加
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -97,9 +101,14 @@ export default function IcpSettingsPage() {
     return (
       <div className="p-6 text-sm text-destructive">
         ICP 配置加载失败，当前配置不会被覆盖。
-        <button onClick={() => refetch()} className="ml-2 underline">
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => refetch()}
+          className="ml-2 h-auto px-1 underline"
+        >
           重试
-        </button>
+        </Button>
       </div>
     );
   }
@@ -141,13 +150,13 @@ export default function IcpSettingsPage() {
           }
           placeholder="如：竞品名、无关行业"
         />
-        <button
+        <Button
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || !data}
-          className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+          disabled={!data}
+          loading={saveMutation.isPending}
         >
           {saveMutation.isPending ? '保存中…' : '保存配置'}
-        </button>
+        </Button>
         {saveMutation.isError && (
           <p className="text-sm text-destructive">
             {(saveMutation.error as Error).message}

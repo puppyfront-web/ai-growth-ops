@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { getLlmConfig } from '@/lib/api/settings';
 import { getAnalyticsOverview } from '@/lib/api/analytics';
 import { queryKeys } from '@/lib/query-keys';
+import { Button } from '@/components/ui/button';
 
 /**
  * First-run guide for the prospecting landing page. New users land here by
@@ -100,12 +101,9 @@ export function ProspectingGuide({
         '点击「新建任务」，用一句话描述你想找的客户（可参考示例），AI 分析后确认策略即可开始。',
       done: false,
       cta: (
-        <button
-          onClick={onStartCreate}
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-        >
+        <Button size="xs" className="shrink-0" onClick={onStartCreate}>
           开始创建 <ChevronRight className="h-3 w-3" />
-        </button>
+        </Button>
       )
     }
   ];
@@ -126,12 +124,14 @@ export function ProspectingGuide({
             </p>
           </div>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={dismiss}
-          className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+          className="text-muted-foreground hover:bg-muted hover:text-muted-foreground"
         >
           不再显示
-        </button>
+        </Button>
       </div>
 
       <ol className="space-y-2">

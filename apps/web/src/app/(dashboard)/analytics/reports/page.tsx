@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { FileText, Calendar, TrendingUp, Users, Send } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 
 const reportTypes = [
   { key: 'daily', label: '日报', icon: Calendar, desc: '每日运营数据汇总' },
@@ -120,7 +120,7 @@ export default function ReportsPage() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">{report.label}</span>
                   <span className="text-xs text-muted-foreground">
-                    {formatDate(report.createdAt)}
+                    {formatDateTime(report.createdAt)}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">

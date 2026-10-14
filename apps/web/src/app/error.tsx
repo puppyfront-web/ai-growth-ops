@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 
@@ -11,6 +12,8 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+
   useEffect(() => {
     console.error('Global error:', error);
   }, [error]);
@@ -37,7 +40,7 @@ export default function GlobalError({
             <RotateCcw className="mr-2 h-4 w-4" />
             重试
           </Button>
-          <Button onClick={() => (window.location.href = '/dashboard')}>
+          <Button onClick={() => router.push('/dashboard')}>
             <Home className="mr-2 h-4 w-4" />
             返回工作台
           </Button>

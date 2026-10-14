@@ -27,6 +27,8 @@ import {
   AlertDialogCancel,
   AlertDialogAction
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const REQUIRED_FIELDS: CustomerImportField[] = [
   'displayName',
@@ -125,18 +127,16 @@ export function CustomerImportPanel() {
 
   return (
     <>
-      <button
+      <Button
+        variant="outline"
+        size="xs"
         onClick={() => fileRef.current?.click()}
-        className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent"
       >
         导入 CSV
-      </button>
-      <button
-        onClick={downloadTemplate}
-        className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent"
-      >
+      </Button>
+      <Button variant="outline" size="xs" onClick={downloadTemplate}>
         下载模板
-      </button>
+      </Button>
       {error && !open && (
         <span className="text-xs text-destructive">{error}</span>
       )}
@@ -179,7 +179,7 @@ export function CustomerImportPanel() {
                     {CUSTOMER_FIELD_LABELS[field]}
                     {REQUIRED_FIELDS.includes(field) ? ' *' : ''}
                   </span>
-                  <select
+                  <NativeSelect
                     value={mapping[field] ?? ''}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -198,17 +198,19 @@ export function CustomerImportPanel() {
                         {h || `列 ${i + 1}`}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
               ))}
             </div>
-            <button
+            <Button
+              size="xs"
+              className="mt-3"
               onClick={() => previewMutation.mutate({ csv, mapping })}
-              disabled={!csv || !mappingReady || previewMutation.isPending}
-              className="mt-3 rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+              disabled={!csv || !mappingReady}
+              loading={previewMutation.isPending}
             >
               {previewMutation.isPending ? '解析中…' : '刷新预览'}
-            </button>
+            </Button>
           </section>
 
           {preview && (

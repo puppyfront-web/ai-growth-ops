@@ -8,6 +8,7 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { LeadLevelBadge } from '@/components/shared/StatusBadge';
 import { Shield, Zap, Brain, AlertTriangle } from 'lucide-react';
@@ -160,13 +161,12 @@ export default function LeadRulesPage() {
                 onCheckedChange={setLowConfidenceReview}
               />
             </div>
-            <button
+            <Button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              loading={saveMutation.isPending}
             >
               {saveMutation.isPending ? '保存中...' : '保存规则'}
-            </button>
+            </Button>
           </CardContent>
         </Card>
 

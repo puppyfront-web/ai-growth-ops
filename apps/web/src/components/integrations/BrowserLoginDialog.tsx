@@ -10,6 +10,7 @@ import {
 import { platformLabels } from '@/lib/constants';
 import { Check } from 'lucide-react';
 import { PlatformIcon } from '@/components/shared/PlatformIcon';
+import { Button } from '@/components/ui/button';
 
 interface BrowserLoginDialogProps {
   accountId: string;
@@ -230,12 +231,13 @@ export function BrowserLoginDialog({
               账号状态已更新为「已授权」，现在可以执行获客任务了
             </p>
             <p className="text-xs text-muted-foreground">窗口将自动关闭…</p>
-            <button
+            <Button
+              variant="outline"
               onClick={handleClose}
-              className="mt-3 rounded-md bg-success px-6 py-2 text-sm text-white hover:bg-success"
+              className="mt-3 border-success/40 text-success hover:bg-success/10 hover:text-success"
             >
               完成
-            </button>
+            </Button>
           </div>
         )}
 
@@ -248,30 +250,19 @@ export function BrowserLoginDialog({
               {error ?? '登录失败'}
             </p>
             <div className="mt-4 flex gap-2">
-              <button
-                onClick={handleRetry}
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
-              >
-                重新登录
-              </button>
-              <button
-                onClick={handleClose}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
-              >
+              <Button onClick={handleRetry}>重新登录</Button>
+              <Button variant="outline" onClick={handleClose}>
                 关闭
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {state === 'waiting_scan' && (
           <div className="mt-4 flex justify-end">
-            <button
-              onClick={handleClose}
-              className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
-            >
+            <Button variant="outline" onClick={handleClose}>
               取消
-            </button>
+            </Button>
           </div>
         )}
       </div>

@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/select';
 import { KeyRound, CheckCircle2, ExternalLink, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 
 /**
  * Operator-facing LLM provider config. Stored org-level in AppConfig
@@ -280,9 +280,7 @@ export function LlmConfigCard() {
                 <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                 已配置 API Key
                 {view.updatedAt
-                  ? `（${new Date(view.updatedAt).toLocaleString('zh-CN', {
-                      hour12: false
-                    })}）`
+                  ? `（${formatDateTime(view.updatedAt)}）`
                   : ''}
               </>
             ) : needsApiKey ? (

@@ -6,6 +6,7 @@ import type {
   Customer,
   CustomerStatus
 } from '@/types/customer';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export const CHANNEL_LABELS: Record<AcquisitionChannel, string> = {
   douyin: '抖音',
@@ -145,7 +146,7 @@ export function CustomerEditor({
           />
         </Field>
         <Field label="来源渠道" htmlFor={`${idPrefix}-channel`}>
-          <select
+          <NativeSelect
             id={`${idPrefix}-channel`}
             value={value.channel}
             onChange={(e) =>
@@ -158,11 +159,11 @@ export function CustomerEditor({
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         {showStatus ? (
           <Field label="跟进状态" htmlFor={`${idPrefix}-status`}>
-            <select
+            <NativeSelect
               id={`${idPrefix}-status`}
               value={value.status}
               onChange={(e) =>
@@ -175,7 +176,7 @@ export function CustomerEditor({
                   {STATUS_LABELS[status]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
         ) : (
           <Field label="来源说明" htmlFor={`${idPrefix}-source-note`}>
@@ -202,7 +203,7 @@ export function CustomerEditor({
       )}
       {showAssignee && (
         <Field label="负责人" htmlFor={`${idPrefix}-assignee`}>
-          <select
+          <NativeSelect
             id={`${idPrefix}-assignee`}
             value={value.assignedTo}
             onChange={(e) => set({ assignedTo: e.target.value })}
@@ -214,7 +215,7 @@ export function CustomerEditor({
                 {member.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
       )}
       <Field label="需求 *" htmlFor={`${idPrefix}-intent`}>

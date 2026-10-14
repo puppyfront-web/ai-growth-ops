@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { apiUpload, authToken } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
 
 export interface UploadedFile {
   id: string;
@@ -181,13 +182,16 @@ export function FileUpload({
                 <span className="text-xs truncate max-w-[80%]">
                   {file.fileName}
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost-destructive"
+                  size="icon-sm"
+                  aria-label="移除文件"
                   onClick={() => removeFile(file.id)}
-                  className="text-xs text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   &times;
-                </button>
+                </Button>
               </div>
             </div>
           ))}

@@ -8,9 +8,10 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { mediaReviewStatusLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import Link from 'next/link';
 import { useState } from 'react';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export default function MediaPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -46,7 +47,7 @@ export default function MediaPage() {
       />
 
       <div className="flex gap-2 mb-4">
-        <select
+        <NativeSelect
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="rounded-md border p-2 text-sm"
@@ -55,13 +56,13 @@ export default function MediaPage() {
           <option value="pending_review">待审核</option>
           <option value="approved">已通过</option>
           <option value="rejected">已拒绝</option>
-        </select>
-        <select aria-label="素材来源" value={sourceType} onChange={(event) => setSourceType(event.target.value)} className="rounded-md border p-2 text-sm">
+        </NativeSelect>
+        <NativeSelect aria-label="素材来源" value={sourceType} onChange={(event) => setSourceType(event.target.value)} className="rounded-md border p-2 text-sm">
           <option value="">全部来源</option>
           <option value="uploaded">本地上传</option>
           <option value="external_url">外部链接</option>
           <option value="generated_future">AI 生成</option>
-        </select>
+        </NativeSelect>
         <div className="flex rounded-md border">
           <button
             onClick={() => setView('grid')}
@@ -161,7 +162,7 @@ export default function MediaPage() {
                       : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {formatDate(asset.createdAt)}
+                    {formatDateTime(asset.createdAt)}
                   </td>
                 </tr>
               ))}

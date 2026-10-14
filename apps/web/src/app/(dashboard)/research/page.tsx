@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PlatformBadge } from '@/components/shared/StatusBadge';
 import { researchStatusLabels } from '@/lib/constants';
+import { Button } from '@/components/ui/button';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { ResearchTask } from '@/types/research';
 import Link from 'next/link';
@@ -92,13 +93,14 @@ export default function ResearchPage() {
               查看
             </Link>
             {canRun && (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => runMutation.mutate(row.original.id)}
-                disabled={isPending}
-                className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                loading={isPending}
               >
                 {isPending ? '运行中...' : '运行'}
-              </button>
+              </Button>
             )}
           </div>
         );

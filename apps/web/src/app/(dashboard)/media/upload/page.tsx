@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { uploadMedia } from '@/lib/api/media';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
+import { Button } from '@/components/ui/button';
 
 export default function MediaUploadPage() {
   const router = useRouter();
@@ -47,13 +48,13 @@ export default function MediaUploadPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             支持图片（JPG/PNG）和视频（MP4），单个文件最大 200MB
           </p>
-          <button
+          <Button
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploadMutation.isPending}
-            className="mt-4 rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            loading={uploadMutation.isPending}
+            className="mt-4"
           >
             {uploadMutation.isPending ? '上传中...' : '选择文件'}
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"

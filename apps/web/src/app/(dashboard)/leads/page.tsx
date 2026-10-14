@@ -11,11 +11,13 @@ import {
   PlatformBadge,
   LeadLevelBadge
 } from '@/components/shared/StatusBadge';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Lead } from '@/types/lead';
 import Link from 'next/link';
 import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 const leadStatusLabels: Record<string, string> = {
   NEW: '新线索',
@@ -82,7 +84,7 @@ const columns: ColumnDef<Lead>[] = [
     header: '创建时间',
     cell: ({ getValue }) => (
       <span className="text-sm text-muted-foreground">
-        {formatDate(getValue() as string)}
+        {formatDateTime(getValue() as string)}
       </span>
     )
   },
@@ -168,19 +170,18 @@ export default function LeadsPage() {
         title="线索管理"
         actions={
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowCreate((v) => !v)}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90"
-            >
+            <Button size="xs" onClick={() => setShowCreate((v) => !v)}>
               + 新建线索
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
               onClick={() => fileInputRef.current?.click()}
               disabled={importMutation.isPending}
-              className="rounded-md border px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50"
+              loading={importMutation.isPending}
             >
               {importMutation.isPending ? '导入中…' : '导入 CSV'}
-            </button>
+            </Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -235,7 +236,7 @@ export default function LeadsPage() {
             </div>
             <div>
               <label className="block text-xs text-muted-foreground">等级</label>
-              <select
+              <NativeSelect
                 value={form.level}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, level: e.target.value as 'A' | 'B' | 'C' | 'D' }))
@@ -245,20 +246,21 @@ export default function LeadsPage() {
                 {(['A', 'B', 'C', 'D'] as const).map((lv) => (
                   <option key={lv} value={lv}>{lv}级</option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
-            <button
+            <Button
+              size="sm"
               onClick={() => form.name.trim() && createMutation.mutate()}
               disabled={!form.name.trim() || createMutation.isPending}
-              className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+              loading={createMutation.isPending}
             >
               {createMutation.isPending ? '保存中…' : '保存'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
       <div className="flex gap-2 mb-4">
-        <select
+        <NativeSelect
           value={filters.level ?? ''}
           onChange={(e) => setFilters((f) => ({ ...f, level: e.target.value }))}
           className="rounded-md border p-2 text-sm"
@@ -268,8 +270,8 @@ export default function LeadsPage() {
           <option value="B">B级</option>
           <option value="C">C级</option>
           <option value="D">D级</option>
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={filters.status ?? ''}
           onChange={(e) =>
             setFilters((f) => ({ ...f, status: e.target.value }))
@@ -282,7 +284,7 @@ export default function LeadsPage() {
           <option value="CONTACTED">已联系</option>
           <option value="ADDED_WECOM">已加企微</option>
           <option value="WON">已成交</option>
-        </select>
+        </NativeSelect>
       </div>
       <DataTable
         columns={columns}

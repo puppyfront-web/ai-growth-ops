@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState, useEffect } from 'react';
 import { Image, Video } from 'lucide-react';
 import Link from 'next/link';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 export default function AiSettingsPage() {
   const qc = useQueryClient();
@@ -91,24 +93,42 @@ export default function AiSettingsPage() {
                 <div>
                   <label className="text-sm font-medium">配置模式</label>
                   <div className="mt-2 flex items-center gap-3">
-                    <button
+                    <Button
                       type="button"
+                      size="sm"
+                      variant={
+                        mediaGen.mode === 'llm_provider'
+                          ? 'default'
+                          : 'secondary'
+                      }
+                      className={
+                        mediaGen.mode === 'llm_provider'
+                          ? undefined
+                          : 'text-muted-foreground hover:bg-accent'
+                      }
                       onClick={() =>
                         setMediaGen((m) => ({ ...m, mode: 'llm_provider' }))
                       }
-                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.mode === 'llm_provider' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
                     >
                       复用 LLM 配置
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      size="sm"
+                      variant={
+                        mediaGen.mode === 'dedicated' ? 'default' : 'secondary'
+                      }
+                      className={
+                        mediaGen.mode === 'dedicated'
+                          ? undefined
+                          : 'text-muted-foreground hover:bg-accent'
+                      }
                       onClick={() =>
                         setMediaGen((m) => ({ ...m, mode: 'dedicated' }))
                       }
-                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.mode === 'dedicated' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
                     >
                       独立配置
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -142,7 +162,7 @@ export default function AiSettingsPage() {
                   <div className="space-y-3">
                     <div>
                       <label className="text-sm font-medium">Provider</label>
-                      <select
+                      <NativeSelect
                         value={mediaGen.provider}
                         onChange={(e) =>
                           setMediaGen((m) => ({
@@ -155,7 +175,7 @@ export default function AiSettingsPage() {
                         <option value="openai">OpenAI (DALL·E)</option>
                         <option value="stability">Stability AI</option>
                         <option value="other">其他 OpenAI 兼容</option>
-                      </select>
+                      </NativeSelect>
                     </div>
                     <div>
                       <label className="text-sm font-medium">API Key</label>
@@ -213,24 +233,44 @@ export default function AiSettingsPage() {
                 <div>
                   <label className="text-sm font-medium">配置模式</label>
                   <div className="mt-2 flex items-center gap-3">
-                    <button
+                    <Button
                       type="button"
+                      size="sm"
+                      variant={
+                        mediaGen.videoMode === 'llm_provider'
+                          ? 'default'
+                          : 'secondary'
+                      }
+                      className={
+                        mediaGen.videoMode === 'llm_provider'
+                          ? undefined
+                          : 'text-muted-foreground hover:bg-accent'
+                      }
                       onClick={() =>
                         setMediaGen((m) => ({ ...m, videoMode: 'llm_provider' }))
                       }
-                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.videoMode === 'llm_provider' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
                     >
                       复用 LLM 配置
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      size="sm"
+                      variant={
+                        mediaGen.videoMode === 'dedicated'
+                          ? 'default'
+                          : 'secondary'
+                      }
+                      className={
+                        mediaGen.videoMode === 'dedicated'
+                          ? undefined
+                          : 'text-muted-foreground hover:bg-accent'
+                      }
                       onClick={() =>
                         setMediaGen((m) => ({ ...m, videoMode: 'dedicated' }))
                       }
-                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mediaGen.videoMode === 'dedicated' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
                     >
                       独立配置
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {mediaGen.videoMode === 'llm_provider' && (
@@ -300,13 +340,12 @@ export default function AiSettingsPage() {
             </CardContent>
           </Card>
 
-          <button
+          <Button
             onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-            className="rounded-md bg-primary px-6 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            loading={saveMutation.isPending}
           >
             {saveMutation.isPending ? '保存中...' : '保存配置'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

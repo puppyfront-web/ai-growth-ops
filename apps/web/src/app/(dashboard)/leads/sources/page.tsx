@@ -10,8 +10,11 @@ import {
 } from '@/lib/api/leads';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
+import { formatDateTime } from '@/lib/utils';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { LeadLevelBadge } from '@/components/shared/StatusBadge';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 export default function LeadSourcesPage() {
   const qc = useQueryClient();
@@ -70,7 +73,7 @@ export default function LeadSourcesPage() {
           </div>
           <div>
             <label className="block text-xs text-muted-foreground">默认等级</label>
-            <select
+            <NativeSelect
               value={defaultLevel}
               onChange={(e) => setDefaultLevel(e.target.value)}
               className="mt-1 rounded border bg-background px-2 py-1 text-sm"
@@ -78,15 +81,16 @@ export default function LeadSourcesPage() {
               {(['A', 'B', 'C', 'D'] as const).map((lv) => (
                 <option key={lv} value={lv}>{lv}级</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
-          <button
+          <Button
+            size="sm"
             onClick={() => name.trim() && createMutation.mutate()}
             disabled={!name.trim() || createMutation.isPending}
-            className="rounded bg-primary px-4 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+            loading={createMutation.isPending}
           >
             {createMutation.isPending ? '创建中…' : '创建来源'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -111,15 +115,16 @@ export default function LeadSourcesPage() {
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  创建于 {new Date(s.createdAt).toLocaleString('zh-CN')}
+                  创建于 {formatDateTime(s.createdAt)}
                 </div>
               </div>
-              <button
+              <Button
+                variant="ghost-destructive"
+                size="xs"
                 onClick={() => deleteMutation.mutate(s.id)}
-                className="text-xs text-muted-foreground hover:text-destructive"
               >
                 删除
-              </button>
+              </Button>
             </div>
 
             <div className="mt-3 rounded-lg bg-muted/40 p-2">
@@ -127,12 +132,13 @@ export default function LeadSourcesPage() {
                 <code className="text-xs break-all">
                   POST {webhookUrl()}
                 </code>
-                <button
+                <Button
+                  size="xs"
+                  className="shrink-0 bg-primary/10 text-primary hover:bg-primary/20"
                   onClick={() => copyToken(s)}
-                  className="shrink-0 rounded bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
                 >
                   {copied === s.id ? '已复制!' : '复制'}
-                </button>
+                </Button>
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 Header: <code>X-Webhook-Token: {s.token}</code>

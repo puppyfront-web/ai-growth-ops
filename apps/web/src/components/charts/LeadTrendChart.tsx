@@ -74,8 +74,8 @@ export function LeadTrendChart({
         >
           <defs>
             <linearGradient id="leadGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+              <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -96,7 +96,7 @@ export function LeadTrendChart({
           <Area
             type="monotone"
             dataKey="total"
-            stroke="#10b981"
+            stroke="hsl(var(--chart-1))"
             fill="url(#leadGradient)"
             strokeWidth={2}
           />

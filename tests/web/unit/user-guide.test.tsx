@@ -18,18 +18,7 @@ import {
 import { navItems } from '@/components/layout/navigation';
 
 const STORAGE_KEY = getUserGuideStorageKey('user-1');
-const VISIBLE_NAV_COUNT = navItems.filter((item) => !item.hidden).length;
-const TOTAL_STEPS = VISIBLE_NAV_COUNT + 5;
-
-function getAdvanceButton() {
-  return screen.getByRole('button', { name: /开始引导|下一步/ });
-}
-
-async function advanceToFinish(user: ReturnType<typeof userEvent.setup>) {
-  for (let i = 0; i < TOTAL_STEPS - 1; i += 1) {
-    await user.click(getAdvanceButton());
-  }
-}
+const visibleModules = navItems.filter((item) => !item.hidden);
 
 describe('UserGuide', () => {
   beforeEach(() => {
@@ -43,85 +32,33 @@ describe('UserGuide', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('starts automatically on first visit with the welcome step', () => {
+  it('auto-opens on first visit as a single-screen module overview', () => {
     render(<UserGuide />);
+    expect(
+      screen.getByRole('dialog', { name: '功能引导' })
+    ).toBeInTheDocument();
     expect(screen.getByText('欢迎使用 AI Growth Ops')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: '开始引导' })
-    ).toBeInTheDocument();
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-    expect(screen.getByRole('button', { name: '开始引导' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '开始使用' })).toHaveFocus();
   });
 
-  it('keeps keyboard focus inside the dialog', async () => {
-    const user = userEvent.setup();
+  it('introduces every visible nav module on one screen', () => {
     render(<UserGuide />);
-
-    await user.tab();
-    expect(screen.getByRole('button', { name: '跳过引导' })).toHaveFocus();
-    await user.tab({ shift: true });
-    expect(screen.getByRole('button', { name: '开始引导' })).toHaveFocus();
-  });
-
-  it('introduces every visible nav module during the walkthrough', async () => {
-    const user = userEvent.setup();
-    render(<UserGuide />);
-
-    const seenTitles = new Set<string>();
-    for (let i = 0; i < TOTAL_STEPS; i += 1) {
-      seenTitles.add(
-        screen.getByRole('heading', { level: 3 }).textContent ?? ''
-      );
-      if (i < TOTAL_STEPS - 1) {
-        await user.click(getAdvanceButton());
-      }
-    }
-
-    for (const item of navItems.filter((nav) => !nav.hidden)) {
-      expect(seenTitles.has(item.label)).toBe(true);
+    for (const item of visibleModules) {
+      expect(screen.getByText(item.label)).toBeInTheDocument();
     }
   });
 
-  it('reaches the finish step and persists completion', async () => {
+  it('persists completion and closes when clicking the primary action', async () => {
     const user = userEvent.setup();
     render(<UserGuide />);
 
-    await advanceToFinish(user);
-    expect(screen.getByText('引导完成')).toBeInTheDocument();
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-
-    await user.click(screen.getByRole('button', { name: '完成' }));
+    await user.click(screen.getByRole('button', { name: '开始使用' }));
     expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('goes back to the previous step', async () => {
-    const user = userEvent.setup();
-    render(<UserGuide />);
-
-    await user.click(screen.getByRole('button', { name: '开始引导' }));
-    expect(screen.getByRole('heading', { name: '主导航' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '下一步' }));
-    const firstNavLabel = navItems.find((nav) => !nav.hidden)!.label;
-    expect(
-      screen.getByRole('heading', { name: firstNavLabel })
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '上一步' }));
-    expect(screen.getByRole('heading', { name: '主导航' })).toBeInTheDocument();
-  });
-
-  it('skipping the guide persists completion so it does not nag', async () => {
-    const user = userEvent.setup();
-    render(<UserGuide />);
-
-    await user.click(screen.getByRole('button', { name: '跳过引导' }));
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  it('finishes on Escape key', async () => {
+  it('closes on Escape key', async () => {
     const user = userEvent.setup();
     render(<UserGuide />);
 
@@ -145,7 +82,7 @@ describe('UserGuide', () => {
     const user = userEvent.setup();
     const { rerender } = render(<UserGuide />);
 
-    await user.click(screen.getByRole('button', { name: '跳过引导' }));
+    await user.click(screen.getByRole('button', { name: '开始使用' }));
     expect(screen.queryByRole('dialog')).toBeNull();
 
     rerender(<UserGuide />);

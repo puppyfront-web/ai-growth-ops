@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { FileUpload, type UploadedFile } from '@/components/media/FileUpload';
+import { Button } from '@/components/ui/button';
 import { generateMedia } from '@/lib/api/media';
 import { ApiError } from '@/lib/api/client';
 
@@ -160,15 +161,17 @@ export function ContentMediaPanel({
           }
           className="w-full rounded-md border p-2 text-sm"
         />
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="xs"
           onClick={() => void onGenerate()}
-          disabled={generating || value.length >= req.maxFiles}
-          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50"
+          disabled={value.length >= req.maxFiles}
+          loading={generating}
         >
           <Sparkles className="h-3.5 w-3.5" />
           {generating ? '生成中…' : '生成并加入素材'}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { useState } from 'react';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export default function VariantsPage() {
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export default function VariantsPage() {
         title="平台版本"
       />
       <div className="mb-4">
-        <select
+        <NativeSelect
           value={selectedItem ?? ''}
           onChange={(e) => setSelectedItem(e.target.value)}
           className="rounded-md border p-2 text-sm"
@@ -39,7 +40,7 @@ export default function VariantsPage() {
               {item.title}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       {selectedItem && variants && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

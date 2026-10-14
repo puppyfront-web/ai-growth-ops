@@ -17,13 +17,14 @@ import {
 import type { ViewMode } from '@/components/calendar';
 import type { CalendarItem } from '@/types/calendar';
 import { toDateKey } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const LEGEND = [
   { label: '内容创建', dotClass: 'bg-primary' },
   { label: '已发布', dotClass: 'bg-success' },
   { label: '已排期', dotClass: 'bg-warning' },
   { label: '失败', dotClass: 'bg-destructive' },
-  { label: '草稿', dotClass: 'bg-gray-400' }
+  { label: '草稿', dotClass: 'bg-muted-foreground/40' }
 ];
 
 export default function ContentCalendarPage() {
@@ -105,12 +106,12 @@ export default function ContentCalendarPage() {
 
       <label className="mb-4 flex items-center gap-2 text-sm">
         显示事件
-        <select className="rounded-md border p-2" value={eventType}
+        <NativeSelect value={eventType}
           onChange={(event) => setEventType(event.target.value as 'all' | 'content' | 'publish')}>
           <option value="all">内容与发布</option>
           <option value="content">内容创建</option>
           <option value="publish">发布计划</option>
-        </select>
+        </NativeSelect>
       </label>
       <CalendarGrid
         month={month}

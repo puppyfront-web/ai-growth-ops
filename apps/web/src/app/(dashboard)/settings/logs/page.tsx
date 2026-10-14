@@ -8,9 +8,12 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
-import { formatDate } from '@/lib/utils';
-import { ChevronDown, ChevronRight, User, FileText } from 'lucide-react';
+import { formatDateTime } from '@/lib/utils';
+import { ChevronDown, ChevronRight, User, FileText, ScrollText } from 'lucide-react';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 type AuditLog = {
   id: string;
@@ -100,20 +103,22 @@ export default function LogsPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-1.5">
           {actionTypes.map((t) => (
-            <button
+            <Button
               key={t.value}
-              onClick={() => setActionFilter(t.value)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              size="xs"
+              variant={actionFilter === t.value ? 'default' : 'secondary'}
+              className={
                 actionFilter === t.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent'
-              }`}
+                  ? undefined
+                  : 'text-muted-foreground hover:bg-accent'
+              }
+              onClick={() => setActionFilter(t.value)}
             >
               {t.label}
-            </button>
+            </Button>
           ))}
         </div>
-        <select
+        <NativeSelect
           value={entityFilter}
           onChange={(e) => setEntityFilter(e.target.value)}
           className="rounded-md border bg-background px-3 py-1.5 text-xs"
@@ -123,7 +128,7 @@ export default function LogsPage() {
               {t.label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <div className="ml-auto">
           <ExportCSVButton
             url="/api/export/audit-logs.csv"
@@ -135,9 +140,11 @@ export default function LogsPage() {
 
       {/* Log entries */}
       {entries.length === 0 ? (
-        <div className="py-20 text-center text-muted-foreground">
-          暂无操作日志
-        </div>
+        <EmptyState
+          icon={<ScrollText className="h-12 w-12" />}
+          title="暂无操作日志"
+          description="团队成员在系统中的关键操作会记录在这里，用于审计与排查。"
+        />
       ) : (
         <div className="space-y-1">
           {entries.map((log) => {
@@ -150,8 +157,9 @@ export default function LogsPage() {
                 key={log.id}
                 className="rounded-lg border bg-card overflow-hidden"
               >
-                <button
-                  className="flex w-full items-center gap-3 p-3 text-left hover:bg-muted/30 transition-colors"
+                <Button
+                  variant="ghost"
+                  className="flex h-auto w-full items-center justify-start gap-3 rounded-none p-3 text-left font-normal hover:bg-muted/30"
                   onClick={() => setExpandedId(isExpanded ? null : log.id)}
                 >
                   {hasChanges ? (
@@ -184,9 +192,9 @@ export default function LogsPage() {
                     </div>
                   )}
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {formatDate(log.createdAt)}
+                    {formatDateTime(log.createdAt)}
                   </span>
-                </button>
+                </Button>
 
                 {isExpanded && hasChanges && (
                   <div className="border-t bg-muted/20 px-4 py-3">

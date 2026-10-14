@@ -10,11 +10,12 @@ import {
   RiskBadge
 } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Interaction } from '@/types/interaction';
 import Link from 'next/link';
 import { useState } from 'react';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const typeLabels: Record<string, string> = {
   comment: '评论',
@@ -90,7 +91,7 @@ const columns: ColumnDef<Interaction>[] = [
     header: '时间',
     cell: ({ getValue }) => (
       <span className="text-sm text-muted-foreground">
-        {formatDate(getValue() as string)}
+        {formatDateTime(getValue() as string)}
       </span>
     )
   }
@@ -117,7 +118,7 @@ export default function ConversationsPage() {
         }
       />
       <div className="flex gap-2 mb-4">
-        <select
+        <NativeSelect
           value={filters.platform ?? ''}
           onChange={(e) =>
             setFilters((f) => ({ ...f, platform: e.target.value }))
@@ -131,8 +132,8 @@ export default function ConversationsPage() {
           <option value="wechat_channels">视频号</option>
           <option value="baijiahao">百家号</option>
           <option value="zhihu">知乎</option>
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={filters.status ?? ''}
           onChange={(e) =>
             setFilters((f) => ({ ...f, status: e.target.value }))
@@ -144,7 +145,7 @@ export default function ConversationsPage() {
           <option value="WAITING_HUMAN_REVIEW">待审核</option>
           <option value="REPLY_SUGGESTED">已建议回复</option>
           <option value="REPLIED">已回复</option>
-        </select>
+        </NativeSelect>
       </div>
       <DataTable
         columns={columns}

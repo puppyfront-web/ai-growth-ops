@@ -43,7 +43,7 @@ const pipelineColumns = [
     label: '已成交',
     color: 'bg-success/10 border-success/25'
   },
-  { key: 'LOST', label: '已流失', color: 'bg-gray-50 border-border' }
+  { key: 'LOST', label: '已流失', color: 'bg-muted border-border' }
 ] as const;
 
 /** A draggable lead card. */

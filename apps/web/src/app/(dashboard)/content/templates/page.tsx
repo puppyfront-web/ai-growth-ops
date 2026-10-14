@@ -8,10 +8,11 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { contentTypeLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { Copy, Plus } from 'lucide-react';
 import type { ContentItem } from '@/types/content';
 
@@ -47,12 +48,10 @@ export default function ContentTemplatesPage() {
       />
 
       {templates.length === 0 ? (
-        <div className="py-20 text-center">
-          <p className="text-muted-foreground mb-4">暂无内容模板</p>
-          <p className="text-xs text-muted-foreground">
-            内容变为「就绪」状态并生成平台变体后，将自动成为可复用模板
-          </p>
-        </div>
+        <EmptyState
+          title="暂无内容模板"
+          description="内容变为「就绪」状态并生成平台变体后，将自动成为可复用模板。"
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templates.map((item) => (
@@ -71,7 +70,7 @@ export default function ContentTemplatesPage() {
                 <span>{item.contentVariants?.length ?? 0} 个平台变体</span>
               </div>
               <div className="text-xs text-muted-foreground mb-3">
-                {formatDate(item.createdAt)}
+                {formatDateTime(item.createdAt)}
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" className="text-xs" asChild>

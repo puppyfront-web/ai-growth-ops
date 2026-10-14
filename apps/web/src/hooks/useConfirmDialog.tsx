@@ -8,14 +8,17 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogCancel,
+  AlertDialogAction,
   AlertDialogDestructiveAction
 } from '@/components/ui/alert-dialog';
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title?: string;
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** destructive 时主按钮为红色危险态 */
+  variant?: 'default' | 'destructive';
 }
 
 /**
@@ -24,7 +27,8 @@ interface ConfirmOptions {
  * Usage:
  *   const { confirm, ConfirmDialog } = useConfirmDialog();
  *   // To trigger:
- *   confirm({ title: '删除确认', description: '确定删除？' }).then(ok => { if (ok) doDelete(); });
+ *   confirm({ title: '删除确认', description: '确定删除？', variant: 'destructive' })
+ *     .then(ok => { if (ok) doDelete(); });
  *   // In JSX (render once):
  *   <ConfirmDialog />
  */
@@ -63,6 +67,8 @@ export function useConfirmDialog(defaultOptions?: ConfirmOptions) {
     setState((prev) => ({ ...prev, open: false, resolver: null }));
   }, [state.resolver]);
 
+  const isDestructive = state.options.variant === 'destructive';
+
   const ConfirmDialogComponent = (
     <AlertDialog open={state.open} onOpenChange={handleOpenChange}>
       <AlertDialogHeader>
@@ -75,12 +81,21 @@ export function useConfirmDialog(defaultOptions?: ConfirmOptions) {
         <AlertDialogCancel onOpenChange={handleOpenChange}>
           {state.options.cancelLabel ?? '取消'}
         </AlertDialogCancel>
-        <AlertDialogDestructiveAction
-          onOpenChange={handleOpenChange}
-          onClick={handleConfirm}
-        >
-          {state.options.confirmLabel ?? '确认'}
-        </AlertDialogDestructiveAction>
+        {isDestructive ? (
+          <AlertDialogDestructiveAction
+            onOpenChange={handleOpenChange}
+            onClick={handleConfirm}
+          >
+            {state.options.confirmLabel ?? '确认删除'}
+          </AlertDialogDestructiveAction>
+        ) : (
+          <AlertDialogAction
+            onOpenChange={handleOpenChange}
+            onClick={handleConfirm}
+          >
+            {state.options.confirmLabel ?? '确认'}
+          </AlertDialogAction>
+        )}
       </AlertDialogFooter>
     </AlertDialog>
   );

@@ -8,11 +8,13 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge, PlatformBadge } from '@/components/shared/StatusBadge';
 import { interactionStatusLabels, platformLabels } from '@/lib/constants';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { ExportCSVButton } from '@/components/shared/ExportCSVButton';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Interaction } from '@/types/interaction';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
 
 const columns: ColumnDef<Interaction>[] = [
   { accessorKey: 'externalUserName', header: '用户' },
@@ -47,7 +49,7 @@ const columns: ColumnDef<Interaction>[] = [
     header: '时间',
     cell: ({ getValue }) => (
       <span className="text-sm text-muted-foreground">
-        {formatDate(getValue() as string)}
+        {formatDateTime(getValue() as string)}
       </span>
     )
   },
@@ -120,7 +122,7 @@ export default function CommentsPage() {
         actions={
           hasAccounts ? (
             <div className="flex items-center gap-2">
-              <select
+              <NativeSelect
                 value={selectedAccountId}
                 onChange={(e) => {
                   setSelectedAccountId(e.target.value);
@@ -137,14 +139,15 @@ export default function CommentsPage() {
                     · {a.name}
                   </option>
                 ))}
-              </select>
-              <button
+              </NativeSelect>
+              <Button
+                size="xs"
                 onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending || !selectedAccountId}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+                disabled={!selectedAccountId}
+                loading={syncMutation.isPending}
               >
                 {syncMutation.isPending ? '同步中…' : '拉取评论'}
-              </button>
+              </Button>
               <label className="flex items-center gap-1 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
@@ -175,12 +178,15 @@ export default function CommentsPage() {
           }`}
         >
           <span>{syncMsg.text}</span>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setSyncMsg(null)}
-            className="opacity-60 hover:opacity-100 ml-4"
+            aria-label="关闭提示"
+            className="ml-4"
           >
             ✕
-          </button>
+          </Button>
         </div>
       )}
 

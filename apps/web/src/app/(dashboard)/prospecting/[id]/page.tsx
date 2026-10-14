@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import {
   getProspectingTask,
   runProspectingTask,
@@ -253,19 +254,16 @@ function ConvertDialog({
           </ul>
         )}
         <div className="flex gap-2 justify-end">
-          <button
-            onClick={onClose}
-            className="rounded border px-3 py-1.5 text-sm"
-          >
+          <Button variant="outline" size="sm" onClick={onClose}>
             取消
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
-            className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
           >
             {confirmDuplicate ? '仍要新建' : '确认转入'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -363,25 +361,22 @@ function CaptchaSolveDialog({
         </p>
         <div className="flex justify-end gap-2">
           {status !== 'solved' && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={async () => {
                 skipCancelRef.current = true;
                 await resolveProspectingCaptcha(platformAccountId);
                 onSolved();
               }}
-              className="rounded border px-3 py-1.5 text-sm hover:bg-accent"
             >
               我已完成验证
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground"
-          >
+          <Button type="button" size="sm" onClick={onClose}>
             {status === 'solved' ? '关闭' : '取消'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -508,9 +503,14 @@ export default function ProspectingDetailPage() {
     return (
       <div className="p-6 text-sm text-destructive">
         获客任务加载失败。
-        <button onClick={() => refetch()} className="ml-2 underline">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => refetch()}
+          className="ml-2 underline"
+        >
           重试
-        </button>
+        </Button>
       </div>
     );
   }
@@ -561,22 +561,37 @@ export default function ProspectingDetailPage() {
         title={task.requirement || '历史获客任务'}
         description={`状态：${statusLabels[task.status] ?? task.status} · 潜客 ${task.totalCandidates} · 已转客户 ${convertedCount} · 评论 ${task.totalComments}`}
         actions={
-          <div className="flex gap-2">
-            <Link
-              href="/prospecting"
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
-            >
-              返回列表
-            </Link>
-            <button
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" asChild>
+              <Link href="/prospecting">返回列表</Link>
+            </Button>
+            {task.status !== 'running' && !isLegacyTask && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const context =
+                    task.requirement ||
+                    (task.keywords?.length ? task.keywords.join('，') : '');
+                  router.push(
+                    `/content/new?source=prospecting${
+                      context ? `&topic=${encodeURIComponent(context)}` : ''
+                    }`
+                  );
+                }}
+              >
+                生成内容
+              </Button>
+            )}
+            <Button
+              variant="outline"
               onClick={() => exportMutation.mutate()}
               disabled={candidates.length === 0 || exportMutation.isPending}
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+              loading={exportMutation.isPending}
             >
               {exportMutation.isPending ? '导出中…' : '导出 CSV'}
-            </button>
+            </Button>
             {task.status !== 'running' && !isLegacyTask && (
-              <button
+              <Button
                 onClick={() => {
                   if (guard?.needsLogin) {
                     router.push('/integrations/platforms');
@@ -585,10 +600,10 @@ export default function ProspectingDetailPage() {
                   runMutation.mutate();
                 }}
                 disabled={runMutation.isPending || runBlocked}
-                className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+                loading={runMutation.isPending}
               >
                 {runMutation.isPending ? '提交中…' : runLabel}
-              </button>
+              </Button>
             )}
           </div>
         }
@@ -653,13 +668,13 @@ export default function ProspectingDetailPage() {
           <p>{task.lastError}</p>
           {(task.metadata?.captchaRequired ||
             /验证码/.test(task.lastError)) && (
-            <button
+            <Button
               type="button"
+              size="xs"
               onClick={() => setCaptchaOpen(true)}
-              className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground"
             >
               打开浏览器过验证码
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -703,13 +718,14 @@ export default function ProspectingDetailPage() {
                 强制重抓近 {guard.skipTtlDays} 天已采集的视频
               </label>
               {guard.platformAccountId && (
-                <button
+                <Button
                   type="button"
+                  variant="link"
+                  size="xs"
                   onClick={() => setCaptchaOpen(true)}
-                  className="text-xs text-primary hover:underline"
                 >
                   打开浏览器过验证码
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -754,18 +770,20 @@ export default function ProspectingDetailPage() {
           />
         </div>
         <div className="flex rounded-md border overflow-hidden">
-          <button
+          <Button
+            size="xs"
+            variant={viewMode === 'user' ? 'default' : 'ghost'}
             onClick={() => setViewMode('user')}
-            className={`px-3 py-1 text-xs ${viewMode === 'user' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
           >
             用户视图
-          </button>
-          <button
+          </Button>
+          <Button
+            size="xs"
+            variant={viewMode === 'list' ? 'default' : 'ghost'}
             onClick={() => setViewMode('list')}
-            className={`px-3 py-1 text-xs ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
           >
             评论列表
-          </button>
+          </Button>
         </div>
         <span className="text-xs text-muted-foreground">
           {viewMode === 'user'
@@ -792,8 +810,10 @@ export default function ProspectingDetailPage() {
                 className="rounded-lg border scroll-mt-24"
               >
                 <div className="flex gap-3 p-4 items-start">
-                  <button
+                  <Button
                     type="button"
+                    size="icon"
+                    aria-label="采集主页资料"
                     title={
                       c.userHomepage
                         ? '点击采集主页资料'
@@ -801,7 +821,7 @@ export default function ProspectingDetailPage() {
                     }
                     disabled={!c.userHomepage || enrichBusy(c, enrichingId)}
                     onClick={() => enrichMutation.mutate(c.id)}
-                    className="flex-shrink-0 rounded-full disabled:opacity-50"
+                    className="flex-shrink-0 rounded-full"
                   >
                     {c.avatarUrl ? (
                       <img
@@ -817,7 +837,7 @@ export default function ProspectingDetailPage() {
                         {enrichBusy(c, enrichingId) ? '…' : '采集'}
                       </span>
                     )}
-                  </button>
+                  </Button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">
@@ -891,12 +911,12 @@ export default function ProspectingDetailPage() {
                         >
                           <div className="flex items-center gap-2 mb-1">
                             {index === 0 && (
-                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
                                 优先跟进
                               </span>
                             )}
                             {item.likeCount != null && item.likeCount > 0 && (
-                              <span className="text-[10px] text-muted-foreground">
+                              <span className="text-xs text-muted-foreground">
                                 {item.likeCount} 赞
                               </span>
                             )}
@@ -926,12 +946,13 @@ export default function ProspectingDetailPage() {
                     {converted ? (
                       <ConvertedBadge customerId={converted} />
                     ) : (
-                      <button
+                      <Button
+                        variant="outline"
+                        size="xs"
                         onClick={() => setConvertTarget(c)}
-                        className="rounded border px-2 py-1 text-xs hover:bg-accent"
                       >
                         转客户
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -966,8 +987,10 @@ export default function ProspectingDetailPage() {
                   <tr key={c.id} className="border-b last:border-0 align-top">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <button
+                        <Button
                           type="button"
+                          size="icon-sm"
+                          aria-label="采集主页资料"
                           disabled={
                             !c.userHomepage || enrichBusy(c, enrichingId)
                           }
@@ -986,11 +1009,11 @@ export default function ProspectingDetailPage() {
                               }}
                             />
                           ) : (
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px]">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs">
                               头
                             </span>
                           )}
-                        </button>
+                        </Button>
                         <div>
                           <p>{c.userNickname ?? '未知'}</p>
                           {c.userHomepage && (
@@ -1011,7 +1034,7 @@ export default function ProspectingDetailPage() {
                         {comments.map((item, index) => (
                           <div key={`${c.id}-${index}`}>
                             {index === 0 && (
-                              <span className="mr-1 text-[10px] text-primary">
+                              <span className="mr-1 text-xs text-primary">
                                 优先
                               </span>
                             )}
@@ -1055,12 +1078,13 @@ export default function ProspectingDetailPage() {
                       {c.customerId ? (
                         <ConvertedBadge customerId={c.customerId} />
                       ) : (
-                        <button
+                        <Button
+                          variant="outline"
+                          size="xs"
                           onClick={() => setConvertTarget(c)}
-                          className="rounded border px-2 py-1 text-xs hover:bg-accent"
                         >
                           转客户
-                        </button>
+                        </Button>
                       )}
                     </td>
                   </tr>

@@ -5,6 +5,7 @@ import { AssistantRuntimeProvider, useThreadListItem } from '@assistant-ui/react
 import { Thread } from '@/components/assistant-ui/thread';
 import { ToolUIRegistry } from '@/components/chat/tool-renderers';
 import { authToken, currentOrg } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
 import { Component, type ReactNode, useEffect, useRef, useState } from 'react';
 
 // ─── Custom fetch wrapper ─────────────────────────────────────────
@@ -59,12 +60,11 @@ class ChatErrorBoundary extends Component<
         <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
           <p className="text-lg font-medium">聊天组件加载出错</p>
           <p className="text-sm">{this.state.error?.message}</p>
-          <button
+          <Button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
           >
             重试
-          </button>
+          </Button>
         </div>
       );
     }

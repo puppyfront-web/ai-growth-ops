@@ -29,7 +29,8 @@ const USER_GUIDE_DIALOG = 'div[role="dialog"][aria-modal="true"]';
 async function dismissUserGuide(page: Page): Promise<void> {
   const dialog = page.locator(USER_GUIDE_DIALOG);
   await dialog.waitFor({ state: 'visible', timeout: 10_000 });
-  await page.getByRole('button', { name: '跳过引导' }).click();
+  // 新版单屏引导：主行动「开始使用」关闭并持久化
+  await dialog.getByRole('button', { name: '开始使用' }).click();
   await dialog.waitFor({ state: 'hidden', timeout: 5_000 });
 }
 

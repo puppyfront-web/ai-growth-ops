@@ -3,7 +3,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FileText } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 import type { Notification } from '@/lib/api/notifications';
 
 export function DailyReport({
@@ -29,7 +29,7 @@ export function DailyReport({
       <div className="mb-3 not-prose flex items-center gap-2 text-xs text-muted-foreground">
         <FileText className="h-3.5 w-3.5" />
         {report.createdAt
-          ? new Date(report.createdAt).toLocaleString('zh-CN')
+          ? formatDateTime(report.createdAt)
           : null}
         {report.level === 'warning' && (
           <span className="rounded-full border border-warning/25 bg-warning/10 px-1.5 py-0.5 text-warning">

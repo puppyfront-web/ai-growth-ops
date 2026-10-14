@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ErrorState } from '@/components/shared/ErrorState';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import {
   BarChart,
   Bar,
@@ -47,7 +47,7 @@ const CUSTOMER_STATUS_LABELS: Record<string, string> = {
   lost: '已流失'
 };
 
-const FUNNEL_COLORS = ['#0f766e', '#0891b2', '#7c3aed', '#d97706'];
+const FUNNEL_COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
 export default function LeadAnalyticsPage() {
   const [days, setDays] = useState<(typeof RANGE_DAYS)[number]>(30);
@@ -151,7 +151,7 @@ export default function LeadAnalyticsPage() {
                       </span>
                       <div className="flex-1 bg-muted/40 rounded h-8 relative overflow-hidden">
                         <div
-                          className="h-full flex items-center px-3 text-xs text-white font-medium"
+                          className="h-full flex items-center px-3 text-xs text-primary-foreground font-medium"
                           style={{
                             width: `${widthPct}%`,
                             backgroundColor:
@@ -177,21 +177,21 @@ export default function LeadAnalyticsPage() {
               </p>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={data.trend}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", backgroundColor: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }} />
                   <Legend />
                   <Bar
                     dataKey="candidates"
                     name="潜客"
-                    fill="#0f766e"
+                    fill="hsl(var(--chart-1))"
                     radius={[3, 3, 0, 0]}
                   />
                   <Bar
                     dataKey="converted"
                     name="转入客户"
-                    fill="#7c3aed"
+                    fill="hsl(var(--chart-2))"
                     radius={[3, 3, 0, 0]}
                   />
                 </BarChart>
@@ -204,7 +204,7 @@ export default function LeadAnalyticsPage() {
               <h3 className="font-semibold mb-4">潜客等级</h3>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={data.byLevel} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis
                     type="number"
                     allowDecimals={false}
@@ -216,17 +216,17 @@ export default function LeadAnalyticsPage() {
                     tick={{ fontSize: 12 }}
                     width={40}
                   />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", backgroundColor: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }} />
                   <Bar
                     dataKey="count"
                     name="潜客"
-                    fill="#0f766e"
+                    fill="hsl(var(--chart-1))"
                     radius={[0, 4, 4, 0]}
                   />
                   <Bar
                     dataKey="converted"
                     name="已转入"
-                    fill="#7c3aed"
+                    fill="hsl(var(--chart-2))"
                     radius={[0, 4, 4, 0]}
                   />
                 </BarChart>
@@ -237,20 +237,20 @@ export default function LeadAnalyticsPage() {
               <h3 className="font-semibold mb-4">相关度分布</h3>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={data.byScoreBand}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="key" tick={{ fontSize: 12 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", backgroundColor: "hsl(var(--card))", color: "hsl(var(--card-foreground))" }} />
                   <Bar
                     dataKey="count"
                     name="潜客"
-                    fill="#0891b2"
+                    fill="hsl(var(--chart-1))"
                     radius={[4, 4, 0, 0]}
                   />
                   <Bar
                     dataKey="converted"
                     name="已转入"
-                    fill="#7c3aed"
+                    fill="hsl(var(--chart-2))"
                     radius={[4, 4, 0, 0]}
                   />
                 </BarChart>
@@ -381,7 +381,7 @@ export default function LeadAnalyticsPage() {
                         {task.converted}
                       </td>
                       <td className="py-2 text-right text-muted-foreground">
-                        {formatDate(task.createdAt)}
+                        {formatDateTime(task.createdAt)}
                       </td>
                     </tr>
                   ))}

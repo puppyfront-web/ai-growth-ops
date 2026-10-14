@@ -15,12 +15,16 @@ const variantStyles = {
   danger: 'bg-destructive/10 text-destructive border-destructive/25',
   muted: 'bg-muted text-muted-foreground border-border',
   info: 'bg-info/10 text-info border-info/25'
-};
+} as const;
+
+export type StatusVariant = keyof typeof variantStyles;
 
 type StatusBadgeProps = {
   status: string;
   label?: string;
   labelsMap?: Record<string, string>;
+  /** 覆写由 status 推导出的语义变体（如运行中→info） */
+  variant?: StatusVariant;
   className?: string;
 };
 
@@ -28,18 +32,22 @@ export function StatusBadge({
   status,
   label,
   labelsMap,
+  variant,
   className
 }: StatusBadgeProps) {
   const lowerStatus = status.toLowerCase();
-  const variant =
-    statusVariantMap[status] ?? statusVariantMap[lowerStatus] ?? 'muted';
+  const resolved =
+    variant ??
+    statusVariantMap[status] ??
+    statusVariantMap[lowerStatus] ??
+    'muted';
   const displayLabel =
     label ?? labelsMap?.[status] ?? labelsMap?.[lowerStatus] ?? status;
   return (
     <span
       className={cn(
         'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
-        variantStyles[variant],
+        variantStyles[resolved],
         className
       )}
     >
@@ -62,7 +70,7 @@ export function PlatformBadge({
   const p = platform as Platform;
   const name = platformLabels[p] ?? String(platform);
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-gray-50 px-2 py-0.5 text-xs font-medium text-foreground">
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
       {showIcon && <PlatformIcon platform={p} className="h-3 w-3" />}
       {name}
     </span>

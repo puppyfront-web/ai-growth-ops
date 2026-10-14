@@ -2,6 +2,7 @@
 
 import { Check, Pause, X, Circle, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { NODE_ORDER, type NodeName, type NodeResult, type RunStatus } from '@/lib/api/agent';
 
 const NODE_META: Record<NodeName, { label: string; hint: string }> = {
@@ -38,26 +39,26 @@ const STATE_STYLE: Record<
 > = {
   done: {
     icon: <Check className="h-4 w-4" />,
-    ring: 'border-green-500',
-    bg: 'bg-success text-white',
+    ring: 'border-success/50',
+    bg: 'bg-success text-success-foreground',
     text: 'text-success'
   },
   running: {
     icon: <Loader2 className="h-4 w-4 animate-spin" />,
-    ring: 'border-blue-500',
-    bg: 'bg-info text-white',
+    ring: 'border-info/50',
+    bg: 'bg-info text-info-foreground',
     text: 'text-info'
   },
   need_input: {
     icon: <Pause className="h-4 w-4" />,
-    ring: 'border-amber-500',
-    bg: 'bg-warning text-white',
+    ring: 'border-warning/50',
+    bg: 'bg-warning text-warning-foreground',
     text: 'text-warning'
   },
   blocked: {
     icon: <X className="h-4 w-4" />,
-    ring: 'border-red-500',
-    bg: 'bg-destructive text-white',
+    ring: 'border-destructive/50',
+    bg: 'bg-destructive text-destructive-foreground',
     text: 'text-destructive'
   },
   empty: {
@@ -132,13 +133,15 @@ export function RunTimeline({
                   </span>
                 )}
                 {result?.summary && onToggleSummary && (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="xs"
                     onClick={() => onToggleSummary(name)}
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    className="text-muted-foreground"
                   >
                     详情
-                  </button>
+                  </Button>
                 )}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
