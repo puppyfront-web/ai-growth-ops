@@ -62,6 +62,10 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
+      # 缓存读取：本镜像 scope + 四个镜像 scope + 共享 scope 都尝试命中。
+      # 四个镜像的 deps 层输入完全相同（同一份清单+锁文件），生产层的 node_modules
+      # 内容也一致，任何一个镜像成功构建过，其余镜像即可复用其层——
+      # 避免 api 因从未成功完成而永远全冷重建（run #15/#16 的恶性循环）。
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -76,8 +80,39 @@ jobs:
           # web 需要 API_BASE_URL 构建参数；其余 Dockerfile 未声明该 ARG，会自动忽略
           build-args: |
             API_BASE_URL=http://api:3100
-          cache-from: type=gha,scope=${{ matrix.app }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+          cache-from: |
+            type=gha,scope=${{ matrix.app }}
+            type=gha,scope=api
+            type=gha,scope=web
+            type=gha,scope=worker
+            type=gha,scope=browser-runner
+            type=gha,scope=shared-buildcache
+          cache-to: type=gha,mode=max,scope=shared-buildcache
+
+      # ACR 认证接口偶发瞬断（connection reset by peer，run #16 的 worker/
+      # browser-runner 即死于此），此时构建/推送层都已就绪，原地重试一次
+      # 即可吃掉瞬断；登录步骤失败也会在这里重新登录后再构建。
+      - name: Retry build and push
+        if: failure()
+        env:
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          echo "$ACR_PASSWORD" | docker login "$REGISTRY_HOST" -u "$ACR_USERNAME" --password-stdin
+          docker buildx build \
+            --file "apps/${{ matrix.app }}/Dockerfile" \
+            --provenance=false \
+            --build-arg API_BASE_URL=http://api:3100 \
+            --cache-from "type=gha,scope=${{ matrix.app }}" \
+            --cache-from "type=gha,scope=api" \
+            --cache-from "type=gha,scope=web" \
+            --cache-from "type=gha,scope=worker" \
+            --cache-from "type=gha,scope=browser-runner" \
+            --cache-from "type=gha,scope=shared-buildcache" \
+            --cache-to "type=gha,mode=max,scope=shared-buildcache" \
+            -t "$REGISTRY_HOST/$NAMESPACE/ai-growth-ops-${{ matrix.app }}:${{ github.sha }}" \
+            -t "$REGISTRY_HOST/$NAMESPACE/ai-growth-ops-${{ matrix.app }}:latest" \
+            --push .
 
       - name: Mirror base images to ACR（国内 ECS 拉 Docker Hub 不可靠）
         if: matrix.app == 'api'
