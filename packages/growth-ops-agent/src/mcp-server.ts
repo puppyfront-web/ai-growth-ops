@@ -43,8 +43,8 @@ export function buildToolDefs(
       name: 'auth_login',
       description:
         `[${CAPABILITIES.AUTH_LOGIN}] Start an interactive QR-code login for a platform (Douyin first). ` +
-        `Returns a sessionId. The browser-runner shows a QR code in a headed window for the operator to scan; ` +
-        `then poll auth_status. Platforms: douyin.`,
+        `Returns a sessionId plus qrImage (base64 PNG data URL of the login page showing the QR code). ` +
+        `Surface the image to the operator to scan, then poll auth_status. Platforms: douyin.`,
       inputSchema: {
         type: 'object',
         properties: { platform: { type: 'string', enum: ['douyin'] } },
@@ -52,13 +52,14 @@ export function buildToolDefs(
       },
       run: async (args) => {
         const platform = String(args.platform ?? '');
-        const { sessionId } = await client.startSession(platform);
+        const { sessionId, qrImage } = await client.startSession(platform);
         store.recordPending(sessionId, platform);
         return {
           sessionId,
           status: 'waiting_scan',
+          qrImage,
           instruction:
-            'A QR code is displayed in the browser-runner headed window. Ask the operator to scan it, then call auth_status.'
+            'qrImage is a base64 PNG data URL showing the login QR code (headless browser, no window). Render it for the operator to scan, then call auth_status.'
         };
       }
     },

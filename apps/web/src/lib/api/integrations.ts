@@ -57,11 +57,14 @@ export function deletePlatformAccount(id: string): Promise<void> {
 export interface BrowserLoginStartResponse {
   sessionId: string;
   status: 'waiting_scan';
+  /** 登录页二维码截图（data URL），由 browser-runner 无头渲染 */
+  qrImage?: string;
 }
 
 export interface BrowserLoginStatusResponse {
   status: 'waiting_scan' | 'logged_in' | 'expired' | 'error';
   cookies?: string;
+  qrImage?: string;
   error?: string;
 }
 

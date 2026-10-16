@@ -97,8 +97,49 @@ export function resolveHeadedPreference(override?: boolean): boolean {
   return process.env.BROWSER_RUNNER_HEADED === 'true';
 }
 
+/** Headed 模式需要显示服务，Linux 容器里通常没有（无 $DISPLAY/WAYLAND_DISPLAY）。 */
+export function hasDisplaySupport(): boolean {
+  return (
+    process.platform !== 'linux' ||
+    Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY)
+  );
+}
+
+export const STEALTH_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+export const STEALTH_LAUNCH_ARGS = [
+  '--disable-blink-features=AutomationControlled',
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage'
+] as const;
+
+/** Remove automation fingerprints before any page script runs. */
+export function applyStealthInitScript(
+  context: BrowserContext
+): Promise<unknown> {
+  return context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).chrome = { runtime: {} };
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['zh-CN', 'zh', 'en']
+    });
+  });
+}
+
 async function getSharedBrowser(headedOverride?: boolean): Promise<Browser> {
-  const headed = resolveHeadedPreference(headedOverride);
+  const requested = resolveHeadedPreference(headedOverride);
+  // 无显示服务的环境里 headed 启动会让 Chromium 直接退出（Missing X server），
+  // 这里降级为 headless，让抓取/同步类任务继续可用。
+  const headed = requested && hasDisplaySupport();
+  if (requested && !headed) {
+    console.warn(
+      '[browser-session] 请求了有界面模式，但当前环境没有显示服务（DISPLAY/WAYLAND_DISPLAY 未设置），已降级为 headless'
+    );
+  }
   const browserKey: 'headed' | 'headless' = headed ? 'headed' : 'headless';
   const now = Date.now();
   const existing = sharedBrowsers.get(browserKey);
@@ -126,12 +167,7 @@ async function getSharedBrowser(headedOverride?: boolean): Promise<Browser> {
 
   const browser = await chromium.launch({
     headless: !headed,
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage'
-    ],
+    args: [...STEALTH_LAUNCH_ARGS],
     ignoreDefaultArgs: ['--enable-automation']
   });
   sharedBrowsers.set(browserKey, browser);
@@ -160,23 +196,13 @@ export async function createStealthSession(
   browserActiveContexts.set(browserKey, (browserActiveContexts.get(browserKey) ?? 0) + 1);
 
   const context = await browser.newContext({
-    userAgent:
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    userAgent: STEALTH_USER_AGENT,
     viewport: { width: 1280, height: 900 },
     locale: 'zh-CN',
     timezoneId: 'Asia/Shanghai'
   });
 
-  // Remove automation fingerprints before any page script runs
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).chrome = { runtime: {} };
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    Object.defineProperty(navigator, 'languages', {
-      get: () => ['zh-CN', 'zh', 'en']
-    });
-  });
+  await applyStealthInitScript(context);
 
   const cookies = resolveContextCookies(cookie, siteDomain);
   if (cookies.length > 0) await context.addCookies(cookies);
