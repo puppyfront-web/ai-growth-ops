@@ -39,6 +39,7 @@ export function BrowserLoginDialog({
   const qc = useQueryClient();
   const [state, setState] = useState<LoginState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [qrImage, setQrImage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(TIMEOUT_SECONDS);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -73,6 +74,7 @@ export function BrowserLoginDialog({
       pollRef.current = setInterval(async () => {
         try {
           const status = await getBrowserLoginStatus(targetAccountId);
+          if (status.qrImage) setQrImage(status.qrImage);
 
           if (status.status === 'logged_in') {
             cleanup();
@@ -108,6 +110,7 @@ export function BrowserLoginDialog({
     sessionActiveRef.current = false;
     setState('idle');
     setError(null);
+    setQrImage(null);
     onClose();
     if (shouldCancel) {
       cancelBrowserLogin(accountId).catch(() => {});
@@ -119,9 +122,11 @@ export function BrowserLoginDialog({
     sessionActiveRef.current = false;
     setState('starting');
     setError(null);
+    setQrImage(null);
     setCountdown(TIMEOUT_SECONDS);
     try {
-      await startBrowserLogin(accountId);
+      const start = await startBrowserLogin(accountId);
+      setQrImage(start.qrImage ?? null);
       sessionActiveRef.current = true;
       setState('waiting_scan');
       startPolling(accountId);
@@ -141,6 +146,7 @@ export function BrowserLoginDialog({
         cleanup();
         setState('idle');
         setError(null);
+        setQrImage(null);
         setCountdown(TIMEOUT_SECONDS);
       }
       return;
@@ -151,10 +157,12 @@ export function BrowserLoginDialog({
     (async () => {
       setState('starting');
       setError(null);
+      setQrImage(null);
       setCountdown(TIMEOUT_SECONDS);
       try {
-        await startBrowserLogin(accountId);
+        const start = await startBrowserLogin(accountId);
         if (cancelled) return;
+        setQrImage(start.qrImage ?? null);
         sessionActiveRef.current = true;
         setState('waiting_scan');
         startPolling(accountId);
@@ -202,15 +210,25 @@ export function BrowserLoginDialog({
         )}
 
         {state === 'waiting_scan' && (
-          <div className="flex flex-col items-center py-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-info/10">
-              <span className="text-3xl">🌐</span>
+          <div className="flex flex-col items-center py-6">
+            <div className="rounded-xl border bg-white p-2">
+              {qrImage ? (
+                <img
+                  src={qrImage}
+                  alt={`${platformName} 登录二维码`}
+                  className="h-52 w-52 object-contain"
+                />
+              ) : (
+                <div className="flex h-52 w-52 items-center justify-center">
+                  <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                </div>
+              )}
             </div>
             <p className="mt-4 text-sm font-medium">
-              请在弹出的浏览器窗口中扫码登录
+              请使用 {platformName} App 扫描二维码登录
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              使用 {platformName} App 扫描浏览器中显示的二维码
+            <p className="mt-1 text-xs text-muted-foreground">
+              二维码过期后会自动刷新；若长时间未更新请点击重新登录
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
               剩余 {Math.floor(countdown / 60)}:

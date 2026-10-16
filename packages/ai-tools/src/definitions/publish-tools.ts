@@ -42,7 +42,7 @@ export const publishTools: ToolDefinition[] = [
   {
     name: 'login_account',
     description:
-      '启动浏览器 QR 码登录流程。打开浏览器窗口供用户扫码登录。返回后需要轮询 check_login_status 确认登录完成。',
+      '启动浏览器 QR 码登录流程。返回 sessionId 和 qrImage（登录页二维码截图，data URL），把图片展示给用户扫码即可，无需弹出浏览器窗口。之后轮询 check_login_status 确认登录完成。',
     inputSchema: z.object({
       accountId: z.string().describe('要登录的平台账号 ID')
     }),

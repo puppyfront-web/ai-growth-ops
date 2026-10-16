@@ -93,7 +93,7 @@ export class BrowserRunnerClient {
 
   // ── session / login ──
   startSession(platform: string) {
-    return this.request<{ sessionId: string; status: string }>(
+    return this.request<{ sessionId: string; status: string; qrImage?: string }>(
       '/session/start',
       { body: { platform } }
     );
@@ -102,6 +102,7 @@ export class BrowserRunnerClient {
     return this.request<{
       status: string;
       cookies?: string;
+      qrImage?: string;
       error?: string;
     }>(`/session/${sessionId}/status`, { method: 'GET' });
   }

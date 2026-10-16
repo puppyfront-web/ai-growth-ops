@@ -59,7 +59,6 @@ import {
   getFreshSession
 } from './browser-login-session';
 import {
-  hashPassword,
   verifyPassword,
   createToken,
   getAuthenticatedUser,
@@ -4091,12 +4090,16 @@ const routes: Route[] = [
             error: err.error ?? '浏览器辅助服务错误'
           });
         }
-        const data = (await startRes.json()) as { sessionId: string };
+        const data = (await startRes.json()) as {
+          sessionId: string;
+          qrImage?: string;
+        };
         setSession(account.id, data.sessionId);
         clearPending(account.id);
         sendJson(res, 200, {
           sessionId: data.sessionId,
-          status: 'waiting_scan'
+          status: 'waiting_scan',
+          qrImage: data.qrImage
         });
       } catch (err) {
         const msg = (err as Error).message || '';
@@ -4157,6 +4160,7 @@ const routes: Route[] = [
         const data = (await statusRes.json()) as {
           status: string;
           cookies?: string;
+          qrImage?: string;
           error?: string;
         };
 
