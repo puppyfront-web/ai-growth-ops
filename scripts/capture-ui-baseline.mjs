@@ -57,6 +57,7 @@ for (const [name, path] of DESKTOP_PAGES) {
 }
 
 // ── 桌面端 暗色（工作台 + 获客 + 分析） ──
+// eslint-disable-next-line no-undef -- localStorage 运行在 page.evaluate 的浏览器上下文里
 await page.evaluate(() => localStorage.setItem('theme', 'dark'));
 for (const [name, path] of [
   ['dashboard', '/dashboard'],
