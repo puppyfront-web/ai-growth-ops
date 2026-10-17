@@ -41,16 +41,53 @@ COPY packages ./packages
 RUN pnpm --filter @ai-growth-ops/database db:generate && \
     pnpm --filter "@ai-growth-ops/api..." build
 
+# 生产依赖：只装 dependencies（排除 next/typescript/tsup 等仅构建需要的包），
+# 并生成 prisma client。生产镜像的 node_modules 取自这一层，
+# 大幅缩小体积与跨境推送时间。
+FROM base AS prod-deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY apps/worker/package.json apps/worker/
+COPY apps/browser-runner/package.json apps/browser-runner/
+COPY packages/ai/package.json packages/ai/
+COPY packages/ai-tools/package.json packages/ai-tools/
+COPY packages/capability-schema/package.json packages/capability-schema/
+COPY packages/connectors/package.json packages/connectors/
+COPY packages/database/package.json packages/database/
+COPY packages/email/package.json packages/email/
+COPY packages/growth-ops-agent/package.json packages/growth-ops-agent/
+COPY packages/lead-sinks/package.json packages/lead-sinks/
+COPY packages/observability/package.json packages/observability/
+COPY packages/providers/package.json packages/providers/
+COPY packages/runtime/package.json packages/runtime/
+COPY packages/runtime-mcp/package.json packages/runtime-mcp/
+COPY packages/shared/package.json packages/shared/
+COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/skills/package.json packages/skills/
+COPY packages/database/prisma packages/database/prisma/
+RUN --mount=type=cache,id=pnpm-store-prod,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --prod && \
+    # hoisted 模式下 pnpm --filter 对 install 不生效，这里显式移除其他应用
+    # 的运行时专属包（web 的 UI/框架、browser-runner 的浏览器栈）。
+    # 注意：若 api 运行时开始依赖下列包（不应发生），需同步调整此清单。
+    rm -rf node_modules/next node_modules/@next \
+           node_modules/lucide-react node_modules/@assistant-ui \
+           node_modules/playwright node_modules/playwright-core \
+           node_modules/playwright-extra node_modules/puppeteer-extra-plugin-stealth \
+           node_modules/@playwright && \
+    pnpm prisma generate --schema packages/database/prisma/schema.prisma
+
 # Production
 FROM base AS production
 ENV NODE_ENV=production
 # 根 package.json 供容器内 pnpm db:deploy / db:seed 脚本解析
-COPY --from=build /app/package.json ./package.json
+COPY --from=prod-deps /app/package.json ./package.json
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/package.json ./apps/api/
 COPY --from=build /app/packages ./packages
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY packages/database/prisma ./packages/database/prisma
 
 EXPOSE 3100
