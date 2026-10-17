@@ -42,6 +42,8 @@ function makeFakeWorld() {
     screenshot: vi.fn(async () => FAKE_PNG),
     locator: vi.fn((_selector: string) => fakeLocator()),
     getByText: vi.fn(() => fakeLocator()),
+    // 返回 null = 未找到二维码元素，走卡片/整页降级路径
+    evaluate: vi.fn(async () => null),
     context: vi.fn(() => context)
   };
   const context = {

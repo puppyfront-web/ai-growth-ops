@@ -40,27 +40,121 @@ const QR_REFRESH_BUTTONS = ['text=点击刷新', 'text=刷新二维码', 'text=�
 // 命中登录卡片时裁剪截图（体积小、码更清晰），否则退回整页截图。
 const LOGIN_CARD_SELECTOR =
   '[class*="douyin_login"], [id*="douyin-login"], [class*="login-card"], [class*="qrcode"], [class*="qr-login"], [class*="login_panel"], [class*="login-box"]';
+const VIEWPORT = { width: 1280, height: 900 };
 
 function toDataUrl(buf: Buffer): string {
   return `data:image/png;base64,${buf.toString('base64')}`;
 }
 
-async function captureLoginScreenshot(session: BrowserSession): Promise<string> {
+function clampClip(
+  box: { x: number; y: number; width: number; height: number },
+  pad: number
+) {
+  const x = Math.max(box.x - pad, 0);
+  const y = Math.max(box.y - pad, 0);
+  return {
+    x,
+    y,
+    width: Math.min(box.width + pad * 2, VIEWPORT.width - x),
+    height: Math.min(box.height + pad * 2, VIEWPORT.height - y)
+  };
+}
+
+/** 在页面上下文里找二维码本体：
+ *  - 只看 img/canvas（装饰性背景 div 常是整页大小，会干扰选择）；
+ *  - 近似正方形（0.85~1.18）、尺寸 120~500px；
+ *  - 若能定位登录卡片，则必须位于卡片内部（排除页面上其他方图）；
+ *  - 多个命中时取面积最大者。
+ *  布局无关——不依赖抖音的类名约定。返回视口坐标（与 screenshot clip 同系）。 */
+const QR_BOX_SCRIPT = `
+(() => {
+  const cardSel = '[class*="login-card"],[class*="qrcode"],[class*="qr-login"],[class*="login_panel"],[class*="login-box"]';
+  let card = null;
+  const cards = [];
+  for (const el of document.querySelectorAll(cardSel)) {
+    const r = el.getBoundingClientRect();
+    if (r.width > 80 && r.height > 80) {
+      cards.push(Math.round(r.width) + 'x' + Math.round(r.height) + '@' + Math.round(r.x) + ',' + Math.round(r.y));
+      if (!card) card = r;
+    }
+  }
+  const imgs = [];
+  let best = null;
+  for (const el of document.querySelectorAll('img, canvas')) {
+    const r = el.getBoundingClientRect();
+    const sq = r.width >= 120 && r.height >= 120 && r.width <= 500 && r.height <= 500 &&
+      (() => { const ratio = r.width / r.height; return ratio >= 0.85 && ratio <= 1.18; })();
+    if (sq) imgs.push(Math.round(r.width) + 'x' + Math.round(r.height) + '@' + Math.round(r.x) + ',' + Math.round(r.y));
+    if (!sq) continue;
+    if (card) {
+      const cx = r.x + r.width / 2;
+      const cy = r.y + r.height / 2;
+      if (cx < card.x || cx > card.x + card.width || cy < card.y || cy > card.y + card.height)
+        continue;
+    }
+    const area = r.width * r.height;
+    if (!best || area > best.area) {
+      best = { area, x: r.x, y: r.y, width: r.width, height: r.height };
+    }
+  }
+  return {
+    box: best,
+    diag: 'card=[' + cards.join('|') + '] 方形img/canvas=[' + imgs.join('|') + '] 全部img=' + document.querySelectorAll('img').length
+  };
+})()`;
+
+async function locateQrBox(page: Page): Promise<{
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null> {
+  const res = await page
+    .evaluate(QR_BOX_SCRIPT)
+    .then(r => r as { box: unknown; diag: string } | null)
+    .catch(err => {
+      console.warn('[session] 二维码探测脚本异常:', String(err).slice(0, 80));
+      return null;
+    });
+  if (!res?.box) {
+    console.warn('[session] 未定位到二维码元素:', res?.diag ?? 'evaluate 失败');
+    return null;
+  }
+  return res.box as { x: number; y: number; width: number; height: number };
+}
+
+async function captureLoginScreenshot(
+  session: BrowserSession,
+  { waitQr = false }: { waitQr?: boolean } = {}
+): Promise<string> {
   const { page } = session;
+  // 首选：只截二维码本体并留白边（整卡截图缩到对话框里码会小到扫不出来）。
+  // 二维码图片是异步加载的，首次截图前轮询等待它出现。
+  try {
+    const attempts = waitQr ? 8 : 1;
+    let qr = null;
+    for (let i = 0; i < attempts && !qr; i++) {
+      qr = await locateQrBox(page);
+      if (!qr && i < attempts - 1) await page.waitForTimeout(500).catch(() => {});
+    }
+    if (qr) {
+      const buf = await page.screenshot({
+        type: 'png',
+        clip: clampClip(qr, Math.round(qr.width * 0.06))
+      });
+      return toDataUrl(buf);
+    }
+  } catch {
+    /* fall through to card/full page */
+  }
   try {
     const card = page.locator(LOGIN_CARD_SELECTOR).first();
     const box = await card.boundingBox().catch(() => null);
     if (box && box.width > 80 && box.height > 80) {
-      const pad = 24;
-      const clip = {
-        x: Math.max(box.x - pad, 0),
-        y: Math.max(box.y - pad, 0),
-        width: box.width + pad * 2,
-        height: box.height + pad * 2
-      };
-      clip.width = Math.min(clip.width, 1280 - clip.x);
-      clip.height = Math.min(clip.height, 900 - clip.y);
-      const buf = await page.screenshot({ type: 'png', clip });
+      const buf = await page.screenshot({
+        type: 'png',
+        clip: clampClip(box, 24)
+      });
       return toDataUrl(buf);
     }
   } catch {
@@ -119,7 +213,9 @@ class SessionManager {
     });
     const context = await browser.newContext({
       userAgent: STEALTH_USER_AGENT,
-      viewport: { width: 1280, height: 900 },
+      viewport: { ...VIEWPORT },
+      // 2 倍渲染密度：二维码截图像素翻倍，手机更容易识别
+      deviceScaleFactor: 2,
       locale: 'zh-CN',
       timezoneId: 'Asia/Shanghai'
     });
@@ -147,7 +243,9 @@ class SessionManager {
       createdAt: Date.now(),
       baselineCookieKeys
     };
-    session.qrImage = await captureLoginScreenshot(session).catch(() => '');
+    session.qrImage = await captureLoginScreenshot(session, {
+      waitQr: true
+    }).catch(() => '');
     session.lastQrAt = Date.now();
     this.sessions.set(sessionId, session);
 
