@@ -27,11 +27,18 @@ interface BrowserSession {
   /** 登录页截图（data URL），前端直接展示给操作员扫码。 */
   qrImage?: string;
   lastQrAt?: number;
+  /** 整页实时画面（JPEG data URL），供操作员远程处理滑块/验证码等交互。 */
+  pageImage?: string;
+  lastPageAt?: number;
 }
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 /** 前端轮询约 3s 一次，截图节流避免每次轮询都截屏。 */
 const QR_CAPTURE_INTERVAL_MS = 2500;
+/** 整页实时画面刷新间隔（交互操作后需要较快看到反馈）。 */
+const PAGE_IMAGE_INTERVAL_MS = 1200;
+/** 登录页视口（与 createSession 的 viewport 一致，前端据此换算坐标）。 */
+export const PAGE_VIEWPORT = { width: 1280, height: 900 } as const;
 
 // 二维码过期后登录页会出现「点击刷新 / 刷新二维码」，点一下即可换新码；
 // 找不到可点的按钮就整页刷新换新码（cookie 基线在 context 层，不受刷新影响）。
@@ -44,6 +51,33 @@ const VIEWPORT = { width: 1280, height: 900 };
 
 function toDataUrl(buf: Buffer): string {
   return `data:image/png;base64,${buf.toString('base64')}`;
+}
+
+/** 整页实时画面：CDP 截图并缩到一半（640×450 JPEG），供前端展示与交互。 */
+async function capturePageImage(
+  session: BrowserSession
+): Promise<string | undefined> {
+  try {
+    const cdp = await session.context.newCDPSession(session.page);
+    try {
+      const { data } = (await cdp.send('Page.captureScreenshot', {
+        format: 'jpeg',
+        quality: 45,
+        clip: {
+          x: 0,
+          y: 0,
+          width: PAGE_VIEWPORT.width,
+          height: PAGE_VIEWPORT.height,
+          scale: 0.5
+        }
+      })) as { data?: string };
+      return data ? `data:image/jpeg;base64,${data}` : undefined;
+    } finally {
+      await cdp.detach().catch(() => {});
+    }
+  } catch {
+    return undefined;
+  }
 }
 
 function clampClip(
@@ -256,6 +290,7 @@ class SessionManager {
     status: 'waiting_scan' | 'logged_in' | 'expired' | 'error';
     cookies?: string;
     qrImage?: string;
+    pageImage?: string;
     error?: string;
   }> {
     const session = this.sessions.get(sessionId);
@@ -383,7 +418,16 @@ class SessionManager {
         );
         session.lastQrAt = now;
       }
-      return { status: 'waiting_scan', qrImage: session.qrImage };
+      // 整页实时画面：操作员据此远程处理滑块/验证码等二次验证交互
+      let pageImage: string | undefined;
+      if (now - (session.lastPageAt ?? 0) > PAGE_IMAGE_INTERVAL_MS) {
+        pageImage = await capturePageImage(session);
+        if (pageImage) session.lastPageAt = now;
+      } else {
+        pageImage = session.pageImage;
+      }
+      if (pageImage) session.pageImage = pageImage;
+      return { status: 'waiting_scan', qrImage: session.qrImage, pageImage };
     } catch (err) {
       console.error(`[session:${sessionId.slice(0, 8)}] error:`, err);
       return { status: 'error', error: (err as Error).message };
@@ -398,6 +442,100 @@ class SessionManager {
       await session.browser.close();
     } catch {
       /* browser may already be closed */
+    }
+  }
+
+  // ── 远程交互：操作员在前端画面上点击/拖拽/输入，转发到无头页面执行 ──
+
+  private resolveInteractiveSession(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return { ok: false as const, error: '会话已过期或不存在' };
+    }
+    return { ok: true as const, session };
+  }
+
+  async clickAt(
+    sessionId: string,
+    x: number,
+    y: number
+  ): Promise<{ ok: boolean; error?: string }> {
+    const r = this.resolveInteractiveSession(sessionId);
+    if (!r.ok) return r;
+    try {
+      await r.session.page.mouse.click(x, y);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  async typeText(
+    sessionId: string,
+    text: string
+  ): Promise<{ ok: boolean; error?: string }> {
+    const r = this.resolveInteractiveSession(sessionId);
+    if (!r.ok) return r;
+    if (!text) return { ok: false, error: '缺少输入内容' };
+    try {
+      // 输入到当前聚焦元素；操作员先点击画面中的输入框再发送
+      await r.session.page.keyboard.type(text.slice(0, 200), { delay: 30 });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  async pressKey(
+    sessionId: string,
+    key: string
+  ): Promise<{ ok: boolean; error?: string }> {
+    const r = this.resolveInteractiveSession(sessionId);
+    if (!r.ok) return r;
+    const allowed = new Set([
+      'Enter',
+      'Backspace',
+      'Escape',
+      'Tab',
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight'
+    ]);
+    if (!allowed.has(key)) return { ok: false, error: `不支持的按键: ${key}` };
+    try {
+      await r.session.page.keyboard.press(key);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  async drag(
+    sessionId: string,
+    from: { x: number; y: number },
+    to: { x: number; y: number }
+  ): Promise<{ ok: boolean; error?: string }> {
+    const r = this.resolveInteractiveSession(sessionId);
+    if (!r.ok) return r;
+    try {
+      // 滑块验证：按下 → 分步移动（模拟人手轨迹）→ 松开
+      await r.session.page.mouse.move(from.x, from.y);
+      await r.session.page.mouse.down();
+      const steps = 25;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const ease = 1 - Math.pow(1 - t, 2);
+        await r.session.page.mouse.move(
+          from.x + (to.x - from.x) * ease,
+          from.y + (to.y - from.y) * ease + Math.sin(t * Math.PI) * 3
+        );
+        await r.session.page.waitForTimeout(8);
+      }
+      await r.session.page.mouse.up();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
     }
   }
 

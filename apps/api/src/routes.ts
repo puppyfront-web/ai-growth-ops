@@ -4161,6 +4161,7 @@ const routes: Route[] = [
           status: string;
           cookies?: string;
           qrImage?: string;
+          pageImage?: string;
           error?: string;
         };
 
@@ -4234,6 +4235,55 @@ const routes: Route[] = [
         clearSession(accountId);
       }
       sendJson(res, 200, { ok: true });
+    }
+  },
+  {
+    // 扫码登录的远程交互转发：点击/输入/按键/拖拽（滑块验证等二次验证场景）
+    method: 'POST',
+    pattern: '/api/accounts/:id/browser-login/interact',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const accountId = ctx.params.id;
+      const sessionId = getSessionId(accountId);
+      if (!sessionId) {
+        return sendJson(res, 200, {
+          ok: false,
+          error: '登录会话不存在，请关闭后重新扫码'
+        });
+      }
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const action = String(body.action ?? '');
+      const runnerPaths: Record<string, string> = {
+        click: 'click',
+        type: 'type',
+        key: 'key',
+        drag: 'drag'
+      };
+      const runnerPath = runnerPaths[action];
+      if (!runnerPath) {
+        return sendJson(res, 400, { ok: false, error: `不支持的交互: ${action}` });
+      }
+      const { action: _drop, ...params } = body;
+      try {
+        const runnerUrl = getBrowserRunnerUrl();
+        const interactRes = await fetchWithTimeout(
+          `${runnerUrl}/session/${sessionId}/${runnerPath}`,
+          {
+            method: 'POST',
+            headers: runnerHeaders(),
+            body: JSON.stringify(params)
+          },
+          15_000
+        );
+        const data = (await interactRes.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+        };
+        sendJson(res, 200, data);
+      } catch (err) {
+        sendJson(res, 200, { ok: false, error: (err as Error).message });
+      }
     }
   },
 

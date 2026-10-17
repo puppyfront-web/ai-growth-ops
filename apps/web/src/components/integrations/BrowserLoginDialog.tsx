@@ -5,12 +5,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   startBrowserLogin,
   getBrowserLoginStatus,
-  cancelBrowserLogin
+  cancelBrowserLogin,
+  interactWithBrowserLogin
 } from '@/lib/api/integrations';
 import { platformLabels } from '@/lib/constants';
 import { Check } from 'lucide-react';
 import { PlatformIcon } from '@/components/shared/PlatformIcon';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface BrowserLoginDialogProps {
   accountId: string;
@@ -29,6 +31,8 @@ type LoginState =
 
 const POLL_INTERVAL = 3000;
 const TIMEOUT_SECONDS = 180;
+// runner 无头页面的视口大小（截图按此坐标系换算点击/拖拽位置）
+const PAGE_VIEWPORT = { width: 1280, height: 900 };
 
 export function BrowserLoginDialog({
   accountId,
@@ -40,10 +44,26 @@ export function BrowserLoginDialog({
   const [state, setState] = useState<LoginState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState<string | null>(null);
+  const [pageImage, setPageImage] = useState<string | null>(null);
+  const [verifyText, setVerifyText] = useState('');
+  const [interacting, setInteracting] = useState(false);
   const [countdown, setCountdown] = useState(TIMEOUT_SECONDS);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionActiveRef = useRef(false);
+  const pointerStartRef = useRef<{
+    clientX: number;
+    clientY: number;
+    px: number;
+    py: number;
+  } | null>(null);
+
+  const resetInteraction = useCallback(() => {
+    setPageImage(null);
+    setVerifyText('');
+    setInteracting(false);
+    pointerStartRef.current = null;
+  }, []);
 
   const cleanup = useCallback(() => {
     if (pollRef.current) {
@@ -75,6 +95,7 @@ export function BrowserLoginDialog({
         try {
           const status = await getBrowserLoginStatus(targetAccountId);
           if (status.qrImage) setQrImage(status.qrImage);
+          if (status.pageImage) setPageImage(status.pageImage);
 
           if (status.status === 'logged_in') {
             cleanup();
@@ -111,11 +132,77 @@ export function BrowserLoginDialog({
     setState('idle');
     setError(null);
     setQrImage(null);
+    resetInteraction();
     onClose();
     if (shouldCancel) {
       cancelBrowserLogin(accountId).catch(() => {});
     }
-  }, [accountId, cleanup, onClose]);
+  }, [accountId, cleanup, onClose, resetInteraction]);
+
+  // 把画面上的点击/拖拽换算为登录页坐标（截图 1280×900 视口）并转发执行
+  const toPageCoords = (e: React.PointerEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * PAGE_VIEWPORT.width);
+    const y = Math.round(
+      ((e.clientY - rect.top) / rect.height) * PAGE_VIEWPORT.height
+    );
+    return {
+      x: Math.min(Math.max(x, 0), PAGE_VIEWPORT.width),
+      y: Math.min(Math.max(y, 0), PAGE_VIEWPORT.height)
+    };
+  };
+
+  const handlePagePointerDown = (e: React.PointerEvent<HTMLImageElement>) => {
+    e.preventDefault();
+    const pt = toPageCoords(e);
+    pointerStartRef.current = { clientX: e.clientX, clientY: e.clientY, px: pt.x, py: pt.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePagePointerUp = async (e: React.PointerEvent<HTMLImageElement>) => {
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start || !sessionActiveRef.current) return;
+    const cur = toPageCoords(e);
+    const movedPx = Math.hypot(e.clientX - start.clientX, e.clientY - start.clientY);
+    setInteracting(true);
+    try {
+      if (movedPx > 10) {
+        await interactWithBrowserLogin(accountId, {
+          action: 'drag',
+          fromX: start.px,
+          fromY: start.py,
+          toX: cur.x,
+          toY: cur.y
+        });
+      } else {
+        await interactWithBrowserLogin(accountId, { action: 'click', x: cur.x, y: cur.y });
+      }
+    } finally {
+      setInteracting(false);
+    }
+  };
+
+  const sendVerifyText = async () => {
+    if (!verifyText.trim() || !sessionActiveRef.current) return;
+    setInteracting(true);
+    try {
+      await interactWithBrowserLogin(accountId, { action: 'type', text: verifyText });
+      setVerifyText('');
+    } finally {
+      setInteracting(false);
+    }
+  };
+
+  const sendEnter = async () => {
+    if (!sessionActiveRef.current) return;
+    setInteracting(true);
+    try {
+      await interactWithBrowserLogin(accountId, { action: 'key', key: 'Enter' });
+    } finally {
+      setInteracting(false);
+    }
+  };
 
   const handleRetry = useCallback(async () => {
     cleanup();
@@ -123,6 +210,7 @@ export function BrowserLoginDialog({
     setState('starting');
     setError(null);
     setQrImage(null);
+    resetInteraction();
     setCountdown(TIMEOUT_SECONDS);
     try {
       const start = await startBrowserLogin(accountId);
@@ -135,7 +223,7 @@ export function BrowserLoginDialog({
       setState('error');
       setError((err as Error).message ?? '启动登录失败');
     }
-  }, [accountId, cleanup, startPolling]);
+  }, [accountId, cleanup, resetInteraction, startPolling]);
 
   useEffect(() => {
     if (!open) {
@@ -147,6 +235,7 @@ export function BrowserLoginDialog({
         setState('idle');
         setError(null);
         setQrImage(null);
+        resetInteraction();
         setCountdown(TIMEOUT_SECONDS);
       }
       return;
@@ -158,6 +247,7 @@ export function BrowserLoginDialog({
       setState('starting');
       setError(null);
       setQrImage(null);
+      resetInteraction();
       setCountdown(TIMEOUT_SECONDS);
       try {
         const start = await startBrowserLogin(accountId);
@@ -178,7 +268,7 @@ export function BrowserLoginDialog({
       cancelled = true;
       cleanup();
     };
-  }, [open, accountId, cleanup, startPolling]);
+  }, [open, accountId, cleanup, resetInteraction, startPolling]);
 
   // Keep rendering during logged_in so the success screen is visible
   if (!open && state !== 'logged_in') return null;
@@ -224,12 +314,69 @@ export function BrowserLoginDialog({
                 </div>
               )}
             </div>
-            <p className="mt-4 text-sm font-medium">
+            <p className="mt-3 text-sm font-medium">
               请使用 {platformName} App 扫描二维码登录
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               二维码过期后会自动刷新；若长时间未更新请点击重新登录
             </p>
+
+            {/* 实时画面：扫码后如出现滑块/验证码等二次验证，直接在画面上远程操作 */}
+            <div className="mt-4 w-full">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium">
+                  出现滑块/验证码？直接在下方画面操作
+                </p>
+                {interacting && (
+                  <span className="text-xs text-muted-foreground">执行中…</span>
+                )}
+              </div>
+              <div className="rounded-lg border overflow-hidden bg-white">
+                {pageImage ? (
+                  <img
+                    src={pageImage}
+                    alt="登录页实时画面"
+                    draggable={false}
+                    className="w-full block cursor-crosshair touch-none select-none"
+                    onPointerDown={handlePagePointerDown}
+                    onPointerUp={handlePagePointerUp}
+                  />
+                ) : (
+                  <div className="h-28 flex items-center justify-center text-xs text-muted-foreground">
+                    正在加载实时画面…
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <Input
+                  value={verifyText}
+                  onChange={(e) => setVerifyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') sendVerifyText();
+                  }}
+                  placeholder="点击画面中的输入框后，在此输入验证码"
+                  className="h-8 text-xs"
+                />
+                <Button
+                  size="sm"
+                  className="h-8"
+                  disabled={interacting || !verifyText.trim()}
+                  onClick={sendVerifyText}
+                >
+                  输入
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  disabled={interacting}
+                  onClick={sendEnter}
+                >
+                  回车
+                </Button>
+              </div>
+            </div>
+
             <p className="mt-3 text-xs text-muted-foreground">
               剩余 {Math.floor(countdown / 60)}:
               {(countdown % 60).toString().padStart(2, '0')}

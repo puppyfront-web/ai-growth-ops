@@ -108,6 +108,80 @@ const routes: Route[] = [
       await sessionManager.cancelSession(sessionId);
       sendJson(res, 200, { ok: true });
     }
+  },
+  {
+    method: 'POST',
+    pattern: '/session/:sessionId/click',
+    handler: async (_req, res, ctx) => {
+      const body = (ctx.body ?? {}) as { x?: number; y?: number };
+      if (typeof body.x !== 'number' || typeof body.y !== 'number') {
+        sendJson(res, 400, { error: '缺少坐标 x/y' });
+        return;
+      }
+      sendJson(
+        res,
+        200,
+        await sessionManager.clickAt(ctx.params.sessionId, body.x, body.y)
+      );
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/session/:sessionId/type',
+    handler: async (_req, res, ctx) => {
+      const body = (ctx.body ?? {}) as { text?: string };
+      sendJson(
+        res,
+        200,
+        await sessionManager.typeText(ctx.params.sessionId, String(body.text ?? ''))
+      );
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/session/:sessionId/key',
+    handler: async (_req, res, ctx) => {
+      const body = (ctx.body ?? {}) as { key?: string };
+      sendJson(
+        res,
+        200,
+        await sessionManager.pressKey(
+          ctx.params.sessionId,
+          String(body.key ?? '')
+        )
+      );
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/session/:sessionId/drag',
+    handler: async (_req, res, ctx) => {
+      const body = (ctx.body ?? {}) as {
+        fromX?: number;
+        fromY?: number;
+        toX?: number;
+        toY?: number;
+      };
+      const { fromX, fromY, toX, toY } = body;
+      if (
+        typeof fromX !== 'number' ||
+        typeof fromY !== 'number' ||
+        typeof toX !== 'number' ||
+        typeof toY !== 'number'
+      ) {
+        sendJson(res, 400, { error: '缺少拖拽坐标 fromX/fromY/toX/toY' });
+        return;
+      }
+      sendJson(
+        res,
+        200,
+        await sessionManager.drag(
+          ctx.params.sessionId,
+          { x: fromX, y: fromY },
+          { x: toX, y: toY }
+        )
+      );
+    }
   }
 ];
 

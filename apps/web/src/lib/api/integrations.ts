@@ -65,6 +65,8 @@ export interface BrowserLoginStatusResponse {
   status: 'waiting_scan' | 'logged_in' | 'expired' | 'error';
   cookies?: string;
   qrImage?: string;
+  /** 整页实时画面（JPEG data URL，640×450），供操作员远程处理滑块/验证码 */
+  pageImage?: string;
   error?: string;
 }
 
@@ -91,6 +93,23 @@ export function cancelBrowserLogin(
   return apiPost<{ ok: boolean }>(
     `/api/accounts/${accountId}/browser-login/cancel`,
     {}
+  );
+}
+
+/** 远程交互参数：click 传 x/y；drag 传 from/to；type 传 text；key 传 key */
+export type BrowserLoginInteraction =
+  | { action: 'click'; x: number; y: number }
+  | { action: 'drag'; fromX: number; fromY: number; toX: number; toY: number }
+  | { action: 'type'; text: string }
+  | { action: 'key'; key: string };
+
+export function interactWithBrowserLogin(
+  accountId: string,
+  interaction: BrowserLoginInteraction
+): Promise<{ ok: boolean; error?: string }> {
+  return apiPost<{ ok: boolean; error?: string }>(
+    `/api/accounts/${accountId}/browser-login/interact`,
+    interaction
   );
 }
 
