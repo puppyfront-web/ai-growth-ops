@@ -113,6 +113,16 @@ export function interactWithBrowserLogin(
   );
 }
 
+/** 实时画面流的短时票据（EventSource 无法携带 Authorization 头） */
+export function getScreencastTicket(accountId: string): Promise<{
+  ticket: string;
+}> {
+  return apiPost<{ ticket: string }>(
+    `/api/accounts/${accountId}/browser-login/screencast-ticket`,
+    {}
+  );
+}
+
 export function getFeishuConfig(): Promise<Record<string, unknown>> {
   return apiGet<Record<string, unknown>>('/api/lead-sinks/feishu');
 }

@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { chromium, type BrowserContext, type Page } from 'playwright';
+import {
+  chromium,
+  type BrowserContext,
+  type CDPSession,
+  type Page
+} from 'playwright';
 import {
   detectLoginWithBaseline,
   getPlatformLoginConfig,
@@ -233,6 +238,8 @@ async function refreshExpiredQr(page: Page): Promise<void> {
 
 class SessionManager {
   private sessions = new Map<string, BrowserSession>();
+  /** 每个会话当前挂着的 CDP screencast 连接（SSE 实时画面用）。 */
+  private screencasts = new Map<string, CDPSession>();
 
   async createSession(platform: string): Promise<{
     sessionId: string;
@@ -438,10 +445,55 @@ class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     this.sessions.delete(sessionId);
+    this.screencasts.delete(sessionId);
     try {
       await session.browser.close();
     } catch {
       /* browser may already be closed */
+    }
+  }
+
+  /** 挂载 CDP screencast：渲染帧经 onFrame 回调推给 SSE 客户端。 */
+  async attachScreencast(
+    sessionId: string,
+    onFrame: (dataUrl: string) => void
+  ): Promise<CDPSession | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    const cdp = await session.context.newCDPSession(session.page);
+    this.screencasts.set(sessionId, cdp);
+    cdp.on('Page.screencastFrame', (frame: { sessionId: number; data: string }) => {
+      try {
+        onFrame(`data:image/jpeg;base64,${frame.data}`);
+      } catch {
+        /* 客户端断开等写失败不中断抓帧 */
+      }
+      cdp
+        .send('Page.screencastFrameAck', { sessionId: frame.sessionId })
+        .catch(() => {});
+    });
+    await cdp.send('Page.startScreencast', {
+      format: 'jpeg',
+      quality: 50,
+      maxWidth: 800,
+      everyNthFrame: 1
+    });
+    return cdp;
+  }
+
+  async detachScreencast(sessionId: string): Promise<void> {
+    const cdp = this.screencasts.get(sessionId);
+    if (!cdp) return;
+    this.screencasts.delete(sessionId);
+    try {
+      await cdp.send('Page.stopScreencast');
+    } catch {
+      /* already stopped */
+    }
+    try {
+      await cdp.detach();
+    } catch {
+      /* already detached */
     }
   }
 

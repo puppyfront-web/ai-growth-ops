@@ -6,7 +6,8 @@ import {
   startBrowserLogin,
   getBrowserLoginStatus,
   cancelBrowserLogin,
-  interactWithBrowserLogin
+  interactWithBrowserLogin,
+  getScreencastTicket
 } from '@/lib/api/integrations';
 import { platformLabels } from '@/lib/constants';
 import { Check } from 'lucide-react';
@@ -65,6 +66,45 @@ export function BrowserLoginDialog({
     pointerStartRef.current = null;
   }, []);
 
+  const sseActiveRef = useRef(false);
+
+  // CDP screencast 实时流：比轮询截图流畅得多；断流时自动回退到轮询 pageImage
+  useEffect(() => {
+    if (state !== 'waiting_scan' || !open) {
+      sseActiveRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    let es: EventSource | null = null;
+    (async () => {
+      try {
+        const { ticket } = await getScreencastTicket(accountId);
+        if (cancelled) return;
+        es = new EventSource(
+          `/api/accounts/${accountId}/browser-login/screencast?ticket=${encodeURIComponent(ticket)}`
+        );
+        es.addEventListener('open', () => {
+          sseActiveRef.current = true;
+        });
+        es.addEventListener('frame', (ev) => {
+          const { frame } = JSON.parse((ev as MessageEvent).data);
+          setPageImage(frame);
+        });
+        es.onerror = () => {
+          // EventSource 自动重连；持续失败则 sseActive 保持 false 走轮询兜底
+          sseActiveRef.current = false;
+        };
+      } catch {
+        /* 拿不到票据时走轮询兜底 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      sseActiveRef.current = false;
+      es?.close();
+    };
+  }, [state, open, accountId]);
+
   const cleanup = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -95,7 +135,9 @@ export function BrowserLoginDialog({
         try {
           const status = await getBrowserLoginStatus(targetAccountId);
           if (status.qrImage) setQrImage(status.qrImage);
-          if (status.pageImage) setPageImage(status.pageImage);
+          if (status.pageImage && !sseActiveRef.current) {
+            setPageImage(status.pageImage);
+          }
 
           if (status.status === 'logged_in') {
             cleanup();

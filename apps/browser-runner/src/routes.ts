@@ -101,6 +101,44 @@ const routes: Route[] = [
     }
   },
   {
+    // 实时画面流（SSE）：CDP screencast 帧 → 前端 EventSource
+    method: 'GET',
+    pattern: '/session/:sessionId/screencast',
+    handler: async (req, res, ctx) => {
+      const { sessionId } = ctx.params;
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      });
+      const send = (event: string, data: unknown) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+      send('open', { ok: true });
+      let attached: import('playwright').CDPSession | null = null;
+      try {
+        attached = await sessionManager.attachScreencast(
+          sessionId,
+          (frame) => send('frame', { frame })
+        );
+      } catch (err) {
+        send('error', { error: (err as Error).message });
+      }
+      if (!attached) {
+        send('error', { error: '会话已过期或不存在' });
+        res.end();
+        return;
+      }
+      const ping = setInterval(() => res.write(': ping\n\n'), 15_000);
+      req.on('close', () => {
+        clearInterval(ping);
+        sessionManager.detachScreencast(sessionId).catch(() => {});
+        res.end();
+      });
+    }
+  },
+  {
     method: 'POST',
     pattern: '/session/:sessionId/cancel',
     handler: async (_req, res, ctx) => {

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { createHmac, randomUUID, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   createReadStream,
   existsSync,
@@ -4283,6 +4283,90 @@ const routes: Route[] = [
         sendJson(res, 200, data);
       } catch (err) {
         sendJson(res, 200, { ok: false, error: (err as Error).message });
+      }
+    }
+  },
+  {
+    // 实时画面流票据：EventSource 无法携带 Authorization 头，
+    // 用短时 HMAC 票据（绑定账号 + 5 分钟过期）做一次性授权
+    method: 'POST',
+    pattern: '/api/accounts/:id/browser-login/screencast-ticket',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const accountId = ctx.params.id;
+      const account = await ctx.db.platformAccount.findFirst({
+        where: {
+          id: accountId,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        },
+        select: { id: true }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
+      const exp = Date.now() + 5 * 60_000;
+      const payload = `${accountId}:${exp}`;
+      const sig = createHmac('sha256', process.env.AUTH_SECRET ?? '')
+        .update(payload)
+        .digest('base64url');
+      sendJson(res, 200, { ticket: `${exp}.${sig}` });
+    }
+  },
+  {
+    // 实时画面流：校验票据后把 runner 的 SSE 流式透传给前端
+    method: 'GET',
+    pattern: '/api/accounts/:id/browser-login/screencast',
+    handler: async (req, res, ctx) => {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      const ticket = url.searchParams.get('ticket') ?? '';
+      const [exp, sig] = ticket.split('.');
+      const accountId = ctx.params.id;
+      const expected = createHmac('sha256', process.env.AUTH_SECRET ?? '')
+        .update(`${accountId}:${exp}`)
+        .digest('base64url');
+      const sigBuf = Buffer.from(sig ?? '');
+      const expBuf = Buffer.from(expected);
+      const ticketValid =
+        sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf);
+      if (!ticketValid || Number(exp) < Date.now()) {
+        res.writeHead(401, { 'Content-Type': 'text/plain' });
+        res.end('invalid ticket');
+        return;
+      }
+      const sessionId = getSessionId(accountId);
+      if (!sessionId) {
+        res.writeHead(410, { 'Content-Type': 'text/event-stream' });
+        res.end('event: error\ndata: {"error":"登录会话不存在"}\n\n');
+        return;
+      }
+      try {
+        const controller = new AbortController();
+        req.on('close', () => controller.abort());
+        const upstream = await fetch(
+          `${getBrowserRunnerUrl()}/session/${sessionId}/screencast`,
+          { headers: runnerHeaders(), signal: controller.signal }
+        );
+        res.writeHead(upstream.status, {
+          'Content-Type':
+            upstream.headers.get('content-type') ?? 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          'X-Accel-Buffering': 'no'
+        });
+        const { pipeline } = await import('node:stream/promises');
+        const { Readable } = await import('node:stream');
+        if (upstream.body) {
+          await pipeline(
+            Readable.fromWeb(
+              upstream.body as import('node:stream/web').ReadableStream
+            ),
+            res
+          );
+        } else {
+          res.end();
+        }
+      } catch {
+        /* 客户端断开或上游关闭 — 流结束 */
+        res.end();
       }
     }
   },
