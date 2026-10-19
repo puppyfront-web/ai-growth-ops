@@ -116,26 +116,34 @@ const routes: Route[] = [
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
       send('open', { ok: true });
+      const onFrame = (frame: string) => send('frame', { frame });
+      let closed = false;
+      let ping: ReturnType<typeof setInterval> | null = null;
+      req.on('close', () => {
+        closed = true;
+        if (ping) clearInterval(ping);
+        sessionManager.detachScreencast(sessionId, onFrame).catch(() => {});
+        res.end();
+      });
       let attached: import('playwright').CDPSession | null = null;
       try {
-        attached = await sessionManager.attachScreencast(
-          sessionId,
-          (frame) => send('frame', { frame })
-        );
+        attached = await sessionManager.attachScreencast(sessionId, onFrame);
       } catch (err) {
         send('error', { error: (err as Error).message });
+      }
+      // attach 期间客户端就断开了：摘掉刚注册的订阅者，避免 screencast 泄漏
+      if (closed) {
+        await sessionManager
+          .detachScreencast(sessionId, onFrame)
+          .catch(() => {});
+        return;
       }
       if (!attached) {
         send('error', { error: '会话已过期或不存在' });
         res.end();
         return;
       }
-      const ping = setInterval(() => res.write(': ping\n\n'), 15_000);
-      req.on('close', () => {
-        clearInterval(ping);
-        sessionManager.detachScreencast(sessionId).catch(() => {});
-        res.end();
-      });
+      ping = setInterval(() => res.write(': ping\n\n'), 15_000);
     }
   },
   {

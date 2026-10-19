@@ -31,6 +31,8 @@ interface BrowserSession {
   douyinNavAttempted?: boolean;
   /** 登录页截图（data URL），前端直接展示给操作员扫码。 */
   qrImage?: string;
+  /** 截图来源：qr=二维码本体；card/page=定位失败时的兜底。 */
+  qrImageKind?: 'qr' | 'card' | 'page';
   lastQrAt?: number;
   /** 整页实时画面（JPEG data URL），供操作员远程处理滑块/验证码等交互。 */
   pageImage?: string;
@@ -56,6 +58,38 @@ const VIEWPORT = { width: 1280, height: 900 };
 
 function toDataUrl(buf: Buffer): string {
   return `data:image/png;base64,${buf.toString('base64')}`;
+}
+
+/** 从 JPEG 的 SOF 段读取宽高；失败返回 null。 */
+function jpegSize(buf: Buffer): { width: number; height: number } | null {
+  let i = 2;
+  while (i + 9 < buf.length) {
+    if (buf[i] !== 0xff) {
+      i++;
+      continue;
+    }
+    const marker = buf[i + 1];
+    if (
+      marker >= 0xc0 &&
+      marker <= 0xcf &&
+      marker !== 0xc4 &&
+      marker !== 0xc8 &&
+      marker !== 0xcc
+    ) {
+      return {
+        height: buf.readUInt16BE(i + 5),
+        width: buf.readUInt16BE(i + 7)
+      };
+    }
+    if (marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd9)) {
+      i += 2;
+      continue;
+    }
+    const len = buf.readUInt16BE(i + 2);
+    if (len < 2) break;
+    i += 2 + len;
+  }
+  return null;
 }
 
 /** 整页实时画面：CDP 截图并缩到一半（640×450 JPEG），供前端展示与交互。 */
@@ -101,13 +135,14 @@ function clampClip(
 
 /** 在页面上下文里找二维码本体：
  *  - 只看 img/canvas（装饰性背景 div 常是整页大小，会干扰选择）；
- *  - 近似正方形（0.85~1.18）、尺寸 120~500px；
- *  - 若能定位登录卡片，则必须位于卡片内部（排除页面上其他方图）；
+ *  - 近似正方形（0.85~1.18）、尺寸 120~500px、且完整落在当前视口内
+ *    （页面下方还有营销图，越出视口的一律排除，避免截到错误元素）；
+ *  - 若能定位登录卡片，则必须位于卡片内部（排除背景装饰图）；
  *  - 多个命中时取面积最大者。
  *  布局无关——不依赖抖音的类名约定。返回视口坐标（与 screenshot clip 同系）。 */
 const QR_BOX_SCRIPT = `
 (() => {
-  const cardSel = '[class*="login-card"],[class*="qrcode"],[class*="qr-login"],[class*="login_panel"],[class*="login-box"]';
+  const cardSel = '[class*="douyin_login"],[id*="douyin-login"],[class*="login-card"],[class*="qrcode"],[class*="qr-login"],[class*="login_panel"],[class*="login-box"]';
   let card = null;
   const cards = [];
   for (const el of document.querySelectorAll(cardSel)) {
@@ -120,8 +155,10 @@ const QR_BOX_SCRIPT = `
   const imgs = [];
   let best = null;
   for (const el of document.querySelectorAll('img, canvas')) {
+    if (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
     const r = el.getBoundingClientRect();
-    const sq = r.width >= 120 && r.height >= 120 && r.width <= 500 && r.height <= 500 &&
+    const inViewport = r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+    const sq = inViewport && r.width >= 120 && r.height >= 120 && r.width <= 500 && r.height <= 500 &&
       (() => { const ratio = r.width / r.height; return ratio >= 0.85 && ratio <= 1.18; })();
     if (sq) imgs.push(Math.round(r.width) + 'x' + Math.round(r.height) + '@' + Math.round(r.x) + ',' + Math.round(r.y));
     if (!sq) continue;
@@ -162,10 +199,16 @@ async function locateQrBox(page: Page): Promise<{
   return res.box as { x: number; y: number; width: number; height: number };
 }
 
+type LoginShotKind = 'qr' | 'card' | 'page';
+interface LoginShot {
+  image: string;
+  kind: LoginShotKind;
+}
+
 async function captureLoginScreenshot(
   session: BrowserSession,
   { waitQr = false }: { waitQr?: boolean } = {}
-): Promise<string> {
+): Promise<LoginShot> {
   const { page } = session;
   // 首选：只截二维码本体并留白边（整卡截图缩到对话框里码会小到扫不出来）。
   // 二维码图片是异步加载的，首次截图前轮询等待它出现。
@@ -181,7 +224,7 @@ async function captureLoginScreenshot(
         type: 'png',
         clip: clampClip(qr, Math.round(qr.width * 0.06))
       });
-      return toDataUrl(buf);
+      return { image: toDataUrl(buf), kind: 'qr' };
     }
   } catch {
     /* fall through to card/full page */
@@ -194,13 +237,13 @@ async function captureLoginScreenshot(
         type: 'png',
         clip: clampClip(box, 24)
       });
-      return toDataUrl(buf);
+      return { image: toDataUrl(buf), kind: 'card' };
     }
   } catch {
     /* fall back to full page */
   }
   const buf = await page.screenshot({ type: 'png' });
-  return toDataUrl(buf);
+  return { image: toDataUrl(buf), kind: 'page' };
 }
 
 /** 仅在页面明确显示「二维码已过期」时刷新，避免误伤用户正在扫的码。 */
@@ -236,10 +279,20 @@ async function refreshExpiredQr(page: Page): Promise<void> {
   }
 }
 
+interface ScreencastEntry {
+  cdp: CDPSession;
+  /** 同一会话允许多个 SSE 订阅者复用一条 screencast，避免互相 detach。 */
+  senders: Set<(dataUrl: string) => void>;
+  /** 最近一帧时间：用来判断流是否仍在出帧。 */
+  lastFrameAt: number;
+}
+
 class SessionManager {
   private sessions = new Map<string, BrowserSession>();
   /** 每个会话当前挂着的 CDP screencast 连接（SSE 实时画面用）。 */
-  private screencasts = new Map<string, CDPSession>();
+  private screencasts = new Map<string, ScreencastEntry>();
+  /** 首帧 attach 的并发去重（React 严格模式下 effect 会执行两次）。 */
+  private screencastPending = new Map<string, Promise<CDPSession | null>>();
 
   async createSession(platform: string): Promise<{
     sessionId: string;
@@ -284,9 +337,11 @@ class SessionManager {
       createdAt: Date.now(),
       baselineCookieKeys
     };
-    session.qrImage = await captureLoginScreenshot(session, {
+    const initialShot = await captureLoginScreenshot(session, {
       waitQr: true
-    }).catch(() => '');
+    }).catch(() => null);
+    session.qrImage = initialShot?.image;
+    session.qrImageKind = initialShot?.kind;
     session.lastQrAt = Date.now();
     this.sessions.set(sessionId, session);
 
@@ -420,20 +475,32 @@ class SessionManager {
         !session.qrImage ||
         now - (session.lastQrAt ?? 0) > QR_CAPTURE_INTERVAL_MS
       ) {
-        session.qrImage = await captureLoginScreenshot(session).catch(
-          () => session.qrImage
+        const shot = await captureLoginScreenshot(session).catch(
+          () => undefined
         );
+        // 一旦成功截到二维码本体，就不再退回整卡/整页兜底图，避免二维码框
+        // 在「二维码特写」和「整页截图」之间来回切换。
+        if (shot && (shot.kind === 'qr' || session.qrImageKind !== 'qr')) {
+          session.qrImage = shot.image;
+          session.qrImageKind = shot.kind;
+        }
         session.lastQrAt = now;
       }
-      // 整页实时画面：操作员据此远程处理滑块/验证码等二次验证交互
+      // 整页实时画面：操作员据此远程处理滑块/验证码等二次验证交互。
+      // 有 screencast 在线时不再截图、也不返回 pageImage——两路来源会互相覆盖，
+      // 前端实时画面就会在两帧不同分辨率/时刻的图之间来回跳。
+      // 流静默超过 5s 则允许轮询截图兜底，避免流卡死时画面永久冻结。
       let pageImage: string | undefined;
-      if (now - (session.lastPageAt ?? 0) > PAGE_IMAGE_INTERVAL_MS) {
+      if (
+        !this.isScreencastLive(sessionId) &&
+        now - (session.lastPageAt ?? 0) > PAGE_IMAGE_INTERVAL_MS
+      ) {
         pageImage = await capturePageImage(session);
-        if (pageImage) session.lastPageAt = now;
-      } else {
-        pageImage = session.pageImage;
+        if (pageImage) {
+          session.pageImage = pageImage;
+          session.lastPageAt = now;
+        }
       }
-      if (pageImage) session.pageImage = pageImage;
       return { status: 'waiting_scan', qrImage: session.qrImage, pageImage };
     } catch (err) {
       console.error(`[session:${sessionId.slice(0, 8)}] error:`, err);
@@ -441,11 +508,11 @@ class SessionManager {
     }
   }
 
-  async cancelSession(sessionId: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
+  async cancelSession(sessionId: string): Promise<void> {    const session = this.sessions.get(sessionId);
     if (!session) return;
     this.sessions.delete(sessionId);
     this.screencasts.delete(sessionId);
+    this.screencastPending.delete(sessionId);
     try {
       await session.browser.close();
     } catch {
@@ -453,45 +520,116 @@ class SessionManager {
     }
   }
 
-  /** 挂载 CDP screencast：渲染帧经 onFrame 回调推给 SSE 客户端。 */
+  /** screencast 是否仍在出帧（页面静止时 Chrome 也会持续推帧）。 */
+  private isScreencastLive(sessionId: string): boolean {
+    const entry = this.screencasts.get(sessionId);
+    return !!entry && Date.now() - entry.lastFrameAt < PAGE_IMAGE_INTERVAL_MS * 4;
+  }
+
+  /** 挂载 CDP screencast：渲染帧经 onFrame 回调推给 SSE 客户端。
+   *  同一会话的多个订阅者共享一条 screencast，单个客户端断开不会停掉其他人。 */
   async attachScreencast(
     sessionId: string,
     onFrame: (dataUrl: string) => void
   ): Promise<CDPSession | null> {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
+
+    const existing = this.screencasts.get(sessionId);
+    if (existing) {
+      existing.senders.add(onFrame);
+      return existing.cdp;
+    }
+
+    let pending = this.screencastPending.get(sessionId);
+    if (!pending) {
+      pending = this.startScreencast(sessionId, session).finally(() => {
+        this.screencastPending.delete(sessionId);
+      });
+      this.screencastPending.set(sessionId, pending);
+    }
+    const cdp = await pending;
+    if (!cdp) return null;
+    const entry = this.screencasts.get(sessionId);
+    if (!entry) return null;
+    entry.senders.add(onFrame);
+    return entry.cdp;
+  }
+
+  private async startScreencast(
+    sessionId: string,
+    session: BrowserSession
+  ): Promise<CDPSession | null> {
     const cdp = await session.context.newCDPSession(session.page);
-    this.screencasts.set(sessionId, cdp);
+    const entry: ScreencastEntry = {
+      cdp,
+      senders: new Set(),
+      lastFrameAt: Date.now()
+    };
+    this.screencasts.set(sessionId, entry);
+    // 二维码截图等操作会让 Chrome 偶尔推一帧半分辨率的 screencast 帧，
+    // 前端看起来就是画面周期性地「糊一下」。这里只放行最大宽度的帧。
+    let maxFrameWidth = 0;
     cdp.on('Page.screencastFrame', (frame: { sessionId: number; data: string }) => {
-      try {
-        onFrame(`data:image/jpeg;base64,${frame.data}`);
-      } catch {
-        /* 客户端断开等写失败不中断抓帧 */
+      entry.lastFrameAt = Date.now();
+      const size = jpegSize(Buffer.from(frame.data, 'base64'));
+      if (size && size.width < maxFrameWidth) {
+        cdp
+          .send('Page.screencastFrameAck', { sessionId: frame.sessionId })
+          .catch(() => {});
+        return;
+      }
+      if (size && size.width > maxFrameWidth) maxFrameWidth = size.width;
+      const dataUrl = `data:image/jpeg;base64,${frame.data}`;
+      for (const send of entry.senders) {
+        try {
+          send(dataUrl);
+        } catch {
+          /* 单个客户端写失败不影响其他订阅者 */
+        }
       }
       cdp
         .send('Page.screencastFrameAck', { sessionId: frame.sessionId })
         .catch(() => {});
     });
-    await cdp.send('Page.startScreencast', {
-      format: 'jpeg',
-      quality: 50,
-      maxWidth: 800,
-      everyNthFrame: 1
-    });
+    try {
+      await cdp.send('Page.startScreencast', {
+        format: 'jpeg',
+        quality: 50,
+        maxWidth: 800,
+        everyNthFrame: 1
+      });
+    } catch (err) {
+      this.screencasts.delete(sessionId);
+      await cdp.detach().catch(() => {});
+      throw err;
+    }
+    // 会话可能在 attach 期间被取消
+    if (!this.sessions.has(sessionId)) {
+      this.screencasts.delete(sessionId);
+      await cdp.detach().catch(() => {});
+      return null;
+    }
     return cdp;
   }
 
-  async detachScreencast(sessionId: string): Promise<void> {
-    const cdp = this.screencasts.get(sessionId);
-    if (!cdp) return;
+  async detachScreencast(
+    sessionId: string,
+    sender?: (dataUrl: string) => void
+  ): Promise<void> {
+    const entry = this.screencasts.get(sessionId);
+    if (!entry) return;
+    if (sender) entry.senders.delete(sender);
+    // 还有其他订阅者在线：保持 screencast，继续推帧
+    if (entry.senders.size > 0) return;
     this.screencasts.delete(sessionId);
     try {
-      await cdp.send('Page.stopScreencast');
+      await entry.cdp.send('Page.stopScreencast');
     } catch {
       /* already stopped */
     }
     try {
-      await cdp.detach();
+      await entry.cdp.detach();
     } catch {
       /* already detached */
     }

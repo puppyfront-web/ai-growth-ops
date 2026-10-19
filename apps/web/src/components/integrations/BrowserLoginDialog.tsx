@@ -32,6 +32,8 @@ type LoginState =
 
 const POLL_INTERVAL = 3000;
 const TIMEOUT_SECONDS = 180;
+/** 实时流超过这个时间没有新帧，才允许用轮询截图兜底。 */
+const STREAM_STALE_MS = 5000;
 // runner 无头页面的视口大小（截图按此坐标系换算点击/拖拽位置）
 const PAGE_VIEWPORT = { width: 1280, height: 900 };
 
@@ -67,11 +69,15 @@ export function BrowserLoginDialog({
   }, []);
 
   const sseActiveRef = useRef(false);
+  const lastStreamFrameAtRef = useRef(0);
+  /** 轮询代次：切换会话/关闭弹窗后，丢弃仍在途的旧响应。 */
+  const pollGenerationRef = useRef(0);
 
   // CDP screencast 实时流：比轮询截图流畅得多；断流时自动回退到轮询 pageImage
   useEffect(() => {
     if (state !== 'waiting_scan' || !open) {
       sseActiveRef.current = false;
+      lastStreamFrameAtRef.current = 0;
       return;
     }
     let cancelled = false;
@@ -88,6 +94,9 @@ export function BrowserLoginDialog({
         });
         es.addEventListener('frame', (ev) => {
           const { frame } = JSON.parse((ev as MessageEvent).data);
+          if (!frame) return;
+          sseActiveRef.current = true;
+          lastStreamFrameAtRef.current = Date.now();
           setPageImage(frame);
         });
         es.onerror = () => {
@@ -101,6 +110,7 @@ export function BrowserLoginDialog({
     return () => {
       cancelled = true;
       sseActiveRef.current = false;
+      lastStreamFrameAtRef.current = 0;
       es?.close();
     };
   }, [state, open, accountId]);
@@ -114,10 +124,20 @@ export function BrowserLoginDialog({
       clearInterval(countdownRef.current);
       countdownRef.current = null;
     }
+    pollGenerationRef.current += 1;
   }, []);
+
+  /** 实时流是否仍在持续出帧（用最近一帧时间判断，而不是只看连接状态）。 */
+  const isStreamHealthy = useCallback(
+    () =>
+      sseActiveRef.current &&
+      Date.now() - lastStreamFrameAtRef.current < STREAM_STALE_MS,
+    []
+  );
 
   const startPolling = useCallback(
     (targetAccountId: string) => {
+      const generation = pollGenerationRef.current;
       countdownRef.current = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
@@ -132,10 +152,14 @@ export function BrowserLoginDialog({
       }, 1000);
 
       pollRef.current = setInterval(async () => {
+        if (generation !== pollGenerationRef.current) return;
         try {
           const status = await getBrowserLoginStatus(targetAccountId);
+          if (generation !== pollGenerationRef.current) return;
           if (status.qrImage) setQrImage(status.qrImage);
-          if (status.pageImage && !sseActiveRef.current) {
+          // 只在实时流已经断掉/卡住时才用轮询截图兜底；
+          // 否则两路画面会互相覆盖，看起来就是内容来回切换。
+          if (status.pageImage && !isStreamHealthy()) {
             setPageImage(status.pageImage);
           }
 
@@ -164,7 +188,7 @@ export function BrowserLoginDialog({
         }
       }, POLL_INTERVAL);
     },
-    [cleanup, qc]
+    [cleanup, isStreamHealthy, qc]
   );
 
   const handleClose = useCallback(() => {
