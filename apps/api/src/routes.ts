@@ -3797,49 +3797,93 @@ const routes: Route[] = [
       if (cookie && !cookie.valid) return sendJson(res, 400, { error: cookie.error });
       const cookieRef = cookie?.valid ? encryptToken(cookie.cookie) : null;
 
-      const account = await ctx.db.platformAccount.create({
-        data: {
-          organizationId: orgCtx.organization.id,
+      // (userId, platform, name) 唯一约束覆盖软删除行：先查明同名占用，避免把 P2002 裸错误抛给前端
+      const existing = await ctx.db.platformAccount.findFirst({
+        where: {
           userId: orgCtx.user.id,
           platform: platform as 'douyin',
-          name,
-          mode: mode as 'official_api',
-          status: encryptedAccess || cookieRef ? 'active' : 'error',
-          authType,
-          accessTokenEncrypted: encryptedAccess,
-          refreshTokenEncrypted: encryptedRefresh,
-          cookieRef,
-          capabilities: body.capabilities ?? {},
-          metadata: { source: 'manual_create' }
+          name
         }
       });
-
-      // Create default capabilities
-      const defaultCaps = [
-        'text_image_publish',
-        'video_publish',
-        'comment_sync',
-        'comment_reply'
-      ];
-      for (const capKey of defaultCaps) {
-        await ctx.db.platformCapability.create({
-          data: {
-            organizationId: orgCtx.organization.id,
-            userId: orgCtx.user.id,
-            platformAccountId: account.id,
-            platform: platform as 'douyin',
-            capabilityKey: capKey,
-            mode: mode as 'official_api',
-            enabled: true
-          }
+      if (existing && !existing.deletedAt)
+        return sendJson(res, 409, {
+          error: `该平台下已存在同名账号「${name}」，请更换名称后重试`
         });
-      }
 
-      const result = await ctx.db.platformAccount.findFirst({
-        where: { id: account.id },
-        include: { platformCapabilities: { where: { deletedAt: null } } }
-      });
-      sendJson(res, 201, result);
+      const accountData = {
+        organizationId: orgCtx.organization.id,
+        userId: orgCtx.user.id,
+        platform: platform as 'douyin',
+        name,
+        mode: mode as 'official_api',
+        status: (encryptedAccess || cookieRef ? 'active' : 'error') as 'active',
+        authType,
+        accessTokenEncrypted: encryptedAccess,
+        refreshTokenEncrypted: encryptedRefresh,
+        cookieRef,
+        capabilities: body.capabilities ?? {},
+        metadata: { source: 'manual_create' }
+      };
+
+      try {
+        // 同名行只剩软删除记录时复用原行恢复，否则该名称永远无法重建
+        const account = existing
+          ? await ctx.db.platformAccount.update({
+              where: { id: existing.id },
+              data: { ...accountData, deletedAt: null }
+            })
+          : await ctx.db.platformAccount.create({ data: accountData });
+
+        // Create default capabilities
+        const defaultCaps = [
+          'text_image_publish',
+          'video_publish',
+          'comment_sync',
+          'comment_reply'
+        ];
+        for (const capKey of defaultCaps) {
+          const existingCap = existing
+            ? await ctx.db.platformCapability.findFirst({
+                where: { platformAccountId: account.id, capabilityKey: capKey }
+              })
+            : null;
+          if (existingCap) {
+            await ctx.db.platformCapability.update({
+              where: { id: existingCap.id },
+              data: {
+                mode: mode as 'official_api',
+                enabled: true,
+                deletedAt: null
+              }
+            });
+          } else {
+            await ctx.db.platformCapability.create({
+              data: {
+                organizationId: orgCtx.organization.id,
+                userId: orgCtx.user.id,
+                platformAccountId: account.id,
+                platform: platform as 'douyin',
+                capabilityKey: capKey,
+                mode: mode as 'official_api',
+                enabled: true
+              }
+            });
+          }
+        }
+
+        const result = await ctx.db.platformAccount.findFirst({
+          where: { id: account.id },
+          include: { platformCapabilities: { where: { deletedAt: null } } }
+        });
+        sendJson(res, 201, result);
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          return sendJson(res, 409, {
+            error: `该平台下已存在同名账号「${name}」，请更换名称后重试`
+          });
+        }
+        throw err;
+      }
     }
   },
   {
@@ -3888,10 +3932,20 @@ const routes: Route[] = [
         }
       }
 
-      await ctx.db.platformAccount.update({
-        where: { id: ctx.params.id },
-        data
-      });
+      try {
+        await ctx.db.platformAccount.update({
+          where: { id: ctx.params.id },
+          data
+        });
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          const conflictName = data.name != null ? String(data.name) : account.name;
+          return sendJson(res, 409, {
+            error: `该平台下已存在同名账号「${conflictName}」，请更换名称后重试`
+          });
+        }
+        throw err;
+      }
 
       // Update capability enabled flags if provided
       if (Array.isArray(body.capabilities)) {
@@ -6264,6 +6318,14 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
     'cache-control': 'no-store'
   });
   res.end(JSON.stringify(payload));
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    'code' in err &&
+    (err as Record<string, unknown>).code === 'P2002'
+  );
 }
 
 function aggregateByDate(
