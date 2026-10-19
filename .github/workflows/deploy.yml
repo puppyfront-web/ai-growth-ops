@@ -24,9 +24,9 @@ jobs:
   build-push:
     name: Build & push ${{ matrix.app }}
     runs-on: ubuntu-latest
-    # 冷构建（依赖全量安装）+ 大镜像跨境推送到 ACR 首跑可能超过 1 小时；
-    # 依赖层建立缓存后日常构建回到分钟级
-    timeout-minutes: 120
+    # 冷构建 + 首次把大底座层推到 ACR 是一次性成本（browser-runner 曾需 >2h，
+    # 见 run #20/#21）；底座层落地 ACR 后内容寻址去重，日常构建回到分钟级
+    timeout-minutes: 180
     strategy:
       # 单个镜像失败不取消其他矩阵任务：已完成的镜像照常推送并导出缓存，
       # 下次重跑只需补建失败的那个，避免「超时→无缓存→再超时」的恶性循环
@@ -55,17 +55,31 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ACR 认证接口偶发 connection reset（run #16/#30）：内联 3 次重试在
+      # 源头吃掉瞬断，避免登录步骤红灯导致构建被跳过（后续重试步骤虽能
+      # 恢复，但 job 仍会被标记失败）
       - name: Login to Aliyun ACR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY_HOST }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+        env:
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          for i in 1 2 3; do
+            if echo "$ACR_PASSWORD" | docker login "$REGISTRY_HOST" -u "$ACR_USERNAME" --password-stdin; then
+              echo "已登录 $REGISTRY_HOST（第 $i 次尝试）"
+              exit 0
+            fi
+            echo "登录失败，10 秒后重试（$i/3）"
+            sleep 10
+          done
+          echo "ACR 登录连续 3 次失败"
+          exit 1
 
-      # 缓存读取：本镜像 scope + 四个镜像 scope + 共享 scope 都尝试命中。
-      # 四个镜像的 deps 层输入完全相同（同一份清单+锁文件），生产层的 node_modules
-      # 内容也一致，任何一个镜像成功构建过，其余镜像即可复用其层——
-      # 避免 api 因从未成功完成而永远全冷重建（run #15/#16 的恶性循环）。
+      # 缓存：单 scope 读写（与 10-12 正常期完全一致的配置，彼时构建
+      # 30~60 秒）。run #18-#27 慢的根源是缓存反复被重置：超时砍单使导出
+      # （只在成功收尾执行）从不发生 + Dockerfile 多次重构重置层哈希 +
+      # 我引入又移除的多 scope 互救。恢复原配置 + 180 分钟超时兜底后，
+      # 一次成功构建即重建缓存，此后回到增量。维持 Dockerfile 稳定是
+      # 缓存持续命中的前提。
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -80,14 +94,8 @@ jobs:
           # web 需要 API_BASE_URL 构建参数；其余 Dockerfile 未声明该 ARG，会自动忽略
           build-args: |
             API_BASE_URL=http://api:3100
-          cache-from: |
-            type=gha,scope=${{ matrix.app }}
-            type=gha,scope=api
-            type=gha,scope=web
-            type=gha,scope=worker
-            type=gha,scope=browser-runner
-            type=gha,scope=shared-buildcache
-          cache-to: type=gha,mode=max,scope=shared-buildcache
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
       # ACR 认证接口偶发瞬断（connection reset by peer，run #16 的 worker/
       # browser-runner 即死于此），此时构建/推送层都已就绪，原地重试一次
@@ -104,12 +112,7 @@ jobs:
             --provenance=false \
             --build-arg API_BASE_URL=http://api:3100 \
             --cache-from "type=gha,scope=${{ matrix.app }}" \
-            --cache-from "type=gha,scope=api" \
-            --cache-from "type=gha,scope=web" \
-            --cache-from "type=gha,scope=worker" \
-            --cache-from "type=gha,scope=browser-runner" \
-            --cache-from "type=gha,scope=shared-buildcache" \
-            --cache-to "type=gha,mode=max,scope=shared-buildcache" \
+            --cache-to "type=gha,mode=max,scope=${{ matrix.app }}" \
             -t "$REGISTRY_HOST/$NAMESPACE/ai-growth-ops-${{ matrix.app }}:${{ github.sha }}" \
             -t "$REGISTRY_HOST/$NAMESPACE/ai-growth-ops-${{ matrix.app }}:latest" \
             --push .

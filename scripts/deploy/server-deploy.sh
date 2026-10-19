@@ -54,13 +54,38 @@ $COMPOSE config --quiet && green "docker-compose.prod.yml 渲染通过"
 
 # ── 3. 登录 ACR 并拉取镜像 ──────────────────────────────────
 step "3/8 拉取镜像（tag=$IMAGE_TAG）"
+# 拉取前预清理：失败的部署走不到第 8 步的收尾清理，历史镜像会持续
+# 累积直至磁盘拉满、后续部署全部失败。本项目旧 tag 镜像均可从 ACR
+# 重新拉取（回滚文档即此方案），删除是安全的。
+docker images --format '{{.Repository}}:{{.Tag}}' \
+  | grep "^${REGISTRY:-}/ai-growth-ops-" \
+  | grep -v ":${IMAGE_TAG}$" | grep -v ":latest$" \
+  | xargs -r docker rmi >/dev/null 2>&1 || true
+docker image prune -f >/dev/null 2>&1 || true
 if [ -n "${ACR_PASSWORD:-}" ]; then
   REGISTRY_HOST="${REGISTRY_HOST:-${REGISTRY%%/*}}"
-  echo "$ACR_PASSWORD" | docker login "$REGISTRY_HOST" -u "${ACR_USERNAME:?缺少 ACR_USERNAME}" --password-stdin
+  # ACR 认证接口偶发 connection reset（与 CI 侧同款瞬断），单次失败会杀死整个部署
+  login_ok=""
+  for i in 1 2 3; do
+    if echo "$ACR_PASSWORD" | docker login "$REGISTRY_HOST" -u "${ACR_USERNAME:?缺少 ACR_USERNAME}" --password-stdin; then
+      login_ok=1; break
+    fi
+    echo "ACR 登录失败，10 秒后重试（$i/3）"
+    sleep 10
+  done
+  [ -n "$login_ok" ] || { red "ACR 登录连续 3 次失败"; exit 1; }
   green "已登录 $REGISTRY_HOST"
 fi
 if [ -n "${REGISTRY:-}" ]; then
-  $COMPOSE pull api web worker browser-runner
+  pull_ok=""
+  for i in 1 2 3; do
+    if $COMPOSE pull api web worker browser-runner; then
+      pull_ok=1; break
+    fi
+    echo "镜像拉取失败，15 秒后重试（$i/3）"
+    sleep 15
+  done
+  [ -n "$pull_ok" ] || { red "镜像拉取连续 3 次失败"; exit 1; }
 else
   echo "未设置 REGISTRY，跳过拉取，使用本地已有镜像（先运行 scripts/deploy/deploy.sh 构建）"
 fi
