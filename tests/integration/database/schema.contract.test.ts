@@ -51,4 +51,21 @@ describe('database schema contract', () => {
       '@@unique([sourcePlatform, sourceAccountId, externalUserId])'
     );
   });
+
+  it('persists local browser bridge authorization sessions', () => {
+    const schema = readFileSync(
+      'packages/database/prisma/schema.prisma',
+      'utf8'
+    );
+
+    expect(schema).toContain('model BrowserSession');
+    expect(schema).toContain('organizationId');
+    expect(schema).toContain('provider');
+    expect(schema).toContain('bridgeTokenHash');
+    expect(schema).toContain('expiresAt');
+    expect(schema).toContain('claimedAt');
+    expect(schema).toContain('completedAt');
+    expect(schema).toContain('cancelledAt');
+    expect(schema).toContain('@@index([organizationId, platformAccountId, status])');
+  });
 });

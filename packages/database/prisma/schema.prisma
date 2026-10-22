@@ -284,6 +284,11 @@ model User {
   campaigns                Campaign[]
   workflows                Workflow[]
   customers                Customer[]
+  deals                    Deal[]
+  outreachSequences        OutreachSequence[]
+  leadCaptureForms         LeadCaptureForm[]
+  marketingCosts           MarketingCost[]
+  experiments              Experiment[]
   prospectingTasks         ProspectingTask[]
   prospectingPlanDrafts    ProspectingPlanDraft[]
 }
@@ -367,6 +372,18 @@ model Organization {
   campaigns            Campaign[]
   workflows            Workflow[]
   customers            Customer[]
+  deals                Deal[]
+  outreachSequences    OutreachSequence[]
+  outreachEnrollments  OutreachEnrollment[]
+  outreachTouches      OutreachTouch[]
+  outreachSuppressions OutreachSuppression[]
+  assignmentRules      AssignmentRule[]
+  leadCaptureForms     LeadCaptureForm[]
+  leadCaptureSubmissions LeadCaptureSubmission[]
+  marketingCosts       MarketingCost[]
+  experiments          Experiment[]
+  experimentAssignments ExperimentAssignment[]
+  experimentEvents     ExperimentEvent[]
   prospectingTasks     ProspectingTask[]
   prospectingPlanDrafts ProspectingPlanDraft[]
   prospectCandidates   ProspectCandidate[]
@@ -801,6 +818,9 @@ model Lead {
   tags                Json?
   assignedTo          String?
   nextAction          String?
+  nextActionAt        DateTime?
+  lastContactedAt     DateTime?
+  slaEscalatedAt      DateTime?
   riskLevel           String?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
@@ -815,8 +835,10 @@ model Lead {
   leadActivities   LeadActivity[]
   externalMappings LeadExternalMapping[]
   syncLogs         LeadSinkSyncLog[]
+  deals            Deal[]
 
   @@index([organizationId])
+  @@index([organizationId, nextActionAt])
   @@index([customerId])
   @@unique([sourcePlatform, sourceAccountId, externalUserId])
   @@map("leads")
@@ -919,6 +941,10 @@ model Customer {
   sourceNote     String?
   status         CustomerStatus     @default(active)
   assignedTo     String?
+  nextAction     String?
+  nextActionAt   DateTime?
+  lastContactedAt DateTime?
+  slaEscalatedAt DateTime?
   fitScore       Int                @default(0)
   intentScore    Int                @default(0)
   healthScore    Int                @default(100)
@@ -933,12 +959,16 @@ model Customer {
   user         User               @relation(fields: [userId], references: [id])
   activities   CustomerActivity[]
   leads        Lead[]
+  deals        Deal[]
   profile      CustomerProfile?
   playbooks    CustomerPlaybook[]
   prospects    ProspectCandidate[]
+  outreachEnrollments OutreachEnrollment[]
+  captureSubmissions LeadCaptureSubmission[]
 
   @@index([organizationId, phone])
   @@index([organizationId, status])
+  @@index([organizationId, nextActionAt])
   @@index([organizationId, createdAt])
   @@map("customers")
 }
@@ -988,6 +1018,62 @@ enum CustomerPlaybookStatus {
   cancelled
 }
 
+enum DealStage {
+  new
+  contacted
+  qualified
+  proposal
+  negotiation
+  won
+  lost
+}
+
+enum OutreachChannel {
+  official_dm
+  wecom
+  email
+  phone_task
+  manual
+}
+
+enum OutreachTouchStatus {
+  planned
+  due
+  sending
+  sent
+  failed
+  skipped
+  replied
+}
+
+enum OutreachEnrollmentStatus {
+  active
+  paused
+  completed
+  cancelled
+}
+
+enum OutreachSuppressionType {
+  customer
+  email
+  phone
+}
+
+enum CostCategory {
+  ad
+  content
+  labor
+  tool
+  other
+}
+
+enum ExperimentStatus {
+  draft
+  running
+  completed
+  cancelled
+}
+
 model CustomerPlaybook {
   id          String                 @id @default(uuid())
   customerId  String
@@ -1006,6 +1092,322 @@ model CustomerPlaybook {
   @@index([customerId, status])
   @@index([customerId, createdAt])
   @@map("customer_playbooks")
+}
+
+model Deal {
+  id                  String              @id @default(uuid())
+  organizationId      String
+  userId              String
+  customerId          String
+  leadId              String?
+  title               String
+  stage               DealStage           @default(new)
+  amount              Decimal?            @db.Decimal(14, 2)
+  currency            String              @default("CNY")
+  expectedCloseDate   DateTime?
+  ownerId             String?
+  nextAction          String?
+  nextActionAt        DateTime?
+  lastContactedAt     DateTime?
+  slaEscalatedAt      DateTime?
+  sourceChannel       AcquisitionChannel?
+  sourceContentItemId String?
+  sourcePublishJobId  String?
+  lostReason          String?
+  wonAt               DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deletedAt           DateTime?
+  metadata            Json?
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  user         User            @relation(fields: [userId], references: [id])
+  customer     Customer        @relation(fields: [customerId], references: [id])
+  lead         Lead?           @relation(fields: [leadId], references: [id])
+  activities   DealActivity[]
+
+  @@index([organizationId, stage])
+  @@index([organizationId, nextActionAt])
+  @@index([organizationId, wonAt])
+  @@index([customerId])
+  @@index([leadId])
+  @@map("deals")
+}
+
+model DealActivity {
+  id        String   @id @default(uuid())
+  dealId    String
+  action    String
+  note      String?
+  operator  String?
+  createdAt DateTime @default(now())
+  metadata  Json?
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId, createdAt])
+  @@map("deal_activities")
+}
+
+model OutreachSequence {
+  id             String          @id @default(uuid())
+  organizationId String
+  userId         String
+  name           String
+  description    String?
+  channel        OutreachChannel
+  enabled        Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  metadata       Json?
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  user         User                 @relation(fields: [userId], references: [id])
+  steps        OutreachStep[]
+  enrollments  OutreachEnrollment[]
+
+  @@index([organizationId, enabled])
+  @@map("outreach_sequences")
+}
+
+model OutreachStep {
+  id             String   @id @default(uuid())
+  sequenceId     String
+  order          Int
+  delayHours     Int      @default(0)
+  template       String
+  requireReview  Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  metadata       Json?
+
+  sequence OutreachSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  touches  OutreachTouch[]
+
+  @@unique([sequenceId, order])
+  @@index([sequenceId])
+  @@map("outreach_steps")
+}
+
+model OutreachEnrollment {
+  id             String                    @id @default(uuid())
+  organizationId String
+  sequenceId     String
+  customerId     String
+  ownerId        String?
+  status         OutreachEnrollmentStatus  @default(active)
+  startedAt      DateTime                  @default(now())
+  stoppedAt      DateTime?
+  stopReason     String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  metadata       Json?
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  sequence     OutreachSequence @relation(fields: [sequenceId], references: [id])
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  touches      OutreachTouch[]
+
+  @@index([organizationId, status])
+  @@index([customerId, status])
+  @@map("outreach_enrollments")
+}
+
+model OutreachTouch {
+  id             String               @id @default(uuid())
+  organizationId String
+  enrollmentId   String
+  stepId         String?
+  channel        OutreachChannel
+  scheduledAt    DateTime
+  status         OutreachTouchStatus @default(planned)
+  content        String?
+  sentAt         DateTime?
+  externalId     String?
+  error          String?
+  repliedAt      DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  metadata       Json?
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  enrollment   OutreachEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  step         OutreachStep?      @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, scheduledAt])
+  @@index([enrollmentId, scheduledAt])
+  @@map("outreach_touches")
+}
+
+model OutreachSuppression {
+  id             String                  @id @default(uuid())
+  organizationId String
+  type           OutreachSuppressionType
+  value          String
+  reason         String?
+  createdBy      String?
+  createdAt      DateTime                @default(now())
+  metadata       Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, type, value])
+  @@index([organizationId, type])
+  @@map("outreach_suppressions")
+}
+
+model LeadCaptureForm {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  name           String
+  slug           String   @unique
+  title          String
+  description    String?
+  fields         Json
+  enabled        Boolean  @default(true)
+  submitMessage  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+  metadata       Json?
+
+  organization Organization            @relation(fields: [organizationId], references: [id])
+  user         User                    @relation(fields: [userId], references: [id])
+  submissions  LeadCaptureSubmission[]
+
+  @@index([organizationId, enabled])
+  @@map("lead_capture_forms")
+}
+
+model LeadCaptureSubmission {
+  id             String   @id @default(uuid())
+  formId         String
+  organizationId String
+  name           String
+  phone          String
+  email          String?
+  company        String?
+  message        String?
+  source         String?
+  customerId     String?
+  createdAt      DateTime @default(now())
+  metadata       Json?
+
+  form         LeadCaptureForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  customer     Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([formId, createdAt])
+  @@map("lead_capture_submissions")
+}
+
+model MarketingCost {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  channel        AcquisitionChannel?
+  contentItemId  String?
+  category       CostCategory @default(ad)
+  amount         Decimal      @db.Decimal(14, 2)
+  currency       String       @default("CNY")
+  incurredAt     DateTime     @default(now())
+  note           String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+  metadata       Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, incurredAt])
+  @@index([organizationId, channel])
+  @@map("marketing_costs")
+}
+
+model Experiment {
+  id             String           @id @default(uuid())
+  organizationId String
+  userId         String
+  name           String
+  description    String?
+  metric         String           @default("conversion")
+  status         ExperimentStatus @default(draft)
+  variants       Json
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  metadata       Json?
+
+  organization Organization           @relation(fields: [organizationId], references: [id])
+  user         User                   @relation(fields: [userId], references: [id])
+  assignments  ExperimentAssignment[]
+  events       ExperimentEvent[]
+
+  @@index([organizationId, status])
+  @@map("experiments")
+}
+
+model ExperimentAssignment {
+  id             String   @id @default(uuid())
+  experimentId   String
+  organizationId String
+  entityType     String
+  entityId       String
+  variantKey     String
+  createdAt      DateTime @default(now())
+  metadata       Json?
+
+  experiment   Experiment   @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id])
+  events       ExperimentEvent[]
+
+  @@unique([experimentId, entityType, entityId])
+  @@index([experimentId, variantKey])
+  @@map("experiment_assignments")
+}
+
+model ExperimentEvent {
+  id             String   @id @default(uuid())
+  experimentId   String
+  assignmentId   String
+  organizationId String
+  metric         String
+  value          Float    @default(1)
+  occurredAt     DateTime @default(now())
+  metadata       Json?
+
+  experiment   Experiment           @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  assignment   ExperimentAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  organization Organization         @relation(fields: [organizationId], references: [id])
+
+  @@index([experimentId, metric, occurredAt])
+  @@map("experiment_events")
+}
+
+model AssignmentRule {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  priority       Int      @default(100)
+  conditions     Json
+  assigneeId     String?
+  strategy       String   @default("fixed")
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+  metadata       Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, enabled, priority])
+  @@map("assignment_rules")
 }
 
 enum ProspectingTaskStatus {
@@ -1028,6 +1430,10 @@ model ProspectingTask {
   strategyPlan         Json?
   planVersion          Int                   @default(1)
   status               ProspectingTaskStatus @default(draft)
+  scheduleEnabled      Boolean               @default(false)
+  scheduleIntervalHours Int?
+  nextRunAt            DateTime?
+  lastRunAt            DateTime?
   executionToken       String?
   topNVideos           Int                   @default(5)
   maxCommentsPerVideo  Int                   @default(30)
@@ -1051,6 +1457,7 @@ model ProspectingTask {
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
   @@index([platformAccountId])
+  @@index([scheduleEnabled, nextRunAt])
   @@map("prospecting_tasks")
 }
 
@@ -1554,18 +1961,29 @@ model ContentComplianceCheck {
 }
 
 model BrowserSession {
-  id             String   @id @default(uuid())
-  platform       String
-  platformAccountId String
-  status         String
-  loginRequired  Boolean  @default(false)
-  startedAt      DateTime?
-  endedAt        DateTime?
-  lastScreenshotKey String?
-  errorMessage   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  organizationId       String?
+  platform             String
+  platformAccountId    String
+  provider             String   @default("local_bridge")
+  status               String
+  loginRequired        Boolean  @default(false)
+  bridgeTokenHash      String?
+  expiresAt            DateTime?
+  claimedAt            DateTime?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+  startedAt            DateTime?
+  endedAt              DateTime?
+  lastScreenshotKey    String?
+  errorMessage         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  metadata             Json?
 
+  @@index([organizationId, platformAccountId, status])
+  @@index([bridgeTokenHash])
+  @@index([expiresAt])
   @@map("browser_sessions")
 }
 

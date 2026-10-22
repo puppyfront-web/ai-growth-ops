@@ -56,17 +56,22 @@ export function deletePlatformAccount(id: string): Promise<void> {
 
 export interface BrowserLoginStartResponse {
   sessionId: string;
-  status: 'waiting_scan';
-  /** 登录页二维码截图（data URL），由 browser-runner 无头渲染 */
-  qrImage?: string;
+  status: 'waiting_local_bridge';
+  expiresAt: string;
+  launchUrl: string;
+  installerUrl?: string;
+  loginUrl?: string;
 }
 
 export interface BrowserLoginStatusResponse {
-  status: 'waiting_scan' | 'logged_in' | 'expired' | 'error';
-  cookies?: string;
-  qrImage?: string;
-  /** 整页实时画面（JPEG data URL，640×450），供操作员远程处理滑块/验证码 */
-  pageImage?: string;
+  status:
+    | 'waiting_local_bridge'
+    | 'waiting_user'
+    | 'logged_in'
+    | 'cancelled'
+    | 'expired'
+    | 'error';
+  expiresAt?: string;
   error?: string;
 }
 
@@ -92,33 +97,6 @@ export function cancelBrowserLogin(
 ): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(
     `/api/accounts/${accountId}/browser-login/cancel`,
-    {}
-  );
-}
-
-/** 远程交互参数：click 传 x/y；drag 传 from/to；type 传 text；key 传 key */
-export type BrowserLoginInteraction =
-  | { action: 'click'; x: number; y: number }
-  | { action: 'drag'; fromX: number; fromY: number; toX: number; toY: number }
-  | { action: 'type'; text: string }
-  | { action: 'key'; key: string };
-
-export function interactWithBrowserLogin(
-  accountId: string,
-  interaction: BrowserLoginInteraction
-): Promise<{ ok: boolean; error?: string }> {
-  return apiPost<{ ok: boolean; error?: string }>(
-    `/api/accounts/${accountId}/browser-login/interact`,
-    interaction
-  );
-}
-
-/** 实时画面流的短时票据（EventSource 无法携带 Authorization 头） */
-export function getScreencastTicket(accountId: string): Promise<{
-  ticket: string;
-}> {
-  return apiPost<{ ticket: string }>(
-    `/api/accounts/${accountId}/browser-login/screencast-ticket`,
     {}
   );
 }

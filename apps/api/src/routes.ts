@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createHmac, randomUUID, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import {
   createReadStream,
   existsSync,
@@ -10,7 +10,12 @@ import { join, extname, resolve, sep } from 'node:path';
 import Busboy from 'busboy';
 
 import type { DatabaseClient } from '@ai-growth-ops/database';
-import { verifyDatabaseSchema } from '@ai-growth-ops/database';
+import {
+  applyAssignmentRules,
+  assignRunningExperiments,
+  verifyDatabaseSchema,
+  syncLeadOutcomeTx
+} from '@ai-growth-ops/database';
 import { createLogger } from '@ai-growth-ops/observability';
 import {
   encryptToken,
@@ -21,7 +26,10 @@ import {
   officialDouyinInboxNoiseWhere,
   officialDouyinInboxNoticeNoiseConditions,
   validatePlatformCookie,
-  isPlatformAuthExpiredError
+  isPlatformAuthExpiredError,
+  leadStatusToOutcome,
+  defaultNextActionAt,
+  PLATFORM_CAPABILITIES
 } from '@ai-growth-ops/shared';
 import { Prisma } from '@prisma/client';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
@@ -29,8 +37,24 @@ import type { SkillRunResult } from '@ai-growth-ops/skills';
 import type { LLMClient } from '@ai-growth-ops/ai';
 import { resolveLlmClientFromDb, resolveLlmConfigFromDb, loadStoredLlmConfig, saveOrgLlmConfig, type StoredLlmConfig } from '@ai-growth-ops/database';
 import { isInternalApiAuthorized } from './services/internal-api-auth.js';
+import { onLeadAssigned } from './services/notification-service.js';
+import { fireWebhook } from './services/webhook-service.js';
 import { localDataPath } from './local-paths.js';
 import { llmSettingsSchema } from './schemas/llm-settings.js';
+import {
+  completeBrowserBridgeSessionSchema,
+  failBrowserBridgeSessionSchema
+} from './schemas/browser-bridge.js';
+import {
+  BrowserBridgeError,
+  cancelBrowserAuthorization,
+  claimBrowserAuthorization,
+  completeBrowserAuthorization,
+  failBrowserAuthorization,
+  getBrowserAuthorizationStatus,
+  resolveApiBaseUrl,
+  startBrowserAuthorization
+} from './browser-authorization-service.js';
 import { taskRoutes } from './routes-tasks.js';
 import { notificationRoutes } from './routes-notifications.js';
 import { auditRoutes } from './routes-audit.js';
@@ -38,8 +62,16 @@ import { analyticsRoutes } from './routes-analytics.js';
 import { authRoutes } from './routes-auth.js';
 import { orgRoutes } from './routes-org.js';
 import { customerRoutes } from './routes-customers.js';
+import { dealRoutes } from './routes-deals.js';
+import { followUpRoutes } from './routes-follow-ups.js';
+import { outreachRoutes } from './routes-outreach.js';
+import { formRoutes } from './routes-forms.js';
+import { costRoutes } from './routes-costs.js';
+import { experimentRoutes } from './routes-experiments.js';
+import { warehouseRoutes } from './routes-warehouse.js';
 import { prospectingRoutes } from './routes-prospecting.js';
 import { getCustomerDashboard } from './mvp-service';
+import { getContentRoi } from './services/funnel-analytics.js';
 import {
   applyPublishProgress,
   isPublishProgressAuthorized
@@ -49,15 +81,6 @@ import {
   fetchWithTimeout,
   runnerHeaders
 } from './browser-login-config';
-import {
-  setSession,
-  getSessionId,
-  clearSession,
-  markPending,
-  clearPending,
-  waitForPendingToClear,
-  getFreshSession
-} from './browser-login-session';
 import {
   verifyPassword,
   createToken,
@@ -1967,6 +1990,14 @@ const routes: Route[] = [
           scheduledAt
         }
       });
+      const contentItemId = String(body.contentItemId ?? '');
+      if (contentItemId) {
+        // Publish exposure enters the entity into any running experiment.
+        await assignRunningExperiments(ctx.db, orgCtx.organization.id, {
+          entityType: 'content_item',
+          entityId: contentItemId
+        });
+      }
       sendJson(res, 201, item);
     }
   },
@@ -2068,6 +2099,12 @@ const routes: Route[] = [
         where: { id: { in: jobs.map((j) => j.id) } },
         include: { contentVariant: true, platformAccount: true }
       });
+      if (contentItemId) {
+        await assignRunningExperiments(ctx.db, orgCtx.organization.id, {
+          entityType: 'content_item',
+          entityId: contentItemId
+        });
+      }
       sendJson(res, 201, refreshed);
     }
   },
@@ -3137,22 +3174,44 @@ const routes: Route[] = [
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
       const body = ctx.body as Record<string, unknown>;
+      const platform = String(body.sourcePlatform ?? 'douyin');
+      const level = String(body.level ?? 'C');
+      const assignment = await applyAssignmentRules(
+        ctx.db,
+        orgCtx.organization.id,
+        { channel: platform, level },
+        'lead'
+      );
       const lead = await ctx.db.lead.create({
         data: {
           organizationId: orgCtx.organization.id,
           userId: orgCtx.user.id,
-          sourcePlatform: String(body.sourcePlatform ?? 'douyin') as 'douyin',
+          sourcePlatform: platform as 'douyin',
           sourceAccountId: String(body.sourceAccountId ?? ''),
           externalUserId: String(body.externalUserId ?? ''),
           externalUserName: String(body.externalUserName ?? ''),
-          level: String(body.level ?? 'C') as 'C',
+          level: level as 'C',
           status: 'NEW',
           intent: body.intent as string | undefined,
           summary: body.summary as string | undefined,
+          assignedTo: assignment.assigneeId,
+          nextAction: '首次联系',
+          nextActionAt: defaultNextActionAt(level),
           tags: body.tags as never
         }
       });
       sendJson(res, 201, lead);
+      await fireWebhook(
+        ctx.db,
+        orgCtx.organization.id,
+        'lead.created',
+        {
+          leadId: lead.id,
+          level: lead.level,
+          sourcePlatform: lead.sourcePlatform,
+          assignedTo: lead.assignedTo
+        }
+      ).catch(() => undefined);
     }
   },
   {
@@ -3313,19 +3372,42 @@ const routes: Route[] = [
         }
       });
       if (!lead) return sendJson(res, 404, { error: 'Not found' });
-      const item = await ctx.db.lead.update({
-        where: { id: ctx.params.id },
-        data: {
-          ...(body.status != null && { status: String(body.status) as never }),
-          ...(body.level != null && { level: String(body.level) as 'A' }),
-          ...(body.assignedTo != null && {
-            assignedTo: String(body.assignedTo)
-          }),
-          ...(body.nextAction != null && {
-            nextAction: String(body.nextAction)
-          }),
-          ...(body.tags != null && { tags: body.tags })
+      const outcome = body.status
+        ? leadStatusToOutcome(String(body.status))
+        : null;
+      const item = await ctx.db.$transaction(async (tx) => {
+        await tx.lead.update({
+          where: { id: ctx.params.id },
+          data: {
+            ...(body.status != null &&
+              outcome == null && { status: String(body.status) as never }),
+            ...(body.level != null && { level: String(body.level) as 'A' }),
+            ...(body.assignedTo != null && {
+              assignedTo: String(body.assignedTo)
+            }),
+            ...(body.nextAction != null && {
+              nextAction: String(body.nextAction)
+            }),
+            ...(body.nextActionAt !== undefined && {
+              nextActionAt: body.nextActionAt
+                ? new Date(String(body.nextActionAt))
+                : null,
+              slaEscalatedAt: null
+            }),
+            ...(body.status === 'CONTACTED' && { lastContactedAt: new Date() }),
+            ...(body.tags != null && { tags: body.tags })
+          }
+        });
+        if (outcome) {
+          await syncLeadOutcomeTx(
+            tx,
+            lead.id,
+            orgCtx.organization.id,
+            outcome,
+            { lostReason: body.lostReason as string | undefined }
+          );
         }
+        return tx.lead.findUniqueOrThrow({ where: { id: lead.id } });
       });
       sendJson(res, 200, item);
     }
@@ -3345,18 +3427,45 @@ const routes: Route[] = [
         }
       });
       if (!lead) return sendJson(res, 404, { error: 'Not found' });
+      const assignedTo = String(body.assignedTo ?? '').trim();
       const item = await ctx.db.lead.update({
         where: { id: ctx.params.id },
-        data: { assignedTo: String(body.assignedTo ?? ''), status: 'ASSIGNED' }
+        data: {
+          assignedTo,
+          status: 'ASSIGNED',
+          ...(lead.nextActionAt == null && assignedTo
+            ? { nextActionAt: defaultNextActionAt(lead.level) }
+            : {})
+        }
       });
       await ctx.db.leadActivity.create({
         data: {
           leadId: ctx.params.id,
           action: 'assigned',
-          note: `分配给 ${body.assignedTo ?? ''}`,
-          operator: 'system'
+          note: assignedTo ? `分配给 ${assignedTo}` : '取消分配',
+          operator: orgCtx.user.name
         }
       });
+      if (assignedTo && assignedTo !== orgCtx.user.id) {
+        const member = await ctx.db.organizationMember.findFirst({
+          where: {
+            userId: assignedTo,
+            organizationId: orgCtx.organization.id,
+            status: 'active'
+          },
+          select: { id: true }
+        });
+        if (member) {
+          await onLeadAssigned({
+            db: ctx.db,
+            userId: assignedTo,
+            organizationId: orgCtx.organization.id,
+            leadId: lead.id,
+            leadName: lead.externalUserName ?? undefined,
+            assignedBy: orgCtx.user.name
+          }).catch(() => undefined);
+        }
+      }
       sendJson(res, 200, item);
     }
   },
@@ -3679,32 +3788,20 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const items = await ctx.db.contentItem.findMany({
-        where: { organizationId: orgCtx.organization.id, deletedAt: null },
-        include: {
-          contentVariants: {
-            include: { publishJobs: { where: { deletedAt: null } } }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 20
-      });
-      const result = items.map((item) => ({
-        id: item.id,
-        title: item.title,
-        type: item.type,
-        variantCount: item.contentVariants.length,
-        publishCount: item.contentVariants.reduce(
-          (sum, v) => sum + v.publishJobs.length,
-          0
-        ),
-        publishedCount: item.contentVariants.reduce(
-          (sum, v) =>
-            sum + v.publishJobs.filter((j) => j.status === 'PUBLISHED').length,
-          0
-        )
-      }));
-      sendJson(res, 200, result);
+      if (!hasPermission(orgCtx.memberRole, 'analytics:view')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const days = Number(ctx.url.searchParams.get('days') || 30);
+      const rows = await getContentRoi(
+        ctx.db,
+        orgCtx.organization.id,
+        Number.isFinite(days) ? days : 30
+      );
+      sendJson(
+        res,
+        200,
+        rows.map((row) => ({ ...row, id: row.contentItemId }))
+      );
     }
   },
   {
@@ -4057,13 +4154,16 @@ const routes: Route[] = [
     }
   },
 
-  // ── Browser Login (browser_assist mode) ────────────────────────
+  // ── Local Browser Bridge authorization ─────────────────────────
   {
     method: 'POST',
     pattern: '/api/accounts/:id/browser-login/start',
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const account = await ctx.db.platformAccount.findFirst({
         where: {
           id: ctx.params.id,
@@ -4072,105 +4172,23 @@ const routes: Route[] = [
         }
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
-
-      // React StrictMode (dev) mounts effects twice, and users can double-click.
-      // Both re-fire /browser-login/start within milliseconds. Instead of 409,
-      // coalesce them into the same runner session when it was just created.
-      const SESSION_REUSE_MS = 15_000;
-      const fresh = getFreshSession(account.id, SESSION_REUSE_MS);
-      if (fresh) {
-        return sendJson(res, 200, {
-          sessionId: fresh.sessionId,
-          status: 'waiting_scan'
-        });
-      }
-      if (!markPending(account.id)) {
-        // Another start is in flight (can take ~60s while Chromium launches).
-        // Wait for it and reuse its session rather than failing the dialog.
-        const cleared = await waitForPendingToClear(account.id);
-        if (!cleared) {
-          return sendJson(res, 503, {
-            status: 'error',
-            error: '登录会话正在创建中，请稍后重试'
-          });
-        }
-        const afterWait = getFreshSession(account.id, SESSION_REUSE_MS);
-        if (afterWait) {
-          return sendJson(res, 200, {
-            sessionId: afterWait.sessionId,
-            status: 'waiting_scan'
-          });
-        }
-        if (!markPending(account.id)) {
-          return sendJson(res, 409, {
-            status: 'error',
-            error: '登录会话正在创建中，请稍候'
-          });
-        }
-      }
-
-      const runnerUrl = getBrowserRunnerUrl();
       try {
-        const existingSessionId = getSessionId(account.id);
-        if (existingSessionId) {
-          try {
-            await fetchWithTimeout(
-              `${runnerUrl}/session/${existingSessionId}/cancel`,
-              { method: 'POST', headers: runnerHeaders() },
-              5_000
-            );
-          } catch {
-            /* cancel old session best-effort */
-          }
-          clearSession(account.id);
-        }
-        const startRes = await fetchWithTimeout(
-          `${runnerUrl}/session/start`,
-          {
-            method: 'POST',
-            headers: runnerHeaders({ 'content-type': 'application/json' }),
-            body: JSON.stringify({ platform: account.platform })
-          },
-          60_000
-        );
-        if (!startRes.ok) {
-          const err = (await startRes
-            .json()
-            .catch(() => ({ error: 'browser-runner error' }))) as {
-            error?: string;
-          };
-          return sendJson(res, 502, {
-            status: 'error',
-            error: err.error ?? '浏览器辅助服务错误'
-          });
-        }
-        const data = (await startRes.json()) as {
-          sessionId: string;
-          qrImage?: string;
-        };
-        setSession(account.id, data.sessionId);
-        clearPending(account.id);
-        sendJson(res, 200, {
-          sessionId: data.sessionId,
-          status: 'waiting_scan',
-          qrImage: data.qrImage
+        const result = await startBrowserAuthorization(ctx.db, {
+          organizationId: orgCtx.organization.id,
+          accountId: account.id,
+          platform: account.platform,
+          apiBaseUrl: resolveApiBaseUrl(req)
         });
-      } catch (err) {
-        const msg = (err as Error).message || '';
-        const cause = (err as Error).cause as
-          | { message?: string; code?: string }
-          | undefined;
-        const causeMsg = cause?.message || cause?.code || '';
-        const detail = causeMsg || msg || 'unknown error';
-        const hint = msg.includes('abort')
-          ? '连接超时，请确认浏览器辅助服务是否已启动'
-          : '服务未启动或不可达';
-        sendJson(res, 502, {
+        sendJson(res, 202, result);
+      } catch (error) {
+        routeLogger.warn('browser bridge session creation failed', {
+          accountId: account.id,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        sendJson(res, 500, {
           status: 'error',
-          error: `浏览器辅助服务不可用: ${hint} (${runnerUrl} — ${detail})`
+          error: '无法创建授权会话，请检查服务配置后重试'
         });
-      } finally {
-        clearPending(account.id);
       }
     }
   },
@@ -4180,91 +4198,24 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const accountId = ctx.params.id;
       const account = await ctx.db.platformAccount.findFirst({
         where: {
-          id: accountId,
+          id: ctx.params.id,
           organizationId: orgCtx.organization.id,
           deletedAt: null
         },
-        select: { id: true, platform: true }
+        select: { id: true }
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
-      const sessionId = getSessionId(accountId);
-      if (!sessionId) {
-        return sendJson(res, 200, {
-          status: 'error',
-          error: '登录会话不存在，请关闭后重新扫码'
-        });
-      }
-
-      try {
-        const runnerUrl = getBrowserRunnerUrl();
-        const statusRes = await fetchWithTimeout(
-          `${runnerUrl}/session/${sessionId}/status`,
-          { method: 'GET', headers: runnerHeaders() },
-          30_000
-        );
-        if (!statusRes.ok) {
-          return sendJson(res, 200, {
-            status: 'error',
-            error: 'browser-runner 返回错误'
-          });
-        }
-        const data = (await statusRes.json()) as {
-          status: string;
-          cookies?: string;
-          qrImage?: string;
-          pageImage?: string;
-          error?: string;
-        };
-
-        if (data.status === 'logged_in') {
-          const cookie = data.cookies
-            ? validatePlatformCookie(account.platform, data.cookies)
-            : { valid: false as const, error: '登录成功但未获取到 Cookie，请完成扫码后稍等或重试' };
-          if (!cookie.valid) {
-            clearSession(accountId);
-            await ctx.db.platformAccount.update({
-              where: { id: accountId },
-              data: {
-                cookieRef: null,
-                status: 'error',
-                lastHealthCheckAt: new Date()
-              }
-            });
-            sendJson(res, 200, {
-              status: 'error',
-              error: cookie.error
-            });
-            return;
-          }
-          const encrypted = encryptToken(cookie.cookie);
-          await ctx.db.platformAccount.update({
-            where: { id: accountId },
-            data: {
-              cookieRef: encrypted,
-              authType: 'cookie',
-              mode: 'browser_assist',
-              status: 'active',
-              lastHealthCheckAt: new Date()
-            }
-          });
-          clearSession(accountId);
-        } else if (data.status === 'expired' || data.status === 'error') {
-          clearSession(accountId);
-          await ctx.db.platformAccount.update({
-            where: { id: accountId },
-            data: { status: 'error', lastHealthCheckAt: new Date() }
-          });
-        }
-
-        // Strip plaintext cookies before sending to frontend
-        const { cookies: _rawCookies, ...safeData } = data;
-        sendJson(res, 200, safeData);
-      } catch (err) {
-        sendJson(res, 200, { status: 'error', error: (err as Error).message });
-      }
+      sendJson(
+        res,
+        200,
+        await getBrowserAuthorizationStatus(
+          ctx.db,
+          orgCtx.organization.id,
+          account.id
+        )
+      );
     }
   },
   {
@@ -4273,155 +4224,130 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const accountId = ctx.params.id;
-      const sessionId = getSessionId(accountId);
-      if (sessionId) {
-        try {
-          const runnerUrl = getBrowserRunnerUrl();
-          await fetchWithTimeout(
-            `${runnerUrl}/session/${sessionId}/cancel`,
-            { method: 'POST', headers: runnerHeaders() },
-            5_000
-          );
-        } catch {
-          /* cancel best-effort */
-        }
-        clearSession(accountId);
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
       }
-      sendJson(res, 200, { ok: true });
-    }
-  },
-  {
-    // 扫码登录的远程交互转发：点击/输入/按键/拖拽（滑块验证等二次验证场景）
-    method: 'POST',
-    pattern: '/api/accounts/:id/browser-login/interact',
-    handler: async (req, res, ctx) => {
-      const orgCtx = await getOrganizationContext(req, ctx.db);
-      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const accountId = ctx.params.id;
-      const sessionId = getSessionId(accountId);
-      if (!sessionId) {
-        return sendJson(res, 200, {
-          ok: false,
-          error: '登录会话不存在，请关闭后重新扫码'
-        });
-      }
-      const body = (ctx.body ?? {}) as Record<string, unknown>;
-      const action = String(body.action ?? '');
-      const runnerPaths: Record<string, string> = {
-        click: 'click',
-        type: 'type',
-        key: 'key',
-        drag: 'drag'
-      };
-      const runnerPath = runnerPaths[action];
-      if (!runnerPath) {
-        return sendJson(res, 400, { ok: false, error: `不支持的交互: ${action}` });
-      }
-      const { action: _drop, ...params } = body;
-      try {
-        const runnerUrl = getBrowserRunnerUrl();
-        const interactRes = await fetchWithTimeout(
-          `${runnerUrl}/session/${sessionId}/${runnerPath}`,
-          {
-            method: 'POST',
-            headers: runnerHeaders(),
-            body: JSON.stringify(params)
-          },
-          15_000
-        );
-        const data = (await interactRes.json().catch(() => ({}))) as {
-          ok?: boolean;
-          error?: string;
-        };
-        sendJson(res, 200, data);
-      } catch (err) {
-        sendJson(res, 200, { ok: false, error: (err as Error).message });
-      }
-    }
-  },
-  {
-    // 实时画面流票据：EventSource 无法携带 Authorization 头，
-    // 用短时 HMAC 票据（绑定账号 + 5 分钟过期）做一次性授权
-    method: 'POST',
-    pattern: '/api/accounts/:id/browser-login/screencast-ticket',
-    handler: async (req, res, ctx) => {
-      const orgCtx = await getOrganizationContext(req, ctx.db);
-      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
-      const accountId = ctx.params.id;
       const account = await ctx.db.platformAccount.findFirst({
         where: {
-          id: accountId,
+          id: ctx.params.id,
           organizationId: orgCtx.organization.id,
           deletedAt: null
         },
         select: { id: true }
       });
       if (!account) return sendJson(res, 404, { error: 'Not found' });
-      const exp = Date.now() + 5 * 60_000;
-      const payload = `${accountId}:${exp}`;
-      const sig = createHmac('sha256', process.env.AUTH_SECRET ?? '')
-        .update(payload)
-        .digest('base64url');
-      sendJson(res, 200, { ticket: `${exp}.${sig}` });
+      await cancelBrowserAuthorization(
+        ctx.db,
+        orgCtx.organization.id,
+        account.id
+      );
+      sendJson(res, 200, { ok: true });
     }
   },
   {
-    // 实时画面流：校验票据后把 runner 的 SSE 流式透传给前端
     method: 'GET',
-    pattern: '/api/accounts/:id/browser-login/screencast',
+    pattern: '/api/browser-bridge/sessions/:id',
     handler: async (req, res, ctx) => {
-      const url = new URL(req.url ?? '/', 'http://localhost');
-      const ticket = url.searchParams.get('ticket') ?? '';
-      const [exp, sig] = ticket.split('.');
-      const accountId = ctx.params.id;
-      const expected = createHmac('sha256', process.env.AUTH_SECRET ?? '')
-        .update(`${accountId}:${exp}`)
-        .digest('base64url');
-      const sigBuf = Buffer.from(sig ?? '');
-      const expBuf = Buffer.from(expected);
-      const ticketValid =
-        sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf);
-      if (!ticketValid || Number(exp) < Date.now()) {
-        res.writeHead(401, { 'Content-Type': 'text/plain' });
-        res.end('invalid ticket');
-        return;
+      try {
+        sendJson(
+          res,
+          200,
+          await claimBrowserAuthorization(ctx.db, req, ctx.params.id)
+        );
+      } catch (error) {
+        const bridgeError =
+          error instanceof BrowserBridgeError
+            ? error
+            : new BrowserBridgeError(500, 'BRIDGE_INTERNAL_ERROR', '授权服务异常');
+        sendJson(res, bridgeError.statusCode, {
+          error: bridgeError.message,
+          code: bridgeError.code
+        });
       }
-      const sessionId = getSessionId(accountId);
-      if (!sessionId) {
-        res.writeHead(410, { 'Content-Type': 'text/event-stream' });
-        res.end('event: error\ndata: {"error":"登录会话不存在"}\n\n');
-        return;
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/browser-bridge/sessions/:id/complete',
+    handler: async (req, res, ctx) => {
+      const parsed = validateBody(completeBrowserBridgeSessionSchema, ctx.body);
+      if (!parsed.success) {
+        return sendJson(res, 400, {
+          error: '请求参数无效',
+          details: parsed.errors
+        });
       }
       try {
-        const controller = new AbortController();
-        req.on('close', () => controller.abort());
-        const upstream = await fetch(
-          `${getBrowserRunnerUrl()}/session/${sessionId}/screencast`,
-          { headers: runnerHeaders(), signal: controller.signal }
+        sendJson(
+          res,
+          200,
+          await completeBrowserAuthorization(
+            ctx.db,
+            req,
+            ctx.params.id,
+            parsed.data.cookies
+          )
         );
-        res.writeHead(upstream.status, {
-          'Content-Type':
-            upstream.headers.get('content-type') ?? 'text/event-stream',
-          'Cache-Control': 'no-cache, no-transform',
-          'X-Accel-Buffering': 'no'
+      } catch (error) {
+        const bridgeError =
+          error instanceof BrowserBridgeError
+            ? error
+            : new BrowserBridgeError(500, 'BRIDGE_INTERNAL_ERROR', '授权服务异常');
+        sendJson(res, bridgeError.statusCode, {
+          error: bridgeError.message,
+          code: bridgeError.code
         });
-        const { pipeline } = await import('node:stream/promises');
-        const { Readable } = await import('node:stream');
-        if (upstream.body) {
-          await pipeline(
-            Readable.fromWeb(
-              upstream.body as import('node:stream/web').ReadableStream
-            ),
-            res
-          );
-        } else {
-          res.end();
-        }
-      } catch {
-        /* 客户端断开或上游关闭 — 流结束 */
-        res.end();
       }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/browser-bridge/sessions/:id/error',
+    handler: async (req, res, ctx) => {
+      const parsed = validateBody(failBrowserBridgeSessionSchema, ctx.body);
+      if (!parsed.success) {
+        return sendJson(res, 400, {
+          error: '请求参数无效',
+          details: parsed.errors
+        });
+      }
+      try {
+        sendJson(
+          res,
+          200,
+          await failBrowserAuthorization(
+            ctx.db,
+            req,
+            ctx.params.id,
+            parsed.data.code,
+            parsed.data.message
+          )
+        );
+      } catch (error) {
+        const bridgeError =
+          error instanceof BrowserBridgeError
+            ? error
+            : new BrowserBridgeError(500, 'BRIDGE_INTERNAL_ERROR', '授权服务异常');
+        sendJson(res, bridgeError.statusCode, {
+          error: bridgeError.message,
+          code: bridgeError.code
+        });
+      }
+    }
+  },
+
+  // ── Platform capability matrix ─────────────────────────────────
+  {
+    method: 'GET',
+    pattern: '/api/platforms/capabilities',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      sendJson(res, 200, {
+        platforms: Object.entries(PLATFORM_CAPABILITIES).map(
+          ([key, value]) => ({ key, ...value })
+        )
+      });
     }
   },
 
@@ -5341,6 +5267,15 @@ const routes: Route[] = [
 
   // Customer CRM routes
   ...customerRoutes,
+
+  // Deal / follow-up / outreach routes
+  ...dealRoutes,
+  ...followUpRoutes,
+  ...outreachRoutes,
+  ...formRoutes,
+  ...costRoutes,
+  ...experimentRoutes,
+  ...warehouseRoutes,
 
   // Keyword prospecting routes
   ...prospectingRoutes,

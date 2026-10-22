@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { createServer } from 'node:http';
 import {
   createDatabaseClient,
   resetDatabase,
@@ -8,373 +7,231 @@ import {
 } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import { createApiServer } from '../../../apps/api/src';
-import { getTestAuth, createAuthFetch, type TestAuthContext } from '../../setup/test-auth';
+import {
+  createAuthFetch,
+  getTestAuth,
+  type TestAuthContext
+} from '../../setup/test-auth';
 
+const db = createDatabaseClient();
 let apiServer: Server;
 let baseUrl: string;
-const db = createDatabaseClient();
-
-// Auth state
 let auth: TestAuthContext;
 let api: ReturnType<typeof createAuthFetch>;
+let accountId: string;
 
-// Mock browser-runner server
-let mockRunner: Server;
-let mockRunnerUrl: string;
-let mockSessionState: 'waiting' | 'logged_in' | 'expired' | 'error' = 'waiting';
-let mockCookies = '';
-
-beforeAll(async () => {
-  // 1. Start mock browser-runner
-  mockRunner = createServer((req, res) => {
-    res.writeHead(200, { 'content-type': 'application/json' });
-
-    if (req.url === '/session/start' && req.method === 'POST') {
-      mockSessionState = 'waiting';
-      mockCookies = '';
-      res.end(
-        JSON.stringify({
-          sessionId: 'mock-session-001',
-          status: 'waiting_scan'
-        })
-      );
-    } else if (
-      req.url?.startsWith('/session/') &&
-      req.url.endsWith('/status')
-    ) {
-      if (mockSessionState === 'logged_in') {
-        res.end(JSON.stringify({ status: 'logged_in', cookies: mockCookies }));
-      } else if (mockSessionState === 'expired') {
-        res.end(
-          JSON.stringify({ status: 'expired', error: 'Session expired' })
-        );
-      } else if (mockSessionState === 'error') {
-        res.end(JSON.stringify({ status: 'error', error: 'Browser error' }));
-      } else {
-        res.end(JSON.stringify({ status: 'waiting_scan' }));
-      }
-    } else if (
-      req.url?.startsWith('/session/') &&
-      req.url.endsWith('/cancel')
-    ) {
-      mockSessionState = 'expired';
-      res.end(JSON.stringify({ ok: true }));
-    } else {
-      res.writeHead(404);
-      res.end(JSON.stringify({ error: 'Not found' }));
+async function bridgeRequest(
+  path: string,
+  token: string,
+  init: RequestInit = {}
+) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
+      ...init.headers
     }
   });
-  await new Promise<void>((resolve) =>
-    mockRunner.listen(0, '127.0.0.1', resolve)
-  );
-  const addr = mockRunner.address() as { address: string; port: number };
-  mockRunnerUrl = `http://${addr.address}:${addr.port}`;
+  return { status: response.status, body: await response.json() };
+}
 
-  process.env.BROWSER_RUNNER_URL = mockRunnerUrl;
-
-  // 2. Reset DB & seed admin user (seed creates a default org + membership)
+beforeAll(async () => {
   await resetDatabase(db);
   await seedDatabase(db);
-
   const admin = await db.user.findFirstOrThrow({
     where: { email: 'admin@ai-growth-ops.local' }
   });
 
-  // 3. Start API server
   apiServer = createApiServer({ db }) as Server;
   await new Promise<void>((resolve) =>
     apiServer.listen(0, '127.0.0.1', resolve)
   );
-  const apiAddr = apiServer.address() as { address: string; port: number };
-  baseUrl = `http://${apiAddr.address}:${apiAddr.port}`;
-
-  // 4. Get authenticated context (resolves the seeded default org)
+  const address = apiServer.address() as { address: string; port: number };
+  baseUrl = `http://${address.address}:${address.port}`;
+  process.env.BROWSER_BRIDGE_API_URL = baseUrl;
+  process.env.BROWSER_ASSISTANT_DOWNLOAD_URL =
+    'https://downloads.example.com/browser-assistant';
   auth = await getTestAuth(db, baseUrl);
   api = createAuthFetch(baseUrl, auth);
 
-  // 5. Create platform accounts in the seeded org (one per platform)
-  const platforms = [
-    'douyin',
-    'xiaohongshu',
-    'wechat_official',
-    'wechat_channels',
-    'baijiahao',
-    'zhihu'
-  ];
-  for (const platform of platforms) {
-    await db.platformAccount.create({
-      data: {
-        organizationId: auth.orgId,
-        userId: admin.id,
-        platform: platform as 'douyin',
-        name: `${platform}-test-account`,
-        mode: 'browser_assist',
-        status: 'active',
-        cookieRef: null
-      }
-    });
-  }
+  const account = await db.platformAccount.create({
+    data: {
+      organizationId: auth.orgId,
+      userId: admin.id,
+      platform: 'douyin',
+      name: 'local-bridge-account',
+      mode: 'browser_assist',
+      status: 'active'
+    }
+  });
+  accountId = account.id;
 });
 
 afterAll(async () => {
-  await new Promise<void>((r) => apiServer.close(() => r()));
-  await new Promise<void>((r) => mockRunner.close(() => r()));
+  delete process.env.BROWSER_BRIDGE_API_URL;
+  delete process.env.BROWSER_ASSISTANT_DOWNLOAD_URL;
+  await new Promise<void>((resolve) => apiServer.close(() => resolve()));
   await db.$disconnect();
 });
 
-// ── Generic login flow test — runs for every platform ───────────
-
-const platformCookieSamples: Record<string, string> = {
-  douyin: 'sessionid=dy_sid_123; sid_tt=tt_456; csrf_session_id=csrf_xyz',
-  xiaohongshu: 'web_session=xhs_sess_abc; webId=xhs_001',
-  wechat_official: 'slave_sid=wx_off_sid; bizuin=123456',
-  wechat_channels: 'finder_username=wx_ch_001; userName=test_channel',
-  baijiahao: 'BDUSS=bjh_bduss_xyz; STOKEN=bjh_stk_001',
-  zhihu: 'z_c0=zhihu_token_abc; _xsrf=xsr_001'
-};
-
-const platforms = Object.keys(platformCookieSamples);
-
-describe('Browser Login Flow — all platforms', () => {
-  for (const platform of platforms) {
-    describe(`platform: ${platform}`, () => {
-      let accountId: string;
-
-      it(`finds seed ${platform} account`, async () => {
-        const { body } = await api.get('/api/accounts');
-        const accounts = body as Record<string, unknown>[];
-        const account = accounts.find(
-          (a: Record<string, unknown>) => a.platform === platform
-        ) as Record<string, unknown>;
-        expect(account).toBeDefined();
-        expect(account.cookieRef).toBeNull();
-        accountId = account.id;
-      });
-
-      it('starts a browser login session', async () => {
-        mockSessionState = 'waiting';
-        const { status, body } = await api.post(
-          `/api/accounts/${accountId}/browser-login/start`
-        );
-        expect(status).toBe(200);
-        expect(body.status).toBe('waiting_scan');
-        expect(body.sessionId).toBe('mock-session-001');
-      });
-
-      it('returns waiting_scan while not logged in', async () => {
-        const { status, body } = await api.get(
-          `/api/accounts/${accountId}/browser-login/status`
-        );
-        expect(status).toBe(200);
-        expect(body.status).toBe('waiting_scan');
-      });
-
-      it('stores encrypted cookies on login', async () => {
-        mockSessionState = 'logged_in';
-        mockCookies = platformCookieSamples[platform];
-
-        const { body } = await api.get(
-          `/api/accounts/${accountId}/browser-login/status`
-        );
-        expect(body.status).toBe('logged_in');
-        // Bug 2 fix: response should NOT contain plaintext cookies
-        expect(body.cookies).toBeUndefined();
-
-        const account = await db.platformAccount.findFirst({
-          where: { id: accountId }
-        });
-        expect(account!.cookieRef).not.toBeNull();
-        expect(account!.authType).toBe('cookie');
-        expect(account!.mode).toBe('browser_assist');
-        expect(account!.status).toBe('active');
-
-        const decrypted = decryptToken(account!.cookieRef!);
-        expect(decrypted).toContain(
-          platformCookieSamples[platform].split('=')[0]
-        );
-      });
-
-      it('cancels a login session', async () => {
-        mockSessionState = 'waiting';
-        await api.post(`/api/accounts/${accountId}/browser-login/start`);
-
-        const { status, body } = await api.post(
-          `/api/accounts/${accountId}/browser-login/cancel`
-        );
-        expect(status).toBe(200);
-        expect(body.ok).toBe(true);
-      });
-    });
-  }
-});
-
-describe('Browser Login — error handling', () => {
-  it('rejects a logged-in response without the platform login cookie', async () => {
-    const account = await db.platformAccount.findFirstOrThrow({
-      where: { platform: 'douyin', name: 'douyin-test-account' }
-    });
-
-    mockSessionState = 'waiting';
-    await api.post(`/api/accounts/${account.id}/browser-login/start`);
-    mockSessionState = 'logged_in';
-    mockCookies = 'ttwid=visitor-cookie';
-
-    const { body } = await api.get(
-      `/api/accounts/${account.id}/browser-login/status`
-    );
-    expect(body.status).toBe('error');
-    expect(body.error).toContain('sessionid');
-
-    const persisted = await db.platformAccount.findUniqueOrThrow({
-      where: { id: account.id }
-    });
-    expect(persisted.cookieRef).toBeNull();
-    expect(persisted.status).toBe('error');
-  });
-
-  it('returns 404 for non-existent account', async () => {
-    const { status } = await api.post(
-      '/api/accounts/nonexistent/browser-login/start'
-    );
-    expect(status).toBe(404);
-  });
-
-  it('handles browser-runner being unreachable', async () => {
+describe('local browser bridge authorization', () => {
+  it('starts immediately without browser-runner and reuses a fresh session', async () => {
     process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
-    const { body } = await api.get('/api/accounts');
-    const accounts = body as Record<string, unknown>[];
-    const dy = accounts.find(
-      (a: Record<string, unknown>) => a.platform === 'douyin'
-    ) as Record<string, unknown>;
-    const { status, body: resBody } = await api.post(
-      `/api/accounts/${dy.id}/browser-login/start`
+    const startedAt = Date.now();
+    const first = await api.post(
+      `/api/accounts/${accountId}/browser-login/start`
     );
-    expect(status).toBe(502);
-    expect(resBody.status).toBe('error');
-    expect(resBody.error).toContain('浏览器辅助服务不可用');
-    process.env.BROWSER_RUNNER_URL = mockRunnerUrl;
+
+    expect(first.status).toBe(202);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(first.body.status).toBe('waiting_local_bridge');
+    expect(first.body.bridgeToken).toBeUndefined();
+    expect(first.body.launchCommand).toBeUndefined();
+    expect(first.body.launchUrl).toMatch(/^aigrowthops:\/\/authorize\?/);
+    expect(first.body.installerUrl).toBe(
+      'https://downloads.example.com/browser-assistant'
+    );
+    expect(first.body.launchUrl).not.toContain('browser-runner');
+
+    const launchUrl = new URL(first.body.launchUrl);
+    expect(launchUrl.searchParams.get('api')).toBe(baseUrl);
+    expect(launchUrl.searchParams.get('session')).toBe(first.body.sessionId);
+    expect(launchUrl.searchParams.get('token')).toMatch(/^[A-Za-z0-9_-]{32,}$/);
+
+    const second = await api.post(
+      `/api/accounts/${accountId}/browser-login/start`
+    );
+    expect(second.status).toBe(202);
+    expect(second.body.sessionId).toBe(first.body.sessionId);
+    expect(second.body.launchUrl).toBe(first.body.launchUrl);
   });
-});
 
-// ── 重点测试：本次修复的关键场景 ──────────────────────────────────
+  it('rejects missing and invalid bridge tokens', async () => {
+    const start = await api.post(
+      `/api/accounts/${accountId}/browser-login/start`
+    );
+    const path = `/api/browser-bridge/sessions/${start.body.sessionId}`;
+    const missing = await fetch(`${baseUrl}${path}`);
+    expect(missing.status).toBe(401);
 
-describe('Browser Login — concurrent start coalescing', () => {
-  it('coalesces duplicate start requests into one session (React StrictMode double-mount)', async () => {
-    const { body } = await api.get('/api/accounts');
-    const accounts = body as Record<string, unknown>[];
-    const dy = accounts.find(
-      (a: Record<string, unknown>) => a.platform === 'douyin'
-    ) as Record<string, unknown>;
+    const invalid = await bridgeRequest(path, 'invalid-token');
+    expect(invalid.status).toBe(401);
+  });
 
-    // Slow mock: session creation takes 500ms (simulates Chromium launch)
-    const slowMock = createServer(async (req, res) => {
-      if (req.url === '/session/start' && req.method === 'POST') {
-        await new Promise((r) => setTimeout(r, 500));
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(
-          JSON.stringify({
-            sessionId: 'slow-mock-session',
-            status: 'waiting_scan'
-          })
-        );
-      } else {
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ status: 'waiting_scan' }));
+  it('claims, validates, encrypts and consumes an authorization session', async () => {
+    const start = await api.post(
+      `/api/accounts/${accountId}/browser-login/start`
+    );
+    const path = `/api/browser-bridge/sessions/${start.body.sessionId}`;
+    const token = new URL(start.body.launchUrl).searchParams.get('token')!;
+    const claim = await bridgeRequest(path, token);
+
+    expect(claim.status).toBe(200);
+    expect(claim.body.status).toBe('waiting_user');
+    expect(claim.body.platform).toBe('douyin');
+    expect(claim.body.loginUrl).toBe('https://creator.douyin.com/');
+    expect(claim.body.requiredCookieNames).toContain('sessionid');
+
+    const missingCookie = await bridgeRequest(
+      `${path}/complete`,
+      token,
+      { method: 'POST', body: JSON.stringify({ cookies: 'ttwid=visitor' }) }
+    );
+    expect(missingCookie.status).toBe(400);
+    expect(missingCookie.body.code).toBe('REQUIRED_COOKIE_MISSING');
+
+    const complete = await bridgeRequest(
+      `${path}/complete`,
+      token,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          cookies: 'sessionid=fresh; sid_tt=secondary; unrelated=secret'
+        })
+      }
+    );
+    expect(complete.status).toBe(200);
+    expect(complete.body.status).toBe('logged_in');
+    expect(JSON.stringify(complete.body)).not.toContain('fresh');
+
+    const status = await api.get(
+      `/api/accounts/${accountId}/browser-login/status`
+    );
+    expect(status.body).toMatchObject({ status: 'logged_in' });
+    expect(status.body.bridgeToken).toBeUndefined();
+
+    const account = await db.platformAccount.findUniqueOrThrow({
+      where: { id: accountId }
+    });
+    expect(decryptToken(account.cookieRef!)).toBe(
+      'sessionid=fresh; sid_tt=secondary'
+    );
+    expect(account.status).toBe('active');
+
+    const consumed = await bridgeRequest(path, token);
+    expect(consumed.status).toBe(401);
+  });
+
+  it('cancels a session and rejects its token', async () => {
+    const start = await api.post(
+      `/api/accounts/${accountId}/browser-login/start`
+    );
+    const cancelled = await api.post(
+      `/api/accounts/${accountId}/browser-login/cancel`
+    );
+    expect(cancelled).toMatchObject({ status: 200, body: { ok: true } });
+
+    const claim = await bridgeRequest(
+      `/api/browser-bridge/sessions/${start.body.sessionId}`,
+      new URL(start.body.launchUrl).searchParams.get('token')!
+    );
+    expect(claim.status).toBe(401);
+  });
+
+  it('does not expose another organization account', async () => {
+    const foreignOrg = await db.organization.create({
+      data: { name: 'Foreign', slug: `foreign-${Date.now()}` }
+    });
+    const foreign = await db.platformAccount.create({
+      data: {
+        organizationId: foreignOrg.id,
+        userId: auth.userId,
+        platform: 'douyin',
+        name: 'foreign-account',
+        mode: 'browser_assist',
+        status: 'active'
       }
     });
-    await new Promise<void>((resolve) =>
-      slowMock.listen(0, '127.0.0.1', resolve)
-    );
-    const slowAddr = slowMock.address() as { address: string; port: number };
-    process.env.BROWSER_RUNNER_URL = `http://${slowAddr.address}:${slowAddr.port}`;
 
-    // Fire two concurrent start requests (StrictMode / double-click)
-    const [res1, res2] = await Promise.all([
-      api.post(`/api/accounts/${dy.id}/browser-login/start`),
-      api.post(`/api/accounts/${dy.id}/browser-login/start`)
-    ]);
-
-    // Both succeed and share the SAME session instead of a 409 error
-    expect(res1.status).toBe(200);
-    expect(res2.status).toBe(200);
-    expect(res1.body.sessionId).toBe('slow-mock-session');
-    expect(res2.body.sessionId).toBe('slow-mock-session');
-
-    // A repeat start within the reuse window also returns the same session
-    const res3 = await api.post(
-      `/api/accounts/${dy.id}/browser-login/start`
-    );
-    expect(res3.status).toBe(200);
-    expect(res3.body.sessionId).toBe('slow-mock-session');
-
-    // Cleanup
-    process.env.BROWSER_RUNNER_URL = mockRunnerUrl;
-    await new Promise<void>((r) => slowMock.close(() => r()));
+    expect(
+      (await api.post(`/api/accounts/${foreign.id}/browser-login/start`)).status
+    ).toBe(404);
+    expect(
+      (await api.get(`/api/accounts/${foreign.id}/browser-login/status`)).status
+    ).toBe(404);
+    expect(
+      (await api.post(`/api/accounts/${foreign.id}/browser-login/cancel`)).status
+    ).toBe(404);
   });
 
-  it('allows start after previous session completes', async () => {
-    const { body } = await api.get('/api/accounts');
-    const accounts = body as Record<string, unknown>[];
-    const xhs = accounts.find(
-      (a: Record<string, unknown>) => a.platform === 'xiaohongshu'
-    ) as Record<string, unknown>;
-
-    // First start — should succeed
-    const res1 = await api.post(`/api/accounts/${xhs.id}/browser-login/start`);
-    expect(res1.status).toBe(200);
-
-    // Cancel the session
-    const cancelRes = await api.post(
-      `/api/accounts/${xhs.id}/browser-login/cancel`
-    );
-    expect(cancelRes.status).toBe(200);
-
-    // Second start after cancel — should also succeed
-    const res2 = await api.post(`/api/accounts/${xhs.id}/browser-login/start`);
-    expect(res2.status).toBe(200);
-  });
-});
-
-describe('Browser Login — timeout and error detail', () => {
-  it('error message contains runner URL and non-empty detail', async () => {
-    // Clear any session left by earlier tests so the start below really
-    // reaches the (unreachable) runner instead of reusing a fresh session.
-    const { body: acctBody } = await api.get('/api/accounts');
-    const accounts = acctBody as Record<string, unknown>[];
-    const dy = accounts.find(
-      (a: Record<string, unknown>) => a.platform === 'douyin'
-    ) as Record<string, unknown>;
-    await api.post(`/api/accounts/${dy.id}/browser-login/cancel`);
-
-    process.env.BROWSER_RUNNER_URL = 'http://127.0.0.1:1';
-
-    const { body: resBody } = await api.post(
-      `/api/accounts/${dy.id}/browser-login/start`
-    );
-
-    // Error should include the URL being connected to
-    expect(resBody.error).toContain('http://127.0.0.1:1');
-    // Error should NOT end with empty parentheses like "— )"
-    expect(resBody.error).not.toMatch(/— \)$/);
-    // Error should have actual detail text after "—"
-    const afterDash = resBody.error.split('—').pop();
-    expect(afterDash?.trim().length).toBeGreaterThan(0);
-
-    process.env.BROWSER_RUNNER_URL = mockRunnerUrl;
-  });
-
-  it('status endpoint returns 200 with error for missing session', async () => {
-    const { body } = await api.get('/api/accounts');
-    const accounts = body as Record<string, unknown>[];
-    const bh = accounts.find(
-      (a: Record<string, unknown>) => a.platform === 'baijiahao'
-    ) as Record<string, unknown>;
-
-    // Poll status without starting a session — should return error gracefully
-    const { status, body: resBody } = await api.get(
-      `/api/accounts/${bh.id}/browser-login/status`
-    );
-    expect(status).toBe(200);
-    expect(resBody.status).toBe('error');
+  it('requires settings permission to start authorization', async () => {
+    const membership = await db.organizationMember.findFirstOrThrow({
+      where: { organizationId: auth.orgId, userId: auth.userId }
+    });
+    await db.organizationMember.update({
+      where: { id: membership.id },
+      data: { role: 'viewer' }
+    });
+    try {
+      expect(
+        (await api.post(`/api/accounts/${accountId}/browser-login/start`)).status
+      ).toBe(403);
+    } finally {
+      await db.organizationMember.update({
+        where: { id: membership.id },
+        data: { role: membership.role }
+      });
+    }
   });
 });

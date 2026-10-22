@@ -1,0 +1,17 @@
+{
+  "name": "@ai-growth-ops/browser-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "login": "tsx src/index.ts login",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-growth-ops/shared": "workspace:*",
+    "playwright-core": "1.62.0"
+  }
+}
