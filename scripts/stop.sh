@@ -8,7 +8,7 @@ set -euo pipefail
 
 echo "[stop] 停止应用进程(api/web/worker/browser-runner)…"
 stopped=0
-for port in 3100 3001 3200; do
+for port in 3100 3001 3002 3200; do
   pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
   if [ -n "$pids" ]; then
     echo "[stop] 端口 $port (pid: $(echo $pids | tr '\n' ' ')) → 停止"
@@ -31,7 +31,7 @@ else
   # 给进程一点时间优雅退出
   sleep 2
   # 强制清理残留
-  for port in 3100 3001 3200; do
+  for port in 3100 3001 3002 3200; do
     pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
     [ -n "$pids" ] && kill -9 $pids 2>/dev/null || true
   done
