@@ -174,7 +174,14 @@ if [ -z "$ok" ]; then
   echo "  $COMPOSE logs --tail=100 api worker"
   exit 1
 fi
-if curl -sf -o /dev/null "http://127.0.0.1:${WEB_PORT}/login"; then
+web_ok=""
+for i in $(seq 1 30); do
+  if curl -sf -o /dev/null "http://127.0.0.1:${WEB_PORT}/login"; then
+    web_ok=1; break
+  fi
+  sleep 2
+done
+if [ -n "$web_ok" ]; then
   green "Web 登录页可访问"
 else
   red "Web 登录页不可访问，排查：$COMPOSE logs --tail=100 web"
