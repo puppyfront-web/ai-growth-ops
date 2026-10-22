@@ -53,6 +53,8 @@ ADMIN_NAME=Admin
 
 # ── 访问地址（对外提供域名时改为 https://yourdomain.com）──
 APP_URL=$APP_URL
+# 浏览器助手签名安装包或下载页；发布安装包后再配置。
+BROWSER_ASSISTANT_DOWNLOAD_URL=
 
 # ── 端口（默认 Web=3000 API=3100，仅绑定 127.0.0.1；如遇冲突可改）──
 # WEB_PORT=3000

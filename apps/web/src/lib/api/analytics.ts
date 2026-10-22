@@ -4,7 +4,8 @@ import type {
   PlatformAnalytics,
   ContentRoiItem,
   TrendDataPoint,
-  AcquisitionAnalytics
+  AcquisitionAnalytics,
+  UnifiedFunnelAnalytics
 } from '@/types/analytics';
 
 export function getAnalyticsOverview(): Promise<AnalyticsOverview> {
@@ -15,8 +16,14 @@ export function getPlatformMetrics(): Promise<PlatformAnalytics[]> {
   return apiGet<PlatformAnalytics[]>('/api/analytics/platforms');
 }
 
-export function getContentMetrics(): Promise<ContentRoiItem[]> {
-  return apiGet<ContentRoiItem[]>('/api/analytics/content-roi');
+export function getContentMetrics(days = 30): Promise<ContentRoiItem[]> {
+  return apiGet<ContentRoiItem[]>(`/api/analytics/content-roi?days=${days}`);
+}
+
+export function getUnifiedFunnel(
+  days = 30
+): Promise<UnifiedFunnelAnalytics> {
+  return apiGet<UnifiedFunnelAnalytics>(`/api/analytics/funnel?days=${days}`);
 }
 
 export function getLeadTrend(): Promise<TrendDataPoint[]> {

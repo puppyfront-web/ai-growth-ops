@@ -20,6 +20,7 @@ import {
   formatProspectingProgress,
   getProspectingProgressPercent,
   isAccountLoginRequiredError,
+  setProspectingSchedule,
   type ProspectCandidate,
   type ProspectEvidence,
   type ProspectUserProfile
@@ -29,6 +30,9 @@ import type { CustomerDuplicate } from '@/types/customer';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { NativeSelect } from '@/components/ui/native-select';
+import { formatDateTime } from '@/lib/utils';
+import { toast } from '@/components/ui/toast';
 
 const statusLabels: Record<string, string> = {
   draft: '草稿',
@@ -428,6 +432,7 @@ export default function ProspectingDetailPage() {
   const [enrichError, setEnrichError] = useState('');
   const [forceRecrawl, setForceRecrawl] = useState(false);
   const [captchaOpen, setCaptchaOpen] = useState(false);
+  const [scheduleInterval, setScheduleInterval] = useState('24');
   const [convertNotice, setConvertNotice] = useState<{
     reused: boolean;
     customerId: string;
@@ -479,6 +484,22 @@ export default function ProspectingDetailPage() {
       }
     }
   });
+
+  const scheduleMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      setProspectingSchedule(id, enabled, Number(scheduleInterval) || 24),
+    onSuccess: () => {
+      toast.success('定时执行已更新');
+      qc.invalidateQueries({ queryKey: ['prospecting', 'task', id] });
+    },
+    onError: (err: Error) => toast.error(err.message || '设置失败')
+  });
+
+  useEffect(() => {
+    if (task?.scheduleIntervalHours) {
+      setScheduleInterval(String(task.scheduleIntervalHours));
+    }
+  }, [task?.scheduleIntervalHours]);
 
   const exportMutation = useMutation({
     mutationFn: () => exportProspectingTask(id)
@@ -613,6 +634,61 @@ export default function ProspectingDetailPage() {
         <div className="mb-4 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
           这是旧版获客任务，仅保留历史结果查看；请新建智能获客任务执行多策略采集。
         </div>
+      )}
+
+      {!isLegacyTask && (
+        <section className="mb-4 rounded-md border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-medium">定时执行</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                到期自动入队；额度、验证码或账号失效时跳过并记录原因。
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={task.scheduleEnabled}
+                disabled={scheduleMutation.isPending || task.status === 'running'}
+                onChange={(event) =>
+                  scheduleMutation.mutate(event.target.checked)
+                }
+              />
+              启用
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">间隔</span>
+            <NativeSelect
+              value={scheduleInterval}
+              onChange={(event) => setScheduleInterval(event.target.value)}
+              className="rounded border bg-background px-2 py-1"
+            >
+              <option value="12">12 小时</option>
+              <option value="24">24 小时</option>
+              <option value="72">3 天</option>
+              <option value="168">7 天</option>
+            </NativeSelect>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={scheduleMutation.isPending}
+              onClick={() => scheduleMutation.mutate(task.scheduleEnabled)}
+            >
+              保存间隔
+            </Button>
+            {task.nextRunAt ? (
+              <span className="text-xs text-muted-foreground">
+                下次执行：{formatDateTime(task.nextRunAt)}
+              </span>
+            ) : null}
+            {task.lastRunAt ? (
+              <span className="text-xs text-muted-foreground">
+                上次执行：{formatDateTime(task.lastRunAt)}
+              </span>
+            ) : null}
+          </div>
+        </section>
       )}
 
       {convertNotice && (

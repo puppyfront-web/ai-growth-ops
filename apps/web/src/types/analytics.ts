@@ -20,11 +20,59 @@ export type PlatformAnalytics = {
 
 export type ContentRoiItem = {
   id: string;
+  contentItemId: string;
   title: string;
   type: string;
-  variantCount: number;
   publishCount: number;
   publishedCount: number;
+  interactionCount: number;
+  leadCount: number;
+  customerCount: number;
+  wonCount: number;
+  wonRevenue: string;
+  engagementScore: number;
+};
+
+export type UnifiedFunnelStage = {
+  key: string;
+  label: string;
+  count: number;
+  rateFromPrev: number;
+  rateFromStart: number;
+  ratioFromPrev: number;
+};
+
+export type UnifiedFunnelChannelRow = {
+  channel: string;
+  leads: number;
+  customers: number;
+  won: number;
+  revenue: string;
+};
+
+export type UnifiedFunnelContentRow = {
+  contentItemId: string;
+  title: string;
+  published: number;
+  interactions: number;
+  leads: number;
+  customers: number;
+  won: number;
+  revenue: string;
+};
+
+export type UnifiedFunnelAnalytics = {
+  range: { from: string; to: string; days: number };
+  stages: UnifiedFunnelStage[];
+  revenue: {
+    pipelineValue: string;
+    wonRevenue: string;
+    avgDealSize: string;
+    currency: string;
+  };
+  byChannel: UnifiedFunnelChannelRow[];
+  byContent: UnifiedFunnelContentRow[];
+  overdue: { leads: number; customers: number; deals: number };
 };
 
 export type TrendDataPoint = {

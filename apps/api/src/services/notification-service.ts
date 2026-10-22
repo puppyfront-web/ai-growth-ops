@@ -150,6 +150,28 @@ export async function onLeadCreated(
   });
 }
 
+export async function onLeadAssigned(
+  ctx: NotificationInput & {
+    leadId: string;
+    leadName?: string;
+    assignedBy?: string;
+  }
+): Promise<void> {
+  const { db, userId, organizationId, leadId, leadName, assignedBy } = ctx;
+
+  await db.notification.create({
+    data: {
+      type: 'lead',
+      title: '线索分配',
+      content: `线索「${leadName || leadId}」已分配给你${assignedBy ? `（${assignedBy}）` : ''}`,
+      level: 'warning',
+      userId,
+      organizationId,
+      actionUrl: `/leads/${leadId}`
+    }
+  });
+}
+
 export async function onLeadScoreChanged(
   ctx: NotificationInput & {
     leadId: string;

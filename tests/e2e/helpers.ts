@@ -155,6 +155,59 @@ export async function seedProspectingPlan(platformAccountId?: string) {
   }
 }
 
+export async function seedProspectCandidate(): Promise<{
+  taskId: string;
+  candidateName: string;
+}> {
+  requireE2eDatabaseUrl();
+  const db = createDatabaseClient();
+  const candidateName = 'E2E 闭环潜客';
+  try {
+    const admin = await db.user.findFirstOrThrow({
+      where: { email: 'admin@ai-growth-ops.local' }
+    });
+    const membership = await db.organizationMember.findFirstOrThrow({
+      where: { userId: admin.id, status: 'active' }
+    });
+    const organizationId = membership.organizationId;
+    const task = await db.prospectingTask.create({
+      data: {
+        organizationId,
+        userId: admin.id,
+        platform: 'douyin',
+        keywords: ['企业获客'],
+        requirement: '寻找有企业获客工具采购意向的负责人',
+        status: 'completed',
+        totalVideos: 1,
+        totalComments: 2,
+        totalCandidates: 1,
+        startedAt: new Date(),
+        finishedAt: new Date()
+      }
+    });
+    await db.prospectCandidate.create({
+      data: {
+        prospectingTaskId: task.id,
+        organizationId,
+        platform: 'douyin',
+        keyword: '企业获客',
+        userKey: `e2e_closed_loop_${Date.now()}`,
+        externalUserId: `e2e_sec_${Date.now()}`,
+        userNickname: candidateName,
+        content: '我们公司想采购获客工具，求推荐和报价',
+        relevanceScore: 88,
+        leadLevel: 'A',
+        intent: '询价',
+        summary: '明确采购意向，询问报价',
+        sourceVideoTitle: '企业获客工具测评'
+      }
+    });
+    return { taskId: task.id, candidateName };
+  } finally {
+    await db.$disconnect();
+  }
+}
+
 export async function seedConversationFixture(): Promise<{
   conversationId: string;
   interactionId: string;

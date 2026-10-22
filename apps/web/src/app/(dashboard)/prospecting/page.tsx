@@ -11,6 +11,8 @@ import {
   listProspectingTasks,
   listProspectingAccounts,
   PROSPECTING_SUPPORTED_PLATFORMS,
+  PROSPECTING_BETA_PLATFORMS,
+  isBetaProspectingPlatform,
   formatProspectingProgress,
   getProspectingProgressPercent,
   isAccountLoginRequiredError,
@@ -58,6 +60,7 @@ export default function ProspectingPage() {
   const [platform, setPlatform] = useState<ProspectingPlatform>('douyin');
   const [requirement, setRequirement] = useState('');
   const [platformAccountId, setPlatformAccountId] = useState('');
+  const [betaConfirmed, setBetaConfirmed] = useState(false);
   const [analysis, setAnalysis] = useState<ProspectingPlanAnalysis | null>(
     null
   );
@@ -115,7 +118,12 @@ export default function ProspectingPage() {
 
   const analyzeMutation = useMutation({
     mutationFn: () =>
-      analyzeProspectingRequirement(requirement, platform, platformAccountId),
+      analyzeProspectingRequirement(
+        requirement,
+        platform,
+        platformAccountId,
+        betaConfirmed
+      ),
     onSuccess: (result) => {
       setAnalysis(result);
       setEnabledStrategyIds(
@@ -210,15 +218,33 @@ export default function ProspectingPage() {
                   setPlatform(e.target.value as ProspectingPlatform);
                   setPlatformAccountId('');
                   setAnalysis(null);
+                  setBetaConfirmed(false);
                 }}
                 className="w-full rounded border bg-background px-2 py-1.5 text-sm"
               >
-                {PROSPECTING_SUPPORTED_PLATFORMS.map((value) => (
+                {[
+                  ...PROSPECTING_SUPPORTED_PLATFORMS,
+                  ...PROSPECTING_BETA_PLATFORMS
+                ].map((value) => (
                   <option key={value} value={value}>
                     {platformLabels[value]}
+                    {isBetaProspectingPlatform(value) ? '（Beta，需确认）' : ''}
                   </option>
                 ))}
               </NativeSelect>
+              {isBetaProspectingPlatform(platform) ? (
+                <label className="mt-2 flex items-start gap-2 rounded border border-warning/30 bg-warning/5 p-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={betaConfirmed}
+                    onChange={(event) => setBetaConfirmed(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    我确认该平台主动获客尚未完成真实账号验收，愿意先低量试用并承担验证成本。
+                  </span>
+                </label>
+              ) : null}
             </div>
             <div>
               <label
@@ -396,7 +422,8 @@ export default function ProspectingPage() {
                 disabled={
                   requirement.trim().length < 20 ||
                   !platformAccountId ||
-                  llmMissing
+                  llmMissing ||
+                  (isBetaProspectingPlatform(platform) && !betaConfirmed)
                 }
                 loading={analyzeMutation.isPending}
               >

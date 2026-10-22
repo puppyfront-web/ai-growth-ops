@@ -15,12 +15,21 @@ export function reopenUserGuide() {
 const GUIDE_VERSION = 'v1';
 
 const MODULE_DESCRIPTIONS: Record<string, string> = {
+  '/dashboard': '今日待办与经营指标，一天的工作从这里开始。',
   '/prospecting': '按理想客户画像自动挖掘潜在客户，线索自动进入跟进池。',
   '/customers': '统一管理客户档案、跟进记录与转化状态。',
+  '/leads': '跟进平台线索，分配负责人并推进转化。',
+  '/outreach': '多步触达序列与退订名单，发送前统一风控。',
+  '/forms': '公开表单收集线索，提交后自动去重与分配。',
+  '/deals/pipeline': '按销售阶段拖拽推进商机，金额与逾期一目了然。',
+  '/analytics/funnel': '从内容到成交的统一经营漏斗。',
+  '/analytics/efficiency': '记录成本，查看 CPL、CAC、ROI 与收入归因。',
+  '/analytics/lead': '查看获客漏斗与转化数据，持续优化获客策略。',
+  '/experiments': '内容与触达的 A/B 分流实验，样本不足不宣布胜出。',
   '/content': 'AI 辅助批量创作、改编多平台运营内容。',
   '/publish': '将内容一键发布或定时发布到已连接的平台。',
   '/conversations': '集中处理各平台的评论与私信，及时互动促转化。',
-  '/analytics/lead': '查看获客漏斗与转化数据，持续优化获客策略。',
+  '/notifications': '任务完成、线索分配与 SLA 超时提醒。',
   '/integrations': '连接社交媒体账号与第三方服务，开启自动化能力。',
   '/settings': '管理团队成员、角色权限与系统参数。'
 };
@@ -87,34 +96,40 @@ export function UserGuide() {
       aria-modal="true"
       aria-label="功能引导"
     >
-      <div className="w-full max-w-[560px] rounded-xl border bg-card p-6 shadow-xl">
-        <h3 className="text-lg font-semibold tracking-tight">
-          欢迎使用 AI Growth Ops
-        </h3>
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-          自动获客、AI 内容创作、多平台发布与互动转化。从这些模块开始：
-        </p>
-
-        <div className="mt-4 grid grid-cols-1 gap-1 sm:grid-cols-2">
-          {visibleModules.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={dismiss}
-              className="flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-accent"
-            >
-              <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">{item.label}</span>
-                <span className="block text-xs leading-relaxed text-muted-foreground">
-                  {MODULE_DESCRIPTIONS[item.href] ?? '常用功能入口。'}
-                </span>
-              </span>
-            </Link>
-          ))}
+      <div className="flex max-h-[85vh] w-full max-w-[560px] flex-col rounded-xl border bg-card shadow-xl">
+        <div className="p-6 pb-0">
+          <h3 className="text-lg font-semibold tracking-tight">
+            欢迎使用 AI Growth Ops
+          </h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            自动获客、AI 内容创作、多平台发布与互动转化。从这些模块开始：
+          </p>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {visibleModules.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={dismiss}
+                className="flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-accent"
+              >
+                <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">
+                    {item.label}
+                  </span>
+                  <span className="block text-xs leading-relaxed text-muted-foreground">
+                    {MODULE_DESCRIPTIONS[item.href] ?? '常用功能入口。'}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-t p-6 pt-4">
           <p className="text-xs text-muted-foreground">
             随时可在头像菜单中重新打开此引导
           </p>

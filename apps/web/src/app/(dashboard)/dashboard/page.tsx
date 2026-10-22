@@ -18,6 +18,7 @@ import { getUnreadCount } from '@/lib/api/notifications';
 import { listInteractions } from '@/lib/api/conversations';
 import { listProspectingTasks } from '@/lib/api/prospecting';
 import { listLeads } from '@/lib/api/leads';
+import { getUnifiedFunnel } from '@/lib/api/analytics';
 import { cn } from '@/lib/utils';
 
 /**
@@ -76,6 +77,38 @@ function TodoTile({ card }: { card: TodoCard }) {
   );
 }
 
+function MetricTile({
+  label,
+  value,
+  hint,
+  href,
+  urgent
+}: {
+  label: string;
+  value: string | number | undefined;
+  hint: string;
+  href: string;
+  urgent?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent"
+    >
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          'mt-1 text-2xl font-bold tabular-nums',
+          urgent && 'text-destructive'
+        )}
+      >
+        {value ?? '–'}
+      </p>
+      <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p>
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
   const { data: reviewData } = useQuery({
     queryKey: ['interactions-review', ''],
@@ -100,6 +133,11 @@ export default function DashboardPage() {
     queryFn: getUnreadCount,
     refetchInterval: 30_000,
     staleTime: 15_000
+  });
+  const { data: funnel } = useQuery({
+    queryKey: ['analytics', 'funnel', 30],
+    queryFn: () => getUnifiedFunnel(30),
+    staleTime: 60_000
   });
 
   const reviewCount = reviewData?.length;
@@ -165,6 +203,48 @@ export default function DashboardPage() {
       )}
 
       <OnboardingGuide />
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricTile
+          label="近 30 天线索"
+          value={funnel?.stages.find((stage) => stage.key === 'leads')?.count}
+          hint="来自内容与主动获客"
+          href="/analytics/funnel"
+        />
+        <MetricTile
+          label="待跟进"
+          value={
+            funnel
+              ? funnel.overdue.leads +
+                funnel.overdue.customers +
+                funnel.overdue.deals
+              : undefined
+          }
+          hint="已逾期，需尽快处理"
+          href="/analytics/funnel"
+          urgent={(funnel?.overdue.leads ?? 0) > 0}
+        />
+        <MetricTile
+          label="近 30 天成交额"
+          value={
+            funnel
+              ? `¥${Number(funnel.revenue.wonRevenue).toLocaleString('zh-CN')}`
+              : undefined
+          }
+          hint="赢单商机金额"
+          href="/analytics/funnel"
+        />
+        <MetricTile
+          label="在手 pipeline"
+          value={
+            funnel
+              ? `¥${Number(funnel.revenue.pipelineValue).toLocaleString('zh-CN')}`
+              : undefined
+          }
+          hint="未关闭商机金额"
+          href="/deals/pipeline"
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (

@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from './client';
+import { apiGet, apiPatch, apiPost, apiPut, apiDelete } from './client';
 import type { Lead, LeadActivity } from '@/types/lead';
 
 interface PaginatedResponse<T> {
@@ -40,6 +40,8 @@ export function updateLead(
     status: string;
     assignedTo: string;
     nextAction: string;
+    nextActionAt: string | null;
+    lostReason: string;
     intent: string;
     summary: string;
   }>
@@ -57,7 +59,7 @@ export function updateLeadLevel(
 
 /** Assign a lead to a sales rep and move it to ASSIGNED. */
 export function assignLead(id: string, assignedTo: string): Promise<Lead> {
-  return apiPost<Lead>(`/api/leads/${id}/assign`, { assignedTo });
+  return apiPatch<Lead>(`/api/leads/${id}/assign`, { assignedTo });
 }
 
 /** Manually create a lead (fallback for offline/exhibition sources). */

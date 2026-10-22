@@ -9,10 +9,12 @@ import {
   selectProspectingAccount,
   loadProspectGuard,
   resolveLlmClientFromDb,
+  scheduleProspectingTask,
   type DatabaseClient
 } from '@ai-growth-ops/database';
 import {
   emptyProspectGuardState,
+  isBetaProspectingPlatform,
   isProspectingTaskRunnable,
   planCrawlQuota,
   PROSPECT_GUARD,
@@ -38,7 +40,8 @@ import {
   runProspectingTaskSchema,
   analyzeProspectingPlanSchema,
   convertProspectSchema,
-  createProspectingTaskSchema
+  createProspectingTaskSchema,
+  scheduleProspectingTaskSchema
 } from './schemas/prospecting.js';
 import {
   convertProspectToCustomer,
@@ -146,6 +149,14 @@ export const prospectingRoutes: Array<{
         });
       }
       const platform = bodyResult.data.platform ?? 'douyin';
+      if (
+        isBetaProspectingPlatform(platform) &&
+        bodyResult.data.confirmBeta !== true
+      ) {
+        return sendJson(res, 400, {
+          error: `${platform} 主动获客仍为 Beta/未验收，请显式确认风险后再执行`
+        });
+      }
       const autoSelect = bodyResult.data.platformAccountId === 'auto';
       const account = autoSelect
         ? await selectProspectingAccount(
@@ -743,6 +754,34 @@ export const prospectingRoutes: Array<{
         });
       } catch (e) {
         sendJson(res, 400, { error: (e as Error).message });
+      }
+    }
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/prospecting/tasks/:id/schedule',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'research:create')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const body = validateBody(scheduleProspectingTaskSchema, ctx.body);
+      if (!body.success) {
+        return sendJson(res, 400, { error: '输入验证失败', errors: body.errors });
+      }
+      try {
+        const task = await scheduleProspectingTask(
+          ctx.db,
+          ctx.params.id,
+          orgCtx.organization.id,
+          body.data
+        );
+        sendJson(res, 200, task);
+      } catch (error) {
+        sendJson(res, 400, {
+          error: error instanceof Error ? error.message : '设置失败'
+        });
       }
     }
   },

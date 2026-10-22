@@ -1,4 +1,4 @@
-import { apiDownload, apiGet, apiPost } from './client';
+import { apiDownload, apiGet, apiPost, apiPut } from './client';
 import type {
   ProspectingIntent,
   ProspectingPlan,
@@ -7,8 +7,17 @@ import type {
 
 export type { ProspectingIntent, ProspectingPlan, ProspectingStrategy };
 
-/** Platforms the crawler actually supports; keep in sync with the API schema. */
+/** Verified platforms; keep in sync with the API schema. */
 export const PROSPECTING_SUPPORTED_PLATFORMS = ['douyin'] as const;
+
+/** Platforms with a code path but no completed real-account acceptance. */
+export const PROSPECTING_BETA_PLATFORMS = ['xiaohongshu'] as const;
+
+export function isBetaProspectingPlatform(
+  platform: ProspectingPlatform
+): boolean {
+  return (PROSPECTING_BETA_PLATFORMS as readonly string[]).includes(platform);
+}
 
 export type ProspectingTaskStatus =
   'draft' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -120,6 +129,10 @@ export type ProspectingTask = {
   intent: ProspectingIntent | null;
   strategyPlan: ProspectingPlan | null;
   status: ProspectingTaskStatus;
+  scheduleEnabled: boolean;
+  scheduleIntervalHours: number | null;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
   topNVideos: number;
   maxCommentsPerVideo: number;
   commentScrollRounds: number;
@@ -308,12 +321,25 @@ export function listProspectingAccounts(platform = 'douyin') {
 export function analyzeProspectingRequirement(
   requirement: string,
   platform: ProspectingPlatform,
-  platformAccountId: string
+  platformAccountId: string,
+  confirmBeta = false
 ) {
   return apiPost<ProspectingPlanAnalysis>('/api/prospecting/plan', {
     requirement,
     platform,
-    platformAccountId
+    platformAccountId,
+    confirmBeta
+  });
+}
+
+export function setProspectingSchedule(
+  id: string,
+  enabled: boolean,
+  intervalHours?: number
+) {
+  return apiPut<ProspectingTask>(`/api/prospecting/tasks/${id}/schedule`, {
+    enabled,
+    intervalHours
   });
 }
 

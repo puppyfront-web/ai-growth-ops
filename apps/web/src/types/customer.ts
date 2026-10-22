@@ -98,6 +98,9 @@ export type Customer = {
   sourceNote: string | null;
   status: CustomerStatus;
   assignedTo: string | null;
+  nextAction: string | null;
+  nextActionAt: string | null;
+  lastContactedAt: string | null;
   fitScore: number;
   intentScore: number;
   healthScore: number;
@@ -179,6 +182,9 @@ export type UpdateCustomerInput = {
   sourceNote?: string;
   status?: CustomerStatus;
   assignedTo?: string;
+  nextAction?: string | null;
+  nextActionAt?: string | null;
+  lostReason?: string;
   tags?: string[];
 };
 

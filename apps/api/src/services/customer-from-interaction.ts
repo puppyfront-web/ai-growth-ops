@@ -1,5 +1,6 @@
 import {
   ensureCustomerFromInteraction,
+  recordLeadConversionForPublishJob,
   trySyncCustomerToFeishu,
   type DatabaseClient
 } from '@ai-growth-ops/database';
@@ -63,6 +64,16 @@ export async function convertInteractionToCustomerRecord(
           interaction.content.slice(0, 200)
       }
     });
+    // Experiment conversion: attribute this lead to the content item that
+    // produced the interaction. Deduped by lead id; best-effort.
+    if (interaction.publishJobId) {
+      await recordLeadConversionForPublishJob(
+        db,
+        organizationId,
+        interaction.publishJobId,
+        lead.id
+      );
+    }
   }
 
   const result = await ensureCustomerFromInteraction(db, {

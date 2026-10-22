@@ -170,12 +170,19 @@ export default function CustomersPage() {
         channel: form.channel,
         sourceNote: form.sourceNote,
         status: form.status,
-        assignedTo: form.assignedTo || undefined
+        assignedTo: form.assignedTo || undefined,
+        nextAction: form.nextAction.trim() || null,
+        nextActionAt: form.nextActionAt
+          ? new Date(form.nextActionAt).toISOString()
+          : null
       });
     },
     onSuccess: () => {
       resetForm();
       qc.invalidateQueries({ queryKey: ['customers'] });
+      qc.invalidateQueries({ queryKey: ['deals'] });
+      qc.invalidateQueries({ queryKey: ['deals-pipeline'] });
+      qc.invalidateQueries({ queryKey: ['analytics', 'funnel'] });
     }
   });
 

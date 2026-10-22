@@ -19,6 +19,7 @@ import {
   mergeSemanticScore,
   getBrowserRunnerConfig,
   getBrowserRunnerHeaders,
+  defaultNextActionAt,
   normalizePhone,
   passesProspectThreshold,
   PROSPECT_GUARD,
@@ -32,6 +33,7 @@ import {
 import { loadIcpConfig } from './customer-profile.js';
 import { resolveLlmClientFromDb } from './llm-config.js';
 import { findCustomerByAcquisitionIdentity } from './customer-crm.js';
+import { applyAssignmentRules } from './assignment.js';
 import {
   claimProfileFetch,
   claimVideoCrawl,
@@ -1321,6 +1323,19 @@ export async function convertProspectToCustomer(
     zhihu: 'zhihu'
   };
 
+  const preCandidate = await db.prospectCandidate.findFirst({
+    where: { id: candidateId, organizationId },
+    select: { platform: true, leadLevel: true }
+  });
+  const assignment = preCandidate
+    ? await applyAssignmentRules(
+        db,
+        organizationId,
+        { channel: preCandidate.platform, level: preCandidate.leadLevel },
+        'customer'
+      ).catch(() => null)
+    : null;
+
   return db.$transaction(async (tx) => {
     const lockValue = normalizedPhone || `prospect:${candidateId}`;
     await tx.$executeRaw`
@@ -1412,6 +1427,7 @@ export async function convertProspectToCustomer(
           displayName:
             input.displayName?.trim() || candidate.userNickname || '潜客',
           phone: normalizedPhone,
+          assignedTo: assignment?.assigneeId ?? undefined,
           company: input.company?.trim() || '待补充',
           role: input.role?.trim() || '待补充',
           intent:
@@ -1419,6 +1435,8 @@ export async function convertProspectToCustomer(
             candidate.summary ||
             candidate.content.slice(0, 500) ||
             '来自关键词获客',
+          nextAction: '首次联系',
+          nextActionAt: defaultNextActionAt(candidate.leadLevel),
           channel: (channelMap[candidate.platform] ?? 'other') as never,
           sourceNote: [
             `关键词获客：${candidate.keyword}`,

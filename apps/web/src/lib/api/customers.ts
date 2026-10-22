@@ -17,6 +17,27 @@ interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export type CustomerDuplicateCandidate = Pick<
+  Customer,
+  'id' | 'displayName' | 'phone' | 'company' | 'status' | 'createdAt'
+>;
+
+export function listCustomerDuplicates(
+  customerId: string
+): Promise<{ items: CustomerDuplicateCandidate[] }> {
+  return apiGet(`/api/customers/${customerId}/duplicates`);
+}
+
+export function mergeCustomer(
+  targetCustomerId: string,
+  sourceCustomerId: string
+): Promise<{ target: { id: string } }> {
+  return apiPost(`/api/customers/${targetCustomerId}/merge`, {
+    sourceCustomerId,
+    confirm: true
+  });
+}
+
 export type CustomerFollowUp = {
   customerId: string;
   displayName: string;

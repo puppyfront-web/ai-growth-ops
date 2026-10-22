@@ -45,6 +45,8 @@ import { handleAgentRun } from './job-handlers/agent.run.js';
 import { handleCustomerProfileRefresh } from './job-handlers/customer.profile.refresh.js';
 import { handleCustomerPlaybookGenerate } from './job-handlers/customer.playbook.generate.js';
 import { handleProspectingRun } from './job-handlers/prospecting.run.js';
+import { handleOutreachCheck } from './job-handlers/outreach.check.js';
+import { handleProspectingSchedule } from './job-handlers/prospecting.schedule.js';
 import {
   startScheduler,
   SCHEDULED_QUEUE,
@@ -74,6 +76,8 @@ const realHandlers: Record<
   [QUEUE_NAMES.CUSTOMER_PROFILE_REFRESH]: handleCustomerProfileRefresh,
   [QUEUE_NAMES.CUSTOMER_PLAYBOOK_GENERATE]: handleCustomerPlaybookGenerate,
   [QUEUE_NAMES.PROSPECTING_RUN]: handleProspectingRun,
+  [QUEUE_NAMES.OUTREACH_CHECK]: handleOutreachCheck,
+  [QUEUE_NAMES.PROSPECTING_SCHEDULE]: handleProspectingSchedule,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
   [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule
 };

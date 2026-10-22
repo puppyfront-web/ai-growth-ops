@@ -1,17 +1,30 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
-import { syncCustomerToFeishu, trySyncCustomerToFeishu } from '@ai-growth-ops/database';
-import { normalizePhone } from '@ai-growth-ops/shared';
+import {
+  findCustomerDuplicateGroups,
+  findDuplicateCandidatesForCustomer,
+  mergeCustomers,
+  syncCustomerOutcomeTx,
+  syncCustomerToFeishu,
+  trySyncCustomerToFeishu
+} from '@ai-growth-ops/database';
+import {
+  customerStatusToOutcome,
+  defaultNextActionAt,
+  normalizePhone
+} from '@ai-growth-ops/shared';
 import { getOrganizationContext } from './auth.js';
 import { parsePagination, paginate } from './middleware/pagination.js';
 import { validateBody } from './middleware/validate.js';
 import { hasPermission, type Permission } from './middleware/rbac.js';
+import { fireWebhook } from './services/webhook-service.js';
 import {
   addCustomerActivitySchema,
   createCustomerSchema,
   customerImportExecuteSchema,
   customerImportPreviewSchema,
   icpConfigSchema,
+  mergeCustomerSchema,
   updateCustomerSchema,
   updateCustomerPlaybookSchema
 } from './schemas/customers.js';
@@ -248,6 +261,8 @@ export const customerRoutes: Array<{
             channel: body.channel,
             sourceNote: body.sourceNote?.trim() || undefined,
             assignedTo: body.assignedTo?.trim() || undefined,
+            nextAction: '首次联系',
+            nextActionAt: defaultNextActionAt('B'),
             tags: body.tags ?? undefined,
             activities: {
               create: {
@@ -277,6 +292,17 @@ export const customerRoutes: Array<{
       }
 
       sendJson(res, 201, result.customer);
+      await fireWebhook(
+        ctx.db,
+        orgCtx.organization.id,
+        'customer.created',
+        {
+          customerId: result.customer.id,
+          displayName: result.customer.displayName,
+          channel: result.customer.channel,
+          status: result.customer.status
+        }
+      ).catch(() => undefined);
       enqueueCustomerProfileRefresh(
         result.customer.id,
         orgCtx.organization.id,
@@ -288,6 +314,67 @@ export const customerRoutes: Array<{
         orgCtx.organization.id,
         orgCtx.user.name
       ).catch(() => undefined);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/customers/duplicates',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!canAccess(res, orgCtx.memberRole, 'lead:view')) return;
+      const groups = await findCustomerDuplicateGroups(
+        ctx.db,
+        orgCtx.organization.id
+      );
+      sendJson(res, 200, { groups });
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/customers/:id/duplicates',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!canAccess(res, orgCtx.memberRole, 'lead:view')) return;
+      try {
+        const items = await findDuplicateCandidatesForCustomer(
+          ctx.db,
+          ctx.params.id,
+          orgCtx.organization.id
+        );
+        sendJson(res, 200, { items });
+      } catch (error) {
+        sendJson(res, 400, {
+          error: error instanceof Error ? error.message : '查询失败'
+        });
+      }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/customers/:id/merge',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!canAccess(res, orgCtx.memberRole, 'lead:edit')) return;
+      const body = validateBody(mergeCustomerSchema, ctx.body);
+      if (!body.success) {
+        return sendJson(res, 400, { error: '输入验证失败', errors: body.errors });
+      }
+      try {
+        const result = await mergeCustomers(ctx.db, {
+          organizationId: orgCtx.organization.id,
+          targetCustomerId: ctx.params.id,
+          sourceCustomerId: body.data.sourceCustomerId,
+          operator: orgCtx.user.name
+        });
+        sendJson(res, 200, result);
+      } catch (error) {
+        sendJson(res, 400, {
+          error: error instanceof Error ? error.message : '合并失败'
+        });
+      }
     }
   },
   {
@@ -490,40 +577,82 @@ export const customerRoutes: Array<{
           ? (existing.metadata as Record<string, unknown>)
           : {};
 
-      const customer = await ctx.db.customer.update({
-        where: { id: existing.id },
-        data: {
-          ...(body.displayName != null && {
-            displayName: body.displayName.trim()
-          }),
-          ...(phoneUpdate !== undefined && {
-            phone: phoneUpdate,
-            metadata: {
-              ...existingMeta,
-              pendingContact: !phoneUpdate
-            } as never
-          }),
-          ...(body.company != null && {
-            company: body.company.trim() || '待补充'
-          }),
-          ...(body.role != null && { role: body.role.trim() || '待补充' }),
-          ...(body.intent != null && { intent: body.intent.trim() }),
-          ...(body.channel != null && { channel: body.channel }),
-          ...(body.sourceNote !== undefined && {
-            sourceNote: body.sourceNote?.trim() || null
-          }),
-          ...(body.status != null && { status: body.status }),
-          ...(body.assignedTo !== undefined && {
-            assignedTo: body.assignedTo?.trim() || null
-          }),
-          ...((phoneUpdate !== undefined || body.tags !== undefined) && { tags })
-        },
-        include: {
-          activities: { orderBy: { createdAt: 'desc' } }
+      const outcome = body.status
+        ? customerStatusToOutcome(body.status)
+        : null;
+      const customer = await ctx.db.$transaction(async (tx) => {
+        await tx.customer.update({
+          where: { id: existing.id },
+          data: {
+            ...(body.displayName != null && {
+              displayName: body.displayName.trim()
+            }),
+            ...(phoneUpdate !== undefined && {
+              phone: phoneUpdate,
+              metadata: {
+                ...existingMeta,
+                pendingContact: !phoneUpdate
+              } as never
+            }),
+            ...(body.company != null && {
+              company: body.company.trim() || '待补充'
+            }),
+            ...(body.role != null && { role: body.role.trim() || '待补充' }),
+            ...(body.intent != null && { intent: body.intent.trim() }),
+            ...(body.channel != null && { channel: body.channel }),
+            ...(body.sourceNote !== undefined && {
+              sourceNote: body.sourceNote?.trim() || null
+            }),
+            ...(body.status != null &&
+              outcome == null && { status: body.status }),
+            ...(body.assignedTo !== undefined && {
+              assignedTo: body.assignedTo?.trim() || null
+            }),
+            ...(body.nextAction !== undefined && {
+              nextAction: body.nextAction
+            }),
+            ...(body.nextActionAt !== undefined && {
+              nextActionAt: body.nextActionAt
+                ? new Date(body.nextActionAt)
+                : null,
+              slaEscalatedAt: null
+            }),
+            ...((phoneUpdate !== undefined || body.tags !== undefined) && {
+              tags
+            })
+          }
+        });
+        if (outcome) {
+          await syncCustomerOutcomeTx(
+            tx,
+            existing.id,
+            orgCtx.organization.id,
+            outcome,
+            { lostReason: body.lostReason }
+          );
         }
+        return tx.customer.findUniqueOrThrow({
+          where: { id: existing.id },
+          include: {
+            activities: { orderBy: { createdAt: 'desc' } }
+          }
+        });
       });
 
       sendJson(res, 200, customer);
+      if (customer.status === 'won' || customer.status === 'lost') {
+        await fireWebhook(
+          ctx.db,
+          orgCtx.organization.id,
+          `customer.${customer.status}`,
+          {
+            customerId: customer.id,
+            displayName: customer.displayName,
+            status: customer.status,
+            channel: customer.channel
+          }
+        ).catch(() => undefined);
+      }
       trySyncCustomerToFeishu(
         ctx.db,
         customer.id,
@@ -557,13 +686,31 @@ export const customerRoutes: Array<{
       });
       if (!customer) return sendJson(res, 404, { error: '客户不存在' });
 
-      const activity = await ctx.db.customerActivity.create({
-        data: {
-          customerId: customer.id,
-          action: bodyResult.data.action,
-          note: bodyResult.data.note,
-          operator: orgCtx.user.name
-        }
+      const activity = await ctx.db.$transaction(async (tx) => {
+        const created = await tx.customerActivity.create({
+          data: {
+            customerId: customer.id,
+            action: bodyResult.data.action,
+            note: bodyResult.data.note,
+            operator: orgCtx.user.name
+          }
+        });
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: {
+            lastContactedAt: new Date(),
+            ...(bodyResult.data.nextAction !== undefined && {
+              nextAction: bodyResult.data.nextAction
+            }),
+            ...(bodyResult.data.nextActionAt !== undefined && {
+              nextActionAt: bodyResult.data.nextActionAt
+                ? new Date(bodyResult.data.nextActionAt)
+                : null,
+              slaEscalatedAt: null
+            })
+          }
+        });
+        return created;
       });
 
       sendJson(res, 201, activity);

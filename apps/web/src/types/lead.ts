@@ -49,6 +49,8 @@ export type Lead = {
   tags: unknown;
   assignedTo: string | null;
   nextAction: string | null;
+  nextActionAt: string | null;
+  lastContactedAt: string | null;
   riskLevel: string | null;
   createdAt: string;
   updatedAt: string;

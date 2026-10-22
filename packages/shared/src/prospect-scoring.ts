@@ -69,8 +69,31 @@ export type SemanticProspectScore = {
  */
 export const PROSPECTING_SUPPORTED_PLATFORMS = ['douyin'] as const;
 
+/**
+ * Platforms with a working browser-runner path but no completed real-account
+ * acceptance. They may only be used after an explicit beta confirmation.
+ */
+export const PROSPECTING_BETA_PLATFORMS = ['xiaohongshu'] as const;
+
+export const PROSPECTING_ALL_PLATFORMS = [
+  ...PROSPECTING_SUPPORTED_PLATFORMS,
+  ...PROSPECTING_BETA_PLATFORMS
+] as const;
+
 export type ProspectingSupportedPlatform =
   (typeof PROSPECTING_SUPPORTED_PLATFORMS)[number];
+
+export type ProspectingBetaPlatform =
+  (typeof PROSPECTING_BETA_PLATFORMS)[number];
+
+export type ProspectingPlatform =
+  (typeof PROSPECTING_ALL_PLATFORMS)[number];
+
+export function isBetaProspectingPlatform(
+  platform: string
+): platform is ProspectingBetaPlatform {
+  return (PROSPECTING_BETA_PLATFORMS as readonly string[]).includes(platform);
+}
 
 export function isProspectingTaskRunnable(status: string): boolean {
   return status === 'draft' || status === 'failed' || status === 'completed';

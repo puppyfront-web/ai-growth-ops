@@ -55,7 +55,19 @@ export type CustomerFormValues = {
   sourceNote: string;
   status: CustomerStatus;
   assignedTo: string;
+  nextAction: string;
+  nextActionAt: string;
 };
+
+function toLocalDateTimeInput(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export const emptyCustomerForm = (
   channel: AcquisitionChannel = 'manual'
@@ -68,7 +80,9 @@ export const emptyCustomerForm = (
   channel,
   sourceNote: '',
   status: 'active',
-  assignedTo: ''
+  assignedTo: '',
+  nextAction: '',
+  nextActionAt: ''
 });
 
 export function formFromCustomer(customer: Customer): CustomerFormValues {
@@ -81,7 +95,9 @@ export function formFromCustomer(customer: Customer): CustomerFormValues {
     channel: customer.channel,
     sourceNote: customer.sourceNote ?? '',
     status: customer.status,
-    assignedTo: customer.assignedTo ?? ''
+    assignedTo: customer.assignedTo ?? '',
+    nextAction: customer.nextAction ?? '',
+    nextActionAt: toLocalDateTimeInput(customer.nextActionAt)
   };
 }
 
@@ -90,6 +106,7 @@ export function CustomerEditor({
   onChange,
   showStatus = false,
   showAssignee = false,
+  showNextAction = false,
   assigneeOptions = [],
   idPrefix,
   onPhoneBlur
@@ -98,6 +115,7 @@ export function CustomerEditor({
   onChange: (next: CustomerFormValues) => void;
   showStatus?: boolean;
   showAssignee?: boolean;
+  showNextAction?: boolean;
   assigneeOptions?: { id: string; name: string }[];
   idPrefix: string;
   onPhoneBlur?: () => void;
@@ -228,6 +246,28 @@ export function CustomerEditor({
           placeholder="客户当前需求或意向"
         />
       </Field>
+      {showNextAction && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="下次动作" htmlFor={`${idPrefix}-next-action`}>
+            <input
+              id={`${idPrefix}-next-action`}
+              value={value.nextAction}
+              onChange={(e) => set({ nextAction: e.target.value })}
+              className="mt-1 w-full rounded border bg-background px-2 py-1.5 text-sm"
+              placeholder="如：电话回访、发送报价单"
+            />
+          </Field>
+          <Field label="截止时间" htmlFor={`${idPrefix}-next-action-at`}>
+            <input
+              id={`${idPrefix}-next-action-at`}
+              type="datetime-local"
+              value={value.nextActionAt}
+              onChange={(e) => set({ nextActionAt: e.target.value })}
+              className="mt-1 w-full rounded border bg-background px-2 py-1.5 text-sm"
+            />
+          </Field>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,9 @@ import {
   MessageCircle,
   LayoutDashboard,
   Bell,
+  FormInput,
+  Coins,
+  FlaskConical,
   type LucideIcon
 } from 'lucide-react';
 
@@ -39,6 +42,12 @@ export const navItems: NavItem[] = [
   { label: '智能获客', href: '/prospecting', icon: Search, group: '获客' },
   { label: '客户管理', href: '/customers', icon: UserCheck, group: '获客' },
   { label: '线索管理', href: '/leads', icon: Users, group: '获客' },
+  { label: '触达运营', href: '/outreach', icon: Send, group: '获客' },
+  { label: '表单获客', href: '/forms', icon: FormInput, group: '获客' },
+  { label: '商机管道', href: '/deals/pipeline', icon: BarChart3, group: '获客' },
+  { label: '经营漏斗', href: '/analytics/funnel', icon: BarChart3, group: '获客' },
+  { label: '成本与 ROI', href: '/analytics/efficiency', icon: Coins, group: '获客' },
+  { label: '实验与 A/B', href: '/experiments', icon: FlaskConical, group: '运营' },
   { label: '获客分析', href: '/analytics/lead', icon: BarChart3, group: '获客' },
   { label: '内容运营', href: '/content', icon: FileText, group: '运营' },
   { label: '发布运营', href: '/publish', icon: Send, group: '运营' },

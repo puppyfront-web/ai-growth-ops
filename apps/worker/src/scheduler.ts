@@ -66,4 +66,28 @@ export async function startScheduler(): Promise<void> {
     }
   );
   logger.info('Agent run scheduler started — daily agent run every 24h');
+
+  // Outreach due-touch scan + SLA escalation — every 5 minutes.
+  const outreachQueue = getQueue(QUEUE_NAMES.OUTREACH_CHECK);
+  await outreachQueue.add(
+    QUEUE_NAMES.OUTREACH_CHECK,
+    { task: 'scan-outreach', triggeredAt: new Date().toISOString() },
+    {
+      repeat: { every: 300_000 },
+      jobId: 'outreach-check-repeat'
+    }
+  );
+  logger.info('Outreach scheduler started — scan runs every 5min');
+
+  // Scheduled prospecting tasks — every 15 minutes.
+  const prospectingScheduleQueue = getQueue(QUEUE_NAMES.PROSPECTING_SCHEDULE);
+  await prospectingScheduleQueue.add(
+    QUEUE_NAMES.PROSPECTING_SCHEDULE,
+    { task: 'claim-scheduled-prospecting', triggeredAt: new Date().toISOString() },
+    {
+      repeat: { every: 900_000 },
+      jobId: 'prospecting-schedule-repeat'
+    }
+  );
+  logger.info('Prospecting scheduler started — claim runs every 15min');
 }

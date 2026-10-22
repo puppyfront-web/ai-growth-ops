@@ -1,5 +1,7 @@
 import type { Platform } from '@prisma/client';
+import { defaultNextActionAt } from '@ai-growth-ops/shared';
 import type { DatabaseClient } from './client.js';
+import { applyAssignmentRules } from './assignment.js';
 
 const CHANNEL_BY_PLATFORM: Record<string, string> = {
   douyin: 'douyin',
@@ -202,17 +204,27 @@ export async function ensureCustomerFromInteraction(
     return { customer, created: false };
   }
 
+  const assignment = await applyAssignmentRules(
+    db,
+    input.organizationId,
+    { channel: input.platform, level: input.leadLevel },
+    'customer'
+  ).catch(() => null);
+
   const customer = await db.customer.create({
     data: {
       organizationId: input.organizationId,
       userId: input.userId,
       displayName: input.externalUserName?.trim() || input.externalUserId,
+      assignedTo: assignment?.assigneeId ?? null,
       phone: '',
       company: '待补充',
       role: '待补充',
       intent: intentText,
       channel,
       sourceNote,
+      nextAction: '首次联系',
+      nextActionAt: defaultNextActionAt(input.leadLevel),
       tags: ['评论私信', '待跟进'] as never,
       metadata: {
         platformUserKey,

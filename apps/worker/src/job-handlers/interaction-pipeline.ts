@@ -8,11 +8,14 @@
  */
 
 import {
+  applyAssignmentRules,
   ensureCustomerFromInteraction,
+  recordLeadConversionForPublishJob,
   trySyncCustomerToFeishu,
   type DatabaseClient
 } from '@ai-growth-ops/database';
 import { getSharedSkillRunner } from '@ai-growth-ops/skills';
+import { defaultNextActionAt } from '@ai-growth-ops/shared';
 import { getQueue, QUEUE_NAMES } from '../queue.js';
 import type {
   ClassificationResult,
@@ -408,6 +411,15 @@ async function convertInteractionToLead(
     !existing ||
     (LEVEL_RANK[newLevel] ?? 99) < (LEVEL_RANK[existing.level] ?? 99);
 
+  const assignment = existing
+    ? null
+    : await applyAssignmentRules(
+        db,
+        interaction.organizationId ?? '',
+        { channel: interaction.platform, level: newLevel },
+        'lead'
+      ).catch(() => null);
+
   const lead = await db.lead.upsert({
     where: {
       sourcePlatform_sourceAccountId_externalUserId: {
@@ -431,7 +443,9 @@ async function convertInteractionToLead(
       confidence: classification.confidence ?? null,
       summary: classification.summary || null,
       tags: classification.tags ?? undefined,
-      nextAction: classification.nextAction || null,
+      assignedTo: assignment?.assigneeId ?? null,
+      nextAction: classification.nextAction || '首次联系',
+      nextActionAt: defaultNextActionAt(newLevel),
       riskLevel: classification.riskLevel || 'low'
     },
     update: shouldUpdateLevel
@@ -471,6 +485,17 @@ async function convertInteractionToLead(
     where: { id: interactionId },
     data: { status: 'CONVERTED_TO_LEAD' }
   });
+
+  // Experiment conversion: count this lead against the content item that
+  // produced the interaction. Deduped by lead id; best-effort.
+  if (interaction.publishJobId && interaction.organizationId) {
+    await recordLeadConversionForPublishJob(
+      db,
+      interaction.organizationId,
+      interaction.publishJobId,
+      lead.id
+    );
+  }
 
   if (customerLink) {
     await trySyncCustomerToFeishu(

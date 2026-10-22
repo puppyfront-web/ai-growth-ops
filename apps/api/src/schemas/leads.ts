@@ -39,6 +39,8 @@ export const updateLeadSchema = z.object({
   tags: z.array(z.string()).optional(),
   assignedTo: z.string().optional(),
   nextAction: z.string().optional(),
+  nextActionAt: z.string().datetime().nullable().optional(),
+  lostReason: z.string().optional(),
   riskLevel: z.string().optional()
 });
 

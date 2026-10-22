@@ -30,6 +30,9 @@ import {
   isUnfilled,
   type CustomerFormValues
 } from '@/components/customers/CustomerEditor';
+import { CustomerDeals } from '@/components/customers/CustomerDeals';
+import { CustomerOutreach } from '@/components/customers/CustomerOutreach';
+import { CustomerMergePanel } from '@/components/customers/CustomerMergePanel';
 
 const segmentLabels: Record<string, string> = {
   hot: '高意向',
@@ -125,7 +128,11 @@ export default function CustomerDetailPage() {
         channel: form.channel,
         sourceNote: form.sourceNote,
         status: form.status,
-        assignedTo: form.assignedTo || undefined
+        assignedTo: form.assignedTo || undefined,
+        nextAction: form.nextAction.trim() || null,
+        nextActionAt: form.nextActionAt
+          ? new Date(form.nextActionAt).toISOString()
+          : null
       });
     },
     onSuccess: () => {
@@ -138,7 +145,12 @@ export default function CustomerDetailPage() {
   const statusMutation = useMutation({
     mutationFn: (status: (typeof CUSTOMER_STATUSES)[number]) =>
       updateCustomer(id, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers'] });
+      qc.invalidateQueries({ queryKey: ['deals'] });
+      qc.invalidateQueries({ queryKey: ['deals-pipeline'] });
+      qc.invalidateQueries({ queryKey: ['analytics', 'funnel'] });
+    }
   });
 
   const profileMutation = useMutation({
@@ -198,6 +210,10 @@ export default function CustomerDetailPage() {
     ? (customer.tags as string[])
     : [];
   const feishuUrl = customer.metadata?.lark?.externalUrl ?? null;
+  const customerOverdue =
+    Boolean(customer.nextActionAt) &&
+    !['won', 'lost'].includes(customer.status) &&
+    new Date(customer.nextActionAt as string).getTime() < Date.now();
 
   return (
     <div>
@@ -278,6 +294,7 @@ export default function CustomerDetailPage() {
                   onChange={setForm}
                   showStatus
                   showAssignee
+                  showNextAction
                   assigneeOptions={teamMembers.map((m) => ({
                     id: m.id,
                     name: m.name
@@ -334,6 +351,20 @@ export default function CustomerDetailPage() {
               <div>
                 <dt className="text-muted-foreground">负责人</dt>
                 <dd>{assigneeName ?? '未分配'}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">下次动作</dt>
+                <dd>{customer.nextAction || '未设置'}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">截止时间</dt>
+                <dd className={customerOverdue ? 'text-destructive' : ''}>
+                  {customer.nextActionAt
+                    ? `${formatDateTime(customer.nextActionAt)}${
+                        customerOverdue ? ' · 已逾期' : ''
+                      }`
+                    : '未设置'}
+                </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">公司</dt>
@@ -401,6 +432,18 @@ export default function CustomerDetailPage() {
             </dl>
             )}
           </section>
+
+          <CustomerDeals
+            customerId={customer.id}
+            assigneeOptions={teamMembers.map((member) => ({
+              id: member.id,
+              name: member.name
+            }))}
+          />
+
+          <CustomerOutreach customerId={customer.id} />
+
+          <CustomerMergePanel customerId={customer.id} />
 
           <section className="rounded-lg border p-4">
             <div className="flex items-center justify-between mb-3">

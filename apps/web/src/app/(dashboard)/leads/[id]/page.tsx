@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
@@ -8,6 +8,7 @@ import Link from 'next/link';
 import {
   getLead,
   getLeadActivities,
+  updateLead,
   updateLeadStatus,
   updateLeadLevel,
   assignLead,
@@ -15,6 +16,8 @@ import {
   syncLeadToFeishu,
   syncLeadToWecom
 } from '@/lib/api/leads';
+import { useOrgMembers } from '@/hooks/use-org-members';
+import { toast } from '@/components/ui/toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
@@ -40,6 +43,16 @@ const leadStatusLabels: Record<string, string> = {
   LOST: '已流失',
   INVALID: '无效'
 };
+function toLocalDateTimeInput(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const statusFlow = [
   'NEW',
   'QUALIFIED',
@@ -65,7 +78,12 @@ export default function LeadDetailPage() {
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => updateLeadStatus(id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead', id] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead', id] });
+      qc.invalidateQueries({ queryKey: ['deals'] });
+      qc.invalidateQueries({ queryKey: ['deals-pipeline'] });
+      qc.invalidateQueries({ queryKey: ['analytics', 'funnel'] });
+    }
   });
 
   const syncFeishuMutation = useMutation({
@@ -82,12 +100,36 @@ export default function LeadDetailPage() {
     mutationFn: (level: 'A' | 'B' | 'C' | 'D') => updateLeadLevel(id, level),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead', id] })
   });
+  const { data: members = [] } = useOrgMembers();
   const assignMutation = useMutation({
     mutationFn: (assignedTo: string) => assignLead(id, assignedTo),
     onSuccess: () => {
+      toast.success('已更新负责人');
       qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['lead-activities', id] });
-    }
+    },
+    onError: (error: Error) => toast.error(error.message || '分配失败')
+  });
+  const [nextActionDraft, setNextActionDraft] = useState('');
+  const [nextActionAtDraft, setNextActionAtDraft] = useState('');
+  useEffect(() => {
+    setNextActionDraft(lead?.nextAction ?? '');
+    setNextActionAtDraft(toLocalDateTimeInput(lead?.nextActionAt ?? null));
+  }, [lead?.id, lead?.nextAction, lead?.nextActionAt]);
+
+  const nextActionMutation = useMutation({
+    mutationFn: () =>
+      updateLead(id, {
+        nextAction: nextActionDraft.trim(),
+        nextActionAt: nextActionAtDraft
+          ? new Date(nextActionAtDraft).toISOString()
+          : null
+      }),
+    onSuccess: () => {
+      toast.success('下一步已更新');
+      qc.invalidateQueries({ queryKey: ['lead', id] });
+    },
+    onError: (error: Error) => toast.error(error.message || '更新失败')
   });
   const [followUp, setFollowUp] = useState('');
   const [followUpAction, setFollowUpAction] = useState('电话沟通');
@@ -187,21 +229,47 @@ export default function LeadDetailPage() {
             </div>
             <div>
               <span className="text-muted-foreground">负责人</span>
-              <div className="flex items-center gap-2">
-                <span>{lead.assignedTo ?? '未分配'}</span>
+              <NativeSelect
+                value={lead.assignedTo ?? ''}
+                onChange={(event) =>
+                  assignMutation.mutate(event.target.value)
+                }
+                disabled={assignMutation.isPending}
+                className="w-36 rounded border bg-background px-1.5 py-0.5 text-xs"
+                title="分配给团队成员"
+              >
+                <option value="">未分配</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div>
+              <span className="text-muted-foreground">下次动作</span>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 <input
-                  type="text"
-                  placeholder="分派给..."
-                  defaultValue={lead.assignedTo ?? ''}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const v = (e.target as HTMLInputElement).value.trim();
-                      if (v) assignMutation.mutate(v);
-                    }
-                  }}
-                  className="w-28 rounded border bg-background px-1.5 py-0.5 text-xs"
-                  title="输入负责人姓名后回车分派"
+                  value={nextActionDraft}
+                  onChange={(event) => setNextActionDraft(event.target.value)}
+                  placeholder="如：电话回访"
+                  className="w-32 rounded border bg-background px-1.5 py-0.5 text-xs"
                 />
+                <input
+                  type="datetime-local"
+                  value={nextActionAtDraft}
+                  onChange={(event) => setNextActionAtDraft(event.target.value)}
+                  className="rounded border bg-background px-1.5 py-0.5 text-xs"
+                />
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => nextActionMutation.mutate()}
+                  loading={nextActionMutation.isPending}
+                >
+                  保存
+                </Button>
               </div>
             </div>
             <div>

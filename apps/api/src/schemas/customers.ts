@@ -55,12 +55,22 @@ export const updateCustomerSchema = z.object({
   sourceNote: z.string().optional(),
   status: z.enum(['active', 'inactive', 'won', 'lost']).optional(),
   assignedTo: z.string().optional(),
+  nextAction: z.string().nullable().optional(),
+  nextActionAt: z.string().datetime().nullable().optional(),
+  lostReason: z.string().optional(),
   tags: z.array(z.string()).optional()
+});
+
+export const mergeCustomerSchema = z.object({
+  sourceCustomerId: z.string().min(1),
+  confirm: z.literal(true)
 });
 
 export const addCustomerActivitySchema = z.object({
   action: z.string().min(1),
-  note: z.string().optional()
+  note: z.string().optional(),
+  nextAction: z.string().optional(),
+  nextActionAt: z.string().datetime().nullable().optional()
 });
 
 const customerFieldMappingSchema = z
