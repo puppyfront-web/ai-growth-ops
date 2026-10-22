@@ -91,6 +91,11 @@ import { isLoginRateLimited, isRateLimited } from './server.js';
 import { parsePagination, paginate } from './middleware/pagination.js';
 import { validateBody } from './middleware/validate.js';
 import { hasPermission, hasAnyPermission } from './middleware/rbac.js';
+import {
+  buildPlatformAccountMetadata,
+  readPlatformAccountSecret,
+  toPlatformAccountDto
+} from './platform-account-security.js';
 import { createResearchTaskSchema } from './schemas/research.js';
 import {
   createContentItemSchema,
@@ -3856,7 +3861,7 @@ const routes: Route[] = [
         include: { platformCapabilities: { where: { deletedAt: null } } },
         orderBy: { platform: 'asc' }
       });
-      sendJson(res, 200, items);
+      sendJson(res, 200, items.map((item) => toPlatformAccountDto(item)));
     }
   },
   {
@@ -3865,6 +3870,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'integration:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const body = ctx.body as Record<string, unknown>;
       const platform = String(body.platform ?? '');
       const name = String(body.name ?? '');
@@ -3894,10 +3902,10 @@ const routes: Route[] = [
       if (cookie && !cookie.valid) return sendJson(res, 400, { error: cookie.error });
       const cookieRef = cookie?.valid ? encryptToken(cookie.cookie) : null;
 
-      // (userId, platform, name) 唯一约束覆盖软删除行：先查明同名占用，避免把 P2002 裸错误抛给前端
+      // 组织级唯一约束覆盖软删除行：先查明同名占用，避免把 P2002 裸错误抛给前端
       const existing = await ctx.db.platformAccount.findFirst({
         where: {
-          userId: orgCtx.user.id,
+          organizationId: orgCtx.organization.id,
           platform: platform as 'douyin',
           name
         }
@@ -3919,7 +3927,13 @@ const routes: Route[] = [
         refreshTokenEncrypted: encryptedRefresh,
         cookieRef,
         capabilities: body.capabilities ?? {},
-        metadata: { source: 'manual_create' }
+        metadata: buildPlatformAccountMetadata({
+          ...body,
+          metadata: {
+            source: 'manual_create',
+            ...((body.metadata as Record<string, unknown> | undefined) ?? {})
+          }
+        })
       };
 
       try {
@@ -3972,7 +3986,7 @@ const routes: Route[] = [
           where: { id: account.id },
           include: { platformCapabilities: { where: { deletedAt: null } } }
         });
-        sendJson(res, 201, result);
+        sendJson(res, 201, result ? toPlatformAccountDto(result) : null);
       } catch (err: unknown) {
         if (isUniqueViolation(err)) {
           return sendJson(res, 409, {
@@ -3989,6 +4003,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'integration:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const body = ctx.body as Record<string, unknown>;
       const account = await ctx.db.platformAccount.findFirst({
         where: {
@@ -4005,7 +4022,13 @@ const routes: Route[] = [
       if (body.mode != null) data.mode = String(body.mode);
       if (body.authType != null)
         data.authType = body.authType ? String(body.authType) : null;
-      if (body.metadata != null) data.metadata = body.metadata;
+      if (
+        body.metadata != null ||
+        body.appSecret != null ||
+        body.clientSecret != null
+      ) {
+        data.metadata = buildPlatformAccountMetadata(body, account.metadata);
+      }
       if (body.accessToken != null)
         data.accessTokenEncrypted = String(body.accessToken)
           ? encryptToken(String(body.accessToken))
@@ -4029,10 +4052,41 @@ const routes: Route[] = [
         }
       }
 
+      const capabilityUpdates: Array<{ id: string; enabled: boolean }> = [];
+      if (Array.isArray(body.capabilities)) {
+        for (const cap of body.capabilities as Array<Record<string, unknown>>) {
+          if (!cap.id || cap.enabled == null) continue;
+          const capability = await ctx.db.platformCapability.findFirst({
+            where: {
+              id: String(cap.id),
+              organizationId: orgCtx.organization.id,
+              platformAccountId: account.id,
+              deletedAt: null
+            },
+            select: { id: true }
+          });
+          if (!capability) {
+            return sendJson(res, 404, { error: '账号能力不存在' });
+          }
+          capabilityUpdates.push({
+            id: capability.id,
+            enabled: Boolean(cap.enabled)
+          });
+        }
+      }
+
       try {
-        await ctx.db.platformAccount.update({
-          where: { id: ctx.params.id },
-          data
+        await ctx.db.$transaction(async (tx) => {
+          await tx.platformAccount.update({
+            where: { id: ctx.params.id },
+            data
+          });
+          for (const capability of capabilityUpdates) {
+            await tx.platformCapability.update({
+              where: { id: capability.id },
+              data: { enabled: capability.enabled }
+            });
+          }
         });
       } catch (err: unknown) {
         if (isUniqueViolation(err)) {
@@ -4044,23 +4098,11 @@ const routes: Route[] = [
         throw err;
       }
 
-      // Update capability enabled flags if provided
-      if (Array.isArray(body.capabilities)) {
-        for (const cap of body.capabilities as Array<Record<string, unknown>>) {
-          if (cap.id && cap.enabled != null) {
-            await ctx.db.platformCapability.update({
-              where: { id: String(cap.id) },
-              data: { enabled: Boolean(cap.enabled) }
-            });
-          }
-        }
-      }
-
       const result = await ctx.db.platformAccount.findFirst({
         where: { id: ctx.params.id },
         include: { platformCapabilities: { where: { deletedAt: null } } }
       });
-      sendJson(res, 200, result);
+      sendJson(res, 200, result ? toPlatformAccountDto(result) : null);
     }
   },
   {
@@ -4069,6 +4111,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'integration:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const account = await ctx.db.platformAccount.findFirst({
         where: {
           id: ctx.params.id,
@@ -4094,8 +4139,7 @@ const routes: Route[] = [
           appId: (account.metadata as Record<string, unknown>)?.appId as
             | string
             | undefined,
-          appSecret: (account.metadata as Record<string, unknown>)
-            ?.appSecret as string | undefined
+          appSecret: readPlatformAccountSecret(account.metadata, 'appSecret')
         };
         const result = await provider.validateCredentials(config);
 
@@ -4138,6 +4182,9 @@ const routes: Route[] = [
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
       if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'integration:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
       const account = await ctx.db.platformAccount.findFirst({
         where: {
           id: ctx.params.id,

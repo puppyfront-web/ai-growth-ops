@@ -465,7 +465,7 @@ model PlatformAccount {
   prospectingTasks     ProspectingTask[]
   prospectingPlanDrafts ProspectingPlanDraft[]
 
-  @@unique([userId, platform, name])
+  @@unique([organizationId, platform, name])
   @@index([organizationId])
   @@map("platform_accounts")
 }

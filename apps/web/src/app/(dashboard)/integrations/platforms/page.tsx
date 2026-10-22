@@ -24,6 +24,7 @@ import { formatDateTime } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useAuth } from '@/providers/AuthProvider';
 
 const capabilityLabels: Record<string, string> = {
   text_image_publish: '图文发布',
@@ -91,6 +92,10 @@ const emptyDialog = (mode: 'create' | 'edit'): AccountDialog => ({
 });
 
 export default function PlatformsPage() {
+  const { currentOrganization } = useAuth();
+  const canManage = ['owner', 'admin'].includes(
+    currentOrganization?.role ?? ''
+  );
   const qc = useQueryClient();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const { data, isLoading } = useQuery({
@@ -113,11 +118,16 @@ export default function PlatformsPage() {
   const autoGuidedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const expired = data?.find((a) => a.status === 'expired');
-    if (expired && !autoGuidedRef.current.has(expired.id) && !browserLogin) {
+    if (
+      canManage &&
+      expired &&
+      !autoGuidedRef.current.has(expired.id) &&
+      !browserLogin
+    ) {
       autoGuidedRef.current.add(expired.id);
       setBrowserLogin({ accountId: expired.id, platform: expired.platform });
     }
-  }, [data, browserLogin]);
+  }, [canManage, data, browserLogin]);
 
   const [mutationError, setMutationError] = useState<string | null>(null);
 
@@ -282,15 +292,11 @@ export default function PlatformsPage() {
       cookie: '',
       appId:
         ((account.metadata as Record<string, unknown>)?.appId as string) ?? '',
-      appSecret:
-        ((account.metadata as Record<string, unknown>)?.appSecret as string) ??
-        '',
+      appSecret: '',
       clientKey:
         ((account.metadata as Record<string, unknown>)?.clientKey as string) ??
         '',
-      clientSecret:
-        ((account.metadata as Record<string, unknown>)
-          ?.clientSecret as string) ?? ''
+      clientSecret: ''
     });
   };
 
@@ -304,9 +310,11 @@ export default function PlatformsPage() {
       <PageHeader
         title="平台账号"
         actions={
-          <Button onClick={() => setDialog(emptyDialog('create'))}>
-            创建账号
-          </Button>
+          canManage ? (
+            <Button onClick={() => setDialog(emptyDialog('create'))}>
+              创建账号
+            </Button>
+          ) : undefined
         }
       />
 
@@ -355,7 +363,10 @@ export default function PlatformsPage() {
                 </div>
                 <button
                   onClick={() => handleToggleStatus(account)}
-                  disabled={updateMutation.isPending}
+                  disabled={!canManage || updateMutation.isPending}
+                  aria-label={
+                    canManage ? '切换账号状态' : '仅管理员可修改账号状态'
+                  }
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${isActive ? 'bg-primary' : 'bg-muted'} disabled:opacity-50`}
                 >
                   <span
@@ -370,7 +381,7 @@ export default function PlatformsPage() {
                   status={account.status}
                   label={accountStatusLabels[account.status] ?? account.status}
                 />
-                {account.cookieRef && account.mode === 'browser_assist' && (
+                {account.hasCookie && account.mode === 'browser_assist' && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
                     Cookie 已保存
                   </span>
@@ -386,7 +397,7 @@ export default function PlatformsPage() {
               </div>
 
               {/* 登录失效引导横幅 */}
-              {account.status === 'expired' && (
+              {canManage && account.status === 'expired' && (
                 <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-warning/25 bg-warning/10 p-2">
                   <p className="text-xs text-warning">
                     平台登录已失效，请重新扫码授权后继续获客任务
@@ -427,7 +438,7 @@ export default function PlatformsPage() {
                             cap.enabled
                           )
                         }
-                        disabled={updateMutation.isPending}
+                        disabled={!canManage || updateMutation.isPending}
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${cap.enabled ? 'bg-primary' : 'bg-muted'} disabled:opacity-50`}
                       >
                         <span
@@ -457,54 +468,56 @@ export default function PlatformsPage() {
                     ? `检查: ${formatDateTime(account.lastHealthCheckAt)}`
                     : '未检查'}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() =>
-                      setBrowserLogin({
-                        accountId: account.id,
-                        platform: account.platform
-                      })
-                    }
-                    className="text-success hover:text-success hover:underline"
-                  >
-                    扫码登录
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => handleValidate(account.id)}
-                    loading={validatingId === account.id}
-                    className="text-info hover:text-info hover:underline"
-                  >
-                    {validatingId === account.id ? '验证中...' : '验证'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => openEditDialog(account)}
-                    className="text-info hover:text-info hover:underline"
-                  >
-                    编辑
-                  </Button>
-                  <Button
-                    variant="ghost-destructive"
-                    size="xs"
-                    onClick={() => {
-                      confirm({
-                        title: '删除账号',
-                        description:
-                          '确定删除此平台账号？相关发布任务不会受影响。'
-                      }).then((ok) => {
-                        if (ok) deleteMutation.mutate(account.id);
-                      });
-                    }}
-                    className="hover:underline"
-                  >
-                    删除
-                  </Button>
-                </div>
+                {canManage && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() =>
+                        setBrowserLogin({
+                          accountId: account.id,
+                          platform: account.platform
+                        })
+                      }
+                      className="text-success hover:text-success hover:underline"
+                    >
+                      扫码登录
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => handleValidate(account.id)}
+                      loading={validatingId === account.id}
+                      className="text-info hover:text-info hover:underline"
+                    >
+                      {validatingId === account.id ? '验证中...' : '验证'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => openEditDialog(account)}
+                      className="text-info hover:text-info hover:underline"
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      variant="ghost-destructive"
+                      size="xs"
+                      onClick={() => {
+                        confirm({
+                          title: '删除账号',
+                          description:
+                            '确定删除此平台账号？相关发布任务不会受影响。'
+                        }).then((ok) => {
+                          if (ok) deleteMutation.mutate(account.id);
+                        });
+                      }}
+                      className="hover:underline"
+                    >
+                      删除
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           );

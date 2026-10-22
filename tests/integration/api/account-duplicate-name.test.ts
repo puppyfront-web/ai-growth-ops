@@ -124,4 +124,31 @@ describe('添加账号的同名冲突处理', () => {
     });
     expect(unchanged.name).toBe('同名冲突-待改名账号');
   });
+
+  it('同组织不同创建人仍不能创建同平台同名账号', async () => {
+    const teammate = await db.user.create({
+      data: {
+        email: `account-owner-${Date.now()}@example.com`,
+        name: '账号创建人'
+      }
+    });
+    await db.platformAccount.create({
+      data: {
+        organizationId: auth.orgId,
+        userId: teammate.id,
+        platform: 'xiaohongshu',
+        name: '组织共享小红书号',
+        mode: 'browser_assist',
+        status: 'active'
+      }
+    });
+
+    const response = await api.post('/api/accounts', {
+      platform: 'xiaohongshu',
+      name: '组织共享小红书号',
+      mode: 'browser_assist'
+    });
+
+    expect(response.status).toBe(409);
+  });
 });

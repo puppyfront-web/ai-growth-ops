@@ -16,9 +16,10 @@ export interface PlatformAccount {
   mode: string;
   status: string;
   authType?: string | null;
-  accessTokenEncrypted?: string | null;
-  refreshTokenEncrypted?: string | null;
-  cookieRef?: string | null;
+  hasAccessToken: boolean;
+  hasRefreshToken: boolean;
+  hasCookie: boolean;
+  hasSecretConfig: boolean;
   capabilities?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   platformCapabilities?: PlatformCapability[];
