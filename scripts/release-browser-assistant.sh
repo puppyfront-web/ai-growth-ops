@@ -54,8 +54,10 @@ gh release create "$TAG" "$ZIP_PATH" "$SHA_PATH" \
 
 - 可信 API Origin: \`$API_ORIGIN\`(构建时内置)
 - SHA-256: \`$SHA256\`
-- 安装:解压 zip,将 BrowserAssistant.app 拖入「应用程序」;首次打开请右键→打开
-- 适用:macOS 12+(Intel / Apple Silicon)"
+- 安装:解压 zip,将 BrowserAssistant.app 拖入「应用程序」
+- 首次打开被拦截(\"无法验证\")时:前往 系统设置 → 隐私与安全性 → 「安全性」区域点按「仍要打开」;
+  也可在终端执行 xattr -d com.apple.quarantine /Applications/BrowserAssistant.app
+- 适用:macOS 12+(架构以内置 Node 为准,见构建日志)"
 
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$TAG/BrowserAssistant-macOS.zip"
 echo ""

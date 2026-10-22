@@ -196,6 +196,16 @@ export function BrowserLoginDialog({
                 </Button>
               )}
             </div>
+            <details className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none">
+                首次打开被 macOS 提示「无法验证」？
+              </summary>
+              <p className="mt-2 leading-relaxed">
+                安装包尚未通过 Apple 公证，首次打开会被系统拦截。前往
+                系统设置 → 隐私与安全性，在「安全性」区域找到关于
+                BrowserAssistant 的提示，点按「仍要打开」，然后回到本页重新打开助手。
+              </p>
+            </details>
             <p className="text-xs text-muted-foreground">
               授权在本机完成，系统不会自动处理或规避平台验证码。
             </p>

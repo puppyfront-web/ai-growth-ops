@@ -100,3 +100,33 @@ describe('BrowserLoginDialog', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe('BrowserLoginDialog first-open guidance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    document.querySelectorAll('iframe').forEach((frame) => frame.remove());
+    vi.mocked(startBrowserLogin).mockResolvedValue({
+      sessionId: 'session-1',
+      status: 'waiting_local_bridge',
+      expiresAt: '2026-10-21T10:00:00.000Z',
+      launchUrl:
+        'aigrowthops://authorize?api=https%3A%2F%2Fops.example.com&session=session-1&token=bridge-token',
+      installerUrl: 'https://downloads.example.com/browser-assistant'
+    });
+    vi.mocked(getBrowserLoginStatus).mockResolvedValue({
+      status: 'waiting_local_bridge',
+      expiresAt: '2026-10-21T10:00:00.000Z'
+    });
+    vi.mocked(cancelBrowserLogin).mockResolvedValue({ ok: true });
+  });
+
+  it('shows the macOS first-open unblock steps near the install entry', async () => {
+    renderDialog();
+    await screen.findByText('正在打开浏览器助手');
+
+    expect(
+      screen.getByText(/系统设置 → 隐私与安全性/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/仍要打开/)).toBeInTheDocument();
+  });
+});
