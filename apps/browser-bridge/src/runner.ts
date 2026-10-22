@@ -37,17 +37,17 @@ function notify(kind: AssistantNotificationKind, detail?: string): void {
 
 export async function runBrowserBridge(args: BrowserBridgeArgs): Promise<void> {
   const client = new BrowserBridgeClient(args);
-  const session = await client.claim();
-  const adapter = getPlatformAuthorizationAdapter(session.platform);
-  const profileDirectory = resolveProfileDirectory(
-    defaultBrowserBridgeDataDirectory(),
-    session.profileRef
-  );
-  await mkdir(profileDirectory, { recursive: true, mode: 0o700 });
-
-  let unsafeRedirect: Error | null = null;
   let context;
   try {
+    const session = await client.claim();
+    const adapter = getPlatformAuthorizationAdapter(session.platform);
+    const profileDirectory = resolveProfileDirectory(
+      defaultBrowserBridgeDataDirectory(),
+      session.profileRef
+    );
+    await mkdir(profileDirectory, { recursive: true, mode: 0o700 });
+
+    let unsafeRedirect: Error | null = null;
     context = await chromium.launchPersistentContext(profileDirectory, {
       channel: 'chrome',
       headless: false

@@ -48,7 +48,10 @@ SHA_PATH="$ZIP_PATH.sha256"
 SHA256="$(cut -d' ' -f1 "$SHA_PATH")"
 
 echo "[release] 创建 GitHub Release $TAG …"
+# tag 指向构建产物对应的 commit(否则默认指向 main HEAD,可能与产物不一致)
+BUILD_COMMIT="$(git rev-parse HEAD)"
 gh release create "$TAG" "$ZIP_PATH" "$SHA_PATH" \
+  --target "$BUILD_COMMIT" \
   --title "浏览器助手 $TAG" \
   --notes "macOS 浏览器助手(ad-hoc 签名,未公证)。
 
@@ -57,7 +60,8 @@ gh release create "$TAG" "$ZIP_PATH" "$SHA_PATH" \
 - 安装:解压 zip,将 BrowserAssistant.app 拖入「应用程序」
 - 首次打开被拦截(\"无法验证\")时:前往 系统设置 → 隐私与安全性 → 「安全性」区域点按「仍要打开」;
   也可在终端执行 xattr -d com.apple.quarantine /Applications/BrowserAssistant.app
-- 适用:macOS 12+(架构以内置 Node 为准,见构建日志)"
+- 适用:macOS 12+,Apple Silicon 与 Intel 通用(universal,内置 Node v22.23.4)
+- 助手无窗口界面:安装后无需手动打开,回到系统网页点「授权」会自动唤起"
 
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$TAG/BrowserAssistant-macOS.zip"
 echo ""
