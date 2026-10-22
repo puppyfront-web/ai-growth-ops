@@ -194,3 +194,22 @@ pnpm test:architecture
 - [x] `.env`/`.env.example`：`BROWSER_ASSISTANT_DOWNLOAD_URL`、`BROWSER_ASSISTANT_TRUSTED_ORIGINS` 说明
 - [x] 验收：zip 经 Web 下载 206；`open aigrowthops://authorize?...` 唤起 .app 并完成领取/回传（本机 Profile 复用态验证 `logged_in`）
 - [ ] 待办：Apple Developer ID 正式签名与公证；全新 Profile（未登录态）走安装包完成一次真实扫码
+
+## 增补：安装包运行时与启动反馈修复（2026-10-22）
+
+前置：线上 `assistant-v0.1.0-202610221116` 包内置 Homebrew node 单文件，缺 `libnode.137.dylib`，任何机器上拉起即 dyld 崩溃且零反馈。
+
+- [x] Red：`tests/unit/browser-bridge/runner.test.ts` — claim 网络失败时必须发出 failed 系统通知（当前 claim 在 try/catch 外，测试应先红）
+- [x] Green：`runner.ts` 将 claim/Adapter/Profile 创建纳入失败通知 try/catch
+- [x] `scripts/build-browser-assistant.sh`：改用官方 node 发行版 `bin/+lib/` 布局（默认 universal，SHA-256 校验，缓存 `release/node-distro/`），构建后 `node -v` 冒烟门禁
+- [x] Swift 壳：无 URL 双击启动 2 秒后发通知退出；子进程 5 秒窗口内异常退出发兜底通知并把 stderr 落 `assistant.log`
+- [x] `apps/browser-bridge/package.json` 版本 0.1.0 → 0.1.1
+- [ ] 验收命令：
+  ```bash
+  pnpm vitest run tests/unit/browser-bridge
+  BROWSER_ASSISTANT_TRUSTED_ORIGINS=https://growth.puppyfront.com pnpm assistant:build
+  release/BrowserAssistant.app/Contents/Resources/node-runtime/bin/node -v
+  open 'aigrowthops://authorize?api=https://growth.puppyfront.com&session=smoke&token=smoke'   # 应出现失败通知而非无反应
+  pnpm typecheck && pnpm lint
+  ```
+- [ ] 重新 `pnpm assistant:release`（需操作员确认后执行）并更新交付状态

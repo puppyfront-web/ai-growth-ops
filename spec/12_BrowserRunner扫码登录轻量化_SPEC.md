@@ -235,3 +235,36 @@ waiting_local_bridge/waiting_user → cancelled | expired
 - 默认分发渠道为 GitHub Releases：`ASSISTANT_API_ORIGIN=<线上 HTTPS Origin> pnpm assistant:release` 构建并以 `assistant-v<版本>-<时间>` 为 tag 发 布，Release 附 zip、sha256 与首开说明；服务端 `BROWSER_ASSISTANT_DOWNLOAD_URL` 指向 Release 资产 URL。
 - 安装包不进入 Git 与 CI 产物；Linux CI 不构建安装包（Swift 壳需 macOS）。
 - 若仓库为私有，下载者需具备仓库读权限；对外公开分发前必须完成 Developer ID 签名与公证。
+
+### 13.5 运行时打包与启动反馈修复（2026-10-22 增补）
+
+线上 `assistant-v0.1.0-202610221116` 安装包在任何机器上均无法启动：构建脚本只复制了 Homebrew `node` 可执行文件，未随包其 `libnode.137.dylib` 等依赖，助手被 `aigrowthops://` 拉起后 dyld 立即中止，且全程零反馈（Swift 壳丢弃子进程 stderr、`runner.ts` 的 `claim()` 在失败通知 try/catch 之外、双击直接启动无任何 UI）。本节为修复规格。
+
+**Node 运行时打包**
+
+- 内置 Node 改用 nodejs.org 官方发行版（`bin/node` + `lib/` 完整布局），置于 `Resources/node-runtime/`，不再取 PATH 中的 node（Homebrew 版动态链接 `/opt/homebrew` 下的 dylib，单拷贝必然失效）。
+- 默认 `universal`（arm64 + x86_64 双架构，`lipo` 合并）；`ASSISTANT_ARCH=arm64|x86_64` 可构建单架构。Swift 壳同样按目标架构编译。
+- 版本默认固定 `v22.23.4`，两个架构 tarball 均做 SHA-256 校验；下载缓存在 `release/node-distro/`，不进 Git。
+- `assistant.sh` 改为执行 `Resources/node-runtime/bin/node`。
+
+**构建冒烟门禁（防再次发出坏包）**
+
+- 组装完成后必须执行 `Resources/node-runtime/bin/node -v` 并输出预期版本，失败即构建失败；无网络/校验不过同样失败，不允许跳过。
+
+**启动反馈（消除「无任何反应」）**
+
+- Swift 壳在收到 Apple Event 的 URL 后才拉起 `assistant.sh`；若启动后 2 秒内无 URL 事件（用户双击直接打开），发系统通知「请回到系统网页点击授权」后退出，不再留驻隐形进程。
+- Swift 壳捕获子进程 stderr；子进程在壳退出前（约 5 秒窗口）异常退出且 stderr 不含 JS 层失败标记时，发兜底失败通知，并把 stderr 追加写入 `~/Library/Application Support/ai-growth-ops/browser-bridge/assistant.log` 供排障。
+- `runner.ts` 将 `claim()`、Adapter 解析、Profile 目录创建全部纳入失败通知 try/catch：连接失败、会话不存在等启动期错误同样发系统通知，不再静默退出。
+
+**边界与非目标**
+
+- ad-hoc 签名与 Gatekeeper 首开拦截问题不变（需 Developer ID 公证，另行处理）；本节只修复「装了打不开、打开无反馈」。
+- 安装包版本升至 0.1.1；旧包（0.1.0）全部不可用，需重新发布并让用户重新下载。
+
+### 13.6 增补测试矩阵（2026-10-22）
+
+| 层级 | 用例 |
+| --- | --- |
+| Bridge 单元 | claim 网络失败/浏览器启动失败均发出 failed 系统通知且不泄露 Token；完成路径发 completed 通知 |
+| 构建验收 | 包内 `node -v` 冒烟通过；universal 包 `lipo -archs` 同时含 arm64 与 x86_64；`open aigrowthops://` 拉起后无效会话产生可见失败反馈 |
