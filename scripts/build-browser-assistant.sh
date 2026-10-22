@@ -32,6 +32,12 @@ NODE_BIN="${NODE_BIN:-$(command -v node)}"
 VERSION="$(node -p "require('./apps/browser-bridge/package.json').version")"
 BUILD_ID="$(date +%Y%m%d%H%M%S)"
 
+NODE_ARCHS="$(lipo -archs "$NODE_BIN" 2>/dev/null || echo unknown)"
+if [ "$NODE_ARCHS" = "arm64" ] || [ "$NODE_ARCHS" = "x86_64" ]; then
+  echo "[assistant] ⚠ 内置 Node 仅含 $NODE_ARCHS——安装包只能在同架构 Mac 上运行"
+  echo "  如需 Intel+Apple Silicon 通用包,用 universal node 构建: NODE_BIN=<universal-node-path> pnpm assistant:build"
+fi
+
 if [ -z "${BROWSER_ASSISTANT_TRUSTED_ORIGINS:-}" ]; then
   echo "✗ 请通过 BROWSER_ASSISTANT_TRUSTED_ORIGINS 指定安装包内置的可信 API Origin"
   echo "  本地开发示例: BROWSER_ASSISTANT_TRUSTED_ORIGINS=http://localhost:3002 pnpm assistant:build"
