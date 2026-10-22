@@ -41,7 +41,9 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       APP_URL: ${APP_URL:?Set APP_URL}
-      BROWSER_ASSISTANT_DOWNLOAD_URL: ${BROWSER_ASSISTANT_DOWNLOAD_URL:-}
+      # 默认指向本仓库 GitHub Release 的 latest 资产；发新助手后无需改配置。
+      # 需要自定义分发源时，在服务器 .env 里覆盖 BROWSER_ASSISTANT_DOWNLOAD_URL。
+      BROWSER_ASSISTANT_DOWNLOAD_URL: ${BROWSER_ASSISTANT_DOWNLOAD_URL:-https://github.com/puppyfront-web/ai-growth-ops/releases/latest/download/BrowserAssistant-macOS.zip}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ai-growth-ops.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
       ADMIN_NAME: ${ADMIN_NAME:-Admin}

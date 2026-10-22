@@ -92,7 +92,7 @@ bash scripts/deploy/update.sh
 | `POSTGRES_PASSWORD` / `MINIO_ROOT_PASSWORD` | 数据库与对象存储密码 |
 | `ADMIN_PASSWORD`（可选 `ADMIN_EMAIL`/`ADMIN_NAME`） | 首次 seed 的管理员 |
 | `APP_URL` | 对外访问地址，如 `https://yourdomain.com` |
-| `BROWSER_ASSISTANT_DOWNLOAD_URL` | 已签名浏览器助手安装包或下载页的公网 HTTPS 地址；未发布安装包前留空 |
+| `BROWSER_ASSISTANT_DOWNLOAD_URL` | 浏览器助手安装包下载地址；生产 compose 已内置默认值（本仓库 GitHub Release 的 latest 资产，`pnpm assistant:release` 发布后自动指向最新版），仅在需要自定义分发源时在服务器 .env 覆盖 |
 | `OPENAI_API_KEY`、`VISION_API_KEY`、`RESEND_API_KEY` 等 | 可选；配置了才会写入 .env |
 
 ### 日常发布与回滚
