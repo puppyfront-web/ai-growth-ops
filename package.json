@@ -14,10 +14,14 @@
     "db:prune-migrations": "node scripts/prune-migration-ghosts.mjs",
     "db:push": "pnpm prisma db push --schema packages/database/prisma/schema.prisma",
     "db:seed": "tsx --env-file-if-exists=.env packages/database/prisma/seed.ts",
+    "db:backfill-deals": "tsx --env-file-if-exists=.env scripts/backfill-deals.ts",
+    "acceptance:readiness": "tsx --env-file-if-exists=.env scripts/acceptance-readiness.ts",
     "db:reset:test": "node scripts/with-e2e-database.mjs pnpm prisma migrate reset --force --skip-seed --schema packages/database/prisma/schema.prisma",
     "dev": "pnpm --filter @ai-growth-ops/api dev",
     "dev:web": "pnpm --filter @ai-growth-ops/web dev",
     "dev:browser-runner": "pnpm --filter @ai-growth-ops/browser-runner dev",
+    "browser-bridge:login": "pnpm --filter @ai-growth-ops/browser-bridge login",
+    "assistant:build": "bash scripts/build-browser-assistant.sh",
     "docker:down": "docker compose down -v",
     "docker:up": "docker compose up -d",
     "e2e": "playwright test",
@@ -35,7 +39,8 @@
     "test:all": "pnpm test && pnpm test:e2e",
     "typecheck": "pnpm -r --if-present typecheck",
     "test:web": "vitest run --config vitest.web.config.ts",
-    "verify:release": "pnpm lint && pnpm typecheck && pnpm test:architecture && pnpm db:reset:test && pnpm test && pnpm build && pnpm test:e2e"
+    "verify:release": "pnpm lint && pnpm typecheck && pnpm test:architecture && pnpm db:reset:test && pnpm test && pnpm build && pnpm test:e2e",
+    "assistant:release": "bash scripts/release-browser-assistant.sh"
   },
   "dependencies": {
     "prisma": "^5.22.0",

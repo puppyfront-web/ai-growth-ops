@@ -31,7 +31,7 @@ cp .env.example .env      # 然后编辑 .env 填入 OPENAI_API_KEY(AI 能力需
 
 ### 启动后做什么
 
-1. **配置平台账号**:进入「集成 → 平台账号」,扫码登录抖音(会弹出浏览器窗口,用手机扫码)
+1. **配置平台账号**:首次使用先安装浏览器助手；之后进入「集成 → 平台账号」点击授权，系统 Chrome 会打开真实登录页，可扫码并完成平台要求的验证步骤
 2. **发布内容**:「内容」创建图文/视频 → 「发布」选择账号触发
 3. **互动管理**:「对话」查看同步的评论/私信,AI 自动分类并生成回复建议
 4. **配 LLM 增强**(强烈推荐):在 `.env` 填入有效 `OPENAI_API_KEY`,启用评论分类、回复生成、以及浏览器操作的**视觉兜底**(平台改版时自动用 vision 模型定位元素,避免选择器失效)
@@ -71,6 +71,7 @@ This stage creates the workspace skeleton only:
 - `apps/api`
 - `apps/worker`
 - `apps/browser-runner`
+- `apps/browser-bridge`（本机交互式账号授权，不下载 Chromium）
 - `packages/shared`
 - `packages/database`
 - `packages/connectors`
@@ -83,6 +84,8 @@ This stage creates the workspace skeleton only:
 Current apps expose typed health-check functions and package placeholders so the workspace can lint, test, and build before deeper business implementation starts.
 
 ## Interaction Runtime Notes
+
+账号授权不再由服务器上的 browser-runner 截图转发。用户首次安装浏览器助手后，Web 会通过 `aigrowthops://` 一键唤起系统 Chrome 和账号独立 Profile，用户直接在真实网页完成扫码、验证方式选择和验证码输入；正式使用不需要仓库、Node.js 或终端命令，也不会自动破解或规避验证码。
 
 Douyin / Xiaohongshu interaction workflows can use real browser-assist execution when both of these are available:
 

@@ -21,3 +21,6 @@ uploads/
 packages/database/generated/
 .cursor/
 gui-test-screenshots/
+release/
+.dev-logs/
+apps/web/public/browser-assistant/

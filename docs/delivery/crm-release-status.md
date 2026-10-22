@@ -3,6 +3,16 @@
 评估日期：2026-09-23
 当前结论：**单机本地数据边界的代码与真实平台核心闭环已验证（真实账号采集、语义打分、画像增强、一条真实发布），剩余回复/飞书写入、本地恢复演练和稳定性观察后即可上线。** 数据规范见 [local-first-data-boundary.md](./local-first-data-boundary.md)。
 
+> 2026-10-21 变更：账号登录默认链路已切换为本机 Browser Bridge，服务器截图、SSE 画面和坐标输入链路已下线。新链路已有单元与 API 集成测试，但尚未完成真实账号扫码、二次验证、Profile 重启和阿里云 Cookie 健康检查，因此当前标记为 `未验收`，不得沿用旧扫码链路的稳定结论。
+>
+> 2026-10-21 门禁复核（本机全量）：`pnpm lint`、`pnpm typecheck`、`pnpm build` 通过；`pnpm test:unit` 558 项、`pnpm test:web` 129 项（22 文件）、`pnpm test:integration` 273 项（39 文件，含重写后的 `tests/integration/api/browser-login.test.ts`）全部通过。旧服务端扫码链路（`/session/start`、screencast、坐标输入）在 API 与 Web 已无任何调用引用；`apps/browser-runner` 内 `/session/*` 路由保留为无调用方的兼容残留，由 `BROWSER_RUNNER_SECRET` 保护。规格见 `spec/12_BrowserRunner扫码登录轻量化_SPEC.md`。
+>
+> 剩余真实验收步骤（需操作员参与，参照 `docs/delivery/real-platform-acceptance-runbook.md`）：① 发布已签名浏览器助手并配置下载地址；② 从线上 Web 一键唤起助手，完成一次抖音真实扫码与（如触发）二次验证；③ 关闭后重新授权，验证 Profile 复用；④ 在阿里云部署后执行账号健康检查，确认本机 Cookie 在服务器侧有效；⑤ 记录外部 ID、时间与截图作为验收证据。上述步骤完成前，登录链路保持 `未验收` 标记。
+>
+> 2026-10-21 17:20 本机真实验收（上述②③的本机 CLI 形态、④的本机部分）已通过：操作员在本机 Chrome 完成抖音真实扫码（账号「黄鸭」，组织 7447d01b，会话 d92309c3，17:20:03 状态 `logged_in`，账号转为 `active`、`cookieRef` 加密落库）；随后重开 Bridge 4 秒内自动完成、无二次扫码，Profile 复用验证通过；本机健康检查 `/api/accounts/:id/validate` 返回 `valid: true`（17:20:40）；`audit_logs` 记录两条 `PlatformAccount` 更新（`source: local_browser_bridge`）。过期路径亦验证：两次会话 10 分钟未扫码自动转 `expired`，Bridge 进程正确退出。剩余未验收：签名助手分发与 URL Scheme（`aigrowthops://authorize`）一键唤起链路（本地未配置 `BROWSER_ASSISTANT_TRUSTED_ORIGINS` 时该路径会拒绝非白名单地址，仅 `--api/--session/--token` 参数路径已验证）、阿里云部署后的服务器侧健康检查。
+>
+> 2026-10-22 浏览器助手安装包（步骤①的本机形态）已交付并验证：`pnpm assistant:build` 产出 `BrowserAssistant.app`（Swift URL Scheme 原生壳 + 内置 Node + 自包含 bundle + 安装包内置可信 Origin 清单，ad-hoc 签名校验通过）与 Web 下载 zip（63MB，含 sha256）；`BROWSER_ASSISTANT_DOWNLOAD_URL` 配置后 API 返回 `installerUrl`，UI 下载按钮出现，zip 经 Web 下载返回 206；`open aigrowthops://authorize?...` 一键唤起 .app → 领取会话 → Chrome 打开 → 自动回传，账号状态 `logged_in`（02:18，本机已登录 Profile 复用态）。门禁：bridge 单测 12 项、`pnpm lint`、全工作区 typecheck 通过。规格增补见 `spec/12_..._SPEC.md` §13。仍标 `未正式发布`：ad-hoc 签名未经 Apple 公证（首次打开需右键→打开），且未用全新 Profile（未登录态）经安装包完成真实扫码——该两项完成前不得对外宣称正式发布。
+
 ## 已完成的整理
 
 - 主入口收敛为智能获客、客户、内容与发布、评论私信、获客分析、集成和设置；旧日历与素材文件夹地址保留重定向。

@@ -27,6 +27,8 @@ LOCAL_DATA_DIR=/absolute/path/to/ai-growth-ops-data
 
 `TOKEN_ENCRYPTION_KEY` 用于解密本地保存的平台和模型凭据，备份后不得随意更换。`LOCAL_DATA_DIR` 必须位于用户控制的持久磁盘；不要放入公开目录或未经确认的云盘同步目录。PostgreSQL、Redis、MinIO、API、Worker 和 Browser Runner 都使用这个目录，不再配置云端控制面数据库。
 
+账号扫码授权不在 ECS 的 Browser Runner 中启动浏览器。正式用户只需安装一次浏览器助手，之后在 Web 点击授权即可通过 `aigrowthops://` 唤起系统 Chrome；不得要求用户克隆仓库、安装 Node.js 或运行终端命令。本地助手不下载 Playwright Chromium；`APP_URL` 必须是用户电脑可访问的 HTTPS 地址，安装包必须把同一 Origin 写入可信列表。服务器 Browser Runner 仍用于采集和发布。
+
 ## 阿里云 ECS 快速部署（推荐）
 
 服务器上只需要 Docker 和 Git，构建、迁移、初始化全部在容器内完成：
@@ -90,6 +92,7 @@ bash scripts/deploy/update.sh
 | `POSTGRES_PASSWORD` / `MINIO_ROOT_PASSWORD` | 数据库与对象存储密码 |
 | `ADMIN_PASSWORD`（可选 `ADMIN_EMAIL`/`ADMIN_NAME`） | 首次 seed 的管理员 |
 | `APP_URL` | 对外访问地址，如 `https://yourdomain.com` |
+| `BROWSER_ASSISTANT_DOWNLOAD_URL` | 已签名浏览器助手安装包或下载页的公网 HTTPS 地址；未发布安装包前留空 |
 | `OPENAI_API_KEY`、`VISION_API_KEY`、`RESEND_API_KEY` 等 | 可选；配置了才会写入 .env |
 
 ### 日常发布与回滚

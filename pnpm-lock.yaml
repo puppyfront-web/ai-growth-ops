@@ -100,6 +100,15 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
 
+  apps/browser-bridge:
+    dependencies:
+      '@ai-growth-ops/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      playwright-core:
+        specifier: 1.62.0
+        version: 1.62.0
+
   apps/browser-runner:
     dependencies:
       '@ai-growth-ops/shared':
