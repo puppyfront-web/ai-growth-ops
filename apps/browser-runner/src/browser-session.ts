@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { type Browser, type BrowserContext, type Page } from 'playwright';
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
@@ -264,6 +266,175 @@ export async function createHeadlessSession(
       } finally {
         const remaining = (browserActiveContexts.get(browserKey) ?? 1) - 1;
         browserActiveContexts.set(browserKey, Math.max(remaining, 0));
+      }
+    }
+  };
+}
+
+// ── Persistent per-account crawl profiles ─────────────────────────
+//
+// 一次性 context 的设备指纹/本地存储每次重置，是平台风控的重点识别特征。
+// 获客采集按账号使用持久化 user-data-dir，让浏览器环境随时间累积信任。
+// 登录态仍以服务端 cookieRef 为准：每次会话 addCookies 覆盖。
+
+const CRAWL_PROFILE_KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const PERSISTENT_IDLE_TTL_MS = 10 * 60 * 1000;
+
+/** profileKey 只允许平台前缀 + 账号 ID 这类安全字符，杜绝路径穿越。 */
+export function sanitizeCrawlProfileKey(value: string): string | null {
+  return CRAWL_PROFILE_KEY_PATTERN.test(value) ? value : null;
+}
+
+function defaultCrawlProfileRoot(): string {
+  if (process.platform === 'darwin') {
+    return join(
+      homedir(),
+      'Library',
+      'Application Support',
+      'ai-growth-ops',
+      'browser-runner',
+      'browser-profiles'
+    );
+  }
+  if (process.platform === 'win32') {
+    return join(
+      process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'),
+      'ai-growth-ops',
+      'browser-runner',
+      'browser-profiles'
+    );
+  }
+  return join(
+    process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'),
+    'ai-growth-ops',
+    'browser-runner',
+    'browser-profiles'
+  );
+}
+
+export function crawlProfileDirectory(profileKey: string): string {
+  const root =
+    process.env.BROWSER_RUNNER_PROFILE_DIR ??
+    join(
+      process.env.LOCAL_DATA_DIR ?? defaultCrawlProfileRoot(),
+      'browser-profiles'
+    );
+  return join(root, profileKey);
+}
+
+interface PersistentProfileEntry {
+  context: BrowserContext;
+  activeSessions: number;
+  stealthApplied: boolean;
+  idleTimer?: ReturnType<typeof setTimeout>;
+}
+
+const persistentProfiles = new Map<string, PersistentProfileEntry>();
+/** 进行中的 launch 去重：并发请求同一账号时只启动一个浏览器进程。 */
+const persistentLaunches = new Map<string, Promise<BrowserContext>>();
+
+async function acquirePersistentContext(
+  profileKey: string,
+  headedOverride?: boolean
+): Promise<PersistentProfileEntry> {
+  const existing = persistentProfiles.get(profileKey);
+  if (existing) {
+    if (existing.idleTimer) {
+      clearTimeout(existing.idleTimer);
+      existing.idleTimer = undefined;
+    }
+    existing.activeSessions += 1;
+    return existing;
+  }
+
+  let launch = persistentLaunches.get(profileKey);
+  if (!launch) {
+    const headed =
+      resolveHeadedPreference(headedOverride) && hasDisplaySupport();
+    launch = chromium.launchPersistentContext(
+      crawlProfileDirectory(profileKey),
+      {
+        headless: !headed,
+        args: [...STEALTH_LAUNCH_ARGS],
+        ignoreDefaultArgs: ['--enable-automation'],
+        userAgent: STEALTH_USER_AGENT,
+        viewport: { width: 1280, height: 900 },
+        locale: 'zh-CN',
+        timezoneId: 'Asia/Shanghai'
+      }
+    );
+    launch.catch(() => persistentLaunches.delete(profileKey));
+    persistentLaunches.set(profileKey, launch);
+  }
+
+  const context = await launch;
+  let entry = persistentProfiles.get(profileKey);
+  if (!entry) {
+    entry = { context, activeSessions: 0, stealthApplied: false };
+    persistentProfiles.set(profileKey, entry);
+  }
+  entry.activeSessions += 1;
+  return entry;
+}
+
+function releasePersistentSession(profileKey: string): void {
+  const entry = persistentProfiles.get(profileKey);
+  if (!entry) return;
+  entry.activeSessions = Math.max(0, entry.activeSessions - 1);
+  if (entry.activeSessions > 0 || entry.idleTimer) return;
+  entry.idleTimer = setTimeout(() => {
+    const current = persistentProfiles.get(profileKey);
+    if (!current || current.activeSessions > 0) return;
+    persistentProfiles.delete(profileKey);
+    void current.context.close().catch(() => undefined);
+  }, PERSISTENT_IDLE_TTL_MS);
+  entry.idleTimer.unref?.();
+}
+
+/**
+ * 采集会话入口：带 profileKey 时使用按账号持久化的浏览器 Profile，
+ * 否则回退共享浏览器的一次性 stealth context（发布/同步等旧链路不变）。
+ */
+export async function createCrawlSession(
+  cookie: string,
+  siteDomain: string,
+  headedOverride?: boolean,
+  profileKey?: string
+): Promise<{
+  context: BrowserContext;
+  page: Page;
+  close: () => Promise<void>;
+}> {
+  const key = profileKey ? sanitizeCrawlProfileKey(profileKey) : null;
+  if (profileKey && !key) {
+    console.warn(
+      '[browser-session] 非法 profileKey（含非法字符或超长），已回退一次性会话'
+    );
+  }
+  if (!key) {
+    return createStealthSession(cookie, siteDomain, headedOverride);
+  }
+
+  const entry = await acquirePersistentContext(key, headedOverride);
+  if (!entry.stealthApplied) {
+    await applyStealthInitScript(entry.context);
+    entry.stealthApplied = true;
+  }
+  const cookies = resolveContextCookies(cookie, siteDomain);
+  if (cookies.length > 0) await entry.context.addCookies(cookies);
+
+  const page = await entry.context.newPage();
+  return {
+    context: entry.context,
+    page,
+    // 只关 page：持久 context 保持存活，空闲 10 分钟后才整体关闭
+    close: async () => {
+      try {
+        await page.close();
+      } catch {
+        /* */
+      } finally {
+        releasePersistentSession(key);
       }
     }
   };

@@ -5,6 +5,7 @@ import {
   asProspectEvidenceList,
   assertCrawlAllowed,
   assertProfileAllowed,
+  buildZeroResultWarning,
   DEFAULT_ICP_CONFIG,
   DEFAULT_ICP_FOR_PROSPECTING,
   type AggregatedProspect,
@@ -169,6 +170,8 @@ async function crawlSearchQueryComments(
     commentScrollRounds: number;
     skipContentIds?: Set<string>;
     claimVideoSlot?: () => Promise<boolean>;
+    /** 按账号持久化浏览器 Profile 的键，降低采集浏览器被风控识别的概率 */
+    profileKey?: string;
   },
   onProgress?: (update: {
     progress: Partial<TaskProgress>;
@@ -178,7 +181,11 @@ async function crawlSearchQueryComments(
     };
   }) => Promise<void>,
   onVideoCrawled?: () => Promise<void>
-): Promise<RawProspectVideo[]> {
+): Promise<{
+  videos: RawProspectVideo[];
+  /** 搜索空结果时 browser-runner 返回的原因码，用于生成准确的零结果警告。 */
+  searchEmptyReason?: string;
+}> {
   await onProgress?.({
     progress: {
       phase: 'searching',
@@ -196,12 +203,14 @@ async function crawlSearchQueryComments(
     }>;
     captchaRequired?: boolean;
     message?: string;
+    reasonCode?: string;
   }>('/assist/search-videos', {
     platform: params.platform,
     cookie: params.cookie,
     keyword: params.query,
     topN: params.topNVideos,
-    headed: false
+    headed: false,
+    ...(params.profileKey ? { profileKey: params.profileKey } : {})
   });
 
   if (searchPayload.captchaRequired) {
@@ -211,10 +220,20 @@ async function crawlSearchQueryComments(
     );
   }
 
-  const items = (searchPayload.results ?? []).filter(
+  const searchResults = searchPayload.results ?? [];
+  const items = searchResults.filter(
     (item) => !params.skipContentIds?.has(item.contentId)
   );
-  if (items.length === 0) return [];
+  if (items.length === 0) {
+    return {
+      videos: [],
+      searchEmptyReason:
+        searchResults.length > 0
+          ? // 搜索有结果但全被「近 N 天已抓」去重跳过，与搜索失败区分开
+            'SEARCH_ALL_SKIPPED'
+          : (searchPayload.reasonCode ?? 'SEARCH_UNKNOWN')
+    };
+  }
 
   await onProgress?.({
     progress: {
@@ -258,7 +277,8 @@ async function crawlSearchQueryComments(
         awemeType: item.awemeType,
         maxCommentsPerVideo: params.maxCommentsPerVideo,
         commentScrollRounds: params.commentScrollRounds,
-        headed: false
+        headed: false,
+        ...(params.profileKey ? { profileKey: params.profileKey } : {})
       });
       allResults.push({
         contentId: video.contentId,
@@ -311,7 +331,7 @@ async function crawlSearchQueryComments(
     await onVideoCrawled?.();
   }
 
-  return allResults;
+  return { videos: allResults };
 }
 
 type SemanticScore = {
@@ -624,6 +644,7 @@ export async function executeProspectingTask(
     >();
 
     let semanticLlmUnavailable = false;
+    const searchEmptyReasons = new Set<string>();
 
     for (const unit of executionUnits) {
       const strategyIndex = enabledStrategies.findIndex(
@@ -644,7 +665,7 @@ export async function executeProspectingTask(
         { totalVideos, totalComments, totalCandidates }
       );
 
-      const videos = await crawlSearchQueryComments(
+      const { videos, searchEmptyReason } = await crawlSearchQueryComments(
         {
           platform: task.platform,
           cookie,
@@ -656,6 +677,7 @@ export async function executeProspectingTask(
           ),
           commentScrollRounds: task.commentScrollRounds,
           skipContentIds,
+          profileKey: `${task.platform}-${account.id}`,
           claimVideoSlot: async () => {
             const ok = await claimVideoCrawl(db, organizationId, account.id);
             if (!ok) quotaExhausted = true;
@@ -683,6 +705,7 @@ export async function executeProspectingTask(
           );
         }
       );
+      if (searchEmptyReason) searchEmptyReasons.add(searchEmptyReason);
 
       totalVideos += videos.length;
       totalComments += videos.reduce(
@@ -853,14 +876,14 @@ export async function executeProspectingTask(
         `已跳过 ${skippedDuplicateUserKeys.size} 个近 ${PROSPECT_GUARD.candidateDedupeTtlDays} 天重复潜客`
       );
     }
-    if (totalCandidates === 0 && skippedDuplicateUserKeys.size === 0) {
-      warnings.push(
-        totalComments === 0
-          ? '未抓取到评论，可能是 Cookie 失效、触发验证码或搜索无结果，请检查抖音登录后重新执行'
-          : '已抓取评论但未找到达到阈值的潜客，可调低「最低相关度」后重新执行'
-      );
-    }
-    const zeroResultWarning = warnings.join('。') || undefined;
+    const zeroResultWarning = buildZeroResultWarning({
+      totalComments,
+      totalCandidates,
+      skippedDuplicates: skippedDuplicateUserKeys.size,
+      searchEmptyReasons: [...searchEmptyReasons]
+    });
+    if (zeroResultWarning) warnings.push(zeroResultWarning);
+    const warning = warnings.join('。') || undefined;
 
     const completed = await db.prospectingTask.updateMany({
       where: { id: task.id, organizationId, executionToken, status: 'running' },
@@ -875,7 +898,10 @@ export async function executeProspectingTask(
           phase: 'done',
           strategyTotal: enabledStrategies.length,
           updatedAt: new Date().toISOString(),
-          ...(zeroResultWarning ? { warning: zeroResultWarning } : {})
+          ...(warning ? { warning } : {}),
+          ...(searchEmptyReasons.size > 0
+            ? { searchEmptyReasons: [...searchEmptyReasons] }
+            : {})
         } as never
       }
     });

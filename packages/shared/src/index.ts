@@ -12,6 +12,7 @@ export * from './customer-playbook';
 export * from './prospect-scoring';
 export * from './prospect-aggregate';
 export * from './prospect-guard';
+export * from './prospect-warning';
 export * from './prospecting-plan';
 export * from './acquisition-analytics';
 export * from './funnel-analytics';
