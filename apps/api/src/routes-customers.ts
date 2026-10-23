@@ -3,6 +3,8 @@ import type { DatabaseClient } from '@ai-growth-ops/database';
 import {
   findCustomerDuplicateGroups,
   findDuplicateCandidatesForCustomer,
+  ingestInquiry,
+  InquiryValidationError,
   mergeCustomers,
   syncCustomerOutcomeTx,
   syncCustomerToFeishu,
@@ -24,6 +26,7 @@ import {
   customerImportExecuteSchema,
   customerImportPreviewSchema,
   icpConfigSchema,
+  inquiryWebhookSchema,
   mergeCustomerSchema,
   updateCustomerSchema,
   updateCustomerPlaybookSchema
@@ -46,6 +49,7 @@ import {
   listCustomerFollowUps,
   updateCustomerPlaybook
 } from './services/customer-playbook.js';
+import { clientIp, isRateLimited } from './server.js';
 
 interface CustomerRouteContext {
   db: DatabaseClient;
@@ -255,6 +259,8 @@ export const customerRoutes: Array<{
             userId: orgCtx.user.id,
             displayName: body.displayName.trim(),
             phone: normalizedPhone,
+            email: body.email || undefined,
+            imAccount: body.imAccount || undefined,
             company: body.company.trim(),
             role: body.role.trim(),
             intent: body.intent.trim(),
@@ -594,6 +600,10 @@ export const customerRoutes: Array<{
                 pendingContact: !phoneUpdate
               } as never
             }),
+            ...(body.email !== undefined && { email: body.email || null }),
+            ...(body.imAccount !== undefined && {
+              imAccount: body.imAccount || null
+            }),
             ...(body.company != null && {
               company: body.company.trim() || '待补充'
             }),
@@ -928,6 +938,54 @@ export const customerRoutes: Array<{
         config
       );
       sendJson(res, 200, config);
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/inquiries/webhook',
+    handler: async (req, res, ctx) => {
+      // 与公开表单同款 IP 限流：防止公开 token 端点被高频刷出动态与通知。
+      if (isRateLimited(`inquiry:${clientIp(req)}`, 30, 60_000)) {
+        return sendJson(res, 429, { error: '请求过于频繁，请稍后再试' });
+      }
+      const token = (req.headers['x-webhook-token'] as string) || '';
+      if (!token) return sendJson(res, 401, { error: 'missing X-Webhook-Token' });
+      const source = await ctx.db.leadSourceConfig.findUnique({
+        where: { token }
+      });
+      if (!source || !source.enabled) {
+        return sendJson(res, 403, { error: 'invalid or disabled token' });
+      }
+      const bodyResult = validateBody(inquiryWebhookSchema, ctx.body);
+      if (!bodyResult.success) {
+        return sendJson(res, 400, {
+          error: '输入验证失败',
+          errors: bodyResult.errors
+        });
+      }
+      const payload = bodyResult.data;
+      const name = payload.name ?? payload.externalUserName;
+      if (!name) return sendJson(res, 400, { error: 'name (或 externalUserName) 必填' });
+      try {
+        const result = await ingestInquiry(ctx.db, source, {
+          name,
+          channel: payload.channel,
+          phone: payload.phone,
+          email: payload.email,
+          imAccount: payload.imAccount,
+          company: payload.company,
+          message: payload.message,
+          country: payload.country
+        });
+        sendJson(res, 201, { ok: true, ...result });
+      } catch (e) {
+        if (e instanceof InquiryValidationError) {
+          sendJson(res, 400, { error: e.message });
+        } else {
+          console.error('[inquiries/webhook] ingest failed:', e);
+          sendJson(res, 500, { error: '询盘写入失败，请稍后重试' });
+        }
+      }
     }
   },
   {

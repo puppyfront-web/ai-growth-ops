@@ -134,6 +134,8 @@ export default function CustomersPage() {
       createCustomer({
         displayName: form.displayName,
         phone: form.phone,
+        email: form.email.trim() || undefined,
+        imAccount: form.imAccount.trim() || undefined,
         company: form.company,
         role: form.role,
         intent: form.intent,
@@ -164,6 +166,8 @@ export default function CustomersPage() {
       return updateCustomer(editingId, {
         displayName: form.displayName.trim(),
         phone: form.phone.trim(),
+        email: form.email.trim(),
+        imAccount: form.imAccount.trim(),
         company: form.company.trim(),
         role: form.role.trim(),
         intent: form.intent.trim(),

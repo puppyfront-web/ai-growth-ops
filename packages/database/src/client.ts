@@ -39,6 +39,7 @@ export async function resetDatabase(
     db.outreachSequence.deleteMany(),
     db.outreachSuppression.deleteMany(),
     db.assignmentRule.deleteMany(),
+    db.leadSourceConfig.deleteMany(),
     db.leadCaptureSubmission.deleteMany(),
     db.leadCaptureForm.deleteMany(),
     db.marketingCost.deleteMany(),

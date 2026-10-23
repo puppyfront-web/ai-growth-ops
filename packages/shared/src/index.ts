@@ -5,6 +5,7 @@ export * from './interaction-sync';
 export * from './rule-classifier';
 export * from './insight-generator';
 export * from './phone';
+export * from './inquiry-channel';
 export * from './csv';
 export * from './customer-import';
 export * from './customer-scoring';

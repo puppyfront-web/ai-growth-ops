@@ -16,6 +16,8 @@
 > 2026-10-22 23:30 重大修正：线上 Release `assistant-v0.1.0-202610221116` 安装包（3.2MB）**在任何机器上均无法启动**——该次构建只复制了 Homebrew `node` 可执行文件（缺失 `libnode.137.dylib` 依赖，dyld 即时中止），且全程零反馈（壳丢弃子进程 stderr、`claim()` 在失败通知之外、双击启动无 UI）。上一条的 63MB zip 与 11:16 发布的 3.2MB 产物并非同一构建，早间"唤起验证通过"对应的是当时的完整产物；11:16 在 Homebrew node 环境下重构建并直接发布，坏包未经过任何运行验证即上线。已修复（v0.1.1，规格见 `spec/12_..._SPEC.md` §13.5）：内置 Node 改为 nodejs.org 官方发行版（默认 universal arm64+x86_64，SHA-256 校验）、构建后 `node -v` 冒烟门禁（此类坏包将直接构建失败）、双击直接启动发通知指引后退出、`claim()` 等启动期失败同样发系统通知、秒级崩溃兜底通知并把 stderr 写入 `assistant.log`。本机验证：zip 解包后 `node -v` 正常（v22.23.4）、双架构 lipo 校验通过、无效会话链路产生可见失败反馈（`浏览器授权失败：BRIDGE_TOKEN_INVALID`）、双击启动 2 秒通知后退出。门禁：bridge/shared 单测 29 项、Web 套件 132 项、`pnpm typecheck`、`pnpm lint`、`test:architecture` 通过。待办：重新 `pnpm assistant:release` 发 v0.1.1 并由用户重新下载；全新 Profile 经安装包完成真实扫码与 Apple 公证仍未完成。
 >
 > 2026-10-23 多用户平台账号安全修复：账号创建、修改、删除和健康检查统一要求 `integration:manage`；能力开关按组织与账号双重校验并与账号更新共用事务；HTTP 响应移除 Token/Cookie/Secret 及密文，仅返回凭据存在状态；App Secret/Client Secret 改为服务端加密保存；账号名称唯一性收紧为组织 + 平台 + 名称。自动化证据：单元测试 570 项、Web 132 项、架构守卫、全工作区 typecheck、lint、Prisma schema 校验通过。数据库集成测试与迁移重放因本机 Docker Desktop 无法启动而未执行；两个真实账号 Profile 隔离和小红书真实低量采集仍为未验收。
+>
+> 2026-10-23 询盘多渠道接入（已验收，内部数据链路）：`AcquisitionChannel` 新增 WhatsApp/Telegram/微信（个人）/邮件/Messenger/Instagram/Line 7 个**数据来源渠道**；`Customer` 新增 `email`/`imAccount` 联系方式与三级去重（手机号→邮箱→IM 账号）；新增 `POST /api/inquiries/webhook`（token 鉴权、渠道路由分配、通知、幂等）与客户 CSV 导入邮箱/IM 列。证据：单测 602 项、Web 151 项、集成新增 7 项全部通过，空库迁移重放与 schema diff 无漂移，见 `docs/delivery/2026-10-23-inquiry-channels.md`。边界：IM 渠道仅为询盘数据录入标识，**不构成任何 IM 平台的自动化能力**（无收发消息）；集成套件存在 2 个文件的既有失败（`platform-account-security` 测试调用了不存在的 `api.delete`、`account-auth-expired` 浏览器 Bridge 401），与本次改动无关，待修。
 
 ## 已完成的整理
 

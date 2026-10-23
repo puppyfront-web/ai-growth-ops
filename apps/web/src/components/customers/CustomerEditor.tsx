@@ -22,6 +22,13 @@ export const CHANNEL_LABELS: Record<AcquisitionChannel, string> = {
   phone: '电话',
   website: '官网',
   partner: '合作伙伴',
+  whatsapp: 'WhatsApp',
+  telegram: 'Telegram',
+  wechat_personal: '微信（个人）',
+  email: '邮件',
+  messenger: 'Messenger',
+  instagram: 'Instagram',
+  line: 'Line',
   other: '其他'
 };
 
@@ -48,6 +55,8 @@ export function isUnfilled(value: string | null | undefined): boolean {
 export type CustomerFormValues = {
   displayName: string;
   phone: string;
+  email: string;
+  imAccount: string;
   company: string;
   role: string;
   intent: string;
@@ -74,6 +83,8 @@ export const emptyCustomerForm = (
 ): CustomerFormValues => ({
   displayName: '',
   phone: '',
+  email: '',
+  imAccount: '',
   company: '',
   role: '',
   intent: '',
@@ -89,6 +100,8 @@ export function formFromCustomer(customer: Customer): CustomerFormValues {
   return {
     displayName: customer.displayName,
     phone: customer.phone,
+    email: customer.email ?? '',
+    imAccount: customer.imAccount ?? '',
     company: isUnfilled(customer.company) ? '' : customer.company,
     role: isUnfilled(customer.role) ? '' : customer.role,
     intent: customer.intent,
@@ -143,6 +156,25 @@ export function CustomerEditor({
             onBlur={onPhoneBlur}
             className="mt-1 w-full rounded border bg-background px-2 py-1.5 text-sm"
             placeholder="可稍后补充"
+          />
+        </Field>
+        <Field label="邮箱" htmlFor={`${idPrefix}-email`}>
+          <input
+            id={`${idPrefix}-email`}
+            type="email"
+            value={value.email}
+            onChange={(e) => set({ email: e.target.value })}
+            className="mt-1 w-full rounded border bg-background px-2 py-1.5 text-sm"
+            placeholder="海外询盘常用，可稍后补充"
+          />
+        </Field>
+        <Field label="IM 账号" htmlFor={`${idPrefix}-im-account`}>
+          <input
+            id={`${idPrefix}-im-account`}
+            value={value.imAccount}
+            onChange={(e) => set({ imAccount: e.target.value })}
+            className="mt-1 w-full rounded border bg-background px-2 py-1.5 text-sm"
+            placeholder="微信号 / Telegram / WhatsApp 等"
           />
         </Field>
         <Field label="公司" htmlFor={`${idPrefix}-company`}>

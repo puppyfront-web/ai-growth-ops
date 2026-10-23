@@ -127,6 +127,15 @@ setInterval(() => {
   }
 }, 300_000);
 
+/** Best-effort client IP for rate-limit keys (trusts x-forwarded-for first hop). */
+export function clientIp(req: IncomingMessage): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0]!.trim();
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
 export function createApiServer(options: ApiServerOptions = {}): Server {
   initSkills();
   const db = options.db ?? createDatabaseClient();

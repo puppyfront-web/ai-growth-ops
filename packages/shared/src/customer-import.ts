@@ -1,4 +1,5 @@
 import { isValidPhone, normalizePhone } from './phone.js';
+import { normalizeInquiryChannel } from './inquiry-channel.js';
 import type { CustomerColumnMapping, CustomerImportField } from './csv.js';
 
 export type ParsedCustomerRow = {
@@ -6,6 +7,8 @@ export type ParsedCustomerRow = {
   displayName: string;
   phone: string;
   normalizedPhone: string;
+  email: string;
+  imAccount: string;
   company: string;
   role: string;
   intent: string;
@@ -35,22 +38,6 @@ export type CustomerImportPreviewRow = {
   };
 };
 
-const VALID_CHANNELS = new Set([
-  'douyin',
-  'xiaohongshu',
-  'wechat_official',
-  'wechat_channels',
-  'baijiahao',
-  'zhihu',
-  'manual',
-  'import',
-  'referral',
-  'exhibition',
-  'phone',
-  'website',
-  'partner',
-  'other'
-]);
 
 function cell(row: string[], index: number | undefined): string {
   if (index == null || index < 0) return '';
@@ -64,14 +51,16 @@ export function extractCustomerRow(
 ): ParsedCustomerRow {
   const rawPhone = cell(row, mapping.phone);
   const normalizedPhone = rawPhone ? normalizePhone(rawPhone) : '';
-  const rawChannel = cell(row, mapping.channel) || 'import';
-  const channel = VALID_CHANNELS.has(rawChannel) ? rawChannel : 'import';
+  const rawChannel = cell(row, mapping.channel);
+  const channel = rawChannel ? normalizeInquiryChannel(rawChannel) : 'import';
 
   return {
     rowNumber,
     displayName: cell(row, mapping.displayName),
     phone: rawPhone,
     normalizedPhone,
+    email: cell(row, mapping.email).toLowerCase(),
+    imAccount: cell(row, mapping.imAccount),
     company: cell(row, mapping.company),
     role: cell(row, mapping.role),
     intent: cell(row, mapping.intent),
@@ -96,7 +85,8 @@ export function validateCustomerRow(
 export function buildImportPreviewRows(
   dataRows: string[][],
   mapping: CustomerColumnMapping,
-  existingPhones: Map<string, { id: string; displayName: string; phone: string; company: string }>
+  existingPhones: Map<string, { id: string; displayName: string; phone: string; company: string }>,
+  existingEmails?: Map<string, { id: string; displayName: string; phone: string; company: string }>
 ): CustomerImportPreviewRow[] {
   const seenPhones = new Set<string>();
   const preview: CustomerImportPreviewRow[] = [];
@@ -122,13 +112,19 @@ export function buildImportPreviewRows(
       }
     }
 
+    if (data.email && existingEmails?.has(data.email)) {
+      issues.push('duplicate_in_db');
+    }
+
     preview.push({
       rowNumber,
       data,
       issues,
       existingCustomer: data.normalizedPhone
         ? existingPhones.get(data.normalizedPhone)
-        : undefined
+        : data.email
+          ? existingEmails?.get(data.email)
+          : undefined
     });
   }
 
