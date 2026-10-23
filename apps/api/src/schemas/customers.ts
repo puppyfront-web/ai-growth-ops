@@ -1,25 +1,21 @@
 import { z } from 'zod';
 import {
+  ACQUISITION_CHANNELS,
   CUSTOMER_IMPORT_CSV_MAX_CHARS,
   isValidPhone
 } from '@ai-growth-ops/shared';
 
-const acquisitionChannelSchema = z.enum([
-  'douyin',
-  'xiaohongshu',
-  'wechat_official',
-  'wechat_channels',
-  'baijiahao',
-  'zhihu',
-  'manual',
-  'import',
-  'referral',
-  'exhibition',
-  'phone',
-  'website',
-  'partner',
-  'other'
-]);
+const acquisitionChannelSchema = z.enum(ACQUISITION_CHANNELS);
+
+// 允许空串以区分「未提交」与「清空」；空串在路由层落为 null / 跳过创建
+const contactEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('请输入有效的邮箱')
+  .or(z.literal(''));
+
+const imAccountSchema = z.string().trim();
 
 const phoneSchema = z
   .string()
@@ -29,6 +25,8 @@ const phoneSchema = z
 export const createCustomerSchema = z.object({
   displayName: z.string().min(1, '姓名不能为空'),
   phone: phoneSchema,
+  email: contactEmailSchema.optional(),
+  imAccount: imAccountSchema.optional(),
   company: z.string().min(1, '公司不能为空'),
   role: z.string().min(1, '职位不能为空'),
   intent: z.string().min(1, '需求不能为空'),
@@ -48,6 +46,8 @@ export const updateCustomerSchema = z.object({
       '请输入有效的手机号'
     )
     .optional(),
+  email: contactEmailSchema.optional(),
+  imAccount: imAccountSchema.optional(),
   company: z.string().optional(),
   role: z.string().optional(),
   intent: z.string().min(1).optional(),
@@ -59,6 +59,18 @@ export const updateCustomerSchema = z.object({
   nextActionAt: z.string().datetime().nullable().optional(),
   lostReason: z.string().optional(),
   tags: z.array(z.string()).optional()
+});
+
+export const inquiryWebhookSchema = z.object({
+  name: z.string().trim().min(1, '姓名不能为空').optional(),
+  externalUserName: z.string().trim().min(1).optional(),
+  channel: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
+  email: z.string().trim().optional(),
+  imAccount: z.string().trim().optional(),
+  company: z.string().trim().optional(),
+  message: z.string().trim().optional(),
+  country: z.string().trim().optional()
 });
 
 export const mergeCustomerSchema = z.object({
@@ -77,6 +89,8 @@ const customerFieldMappingSchema = z
   .object({
     displayName: z.number().int().min(0).optional(),
     phone: z.number().int().min(0).optional(),
+    email: z.number().int().min(0).optional(),
+    imAccount: z.number().int().min(0).optional(),
     company: z.number().int().min(0).optional(),
     role: z.number().int().min(0).optional(),
     intent: z.number().int().min(0).optional(),

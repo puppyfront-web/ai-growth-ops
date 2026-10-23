@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACQUISITION_CHANNELS } from '@ai-growth-ops/shared';
 
 export const dealStageSchema = z.enum([
   'new',
@@ -10,22 +11,7 @@ export const dealStageSchema = z.enum([
   'lost'
 ]);
 
-const acquisitionChannelSchema = z.enum([
-  'douyin',
-  'xiaohongshu',
-  'wechat_official',
-  'wechat_channels',
-  'baijiahao',
-  'zhihu',
-  'manual',
-  'import',
-  'referral',
-  'exhibition',
-  'phone',
-  'website',
-  'partner',
-  'other'
-]);
+const acquisitionChannelSchema = z.enum(ACQUISITION_CHANNELS);
 
 const amountSchema = z
   .number()

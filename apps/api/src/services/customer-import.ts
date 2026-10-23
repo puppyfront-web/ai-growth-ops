@@ -72,6 +72,43 @@ function parseCustomerCsv(csv: string) {
   return { headers, dataRows };
 }
 
+async function loadExistingEmails(
+  db: DatabaseClient,
+  organizationId: string,
+  emails: string[]
+) {
+  const map = new Map<
+    string,
+    { id: string; displayName: string; phone: string; company: string }
+  >();
+  if (emails.length === 0) return map;
+
+  const existing = await db.customer.findMany({
+    where: {
+      organizationId,
+      email: { in: emails },
+      deletedAt: null
+    },
+    select: {
+      id: true,
+      displayName: true,
+      phone: true,
+      company: true,
+      email: true
+    }
+  });
+
+  for (const c of existing) {
+    map.set(c.email!, {
+      id: c.id,
+      displayName: c.displayName,
+      phone: c.phone,
+      company: c.company
+    });
+  }
+  return map;
+}
+
 export async function previewCustomerImport(
   db: DatabaseClient,
   organizationId: string,
@@ -92,12 +129,15 @@ export async function previewCustomerImport(
   const phones = parsed
     .map((r) => r.normalizedPhone)
     .filter((p) => p.length > 0);
+  const emails = parsed.map((r) => r.email).filter((e) => e.length > 0);
 
   const existingPhones = await loadExistingPhones(db, organizationId, phones);
+  const existingEmails = await loadExistingEmails(db, organizationId, emails);
   const previewRows = buildImportPreviewRows(
     dataRows,
     mapping,
-    existingPhones
+    existingPhones,
+    existingEmails
   );
 
   return {
@@ -139,6 +179,8 @@ export async function executeCustomerImport(
     const data = row.data as {
       displayName: string;
       normalizedPhone: string;
+      email?: string;
+      imAccount?: string;
       company: string;
       role: string;
       intent: string;
@@ -153,6 +195,8 @@ export async function executeCustomerImport(
           userId: params.userId,
           displayName: data.displayName,
           phone: data.normalizedPhone,
+          email: data.email || undefined,
+          imAccount: data.imAccount || undefined,
           company: data.company,
           role: data.role,
           intent: data.intent,

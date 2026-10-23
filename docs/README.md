@@ -83,7 +83,7 @@ packages/
 
 ```bash
 # 克隆仓库
-git clone <repo-url> && cd ai-growth-ops
+git clone https://github.com/puppyfront-web/ai-growth-ops.git && cd ai-growth-ops
 
 # 安装依赖
 pnpm install

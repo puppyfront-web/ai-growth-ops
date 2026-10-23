@@ -26,6 +26,7 @@ import {
   PROSPECT_GUARD,
   remainingMs,
   scoreProspectUser,
+  secUidFromHomepage,
   mergeProspectAttributions,
   prospectingPlanSchema,
   type ProspectAttribution,
@@ -588,6 +589,24 @@ export async function executeProspectingTask(
     const existingByUserKey = new Map(
       existingCandidates.map((row) => [row.userKey, row])
     );
+    // 数字 UID 老行经画像补采后有 secUid 主页；新批次若以 secUid 为 key，
+    // 需要通过主页索引命中同一行，避免同账号分裂成两行。
+    const existingBySecUid = new Map<
+      string,
+      (typeof existingCandidates)[number]
+    >();
+    for (const row of existingCandidates) {
+      const secUid = secUidFromHomepage(row.userHomepage);
+      if (secUid && !existingBySecUid.has(secUid)) {
+        existingBySecUid.set(secUid, row);
+      }
+    }
+    const findExistingCandidate = (prospect: AggregatedProspect) => {
+      const byKey = existingByUserKey.get(prospect.userKey);
+      if (byKey) return byKey;
+      const secUid = secUidFromHomepage(prospect.userHomepage);
+      return secUid ? existingBySecUid.get(secUid) : undefined;
+    };
     const recentCandidates = await db.prospectCandidate.findMany({
       where: {
         organizationId,
@@ -600,11 +619,14 @@ export async function executeProspectingTask(
           )
         }
       },
-      select: { userKey: true }
+      select: { userKey: true, userHomepage: true }
     });
-    const previouslySeenUserKeys = new Set(
-      recentCandidates.map((candidate) => candidate.userKey)
-    );
+    const previouslySeenUserKeys = new Set<string>();
+    for (const candidate of recentCandidates) {
+      previouslySeenUserKeys.add(candidate.userKey);
+      const secUid = secUidFromHomepage(candidate.userHomepage);
+      if (secUid) previouslySeenUserKeys.add(secUid);
+    }
     const skippedDuplicateUserKeys = new Set<string>();
     const skipContentIds = collectedVideoIds(existingCandidates);
     if (!options.forceRecrawl) {
@@ -842,16 +864,26 @@ export async function executeProspectingTask(
     );
 
     for (const { prospect, score, attributions } of prospectsByUser.values()) {
-      await upsertProspectCandidate(db, {
+      const existing = findExistingCandidate(prospect);
+      const saved = await upsertProspectCandidate(db, {
         taskId: task.id,
         organizationId,
         platform: task.platform,
         prospect,
         score,
         attributions,
-        existing: existingByUserKey.get(prospect.userKey)
+        existing
       });
+      // 刷新快照：同账号可能在同一批次以不同 key 再次命中该行。
+      if (saved) {
+        existingByUserKey.set(saved.userKey, saved);
+        const savedSecUid = secUidFromHomepage(saved.userHomepage);
+        if (savedSecUid) existingBySecUid.set(savedSecUid, saved);
+      }
     }
+
+    // 双链路 key 分裂的残余（历史行、画像补采前后不一致）在落库后统一合并。
+    await mergeDuplicateProspectCandidates(db, task.id);
 
     // totalVideos/totalComments stay as the TRUE crawl metrics accumulated
     // during the run. Recomputing them from saved candidates used to collapse
@@ -995,9 +1027,12 @@ async function upsertProspectCandidate(
     };
   }
 ) {
+  // 返回落库后的最新行：调用方用它刷新快照索引，避免同批次内
+  // 两个不同 key 的潜客命中同一行时，第二次 upsert 基于陈旧快照
+  // 覆盖第一次合并的 evidence。
   const { prospect, score, existing, attributions } = input;
   if (!existing) {
-    await db.prospectCandidate.create({
+    return db.prospectCandidate.create({
       data: {
         prospectingTaskId: input.taskId,
         organizationId: input.organizationId,
@@ -1027,7 +1062,6 @@ async function upsertProspectCandidate(
         riskFlags: score.riskFlags as never
       }
     });
-    return;
   }
 
   const evidence = mergeProspectEvidence(
@@ -1067,6 +1101,7 @@ async function upsertProspectCandidate(
       riskFlags: keepExistingScore ? undefined : (score.riskFlags as never)
     }
   });
+  return db.prospectCandidate.findUnique({ where: { id: existing.id } });
 }
 
 function asAttributions(value: unknown): ProspectAttribution[] {
@@ -1078,6 +1113,137 @@ function asAttributions(value: unknown): ProspectAttribution[] {
       typeof (item as ProspectAttribution).strategyId === 'string' &&
       typeof (item as ProspectAttribution).query === 'string'
   );
+}
+
+type ProspectCandidateRow = {
+  id: string;
+  userKey: string;
+  externalUserId: string | null;
+  userNickname: string | null;
+  userHomepage: string | null;
+  avatarUrl: string | null;
+  content: string;
+  commentCount: number;
+  evidence: unknown;
+  sourceVideoTitle: string | null;
+  sourceVideoUrl: string | null;
+  sourceVideoAuthor: string | null;
+  sourcePostId: string | null;
+  relevanceScore: number;
+  leadLevel: string;
+  scoreSource: string;
+  intent: string | null;
+  summary: string | null;
+  matchedKeywords: unknown;
+  attributions: unknown;
+  buyingStage: string | null;
+  confidence: number | null;
+  riskFlags: unknown;
+  customerId: string | null;
+  createdAt: Date;
+};
+
+function pickMergeSurvivor(rows: ProspectCandidateRow[]): ProspectCandidateRow {
+  // 已转客户的行承载客户归属，必须保留；其次保留数字 UID 行
+  //（转客户的 platformUserKey 引用数字 UID，是平台稳定标识）。
+  const withCustomer = rows.find((row) => row.customerId);
+  if (withCustomer) return withCustomer;
+  const withNumericKey = rows.find((row) => /^\d+$/.test(row.userKey));
+  if (withNumericKey) return withNumericKey;
+  return [...rows].sort(
+    (a, b) => b.relevanceScore - a.relevanceScore || a.createdAt.getTime() - b.createdAt.getTime()
+  )[0];
+}
+
+/**
+ * 合并同一任务内"同账号多行"的潜客：结构化链路以数字 UID 作 userKey、
+ * DOM 兜底以 secUid 作 userKey，画像补采前两行可能各自入库。按主页
+ * secUid 分组，evidence 并集、评分取最高行、customerId 保留，删除多余行。
+ * 幂等，可重复执行。
+ */
+export async function mergeDuplicateProspectCandidates(
+  db: DatabaseClient,
+  taskId: string
+): Promise<{ groupsMerged: number; removedRows: number }> {
+  const rows = (await db.prospectCandidate.findMany({
+    where: { prospectingTaskId: taskId }
+  })) as ProspectCandidateRow[];
+
+  const bySecUid = new Map<string, ProspectCandidateRow[]>();
+  for (const row of rows) {
+    const secUid = secUidFromHomepage(row.userHomepage);
+    if (!secUid) continue;
+    const group = bySecUid.get(secUid) ?? [];
+    group.push(row);
+    bySecUid.set(secUid, group);
+  }
+
+  let groupsMerged = 0;
+  let removedRows = 0;
+  for (const group of bySecUid.values()) {
+    if (group.length < 2) continue;
+    // 同组内出现多个不同客户归属时合并会丢掉其中一个关联，
+    // 属异常数据（同账号被转成两个客户），跳过合并保留原状。
+    const distinctCustomerIds = new Set(
+      group.filter((row) => row.customerId).map((row) => row.customerId)
+    );
+    if (distinctCustomerIds.size > 1) continue;
+    groupsMerged++;
+    const survivor = pickMergeSurvivor(group);
+    const losers = group.filter((row) => row.id !== survivor.id);
+    const best = [...group].sort(
+      (a, b) => b.relevanceScore - a.relevanceScore
+    )[0];
+    const evidence = losers.reduce(
+      (acc, row) => mergeProspectEvidence(acc, asProspectEvidenceList(row.evidence)),
+      asProspectEvidenceList(survivor.evidence)
+    );
+    const attributions = losers.reduce(
+      (acc, row) => mergeProspectAttributions(acc, asAttributions(row.attributions)),
+      asAttributions(survivor.attributions)
+    );
+
+    await db.$transaction(async (tx) => {
+      await tx.prospectCandidate.update({
+        where: { id: survivor.id },
+        data: {
+          externalUserId:
+            survivor.externalUserId ?? losers.find((l) => l.externalUserId)?.externalUserId ?? null,
+          userNickname:
+            survivor.userNickname ?? losers.find((l) => l.userNickname)?.userNickname ?? null,
+          userHomepage:
+            survivor.userHomepage ?? losers.find((l) => l.userHomepage)?.userHomepage ?? null,
+          avatarUrl:
+            survivor.avatarUrl ?? losers.find((l) => l.avatarUrl)?.avatarUrl ?? null,
+          customerId:
+            survivor.customerId ?? losers.find((l) => l.customerId)?.customerId ?? null,
+          // 评分四件套整体取最高分行，content 同步其代表评论
+          content: best.content,
+          relevanceScore: best.relevanceScore,
+          leadLevel: best.leadLevel,
+          scoreSource: best.scoreSource,
+          intent: best.intent,
+          summary: best.summary,
+          matchedKeywords: best.matchedKeywords as never,
+          attributions: attributions as never,
+          buyingStage: best.buyingStage,
+          confidence: best.confidence,
+          riskFlags: best.riskFlags as never,
+          commentCount: evidence.length,
+          evidence: evidence as never,
+          createdAt: new Date(
+            Math.min(...group.map((row) => row.createdAt.getTime()))
+          )
+        }
+      });
+      await tx.prospectCandidate.deleteMany({
+        where: { id: { in: losers.map((row) => row.id) } }
+      });
+    });
+    removedRows += losers.length;
+  }
+
+  return { groupsMerged, removedRows };
 }
 
 function candidateHomepage(candidate: {

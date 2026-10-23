@@ -12,7 +12,14 @@ export type AcquisitionChannel =
   | 'phone'
   | 'website'
   | 'partner'
-  | 'other';
+  | 'other'
+  | 'whatsapp'
+  | 'telegram'
+  | 'wechat_personal'
+  | 'email'
+  | 'messenger'
+  | 'instagram'
+  | 'line';
 
 export type CustomerStatus = 'active' | 'inactive' | 'won' | 'lost';
 
@@ -91,6 +98,8 @@ export type Customer = {
   userId: string;
   displayName: string;
   phone: string;
+  email: string | null;
+  imAccount: string | null;
   company: string;
   role: string;
   intent: string;
@@ -162,6 +171,8 @@ export type CustomerDuplicate = Pick<
 export type CreateCustomerInput = {
   displayName: string;
   phone: string;
+  email?: string;
+  imAccount?: string;
   company: string;
   role: string;
   intent: string;
@@ -175,6 +186,8 @@ export type CreateCustomerInput = {
 export type UpdateCustomerInput = {
   displayName?: string;
   phone?: string;
+  email?: string;
+  imAccount?: string;
   company?: string;
   role?: string;
   intent?: string;

@@ -17,7 +17,7 @@ import {
 import { getOrganizationContext } from './auth.js';
 import { validateBody } from './middleware/validate.js';
 import { hasPermission } from './middleware/rbac.js';
-import { isRateLimited } from './server.js';
+import { isRateLimited, clientIp } from './server.js';
 import {
   createAssignmentRuleSchema,
   createLeadCaptureFormSchema,
@@ -57,13 +57,6 @@ function handleError(res: ServerResponse, error: unknown) {
   });
 }
 
-function clientIp(req: IncomingMessage): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0]!.trim();
-  }
-  return req.socket.remoteAddress ?? 'unknown';
-}
 
 export const formRoutes: Array<{
   method: string;

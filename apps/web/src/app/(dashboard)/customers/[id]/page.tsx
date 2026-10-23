@@ -122,6 +122,8 @@ export default function CustomerDetailPage() {
       return updateCustomer(id, {
         displayName: form.displayName.trim(),
         phone: form.phone.trim(),
+        email: form.email.trim(),
+        imAccount: form.imAccount.trim(),
         company: form.company.trim(),
         role: form.role.trim(),
         intent: form.intent.trim(),
@@ -343,6 +345,14 @@ export default function CustomerDetailPage() {
                     customer.phone
                   )}
                 </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">邮箱</dt>
+                <dd>{customer.email || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">IM 账号</dt>
+                <dd>{customer.imAccount || '—'}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">来源</dt>

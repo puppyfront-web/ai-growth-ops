@@ -45,6 +45,8 @@ export function parseCsv(text: string): string[][] {
 export type CustomerImportField =
   | 'displayName'
   | 'phone'
+  | 'email'
+  | 'imAccount'
   | 'company'
   | 'role'
   | 'intent'
@@ -56,6 +58,8 @@ export const CUSTOMER_IMPORT_CSV_MAX_CHARS = 500_000;
 export const CUSTOMER_IMPORT_FIELDS: CustomerImportField[] = [
   'displayName',
   'phone',
+  'email',
+  'imAccount',
   'company',
   'role',
   'intent',
@@ -66,6 +70,8 @@ export const CUSTOMER_IMPORT_FIELDS: CustomerImportField[] = [
 export const CUSTOMER_FIELD_LABELS: Record<CustomerImportField, string> = {
   displayName: '姓名',
   phone: '手机号',
+  email: '邮箱',
+  imAccount: 'IM 账号',
   company: '公司',
   role: '职位',
   intent: '需求',
@@ -75,7 +81,9 @@ export const CUSTOMER_FIELD_LABELS: Record<CustomerImportField, string> = {
 
 const FIELD_ALIASES: Record<CustomerImportField, string[]> = {
   displayName: ['name', 'displayname', 'display_name', '姓名', '客户名称', '联系人'],
-  phone: ['phone', 'mobile', 'tel', '手机号', '电话', '联系电话'],
+  phone: ['phone', 'mobile', 'tel', '手机号', '电话', '联系电话', 'whatsapp号'],
+  email: ['email', 'e-mail', 'mail', '邮箱', '邮件', '电子邮件'],
+  imAccount: ['imaccount', 'im_account', 'im', 'im账号', '微信号', '微信', 'whatsapp', 'telegram', 'tg号'],
   company: ['company', 'org', 'organization', '公司', '企业', '单位'],
   role: ['role', 'title', 'position', 'job', '职位', '职务', '岗位'],
   intent: ['intent', 'need', 'requirement', '需求', '意向', '备注', 'summary'],
@@ -115,6 +123,7 @@ export function mappingIsComplete(
   );
 }
 
-export const CUSTOMER_IMPORT_TEMPLATE = `name,phone,company,role,intent,channel,source_note
-张三,13800138000,某某科技,采购经理,想了解企业版,exhibition,2026深圳展会
-李四,13900139000,示例公司,市场总监,价格咨询,referral,老客户介绍`;
+export const CUSTOMER_IMPORT_TEMPLATE = `name,phone,email,im_account,company,role,intent,channel,source_note
+张三,13800138001,zhang@example.com,wx_zhangsan,某某科技,采购经理,想了解企业版,WhatsApp,2026广交会名片
+李四,13900139002,,tg_lisi,示例公司,市场总监,价格咨询,Telegram,海外询盘
+王五,13800138003,wang@example.com,,本地贸易,老板,风扇批发,微信,朋友介绍`;

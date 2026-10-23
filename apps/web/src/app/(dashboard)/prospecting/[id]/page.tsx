@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import {
+  useParams,
+  useRouter,
+  useSearchParams
+} from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   getProspectingTask,
+  listProspectCandidates,
   runProspectingTask,
   exportProspectingTask,
   convertProspectToCustomer,
@@ -22,14 +27,28 @@ import {
   isAccountLoginRequiredError,
   setProspectingSchedule,
   type ProspectCandidate,
-  type ProspectEvidence,
-  type ProspectUserProfile
+  type ProspectCandidateFilters,
+  type ProspectSort
 } from '@/lib/api/prospecting';
 import { ApiError } from '@/lib/api/client';
+import {
+  ProspectFilterBar,
+  emptyProspectFilters,
+  hasActiveProspectFilters
+} from '@/components/prospecting/ProspectFilterBar';
+import { ProspectListRow } from '@/components/prospecting/ProspectListRow';
+import { ProspectDetailPanel } from '@/components/prospecting/ProspectDetailPanel';
+import {
+  candidateComments,
+  ProfileSummary
+} from '@/components/prospecting/prospect-shared';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 import type { CustomerDuplicate } from '@/types/customer';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorState } from '@/components/shared/ErrorState';
 import { NativeSelect } from '@/components/ui/native-select';
 import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/components/ui/toast';
@@ -41,59 +60,6 @@ const statusLabels: Record<string, string> = {
   failed: '失败',
   cancelled: '已取消'
 };
-
-const levelLabels: Record<string, string> = {
-  A: '高意向',
-  B: '中意向',
-  C: '低意向',
-  D: '无效'
-};
-
-function candidateComments(candidate: ProspectCandidate): ProspectEvidence[] {
-  const list =
-    candidate.evidence && candidate.evidence.length > 0
-      ? candidate.evidence
-      : [
-          {
-            content: candidate.content,
-            sourceVideoTitle: candidate.sourceVideoTitle,
-            sourceVideoUrl: candidate.sourceVideoUrl,
-            publishedAt: null,
-            likeCount: null
-          }
-        ];
-  return [...list].sort((a, b) => {
-    if (a.content === candidate.content && b.content !== candidate.content) {
-      return -1;
-    }
-    if (b.content === candidate.content && a.content !== candidate.content) {
-      return 1;
-    }
-    return (b.likeCount ?? 0) - (a.likeCount ?? 0);
-  });
-}
-
-function formatCount(value: number | null | undefined): string {
-  if (value == null) return '-';
-  if (value >= 10000) return `${(value / 10000).toFixed(1)}万`;
-  return String(value);
-}
-
-function ProfileSummary({ profile }: { profile: ProspectUserProfile }) {
-  return (
-    <div className="mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs space-y-1">
-      {profile.signature && (
-        <p className="whitespace-pre-wrap">{profile.signature}</p>
-      )}
-      <p className="text-muted-foreground">
-        粉丝 {formatCount(profile.followerCount)} · 关注{' '}
-        {formatCount(profile.followingCount)} · 获赞{' '}
-        {formatCount(profile.likeCount)}
-        {profile.location ? ` · ${profile.location}` : ''}
-      </p>
-    </div>
-  );
-}
 
 function ConvertDialog({
   candidate,
@@ -387,47 +353,77 @@ function CaptchaSolveDialog({
   );
 }
 
-function groupByUser(candidates: ProspectCandidate[]) {
-  const map = new Map<
-    string,
-    { key: string; best: ProspectCandidate; all: ProspectCandidate[] }
-  >();
-  for (const c of candidates) {
-    const key = c.userKey || c.externalUserId || c.userNickname || c.id;
-    if (!map.has(key)) {
-      map.set(key, { key, best: c, all: [c] });
-    } else {
-      const entry = map.get(key)!;
-      entry.all.push(c);
-      if (c.relevanceScore > entry.best.relevanceScore) entry.best = c;
-    }
-  }
-  return [...map.values()].sort(
-    (a, b) => b.best.relevanceScore - a.best.relevanceScore
-  );
-}
+/** 窄屏下的潜客详情覆盖层：Esc 关闭，关闭后焦点自然归还列表行。 */
+function MobileDetailOverlay({
+  children,
+  onClose
+}: {
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-function ConvertedBadge({ customerId }: { customerId: string }) {
   return (
-    <Link
-      href={`/customers/${customerId}`}
-      className="inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success hover:bg-success/20"
+    <div
+      className="fixed inset-0 z-40 flex items-end bg-black/50 sm:items-center sm:justify-center sm:p-4 lg:hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label="潜客详情"
     >
-      已转客户
-    </Link>
+      <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-lg bg-background p-3 sm:rounded-lg">
+        <div className="mb-2 flex justify-end">
+          <Button type="button" size="xs" variant="ghost" onClick={onClose}>
+            关闭
+          </Button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
 
 export default function ProspectingDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
   const qc = useQueryClient();
   const [convertTarget, setConvertTarget] = useState<ProspectCandidate | null>(
     null
   );
-  const [viewMode, setViewMode] = useState<'list' | 'user'>('user');
-  const [minScoreFilter, setMinScoreFilter] = useState(0);
+  // 筛选与分页从 URL 恢复（interaction-spec §6：列表状态可分享、刷新不丢）。
+  const [filters, setFilters] = useState<ProspectCandidateFilters>(() => {
+    const level = searchParams.get('leadLevel') ?? '';
+    const converted = searchParams.get('converted') ?? '';
+    return {
+      q: searchParams.get('q') ?? '',
+      minScore: Number(searchParams.get('minScore')) || 0,
+      leadLevel: ['A', 'B', 'C', 'D'].includes(level)
+        ? (level as ProspectCandidateFilters['leadLevel'])
+        : '',
+      converted: ['yes', 'no'].includes(converted)
+        ? (converted as ProspectCandidateFilters['converted'])
+        : ''
+    };
+  });
+  const [page, setPage] = useState(() =>
+    Math.max(1, Number(searchParams.get('page')) || 1)
+  );
+  const [sort, setSort] = useState<ProspectSort>(() =>
+    searchParams.get('sort') === 'latest' ? 'latest' : 'relevance'
+  );
+  const [pageSize, setPageSize] = useState(() =>
+    Math.min(100, Math.max(10, Number(searchParams.get('pageSize')) || 20))
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [focusCandidateId, setFocusCandidateId] = useState<string | null>(null);
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [enrichError, setEnrichError] = useState('');
   const [forceRecrawl, setForceRecrawl] = useState(false);
@@ -446,21 +442,125 @@ export default function ProspectingDetailPage() {
   } = useQuery({
     queryKey: ['prospecting', 'task', id],
     queryFn: () => getProspectingTask(id),
+    refetchInterval: (q) =>
+      q.state.data?.status === 'running' ? 3000 : false
+  });
+
+  const {
+    data: candidatesPage,
+    isLoading: candidatesLoading,
+    error: candidatesError,
+    refetch: refetchCandidates
+  } = useQuery({
+    queryKey: [
+      'prospecting',
+      'task',
+      id,
+      'candidates',
+      filters,
+      page,
+      pageSize,
+      sort
+    ],
+    queryFn: () =>
+      listProspectCandidates(id, filters, page, pageSize, undefined, sort),
+    enabled: Boolean(task),
     refetchInterval: (q) => {
-      const current = q.state.data;
-      if (current?.status === 'running') return 3000;
-      if (
-        (current?.candidates ?? []).some(
-          (item) =>
-            item.metadata?.enrichStatus === 'queued' ||
-            item.metadata?.enrichStatus === 'running'
-        )
-      ) {
-        return 3000;
-      }
-      return false;
+      if (task?.status === 'running') return 3000;
+      const items = q.state.data?.items ?? [];
+      return items.some(
+        (item) =>
+          item.metadata?.enrichStatus === 'queued' ||
+          item.metadata?.enrichStatus === 'running'
+      )
+        ? 3000
+        : false;
     }
   });
+
+  // 客户详情页会带 #candidate-{id} 深链进来；分页后先用一次预查询算出
+  // 该潜客所在页，再滚动定位，避免用户在分页里手翻。
+  const focusLookupDone = useRef(false);
+  useEffect(() => {
+    if (focusLookupDone.current) return;
+    const match = /^#candidate-([\w-]{6,64})$/.exec(window.location.hash);
+    if (!match) {
+      focusLookupDone.current = true;
+      return;
+    }
+    focusLookupDone.current = true;
+    const candidateId = match[1];
+    setFocusCandidateId(candidateId);
+    let cancelled = false;
+    listProspectCandidates(id, emptyProspectFilters, 1, pageSize, candidateId)
+      .then((preview) => {
+        if (!cancelled && preview.focusResolved) setPage(preview.page);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, pageSize]);
+
+  const focusScrolled = useRef(false);
+  useEffect(() => {
+    if (!focusCandidateId || focusScrolled.current || !candidatesPage) return;
+    const element = document.getElementById(
+      `candidate-${focusCandidateId}`
+    );
+    if (element) {
+      focusScrolled.current = true;
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [focusCandidateId, candidatesPage]);
+
+  // 筛选/分页写回 URL；q 输入防抖，避免每键一次历史记录。
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (filters.q) params.set('q', filters.q);
+      if (filters.minScore > 0) params.set('minScore', String(filters.minScore));
+      if (filters.leadLevel) params.set('leadLevel', filters.leadLevel);
+      if (filters.converted) params.set('converted', filters.converted);
+      if (page > 1) params.set('page', String(page));
+      if (pageSize !== 20) params.set('pageSize', String(pageSize));
+      if (sort !== 'relevance') params.set('sort', sort);
+      const qs = params.toString();
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const target = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+      if (current !== target) router.replace(target, { scroll: false });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filters, page, pageSize, sort, router]);
+
+  const candidates = candidatesPage?.items ?? [];
+  const selectedItem =
+    candidates.find((item) => item.id === selectedId) ?? null;
+
+  // 双栏选中：无选中时默认取当前页首位（桌面端，避免移动端自动弹详情）；
+  // 深链目标优先；筛选/翻页后选中项不在当前页则重置。
+  useEffect(() => {
+    if (!candidatesPage) return;
+    const items = candidatesPage.items;
+    if (selectedId && items.some((item) => item.id === selectedId)) return;
+    const focused = focusCandidateId
+      ? items.find((item) => item.id === focusCandidateId)
+      : undefined;
+    if (focused) {
+      setSelectedId(focused.id);
+      return;
+    }
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+      setSelectedId(items[0]?.id ?? null);
+    }
+  }, [candidatesPage, selectedId, focusCandidateId]);
+
+  const handleSelect = (candidate: ProspectCandidate) => {
+    setSelectedId(candidate.id);
+    if (!window.matchMedia('(min-width: 1024px)').matches) {
+      setMobileDetailOpen(true);
+    }
+  };
 
   const { data: guard } = useQuery({
     queryKey: ['prospecting', 'guard', task?.platformAccountId],
@@ -546,14 +646,14 @@ export default function ProspectingDetailPage() {
     );
   }
 
-  const allCandidates = task.candidates ?? [];
-  const candidates =
-    minScoreFilter > 0
-      ? allCandidates.filter((c) => c.relevanceScore >= minScoreFilter)
-      : allCandidates;
-  const userGroups = groupByUser(candidates);
-  const convertedCount = allCandidates.filter((c) => c.customerId).length;
+  const candidatesTotal = candidatesPage?.total ?? 0;
+  const convertedCount = candidatesPage?.convertedCount ?? 0;
   const isLegacyTask = !task.strategyPlan;
+  const strategies =
+    task.strategyPlan?.strategies.map((strategy) => ({
+      id: strategy.id,
+      title: strategy.title
+    })) ?? [];
   const plannedVideos = task.strategyPlan?.limits.maxTotalVideos ?? 0;
   const allowedVideos = guard
     ? Math.min(plannedVideos, guard.videosRemaining)
@@ -569,7 +669,7 @@ export default function ProspectingDetailPage() {
     Boolean(guard && guard.captchaWaitMs > 0);
   const runLabel =
     task.status === 'completed' ||
-    (task.status === 'failed' && allCandidates.length > 0)
+    (task.status === 'failed' && candidatesTotal > 0)
       ? '增量执行'
       : task.status === 'failed'
         ? '重新执行'
@@ -606,7 +706,7 @@ export default function ProspectingDetailPage() {
             <Button
               variant="outline"
               onClick={() => exportMutation.mutate()}
-              disabled={candidates.length === 0 || exportMutation.isPending}
+              disabled={task.totalCandidates === 0 || exportMutation.isPending}
               loading={exportMutation.isPending}
             >
               {exportMutation.isPending ? '导出中…' : '导出 CSV'}
@@ -827,360 +927,103 @@ export default function ProspectingDetailPage() {
         </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap gap-3 items-center text-sm">
-        <div className="flex items-center gap-2">
-          <label
-            htmlFor="score-filter"
-            className="text-muted-foreground text-xs"
-          >
-            最低相关度
-          </label>
-          <input
-            id="score-filter"
-            type="number"
-            min={0}
-            max={100}
-            value={minScoreFilter}
-            onChange={(e) => setMinScoreFilter(Number(e.target.value))}
-            className="w-16 rounded border bg-background px-2 py-1 text-xs"
-          />
-        </div>
-        <div className="flex rounded-md border overflow-hidden">
-          <Button
-            size="xs"
-            variant={viewMode === 'user' ? 'default' : 'ghost'}
-            onClick={() => setViewMode('user')}
-          >
-            用户视图
-          </Button>
-          <Button
-            size="xs"
-            variant={viewMode === 'list' ? 'default' : 'ghost'}
-            onClick={() => setViewMode('list')}
-          >
-            评论列表
-          </Button>
-        </div>
+      <div className="mb-3 flex flex-wrap gap-3 items-center justify-between">
+        <ProspectFilterBar
+          filters={filters}
+          onChange={(next) => {
+            setFilters(next);
+            setPage(1);
+          }}
+          sort={sort}
+          onSortChange={(next) => {
+            setSort(next);
+            setPage(1);
+          }}
+        />
         <span className="text-xs text-muted-foreground">
-          {viewMode === 'user'
-            ? `共 ${userGroups.length} 位潜客用户`
-            : `共 ${candidates.length} 条记录`}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          点击头像采集主页资料
+          共 {candidatesTotal} 位潜客用户 · 点击列表查看详情
         </span>
       </div>
 
-      {viewMode === 'user' ? (
-        <div className="space-y-3">
-          {userGroups.map((group) => {
-            const c = group.best;
-            const comments = candidateComments(c);
-            const converted = group.all.find(
-              (item) => item.customerId
-            )?.customerId;
-            return (
-              <div
-                key={group.key}
-                id={`candidate-${c.id}`}
-                className="rounded-lg border scroll-mt-24"
-              >
-                <div className="flex gap-3 p-4 items-start">
-                  <Button
-                    type="button"
-                    size="icon"
-                    aria-label="采集主页资料"
-                    title={
-                      c.userHomepage
-                        ? '点击采集主页资料'
-                        : '暂无主页链接，无法采集'
-                    }
-                    disabled={!c.userHomepage || enrichBusy(c, enrichingId)}
-                    onClick={() => enrichMutation.mutate(c.id)}
-                    className="flex-shrink-0 rounded-full"
-                  >
-                    {c.avatarUrl ? (
-                      <img
-                        src={c.avatarUrl}
-                        alt={c.userNickname ?? '用户头像'}
-                        className="w-10 h-10 rounded-full object-cover ring-2 ring-transparent hover:ring-primary"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-xs">
-                        {enrichBusy(c, enrichingId) ? '…' : '采集'}
-                      </span>
-                    )}
-                  </Button>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">
-                        {c.userNickname ?? '未知用户'}
-                      </span>
-                      {c.userHomepage && (
-                        <a
-                          href={c.userHomepage}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline"
-                        >
-                          主页 ↗
-                        </a>
-                      )}
-                      <span
-                        className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                          c.leadLevel === 'A'
-                            ? 'bg-success/10 text-success'
-                            : c.leadLevel === 'B'
-                              ? 'bg-info/10 text-info'
-                              : c.leadLevel === 'C'
-                                ? 'bg-warning/10 text-warning'
-                                : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        {levelLabels[c.leadLevel] ?? c.leadLevel}
-                      </span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        相关度 {c.relevanceScore}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {c.scoreSource === 'skill' ? '语义评分' : '规则评分'}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {comments.length} 条评论
-                      </span>
-                    </div>
-                    {c.summary && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {c.leadLevel === 'A' || c.leadLevel === 'B'
-                          ? `为什么是${c.leadLevel}：${c.summary}`
-                          : c.summary}
-                      </p>
-                    )}
-                    {(c.matchedKeywords?.length ?? 0) > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        匹配：{c.matchedKeywords?.join('、')}
-                      </p>
-                    )}
-                    {c.metadata?.profile && (
-                      <ProfileSummary profile={c.metadata.profile} />
-                    )}
-                    {(enrichBusy(c, enrichingId) ||
-                      c.metadata?.enrichStatus === 'failed') && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {c.metadata?.enrichStatus === 'queued'
-                          ? '主页采集排队中，等当前爬取结束后开始…'
-                          : c.metadata?.enrichStatus === 'running'
-                            ? '正在打开主页采集资料…'
-                            : c.metadata?.enrichError
-                              ? `主页采集失败：${c.metadata.enrichError}`
-                              : '正在打开主页采集资料…'}
-                      </p>
-                    )}
-                    <div className="mt-2 space-y-2">
-                      {comments.map((item, index) => (
-                        <div
-                          key={`${item.content}-${index}`}
-                          className="rounded-md border px-3 py-2 text-sm"
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            {index === 0 && (
-                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
-                                优先跟进
-                              </span>
-                            )}
-                            {item.likeCount != null && item.likeCount > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                {item.likeCount} 赞
-                              </span>
-                            )}
-                          </div>
-                          <p className="whitespace-pre-wrap">{item.content}</p>
-                          <p className="text-xs mt-1 text-muted-foreground">
-                            命中策略：
-                            {c.attributions
-                              ?.map(
-                                (item) =>
-                                  task.strategyPlan?.strategies.find(
-                                    (strategy) =>
-                                      strategy.id === item.strategyId
-                                  )?.title
-                              )
-                              .filter(Boolean)
-                              .join('、') || '历史任务'}
-                            {item.sourceVideoTitle
-                              ? ` · 来源：${item.sourceVideoTitle}`
-                              : ''}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    {converted ? (
-                      <ConvertedBadge customerId={converted} />
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setConvertTarget(c)}
-                      >
-                        转客户
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {userGroups.length === 0 && (
-            <div className="rounded-lg border px-4 py-8 text-center text-muted-foreground text-sm">
-              {task.status === 'running'
-                ? '正在爬取与分析，请稍候…'
-                : '暂无潜客结果，点击「开始执行」开始任务'}
-            </div>
-          )}
-        </div>
+      {candidatesError ? (
+        <ErrorState
+          message="潜客列表加载失败"
+          onRetry={() => refetchCandidates()}
+        />
+      ) : candidatesLoading ? (
+        <LoadingState />
       ) : (
-        <div className="rounded-lg border overflow-x-auto">
-          <table className="w-full min-w-[800px] text-sm">
-            <thead className="bg-muted/50 border-b">
-              <tr>
-                <th className="text-left px-4 py-3">用户</th>
-                <th className="text-left px-4 py-3">评论</th>
-                <th className="text-left px-4 py-3">来源视频</th>
-                <th className="text-left px-4 py-3">相关度</th>
-                <th className="text-left px-4 py-3">意向</th>
-                <th className="text-left px-4 py-3">状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {candidates.map((c) => {
-                const comments = candidateComments(c);
-                return (
-                  <tr key={c.id} className="border-b last:border-0 align-top">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          aria-label="采集主页资料"
-                          disabled={
-                            !c.userHomepage || enrichBusy(c, enrichingId)
-                          }
-                          onClick={() => enrichMutation.mutate(c.id)}
-                          className="flex-shrink-0"
-                          title="点击采集主页资料"
-                        >
-                          {c.avatarUrl ? (
-                            <img
-                              src={c.avatarUrl}
-                              alt=""
-                              className="w-7 h-7 rounded-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display =
-                                  'none';
-                              }}
-                            />
-                          ) : (
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs">
-                              头
-                            </span>
-                          )}
-                        </Button>
-                        <div>
-                          <p>{c.userNickname ?? '未知'}</p>
-                          {c.userHomepage && (
-                            <a
-                              href={c.userHomepage}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline"
-                            >
-                              主页
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 max-w-md">
-                      <div className="space-y-2">
-                        {comments.map((item, index) => (
-                          <div key={`${c.id}-${index}`}>
-                            {index === 0 && (
-                              <span className="mr-1 text-xs text-primary">
-                                优先
-                              </span>
-                            )}
-                            <span>{item.content}</span>
-                          </div>
-                        ))}
-                      </div>
-                      {c.summary && (
-                        <p className="text-xs mt-1 text-muted-foreground italic">
-                          {c.summary}
-                        </p>
-                      )}
-                      <p className="text-xs mt-1">
-                        命中策略：
-                        {c.attributions
-                          ?.map(
-                            (item) =>
-                              task.strategyPlan?.strategies.find(
-                                (strategy) => strategy.id === item.strategyId
-                              )?.title
-                          )
-                          .filter(Boolean)
-                          .join('、') || '历史任务'}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 max-w-[180px]">
-                      <p>{c.sourceVideoTitle ?? '-'}</p>
-                      {c.sourceVideoAuthor && (
-                        <p className="text-xs text-muted-foreground">
-                          @{c.sourceVideoAuthor}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums font-medium">
-                      {c.relevanceScore}
-                    </td>
-                    <td className="px-4 py-3">
-                      {levelLabels[c.leadLevel] ?? c.leadLevel}
-                    </td>
-                    <td className="px-4 py-3">
-                      {c.customerId ? (
-                        <ConvertedBadge customerId={c.customerId} />
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => setConvertTarget(c)}
-                        >
-                          转客户
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {candidates.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-8 text-center text-muted-foreground"
-                  >
-                    {task.status === 'running'
-                      ? '正在爬取与分析，请稍候…'
-                      : '暂无潜客结果，点击「开始执行」开始任务'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start">
+          <div className="min-w-0">
+            <div className="space-y-1">
+              {candidates.map((c) => (
+                <ProspectListRow
+                  key={c.id}
+                  candidate={c}
+                  selected={c.id === selectedId}
+                  onSelect={handleSelect}
+                />
+              ))}
+            </div>
+            {candidates.length === 0 &&
+              (hasActiveProspectFilters(filters) ? (
+                <EmptyState
+                  title="没有符合筛选条件的潜客"
+                  description="试试放宽关键词、降低相关度要求，或重置筛选"
+                  action={{
+                    label: '重置筛选',
+                    onClick: () => {
+                      setFilters(emptyProspectFilters);
+                      setPage(1);
+                    }
+                  }}
+                />
+              ) : (
+                <div className="rounded-lg border px-4 py-8 text-center text-muted-foreground text-sm">
+                  {task.status === 'running'
+                    ? '正在爬取与分析，请稍候…'
+                    : '暂无潜客结果，点击「开始执行」开始任务'}
+                </div>
+              ))}
+            <DataTablePagination
+              page={page}
+              pageSize={pageSize}
+              total={candidatesTotal}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="hidden lg:block lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+            {selectedItem ? (
+              <ProspectDetailPanel
+                candidate={selectedItem}
+                strategies={strategies}
+                enrichBusy={enrichBusy(selectedItem, enrichingId)}
+                onEnrich={(candidateId) => enrichMutation.mutate(candidateId)}
+                onConvert={setConvertTarget}
+              />
+            ) : (
+              <div className="rounded-lg border px-4 py-8 text-center text-sm text-muted-foreground">
+                从左侧选择潜客查看详情
+              </div>
+            )}
+          </div>
         </div>
+      )}
+
+      {mobileDetailOpen && selectedItem && (
+        <MobileDetailOverlay onClose={() => setMobileDetailOpen(false)}>
+          <ProspectDetailPanel
+            candidate={selectedItem}
+            strategies={strategies}
+            enrichBusy={enrichBusy(selectedItem, enrichingId)}
+            onEnrich={(candidateId) => enrichMutation.mutate(candidateId)}
+            onConvert={setConvertTarget}
+          />
+        </MobileDetailOverlay>
       )}
 
       {captchaOpen && task.platformAccountId && (

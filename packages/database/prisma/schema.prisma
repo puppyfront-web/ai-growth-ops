@@ -241,6 +241,13 @@ enum AcquisitionChannel {
   website
   partner
   other
+  whatsapp
+  telegram
+  wechat_personal
+  email
+  messenger
+  instagram
+  line
 }
 
 enum CustomerStatus {
@@ -934,6 +941,8 @@ model Customer {
   userId         String
   displayName    String
   phone          String
+  email          String?
+  imAccount      String?
   company        String
   role           String
   intent         String
@@ -967,6 +976,8 @@ model Customer {
   captureSubmissions LeadCaptureSubmission[]
 
   @@index([organizationId, phone])
+  @@index([organizationId, email])
+  @@index([organizationId, imAccount])
   @@index([organizationId, status])
   @@index([organizationId, nextActionAt])
   @@index([organizationId, createdAt])

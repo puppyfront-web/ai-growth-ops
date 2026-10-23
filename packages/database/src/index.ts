@@ -19,6 +19,7 @@ export * from './deals';
 export * from './outreach';
 export * from './assignment';
 export * from './lead-capture';
+export * from './inquiry-ingest';
 export * from './customer-merge';
 export * from './costs';
 export * from './experiments';
