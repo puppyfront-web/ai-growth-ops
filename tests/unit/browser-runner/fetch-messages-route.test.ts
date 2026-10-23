@@ -32,6 +32,9 @@ describe('/assist/fetch-messages', () => {
     vi.doMock('../../../apps/browser-runner/src/browser-session.js', () => ({
       createStealthSession: vi
         .fn()
+        .mockRejectedValue(new Error('session bootstrap failed')),
+      createCrawlSession: vi
+        .fn()
         .mockRejectedValue(new Error('session bootstrap failed'))
     }));
 

@@ -13,6 +13,7 @@ import {
 } from './platform-configs';
 import {
   applyStealthInitScript,
+  hasDisplaySupport,
   STEALTH_LAUNCH_ARGS,
   STEALTH_USER_AGENT
 } from './browser-session';
@@ -297,11 +298,20 @@ class SessionManager {
   async createSession(platform: string): Promise<{
     sessionId: string;
     qrImage: string;
+    /** true = 已弹出真实浏览器窗口展示完整登录页（第 1 代交互方式） */
+    headed: boolean;
   }> {
     const config = getPlatformLoginConfig(platform);
-    // 无头启动 + 登录页截图：容器部署无需显示服务，二维码由前端直接展示。
+    // 部署到用户机器时直接弹出真实浏览器窗口展示完整登录页（第 1 代交互）；
+    // 无显示服务（无 DISPLAY 的容器）降级为无头 + 登录页截图，二维码由前端展示。
+    const headed = hasDisplaySupport();
+    if (!headed) {
+      console.warn(
+        '[session] 当前环境没有显示服务（DISPLAY/WAYLAND_DISPLAY 未设置），降级为无头模式，二维码将在网页弹窗中展示'
+      );
+    }
     const browser = await chromium.launch({
-      headless: true,
+      headless: !headed,
       args: [...STEALTH_LAUNCH_ARGS],
       ignoreDefaultArgs: ['--enable-automation']
     });
@@ -345,7 +355,7 @@ class SessionManager {
     session.lastQrAt = Date.now();
     this.sessions.set(sessionId, session);
 
-    return { sessionId, qrImage: session.qrImage ?? '' };
+    return { sessionId, qrImage: session.qrImage ?? '', headed };
   }
 
   async getSessionStatus(sessionId: string): Promise<{

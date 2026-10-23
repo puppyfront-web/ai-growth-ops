@@ -11,6 +11,18 @@ vi.mock('puppeteer-extra-plugin-stealth', () => ({
 import { chromium, type Browser } from 'playwright';
 import { sessionManager } from '../../../apps/browser-runner/src/session-manager';
 
+const ORIGINAL_PLATFORM = Object.getOwnPropertyDescriptor(process, 'platform')
+  ?.value;
+
+function setPlatform(platform: string) {
+  Object.defineProperty(process, 'platform', { value: platform });
+}
+
+function clearDisplayEnv() {
+  delete process.env.DISPLAY;
+  delete process.env.WAYLAND_DISPLAY;
+}
+
 const FAKE_PNG = Buffer.from('fake-png-bytes');
 
 interface FakeLocator {
@@ -78,26 +90,54 @@ function makeQrExpired(page: ReturnType<typeof makeFakeWorld>['page']) {
   return { markerLoc, refreshBtnLoc };
 }
 
-describe('session-manager（无头扫码登录）', () => {
+describe('session-manager（第 1 代扫码登录：有显示弹窗口，无显示降级）', () => {
   beforeEach(() => {
     vi.mocked(chromium.launch).mockReset();
   });
 
   afterEach(async () => {
+    if (typeof ORIGINAL_PLATFORM === 'string') {
+      Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM });
+    }
     await sessionManager.cleanupStaleSessions();
   });
 
-  it('createSession 无头启动并返回二维码截图', async () => {
+  it('有显示服务时以有头模式弹出完整登录页窗口', async () => {
+    setPlatform('darwin');
+    clearDisplayEnv();
     const world = makeFakeWorld();
     vi.mocked(chromium.launch).mockResolvedValue(
       world.browser as unknown as Browser
     );
 
-    const { sessionId, qrImage } = await sessionManager.createSession('douyin');
+    const { sessionId, qrImage, headed } =
+      await sessionManager.createSession('douyin');
+
+    expect(chromium.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ headless: false })
+    );
+    expect(headed).toBe(true);
+    expect(sessionId).toBeTruthy();
+    expect(qrImage).toMatch(/^data:image\/png;base64,/);
+
+    await sessionManager.cancelSession(sessionId);
+  });
+
+  it('无显示服务（无 DISPLAY 容器）降级为无头启动并在响应中标记', async () => {
+    setPlatform('linux');
+    clearDisplayEnv();
+    const world = makeFakeWorld();
+    vi.mocked(chromium.launch).mockResolvedValue(
+      world.browser as unknown as Browser
+    );
+
+    const { sessionId, qrImage, headed } =
+      await sessionManager.createSession('douyin');
 
     expect(chromium.launch).toHaveBeenCalledWith(
       expect.objectContaining({ headless: true })
     );
+    expect(headed).toBe(false);
     expect(sessionId).toBeTruthy();
     expect(qrImage).toMatch(/^data:image\/png;base64,/);
 

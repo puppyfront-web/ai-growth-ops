@@ -37,7 +37,7 @@ describe('database schema contract', () => {
       'utf8'
     );
 
-    expect(schema).toContain('@@unique([userId, platform, name])');
+    expect(schema).toContain('@@unique([organizationId, platform, name])');
     expect(schema).toContain(
       '@@unique([contentItemId, platform, contentType])'
     );

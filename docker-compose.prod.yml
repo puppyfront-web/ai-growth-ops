@@ -124,11 +124,14 @@ services:
       BROWSER_RUNNER_SECRET: ${BROWSER_RUNNER_SECRET:?Set BROWSER_RUNNER_SECRET}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
       LOCAL_DATA_DIR: /var/lib/ai-growth-ops
+      # 按账号持久化采集浏览器 Profile（可写目录，其余挂载只读）
+      BROWSER_RUNNER_PROFILE_DIR: /var/lib/ai-growth-ops/browser-profiles
       VISION_API_KEY: ${VISION_API_KEY:-}
       VISION_BASE_URL: ${VISION_BASE_URL:-}
       VISION_MODEL: ${VISION_MODEL:-}
     volumes:
       - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}:/var/lib/ai-growth-ops:ro
+      - ${LOCAL_DATA_DIR:?Set LOCAL_DATA_DIR}/browser-profiles:/var/lib/ai-growth-ops/browser-profiles
 
   postgres:
     # 国内 ECS 直连 Docker Hub 不可靠：CI 部署时由 server-deploy.sh 指向 ACR 中转镜像

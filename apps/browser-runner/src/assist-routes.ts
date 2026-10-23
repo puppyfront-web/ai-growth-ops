@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http';
 import type { RouteHandler, Route } from './routes.js';
-import { createStealthSession } from './browser-session.js';
+import { createCrawlSession } from './browser-session.js';
 import { detectCaptcha } from './captcha-detect.js';
 import {
   cancelCaptchaSession,
@@ -15,7 +15,8 @@ import {
   dedupeByKey,
   isOfficialDouyinInboxNoise,
   RECENT_INTERACTION_FALLBACK_LIMIT,
-  selectTodayOrRecent
+  selectTodayOrRecent,
+  type SearchEmptyReason
 } from '@ai-growth-ops/shared';
 
 // ── Platform comment management page URLs ─────────────────────────
@@ -261,7 +262,7 @@ const MESSAGE_API_PATTERNS: Record<string, string[]> = {
 
 // ── Search API patterns ─────────────────────────────────────────────
 
-const _SEARCH_API_PATTERNS: Record<string, string[]> = {
+const SEARCH_API_PATTERNS: Record<string, string[]> = {
   douyin: [
     '/aweme/v1/web/search/item/',
     '/aweme/v1/general/search/',
@@ -345,6 +346,8 @@ interface SearchAndFetchCommentsBody {
   headed?: boolean;
   commentScrollRounds?: number;
   maxCommentsPerVideo?: number;
+  /** 按账号持久化浏览器 Profile 的键（<platform>-<accountId>）；缺省回退一次性会话 */
+  profileKey?: string;
 }
 
 interface SearchVideosBody {
@@ -353,6 +356,7 @@ interface SearchVideosBody {
   keyword: string;
   topN?: number;
   headed?: boolean;
+  profileKey?: string;
 }
 
 interface FetchSearchVideoCommentsBody {
@@ -365,6 +369,96 @@ interface FetchSearchVideoCommentsBody {
   commentScrollRounds?: number;
   maxCommentsPerVideo?: number;
   headed?: boolean;
+  profileKey?: string;
+}
+
+/** 搜索页空结果时的页面信号，用于区分风控拦截/登录墙/真无结果。 */
+export interface SearchEmptySignals {
+  containerExists?: boolean;
+  loginPromptVisible?: boolean;
+}
+
+export interface SearchEmptyClassification {
+  reasonCode: SearchEmptyReason;
+  message: string;
+}
+
+/**
+ * 把搜索页信号翻译成机器可读原因 + 面向用户的说明。
+ * 登录墙优先于容器缺失：未登录时容器往往也不渲染，
+ * 但根因是登录态未生效，提示重新扫码才有可操作性。
+ */
+export function classifySearchEmptyReason(
+  signals: SearchEmptySignals
+): SearchEmptyClassification {
+  if (signals.loginPromptVisible) {
+    return {
+      reasonCode: 'SEARCH_LOGIN_REQUIRED',
+      message: '搜索页要求登录，账号 Cookie 可能未在搜索页生效'
+    };
+  }
+  if (signals.containerExists === false) {
+    return {
+      reasonCode: 'SEARCH_PAGE_NOT_LOADED',
+      message: '搜索页未加载出结果，可能被平台风控拦截或页面结构已变化'
+    };
+  }
+  if (signals.containerExists === true) {
+    return {
+      reasonCode: 'SEARCH_EMPTY',
+      message: '搜索完成但没有匹配结果'
+    };
+  }
+  return {
+    reasonCode: 'SEARCH_UNKNOWN',
+    message: '搜索未返回结果，原因未识别'
+  };
+}
+
+/** DOM 与网络双源结果按 contentId 去重合并，DOM 优先（标题/作者解析更完整）。 */
+export function mergeSearchResults(
+  domResults: SearchResultItem[],
+  apiResults: SearchResultItem[]
+): SearchResultItem[] {
+  const merged = new Map<string, SearchResultItem>();
+  for (const item of [...domResults, ...apiResults]) {
+    if (!item.contentId || merged.has(item.contentId)) continue;
+    merged.set(item.contentId, item);
+  }
+  return [...merged.values()];
+}
+
+async function collectSearchPageSignals(
+  page: import('playwright').Page,
+  platform: string
+): Promise<SearchEmptySignals> {
+  if (platform !== 'douyin') return {};
+  try {
+    return await page.evaluate(() => {
+      const containerExists =
+        document.getElementById('search-result-container') != null;
+      let loginPromptVisible = false;
+      const loginNodes = document.querySelectorAll(
+        '[class*="douyin_login"], [id*="douyin-login"], [class*="login-panel"], [class*="loginPanel"]'
+      );
+      for (const node of loginNodes) {
+        const rect = node.getBoundingClientRect();
+        if (rect.width > 100 && rect.height > 100) {
+          loginPromptVisible = true;
+          break;
+        }
+      }
+      if (!loginPromptVisible) {
+        // 未登录时搜索页会弹出含「扫码登录」的登录弹层
+        loginPromptVisible = [...document.querySelectorAll('a,button,span,div')]
+          .filter((el) => el.childElementCount === 0)
+          .some((el) => (el.textContent ?? '').trim() === '扫码登录');
+      }
+      return { containerExists, loginPromptVisible };
+    });
+  } catch {
+    return {};
+  }
 }
 
 async function runKeywordVideoSearch(
@@ -374,6 +468,7 @@ async function runKeywordVideoSearch(
   results: SearchResultItem[];
   captchaRequired?: boolean;
   message?: string;
+  reasonCode?: SearchEmptyClassification['reasonCode'];
 }> {
   const searchUrl = SEARCH_PAGE_URLS[body.platform]?.(body.keyword);
   if (!searchUrl) {
@@ -382,9 +477,39 @@ async function runKeywordVideoSearch(
 
   const topN = body.topN ?? 3;
   let session: Awaited<ReturnType<typeof createSession>> | null = null;
+  let responseListener:
+    | ((response: import('playwright').Response) => void)
+    | null = null;
   try {
-    session = await createSession(body.cookie, searchUrl, body.headed);
+    session = await createSession(
+      body.cookie,
+      searchUrl,
+      body.headed,
+      body.profileKey
+    );
     const { page } = session;
+
+    // 搜索 XHR 是稳定契约；DOM 选择器随前端改版会失效，网络结果作兜底源。
+    const apiResults: SearchResultItem[] = [];
+    const responseTasks: Array<Promise<void>> = [];
+    const xhrPatterns = SEARCH_API_PATTERNS[body.platform] ?? [];
+    responseListener = (response: import('playwright').Response) => {
+      const task = (async () => {
+        const url = response.url();
+        if (!xhrPatterns.some((pattern) => url.includes(pattern))) return;
+        try {
+          const json = parseJsonBigInt(await response.text()) as Record<
+            string,
+            unknown
+          >;
+          apiResults.push(...extractSearchResults(body.platform, json));
+        } catch {
+          /* skip non-JSON */
+        }
+      })();
+      responseTasks.push(task);
+    };
+    page.on('response', responseListener);
 
     if (body.platform === 'douyin') {
       try {
@@ -418,18 +543,60 @@ async function runKeywordVideoSearch(
       }
     }
 
+    const collect = async () => {
+      const domResults = await extractSearchResultsFromDOM(
+        page,
+        body.platform
+      );
+      await Promise.allSettled(responseTasks.splice(0));
+      const signals = await collectSearchPageSignals(page, body.platform);
+      return { domResults, signals };
+    };
+
     await humanLikeScroll(page, 5);
     await page.waitForTimeout(2000);
+    let { domResults, signals } = await collect();
+    let merged = mergeSearchResults(domResults, apiResults);
 
-    const searchResults = await extractSearchResultsFromDOM(
-      page,
-      body.platform
+    // 结果容器都没渲染多半是风控/加载失败，重载一次再确认，避免误报
+    if (merged.length === 0 && signals.containerExists === false) {
+      await page
+        .reload({ waitUntil: 'domcontentloaded', timeout: 30000 })
+        .catch(() => {});
+      await page.waitForTimeout(4000);
+      await humanLikeScroll(page, 3);
+      ({ domResults, signals } = await collect());
+      merged = mergeSearchResults(domResults, apiResults);
+    }
+
+    if (merged.length === 0) {
+      const classified = classifySearchEmptyReason(signals);
+      console.warn(
+        `[search] platform=${body.platform} keyword=${body.keyword} container=${String(signals.containerExists)} loginPrompt=${String(signals.loginPromptVisible)} apiHits=${apiResults.length} dom=${domResults.length} reason=${classified.reasonCode}`
+      );
+      return {
+        keyword: body.keyword,
+        results: [],
+        reasonCode: classified.reasonCode,
+        message: classified.message
+      };
+    }
+
+    console.log(
+      `[search] platform=${body.platform} keyword=${body.keyword} container=${String(signals.containerExists)} dom=${domResults.length} api=${apiResults.length} results=${merged.length}`
     );
     return {
       keyword: body.keyword,
-      results: searchResults.slice(0, topN)
+      results: merged.slice(0, topN)
     };
   } finally {
+    if (session && responseListener) {
+      try {
+        session.page.off('response', responseListener);
+      } catch {
+        /* page already closed */
+      }
+    }
     await session?.close();
   }
 }
@@ -450,7 +617,12 @@ async function runSearchVideoCommentFetch(
 
   let session: Awaited<ReturnType<typeof createSession>> | null = null;
   try {
-    session = await createSession(body.cookie, contentUrl, body.headed);
+    session = await createSession(
+      body.cookie,
+      contentUrl,
+      body.headed,
+      body.profileKey
+    );
     const { page } = session;
     const captured: Array<Record<string, unknown>> = [];
     const responseTasks: Array<Promise<void>> = [];
@@ -754,7 +926,8 @@ const handleSearchAndFetchComments: RouteHandler = async (_req, res, ctx) => {
       sendJson(res, 200, {
         keyword: body.keyword,
         results: [],
-        message: 'No search results found on page'
+        reasonCode: searchPayload.reasonCode,
+        message: searchPayload.message ?? 'No search results found on page'
       });
       return;
     }
@@ -778,7 +951,8 @@ const handleSearchAndFetchComments: RouteHandler = async (_req, res, ctx) => {
           awemeType: result.awemeType,
           commentScrollRounds: body.commentScrollRounds,
           maxCommentsPerVideo: body.maxCommentsPerVideo,
-          headed: body.headed
+          headed: body.headed,
+          profileKey: body.profileKey
         });
         allResults.push(video);
       } catch (err) {
@@ -1144,11 +1318,12 @@ function extractDomain(url: string): string {
 async function createSession(
   cookie: string,
   targetUrl: string,
-  headed?: boolean
+  headed?: boolean,
+  profileKey?: string
 ) {
   const hostname = extractDomain(targetUrl);
   const domain = rootDomain(hostname);
-  return createStealthSession(cookie, domain, headed);
+  return createCrawlSession(cookie, domain, headed, profileKey);
 }
 
 /**

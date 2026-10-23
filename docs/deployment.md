@@ -95,6 +95,10 @@ bash scripts/deploy/update.sh
 | `BROWSER_ASSISTANT_DOWNLOAD_URL` | 浏览器助手安装包下载地址；生产 compose 已内置默认值（本仓库 GitHub Release 的 latest 资产，`pnpm assistant:release` 发布后自动指向最新版），仅在需要自定义分发源时在服务器 .env 覆盖 |
 | `OPENAI_API_KEY`、`VISION_API_KEY`、`RESEND_API_KEY` 等 | 可选；配置了才会写入 .env |
 
+### browser-runner 持久化采集 Profile
+
+获客采集按账号使用持久化浏览器 Profile（`${LOCAL_DATA_DIR}/browser-profiles`，compose 已挂载为 browser-runner 内唯一可写目录）。首次部署或升级到该版本后无需手动操作，目录会自动创建；排查风控/登录问题时可查看该目录是否按账号累积。删除某账号目录即重置其采集浏览器环境。
+
 ### 日常发布与回滚
 
 - **发布**：合并到 `main` 即自动发布；工作流自带并发队列，不会并行部署。

@@ -16,9 +16,10 @@ export interface PlatformAccount {
   mode: string;
   status: string;
   authType?: string | null;
-  accessTokenEncrypted?: string | null;
-  refreshTokenEncrypted?: string | null;
-  cookieRef?: string | null;
+  hasAccessToken: boolean;
+  hasRefreshToken: boolean;
+  hasCookie: boolean;
+  hasSecretConfig: boolean;
   capabilities?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   platformCapabilities?: PlatformCapability[];
@@ -97,6 +98,47 @@ export function cancelBrowserLogin(
 ): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(
     `/api/accounts/${accountId}/browser-login/cancel`,
+    {}
+  );
+}
+
+// ── 网页内扫码登录（第 1 代交互，部署到用户机器时的默认方式）──
+
+export interface QrLoginStartResponse {
+  sessionId: string;
+  status: 'waiting_scan';
+  /** true = 已弹出真实浏览器窗口展示完整登录页；false = 无头模式，弹窗展示二维码 */
+  headed?: boolean;
+  qrImage?: string;
+}
+
+export interface QrLoginStatusResponse {
+  status: 'waiting_scan' | 'logged_in' | 'expired' | 'error';
+  qrImage?: string;
+  pageImage?: string;
+  error?: string;
+}
+
+export function startQrLogin(
+  accountId: string
+): Promise<QrLoginStartResponse> {
+  return apiPost<QrLoginStartResponse>(
+    `/api/accounts/${accountId}/qr-login/start`,
+    {}
+  );
+}
+
+export function getQrLoginStatus(
+  accountId: string
+): Promise<QrLoginStatusResponse> {
+  return apiGet<QrLoginStatusResponse>(
+    `/api/accounts/${accountId}/qr-login/status`
+  );
+}
+
+export function cancelQrLogin(accountId: string): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(
+    `/api/accounts/${accountId}/qr-login/cancel`,
     {}
   );
 }
