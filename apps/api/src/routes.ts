@@ -82,6 +82,15 @@ import {
   runnerHeaders
 } from './browser-login-config';
 import {
+  setSession,
+  getSessionId,
+  clearSession,
+  markPending,
+  clearPending,
+  waitForPendingToClear,
+  getFreshSession
+} from './browser-login-session.js';
+import {
   verifyPassword,
   createToken,
   getAuthenticatedUser,
@@ -4288,6 +4297,249 @@ const routes: Route[] = [
         orgCtx.organization.id,
         account.id
       );
+      sendJson(res, 200, { ok: true });
+    }
+  },
+
+  // ── 网页内扫码登录（第 1 代交互，部署到用户机器时的默认方式）──
+  // browser-runner 在用户机器上弹出真实浏览器窗口展示完整登录页，
+  // 用户在窗口里扫码并完成验证方式选择/短信验证码。
+  {
+    method: 'POST',
+    pattern: '/api/accounts/:id/qr-login/start',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'settings:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const account = await ctx.db.platformAccount.findFirst({
+        where: {
+          id: ctx.params.id,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        },
+        select: { id: true, platform: true }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
+
+      // React StrictMode 双挂载/双击会在毫秒级重复触发 start，
+      // 合并为同一个 runner 会话而不是报 409。
+      const SESSION_REUSE_MS = 15_000;
+      const fresh = getFreshSession(account.id, SESSION_REUSE_MS);
+      if (fresh) {
+        return sendJson(res, 200, {
+          sessionId: fresh.sessionId,
+          status: 'waiting_scan'
+        });
+      }
+      if (!markPending(account.id)) {
+        // 另一个 start 在途（Chromium 启动可达 ~60s），等它结束并复用其会话
+        const cleared = await waitForPendingToClear(account.id);
+        if (!cleared) {
+          return sendJson(res, 503, {
+            status: 'error',
+            error: '登录会话正在创建中，请稍后重试'
+          });
+        }
+        const afterWait = getFreshSession(account.id, SESSION_REUSE_MS);
+        if (afterWait) {
+          return sendJson(res, 200, {
+            sessionId: afterWait.sessionId,
+            status: 'waiting_scan'
+          });
+        }
+        if (!markPending(account.id)) {
+          return sendJson(res, 409, {
+            status: 'error',
+            error: '登录会话正在创建中，请稍候'
+          });
+        }
+      }
+
+      const runnerUrl = getBrowserRunnerUrl();
+      try {
+        const existingSessionId = getSessionId(account.id);
+        if (existingSessionId) {
+          try {
+            await fetchWithTimeout(
+              `${runnerUrl}/session/${existingSessionId}/cancel`,
+              { method: 'POST', headers: runnerHeaders() },
+              5_000
+            );
+          } catch {
+            /* cancel old session best-effort */
+          }
+          clearSession(account.id);
+        }
+        const startRes = await fetchWithTimeout(
+          `${runnerUrl}/session/start`,
+          {
+            method: 'POST',
+            headers: runnerHeaders({ 'content-type': 'application/json' }),
+            body: JSON.stringify({ platform: account.platform })
+          },
+          60_000
+        );
+        if (!startRes.ok) {
+          const err = (await startRes
+            .json()
+            .catch(() => ({ error: 'browser-runner error' }))) as {
+            error?: string;
+          };
+          return sendJson(res, 502, {
+            status: 'error',
+            error: err.error ?? '浏览器辅助服务错误'
+          });
+        }
+        const data = (await startRes.json()) as {
+          sessionId: string;
+          qrImage?: string;
+          headed?: boolean;
+        };
+        setSession(account.id, data.sessionId);
+        sendJson(res, 200, {
+          sessionId: data.sessionId,
+          status: 'waiting_scan',
+          qrImage: data.qrImage,
+          headed: data.headed === true
+        });
+      } catch (err) {
+        const msg = (err as Error).message || '';
+        const cause = (err as Error).cause as
+          | { message?: string; code?: string }
+          | undefined;
+        const causeMsg = cause?.message || cause?.code || '';
+        const detail = causeMsg || msg || 'unknown error';
+        const hint = msg.includes('abort')
+          ? '连接超时，请确认浏览器辅助服务是否已启动'
+          : '服务未启动或不可达';
+        sendJson(res, 502, {
+          status: 'error',
+          error: `浏览器辅助服务不可用: ${hint} (${runnerUrl} — ${detail})`
+        });
+      } finally {
+        clearPending(account.id);
+      }
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/accounts/:id/qr-login/status',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const accountId = ctx.params.id;
+      const account = await ctx.db.platformAccount.findFirst({
+        where: {
+          id: accountId,
+          organizationId: orgCtx.organization.id,
+          deletedAt: null
+        },
+        select: { id: true, platform: true }
+      });
+      if (!account) return sendJson(res, 404, { error: 'Not found' });
+      const sessionId = getSessionId(accountId);
+      if (!sessionId) {
+        return sendJson(res, 200, {
+          status: 'error',
+          error: '登录会话不存在，请关闭后重新扫码'
+        });
+      }
+
+      try {
+        const runnerUrl = getBrowserRunnerUrl();
+        const statusRes = await fetchWithTimeout(
+          `${runnerUrl}/session/${sessionId}/status`,
+          { method: 'GET', headers: runnerHeaders() },
+          30_000
+        );
+        if (!statusRes.ok) {
+          return sendJson(res, 200, {
+            status: 'error',
+            error: 'browser-runner 返回错误'
+          });
+        }
+        const data = (await statusRes.json()) as {
+          status: string;
+          cookies?: string;
+          qrImage?: string;
+          pageImage?: string;
+          error?: string;
+        };
+
+        if (data.status === 'logged_in') {
+          const cookie = data.cookies
+            ? validatePlatformCookie(account.platform, data.cookies)
+            : {
+                valid: false as const,
+                error: '登录成功但未获取到 Cookie，请完成扫码后稍等或重试'
+              };
+          if (!cookie.valid) {
+            clearSession(accountId);
+            await ctx.db.platformAccount.update({
+              where: { id: accountId },
+              data: {
+                cookieRef: null,
+                status: 'error',
+                lastHealthCheckAt: new Date()
+              }
+            });
+            sendJson(res, 200, {
+              status: 'error',
+              error: cookie.error
+            });
+            return;
+          }
+          const encrypted = encryptToken(cookie.cookie);
+          await ctx.db.platformAccount.update({
+            where: { id: accountId },
+            data: {
+              cookieRef: encrypted,
+              authType: 'cookie',
+              mode: 'browser_assist',
+              status: 'active',
+              lastHealthCheckAt: new Date()
+            }
+          });
+          clearSession(accountId);
+        } else if (data.status === 'expired' || data.status === 'error') {
+          clearSession(accountId);
+          await ctx.db.platformAccount.update({
+            where: { id: accountId },
+            data: { status: 'error', lastHealthCheckAt: new Date() }
+          });
+        }
+
+        // 明文 Cookie 不回传前端
+        const { cookies: _rawCookies, ...safeData } = data;
+        sendJson(res, 200, safeData);
+      } catch (err) {
+        sendJson(res, 200, { status: 'error', error: (err as Error).message });
+      }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: '/api/accounts/:id/qr-login/cancel',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      const accountId = ctx.params.id;
+      const sessionId = getSessionId(accountId);
+      if (sessionId) {
+        try {
+          const runnerUrl = getBrowserRunnerUrl();
+          await fetchWithTimeout(
+            `${runnerUrl}/session/${sessionId}/cancel`,
+            { method: 'POST', headers: runnerHeaders() },
+            5_000
+          );
+        } catch {
+          /* cancel best-effort */
+        }
+        clearSession(accountId);
+      }
       sendJson(res, 200, { ok: true });
     }
   },

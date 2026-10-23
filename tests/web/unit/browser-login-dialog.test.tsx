@@ -1,17 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BrowserLoginDialog } from '@/components/integrations/BrowserLoginDialog';
 import {
-  cancelBrowserLogin,
-  getBrowserLoginStatus,
-  startBrowserLogin
+  cancelQrLogin,
+  getQrLoginStatus,
+  startQrLogin
 } from '@/lib/api/integrations';
 
 vi.mock('@/lib/api/integrations', () => ({
-  startBrowserLogin: vi.fn(),
-  getBrowserLoginStatus: vi.fn(),
-  cancelBrowserLogin: vi.fn()
+  startQrLogin: vi.fn(),
+  getQrLoginStatus: vi.fn(),
+  cancelQrLogin: vi.fn()
 }));
 
 function renderDialog(onClose = vi.fn()) {
@@ -31,102 +31,98 @@ function renderDialog(onClose = vi.fn()) {
   return { onClose };
 }
 
-describe('BrowserLoginDialog', () => {
+const QR_DATA_URL = 'data:image/png;base64,qr-code-image';
+
+describe('BrowserLoginDialog（第 1 代：弹出浏览器窗口扫码）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    document.querySelectorAll('iframe').forEach((frame) => frame.remove());
-    vi.mocked(startBrowserLogin).mockResolvedValue({
+    vi.mocked(startQrLogin).mockResolvedValue({
       sessionId: 'session-1',
-      status: 'waiting_local_bridge',
-      expiresAt: '2026-10-21T10:00:00.000Z',
-      launchUrl:
-        'aigrowthops://authorize?api=https%3A%2F%2Fops.example.com&session=session-1&token=bridge-token',
-      installerUrl: 'https://downloads.example.com/browser-assistant'
+      status: 'waiting_scan',
+      headed: true
     });
-    vi.mocked(getBrowserLoginStatus).mockResolvedValue({
-      status: 'waiting_local_bridge',
-      expiresAt: '2026-10-21T10:00:00.000Z'
+    vi.mocked(getQrLoginStatus).mockResolvedValue({
+      status: 'waiting_scan'
     });
-    vi.mocked(cancelBrowserLogin).mockResolvedValue({ ok: true });
+    vi.mocked(cancelQrLogin).mockResolvedValue({ ok: true });
   });
 
-  it('automatically opens the installed assistant without exposing commands or tokens', async () => {
+  it('有显示服务的部署：提示在弹出的浏览器窗口中扫码，无需任何本地助手', async () => {
     renderDialog();
-
-    expect(await screen.findByText('正在打开浏览器助手')).toBeInTheDocument();
-    expect(screen.queryByText(/pnpm browser-bridge:login/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/bridge-token/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/实时画面/)).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/验证码/)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '下载安装浏览器助手' })).toHaveAttribute(
-      'href',
-      'https://downloads.example.com/browser-assistant'
-    );
-    expect(document.querySelector('iframe')?.getAttribute('src')).toMatch(
-      /^aigrowthops:\/\/authorize\?/
-    );
-  });
-
-  it('lets the user retry opening the assistant with one click', async () => {
-    renderDialog();
-    await screen.findByText('正在打开浏览器助手');
-
-    fireEvent.click(screen.getByRole('button', { name: '重新打开浏览器助手' }));
-
-    expect(document.querySelectorAll('iframe')).toHaveLength(2);
-  });
-
-  it('cancels the persisted authorization session when closed', async () => {
-    const { onClose } = renderDialog();
-    await screen.findByText('正在打开浏览器助手');
-    fireEvent.click(screen.getByRole('button', { name: '取消授权' }));
-
-    await waitFor(() => {
-      expect(cancelBrowserLogin).toHaveBeenCalledWith('account-1');
-      expect(onClose).toHaveBeenCalled();
-    });
-  });
-
-  it('keeps the dialog open and shows a recoverable error when cancellation fails', async () => {
-    vi.mocked(cancelBrowserLogin).mockRejectedValue(new Error('取消授权请求失败'));
-    const { onClose } = renderDialog();
-    await screen.findByText('正在打开浏览器助手');
-
-    fireEvent.click(screen.getByRole('button', { name: '取消授权' }));
 
     expect(
-      await screen.findByText('取消授权请求失败')
+      await screen.findByText('请在弹出的浏览器窗口中扫码登录')
     ).toBeInTheDocument();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(startQrLogin).toHaveBeenCalledWith('account-1');
+    expect(
+      screen.queryByPlaceholderText(/输入验证码/)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/浏览器助手/)
+    ).not.toBeInTheDocument();
   });
-});
 
-describe('BrowserLoginDialog first-open guidance', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    document.querySelectorAll('iframe').forEach((frame) => frame.remove());
-    vi.mocked(startBrowserLogin).mockResolvedValue({
+  it('无显示服务的部署（无 DISPLAY 容器）：降级为弹窗内展示二维码', async () => {
+    vi.mocked(startQrLogin).mockResolvedValue({
       sessionId: 'session-1',
-      status: 'waiting_local_bridge',
-      expiresAt: '2026-10-21T10:00:00.000Z',
-      launchUrl:
-        'aigrowthops://authorize?api=https%3A%2F%2Fops.example.com&session=session-1&token=bridge-token',
-      installerUrl: 'https://downloads.example.com/browser-assistant'
+      status: 'waiting_scan',
+      headed: false,
+      qrImage: QR_DATA_URL
     });
-    vi.mocked(getBrowserLoginStatus).mockResolvedValue({
-      status: 'waiting_local_bridge',
-      expiresAt: '2026-10-21T10:00:00.000Z'
-    });
-    vi.mocked(cancelBrowserLogin).mockResolvedValue({ ok: true });
-  });
-
-  it('shows the macOS first-open unblock steps near the install entry', async () => {
     renderDialog();
-    await screen.findByText('正在打开浏览器助手');
 
     expect(
-      screen.getByText(/系统设置 → 隐私与安全性/)
+      await screen.findByText('请使用 抖音 App 扫描二维码登录')
     ).toBeInTheDocument();
-    expect(screen.getByText(/仍要打开/)).toBeInTheDocument();
+    expect(
+      document.querySelector('img[src^="data:image/png"]')
+    ).not.toBeNull();
+  });
+
+  it('轮询到 logged_in 后展示成功态', async () => {
+    // 轮询间隔 3s，用 fake timers 确定性推进，避免真实等待导致的抖动
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getQrLoginStatus)
+        .mockResolvedValueOnce({ status: 'waiting_scan' })
+        .mockResolvedValueOnce({ status: 'logged_in' });
+      renderDialog();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('抖音 · 扫码登录')).toBeInTheDocument();
+
+      await act(async () => {
+        // 覆盖两轮 3s 轮询：第一轮 waiting_scan，第二轮 logged_in
+        await vi.advanceTimersByTimeAsync(6500);
+      });
+      expect(
+        screen.getByText('登录成功！Cookie 已加密保存')
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('关闭弹窗时取消登录会话', async () => {
+    const { onClose } = renderDialog();
+    await screen.findByText('请在弹出的浏览器窗口中扫码登录');
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    await act(async () => {});
+    expect(cancelQrLogin).toHaveBeenCalledWith('account-1');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('启动失败时展示可恢复的错误', async () => {
+    vi.mocked(startQrLogin).mockRejectedValueOnce(
+      new Error('浏览器辅助服务不可用: 服务未启动或不可达')
+    );
+    renderDialog();
+
+    expect(
+      await screen.findByText(/浏览器辅助服务不可用/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重新登录' })).toBeInTheDocument();
   });
 });

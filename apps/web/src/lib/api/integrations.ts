@@ -102,6 +102,47 @@ export function cancelBrowserLogin(
   );
 }
 
+// ── 网页内扫码登录（第 1 代交互，部署到用户机器时的默认方式）──
+
+export interface QrLoginStartResponse {
+  sessionId: string;
+  status: 'waiting_scan';
+  /** true = 已弹出真实浏览器窗口展示完整登录页；false = 无头模式，弹窗展示二维码 */
+  headed?: boolean;
+  qrImage?: string;
+}
+
+export interface QrLoginStatusResponse {
+  status: 'waiting_scan' | 'logged_in' | 'expired' | 'error';
+  qrImage?: string;
+  pageImage?: string;
+  error?: string;
+}
+
+export function startQrLogin(
+  accountId: string
+): Promise<QrLoginStartResponse> {
+  return apiPost<QrLoginStartResponse>(
+    `/api/accounts/${accountId}/qr-login/start`,
+    {}
+  );
+}
+
+export function getQrLoginStatus(
+  accountId: string
+): Promise<QrLoginStatusResponse> {
+  return apiGet<QrLoginStatusResponse>(
+    `/api/accounts/${accountId}/qr-login/status`
+  );
+}
+
+export function cancelQrLogin(accountId: string): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(
+    `/api/accounts/${accountId}/qr-login/cancel`,
+    {}
+  );
+}
+
 export function getFeishuConfig(): Promise<Record<string, unknown>> {
   return apiGet<Record<string, unknown>>('/api/lead-sinks/feishu');
 }
