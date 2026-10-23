@@ -75,6 +75,21 @@ function count(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * 抖音主页 URL 的最后路径段是账号的 secUid（两条采集链路都能拿到），
+ * 用作跨链路的账号统一标识；纯数字段可能是数字 UID 形式的主页，
+ * 不具备跨链路一致性，返回 null。
+ */
+export function secUidFromHomepage(
+  homepage: string | null | undefined
+): string | null {
+  if (!homepage) return null;
+  const match = homepage.match(/\/user\/([^/?#]+)/);
+  const segment = match?.[1];
+  if (!segment || /^\d+$/.test(segment)) return null;
+  return segment;
+}
+
 export function aggregateProspectComments(
   videos: RawProspectVideo[],
   keyword: string
@@ -131,7 +146,11 @@ export function aggregateProspectComments(
       const externalUserId = optionalText(comment.externalUserId);
       const userNickname =
         optionalText(comment.userNickname) ?? optionalText(comment.userName);
-      const userKey = externalUserId ?? userNickname;
+      const userHomepage = optionalText(comment.userHomepage);
+      // 同一账号可能以 数字 UID（结构化接口）或 secUid（DOM 兜底）作为
+      // externalUserId 到达；两条链路都带 secUid 主页，以其统一 key。
+      const userKey =
+        secUidFromHomepage(userHomepage) ?? externalUserId ?? userNickname;
       if (!userKey) continue;
 
       const evidenceKey = `${userKey}:${content.slice(0, 80)}`;
@@ -145,7 +164,7 @@ export function aggregateProspectComments(
           keyword,
           externalUserId,
           userNickname,
-          userHomepage: optionalText(comment.userHomepage),
+          userHomepage,
           avatarUrl: optionalText(comment.avatarUrl),
           sourceVideoTitle: videoTitle,
           sourceVideoUrl: videoUrl,

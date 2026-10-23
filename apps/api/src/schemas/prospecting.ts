@@ -33,3 +33,12 @@ export const convertProspectSchema = z.object({
   intent: z.string().optional(),
   confirmDuplicate: z.boolean().optional()
 });
+
+export const prospectCandidateQuerySchema = z.object({
+  minScore: z.coerce.number().int().min(0).max(100).default(0),
+  leadLevel: z.enum(['A', 'B', 'C', 'D']).optional(),
+  converted: z.enum(['yes', 'no']).optional(),
+  q: z.string().trim().max(100).optional(),
+  focusId: z.string().min(1).max(64).optional(),
+  sort: z.enum(['relevance', 'latest']).default('relevance')
+});

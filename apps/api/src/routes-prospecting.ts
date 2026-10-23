@@ -34,13 +34,14 @@ import {
 } from './captcha-solve-session.js';
 import { getOrganizationContext } from './auth.js';
 import { parsePagination } from './middleware/pagination.js';
-import { validateBody } from './middleware/validate.js';
+import { validateBody, validateQuery } from './middleware/validate.js';
 import { hasPermission } from './middleware/rbac.js';
 import {
   runProspectingTaskSchema,
   analyzeProspectingPlanSchema,
   convertProspectSchema,
   createProspectingTaskSchema,
+  prospectCandidateQuerySchema,
   scheduleProspectingTaskSchema
 } from './schemas/prospecting.js';
 import {
@@ -579,23 +580,129 @@ export const prospectingRoutes: Array<{
         return sendJson(res, 403, { error: '权限不足' });
       }
 
-      const minScore = Number(ctx.url.searchParams.get('minScore') ?? '0');
+      // 潜客列表改由 /candidates 分页接口返回，详情不再内嵌全量数据。
       const task = await ctx.db.prospectingTask.findFirst({
         where: {
           id: ctx.params.id,
           organizationId: orgCtx.organization.id
-        },
-        include: {
-          candidates: {
-            where:
-              minScore > 0 ? { relevanceScore: { gte: minScore } } : undefined,
-            orderBy: { relevanceScore: 'desc' }
-          }
         }
       });
 
       if (!task) return sendJson(res, 404, { error: '任务不存在' });
       sendJson(res, 200, task);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/prospecting/tasks/:id/candidates',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'research:view')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+
+      const queryResult = validateQuery(prospectCandidateQuerySchema, ctx.url);
+      if (!queryResult.success) {
+        return sendJson(res, 400, {
+          error: '输入验证失败',
+          errors: queryResult.errors
+        });
+      }
+      const { minScore = 0, leadLevel, converted, q, focusId, sort = 'relevance' } =
+        queryResult.data;
+      const { page: requestedPage, pageSize } = parsePagination(ctx.url);
+      // 排序规则单一来源：列表 orderBy 与深链排名计算共用。
+      const candidateOrderBy =
+        sort === 'latest'
+          ? [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
+          : [{ relevanceScore: 'desc' as const }, { id: 'asc' as const }];
+
+      const task = await ctx.db.prospectingTask.findFirst({
+        where: {
+          id: ctx.params.id,
+          organizationId: orgCtx.organization.id
+        },
+        select: { id: true }
+      });
+      if (!task) return sendJson(res, 404, { error: '任务不存在' });
+
+      const filters = {
+        prospectingTaskId: task.id,
+        ...(minScore > 0 ? { relevanceScore: { gte: minScore } } : {}),
+        ...(leadLevel ? { leadLevel } : {}),
+        ...(converted === 'yes'
+          ? { customerId: { not: null } }
+          : converted === 'no'
+            ? { customerId: null }
+            : {}),
+        ...(q
+          ? {
+              OR: [
+                { userNickname: { contains: q, mode: 'insensitive' } },
+                { externalUserId: { contains: q, mode: 'insensitive' } },
+                { content: { contains: q, mode: 'insensitive' } }
+              ]
+            }
+          : {})
+      };
+
+      // 深链定位：客户详情页会跳转 #candidate-{id}，分页后用排名计算所在页。
+      let page = requestedPage;
+      let focusResolved: string | undefined;
+      if (focusId) {
+        const focused = await ctx.db.prospectCandidate.findFirst({
+          where: { ...filters, id: focusId },
+          select: { id: true, relevanceScore: true, createdAt: true }
+        });
+        if (focused) {
+          // 与列表 orderBy 完全一致的“排在它前面”的条件
+          const ahead =
+            sort === 'latest'
+              ? [
+                  { createdAt: { gt: focused.createdAt } },
+                  {
+                    createdAt: focused.createdAt,
+                    id: { gt: focused.id }
+                  }
+                ]
+              : [
+                  { relevanceScore: { gt: focused.relevanceScore } },
+                  {
+                    relevanceScore: focused.relevanceScore,
+                    id: { lt: focused.id }
+                  }
+                ];
+          const rank = await ctx.db.prospectCandidate.count({
+            where: { AND: [filters, { OR: ahead }] }
+          });
+          page = Math.floor(rank / pageSize) + 1;
+          focusResolved = focused.id;
+        }
+      }
+
+      const [items, total, convertedCount] = await Promise.all([
+        ctx.db.prospectCandidate.findMany({
+          where: filters,
+          orderBy: candidateOrderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize
+        }),
+        ctx.db.prospectCandidate.count({ where: filters }),
+        ctx.db.prospectCandidate.count({
+          where: { prospectingTaskId: task.id, customerId: { not: null } }
+        })
+      ]);
+
+      sendJson(res, 200, {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+        convertedCount,
+        ...(focusResolved ? { focusResolved } : {})
+      });
     }
   },
   {

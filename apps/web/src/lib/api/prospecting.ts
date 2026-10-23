@@ -146,7 +146,26 @@ export type ProspectingTask = {
   metadata?: ProspectingTaskProgress | null;
   createdAt: string;
   updatedAt: string;
-  candidates?: ProspectCandidate[];
+};
+
+export type ProspectCandidateFilters = {
+  q: string;
+  minScore: number;
+  leadLevel: '' | 'A' | 'B' | 'C' | 'D';
+  converted: '' | 'yes' | 'no';
+};
+
+/** 潜客列表排序：相关度优先（默认）或最新采集优先。 */
+export type ProspectSort = 'relevance' | 'latest';
+
+export type ProspectCandidatePage = {
+  items: ProspectCandidate[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  convertedCount: number;
+  focusResolved?: string;
 };
 
 export function getProspectingProgressPercent(task: ProspectingTask): number {
@@ -353,9 +372,31 @@ export function listProspectingTasks(page = 1, pageSize = 20) {
   }>(`/api/prospecting/tasks?page=${page}&pageSize=${pageSize}`);
 }
 
-export function getProspectingTask(id: string, minScore?: number) {
-  const qs = minScore ? `?minScore=${minScore}` : '';
-  return apiGet<ProspectingTask>(`/api/prospecting/tasks/${id}${qs}`);
+export function getProspectingTask(id: string) {
+  return apiGet<ProspectingTask>(`/api/prospecting/tasks/${id}`);
+}
+
+export function listProspectCandidates(
+  taskId: string,
+  filters: ProspectCandidateFilters,
+  page: number,
+  pageSize: number,
+  focusId?: string,
+  sort: ProspectSort = 'relevance'
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    minScore: String(filters.minScore),
+    sort
+  });
+  if (filters.q) params.set('q', filters.q);
+  if (filters.leadLevel) params.set('leadLevel', filters.leadLevel);
+  if (filters.converted) params.set('converted', filters.converted);
+  if (focusId) params.set('focusId', focusId);
+  return apiGet<ProspectCandidatePage>(
+    `/api/prospecting/tasks/${taskId}/candidates?${params.toString()}`
+  );
 }
 
 export function createProspectingTask(data: CreateProspectingTaskInput) {
