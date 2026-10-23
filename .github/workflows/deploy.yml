@@ -1,6 +1,8 @@
 # =============================================================
 # AI Growth Ops — CI/CD：构建镜像 → 推送阿里云 ACR → SSH 部署到 ECS
-# 触发：push 到 main 或手动 workflow_dispatch
+# 状态：已停用自动触发（产品转向本地/办公室部署，不再部署阿里云）。
+# 仅保留 workflow_dispatch 手动触发；如需恢复自动部署，
+# 把下方 `push: branches: [main]` 加回 on: 即可。
 # 服务器端动作（建数据目录/自动建库/迁移/seed/滚动重启/健康检查）
 # 见 scripts/deploy/server-deploy.sh。
 # 所需 GitHub Secrets 见 docs/deployment.md「GitHub Actions 自动部署」。
@@ -8,8 +10,6 @@
 name: Deploy to Aliyun ECS
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
