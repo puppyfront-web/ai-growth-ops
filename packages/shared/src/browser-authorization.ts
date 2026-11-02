@@ -1,3 +1,5 @@
+import { getPlatformLoginAdapter } from './platform-login';
+
 export type BrowserAuthorizationStatus =
   | 'waiting_local_bridge'
   | 'waiting_user'
@@ -21,16 +23,31 @@ export interface AuthorizationCookie {
   domain: string;
 }
 
+/** loginUrl / requiredCookieNames 派生自 platform-login 注册表（单一事实源），
+ *  此处只维护 Browser Bridge 专有字段（来源白名单、cookie 域与采集白名单）。 */
+function defineAuthorizationAdapter(
+  platform: string,
+  bridge: Pick<
+    PlatformAuthorizationAdapter,
+    'allowedOrigins' | 'cookieDomains' | 'cookieNames'
+  >
+): PlatformAuthorizationAdapter {
+  const login = getPlatformLoginAdapter(platform);
+  return {
+    platform,
+    loginUrl: login.loginUrl,
+    requiredCookieNames: login.requiredCookieNames,
+    ...bridge
+  };
+}
+
 const PLATFORM_AUTHORIZATION_ADAPTERS: Record<
   string,
   PlatformAuthorizationAdapter
 > = {
-  douyin: {
-    platform: 'douyin',
-    loginUrl: 'https://creator.douyin.com/',
+  douyin: defineAuthorizationAdapter('douyin', {
     allowedOrigins: ['https://douyin.com'],
     cookieDomains: ['douyin.com'],
-    requiredCookieNames: ['sessionid'],
     cookieNames: [
       'sessionid',
       'sid_tt',
@@ -40,21 +57,15 @@ const PLATFORM_AUTHORIZATION_ADAPTERS: Record<
       'passport_csrf_token',
       'ttwid'
     ]
-  },
-  xiaohongshu: {
-    platform: 'xiaohongshu',
-    loginUrl: 'https://creator.xiaohongshu.com/login',
+  }),
+  xiaohongshu: defineAuthorizationAdapter('xiaohongshu', {
     allowedOrigins: ['https://xiaohongshu.com'],
     cookieDomains: ['xiaohongshu.com'],
-    requiredCookieNames: ['web_session'],
     cookieNames: ['web_session', 'webId', 'a1', 'webBuild', 'acw_tc']
-  },
-  wechat_official: {
-    platform: 'wechat_official',
-    loginUrl: 'https://mp.weixin.qq.com/',
+  }),
+  wechat_official: defineAuthorizationAdapter('wechat_official', {
     allowedOrigins: ['https://qq.com'],
     cookieDomains: ['qq.com'],
-    requiredCookieNames: ['slave_sid'],
     cookieNames: [
       'slave_sid',
       'slave_user',
@@ -63,31 +74,22 @@ const PLATFORM_AUTHORIZATION_ADAPTERS: Record<
       'data_ticket',
       'xid'
     ]
-  },
-  wechat_channels: {
-    platform: 'wechat_channels',
-    loginUrl: 'https://channels.weixin.qq.com/',
+  }),
+  wechat_channels: defineAuthorizationAdapter('wechat_channels', {
     allowedOrigins: ['https://weixin.qq.com'],
     cookieDomains: ['weixin.qq.com'],
-    requiredCookieNames: ['finder_username'],
     cookieNames: ['finder_username', 'wxuin', 'wxsid']
-  },
-  baijiahao: {
-    platform: 'baijiahao',
-    loginUrl: 'https://baijiahao.baidu.com/',
+  }),
+  baijiahao: defineAuthorizationAdapter('baijiahao', {
     allowedOrigins: ['https://baidu.com'],
     cookieDomains: ['baidu.com'],
-    requiredCookieNames: ['BDUSS'],
     cookieNames: ['BDUSS', 'STOKEN']
-  },
-  zhihu: {
-    platform: 'zhihu',
-    loginUrl: 'https://www.zhihu.com/signin',
+  }),
+  zhihu: defineAuthorizationAdapter('zhihu', {
     allowedOrigins: ['https://zhihu.com'],
     cookieDomains: ['zhihu.com'],
-    requiredCookieNames: ['z_c0'],
     cookieNames: ['z_c0', '_xsrf', 'd_c0']
-  }
+  })
 };
 
 const STATUS_TRANSITIONS: Record<

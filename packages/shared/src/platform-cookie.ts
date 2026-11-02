@@ -1,11 +1,9 @@
-const REQUIRED_COOKIE_NAMES: Record<string, readonly string[]> = {
-  douyin: ['sessionid'],
-  xiaohongshu: ['web_session'],
-  wechat_official: ['slave_sid'],
-  wechat_channels: ['finder_username'],
-  baijiahao: ['BDUSS'],
-  zhihu: ['z_c0']
-};
+import { PLATFORM_LOGIN_ADAPTERS } from './platform-login';
+
+/** 必备 cookie 的单一事实源：packages/shared/src/platform-login.ts 注册表。 */
+function requiredCookieNames(platform: string): readonly string[] {
+  return PLATFORM_LOGIN_ADAPTERS[platform]?.requiredCookieNames ?? [];
+}
 
 function cookieNames(cookie: string): Set<string> {
   return new Set(
@@ -25,8 +23,8 @@ export function validatePlatformCookie(
     return { valid: false, error: 'Cookie 格式无效，请粘贴完整的 Cookie 字符串' };
   }
 
-  const requiredNames = REQUIRED_COOKIE_NAMES[platform];
-  if (!requiredNames) return { valid: true, cookie };
+  const requiredNames = requiredCookieNames(platform);
+  if (!requiredNames.length) return { valid: true, cookie };
 
   const names = cookieNames(cookie);
   const missing = requiredNames.filter((name) => !names.has(name));

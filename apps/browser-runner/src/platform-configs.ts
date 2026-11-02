@@ -1,4 +1,8 @@
 import type { Page } from 'playwright';
+import {
+  PLATFORM_LOGIN_ADAPTERS,
+  type PlatformLoginAdapter
+} from '@ai-growth-ops/shared';
 
 export type LoginMode = 'qr' | 'form';
 
@@ -13,6 +17,10 @@ export interface PlatformLoginConfig {
   detectLogin: (page: Page) => Promise<LoginDetectionResult>;
   /** Baseline fallback only counts NEW cookies with these names (avoids SSO noise). */
   baselineAuthCookieNames?: string[];
+  /** 派生自 shared 适配器：登录成功必须在场的 cookie，finalize 强校验。 */
+  requiredCookieNames?: string[];
+  /** 派生自 shared 适配器的声明式规则（诊断与一致性测试用）；手写检测器平台不设。 */
+  detectRule?: DetectionRule;
 }
 
 /** Detection rule: any match → logged in. All conditions are OR'd. */
@@ -278,16 +286,19 @@ async function detectDouyinLogin(page: Page): Promise<LoginDetectionResult> {
   return { loggedIn: false, cookies: '' };
 }
 
-/** Build a detectLogin function from a declarative rule set. */
+/** Build a detectLogin function from a declarative rule set.
+ *  命中候选规则只是第一步：finalize 还会强校验平台必备 cookie（如小红书 web_session），
+ *  避免匿名 cookie（xsecappid 等）或仅 URL 跳转造成误判（spec/29 §1.2）。 */
 function buildDetector(
-  rule: DetectionRule
+  rule: DetectionRule,
+  requiredNames: string[] = []
 ): (page: Page) => Promise<LoginDetectionResult> {
   return async (page: Page) => {
     const contextCookies = await page.context().cookies();
     if (!matchesRule(page, rule, contextCookies)) {
       return { loggedIn: false, cookies: '' };
     }
-    return finalizeLogin(page);
+    return finalizeLogin(page, requiredNames);
   };
 }
 
@@ -311,84 +322,32 @@ export async function detectLoginWithBaseline(
     return { loggedIn: false, cookies: '' };
   }
 
-  const required = config.baselineAuthCookieNames?.includes('sessionid')
-    ? ['sessionid']
-    : [];
-  return finalizeLogin(page, required);
-}
-
-/** Define a platform config with a simple rule instead of a handwritten function. */
-function definePlatform(
-  loginUrl: string,
-  loginMode: LoginMode,
-  rule: DetectionRule,
-  baselineAuthCookieNames?: string[]
-): PlatformLoginConfig {
-  return {
-    loginUrl,
-    loginMode,
-    detectLogin: buildDetector(rule),
-    baselineAuthCookieNames
-  };
+  return finalizeLogin(page, config.requiredCookieNames ?? []);
 }
 
 // ── Platform registry ───────────────────────────────────────────
+// 单一事实源在 packages/shared/src/platform-login.ts；此处仅构建执行配置，
+// 需要手写检测器的平台（抖音：登录 UI 消失 + 跳转兜底）以覆盖方式注入。
 
-const configs: Record<string, PlatformLoginConfig> = {
-  douyin: {
-    loginUrl: 'https://creator.douyin.com/',
-    loginMode: 'qr',
-    detectLogin: detectDouyinLogin,
-    baselineAuthCookieNames: [...DOUYIN_AUTH_COOKIE_NAMES]
-  },
+const configs: Record<string, PlatformLoginConfig> = {};
 
-  xiaohongshu: definePlatform(
-    'https://creator.xiaohongshu.com/login',
-    'form',
-    {
-      cookieNames: ['web_session', 'xsecappid'],
-      urlIncludes: ['/creator/home', '/creator-center']
-    },
-    ['web_session']
-  ),
+for (const adapter of Object.values(PLATFORM_LOGIN_ADAPTERS)) {
+  configs[adapter.platform] = {
+    loginUrl: adapter.loginUrl,
+    loginMode: adapter.loginMode,
+    detectLogin: buildDetector(adapter.detect, adapter.requiredCookieNames),
+    baselineAuthCookieNames: adapter.baselineAuthCookieNames,
+    requiredCookieNames: adapter.requiredCookieNames,
+    detectRule: adapter.detect
+  };
+}
 
-  wechat_official: definePlatform(
-    'https://mp.weixin.qq.com/',
-    'qr',
-    {
-      cookieNames: ['slave_user', 'slave_sid', 'bizuin', 'data_bizuin'],
-      urlIncludes: ['/cgi-bin/home', '/cgi-bin/index', '/cgi-bin/frame']
-    },
-    ['slave_sid', 'slave_user']
-  ),
-
-  wechat_channels: definePlatform(
-    'https://channels.weixin.qq.com/',
-    'qr',
-    {
-      cookieNames: ['finder_username', 'userName', 'sessionid', 'wxuin'],
-      urlIncludes: ['/platform/', '/post/', '/login_done', '/cgi-bin/']
-    },
-    ['finder_username', 'userName']
-  ),
-
-  baijiahao: definePlatform(
-    'https://baijiahao.baidu.com/',
-    'form',
-    {
-      cookieNames: ['BDUSS', 'STOKEN'],
-      urlIncludes: ['/builder', '/builder/rc']
-    },
-    ['BDUSS']
-  ),
-
-  zhihu: definePlatform(
-    'https://www.zhihu.com/signin',
-    'form',
-    { cookieNames: ['z_c0', '_zap'], urlIncludes: ['/creator', '/settings'] },
-    ['z_c0']
-  )
-};
+// 抖音：声明式规则不足以覆盖「登录 UI 消失 + 跳转后导航兜底」的时序，保留手写检测器。
+const douyinConfig = configs.douyin;
+if (douyinConfig) {
+  douyinConfig.detectLogin = detectDouyinLogin;
+  delete douyinConfig.detectRule;
+}
 
 export function getPlatformLoginConfig(platform: string): PlatformLoginConfig {
   const config = configs[platform];
@@ -399,3 +358,5 @@ export function getPlatformLoginConfig(platform: string): PlatformLoginConfig {
 export function getSupportedPlatforms(): string[] {
   return Object.keys(configs);
 }
+
+export type { PlatformLoginAdapter };

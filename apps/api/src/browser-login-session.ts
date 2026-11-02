@@ -1,14 +1,30 @@
+interface LoginSessionMeta {
+  /** 首次 start 响应的运行形态——复用会话时必须原样带回，丢失会让前端弹窗退回二维码分支。 */
+  headed: boolean;
+  qrImage?: string;
+}
+
 interface LoginSession {
   sessionId: string;
   accountId: string;
   startedAt: Date;
+  meta?: LoginSessionMeta;
 }
 
 const sessions = new Map<string, LoginSession>();
 const pendingStarts = new Set<string>();
 
-export function setSession(accountId: string, sessionId: string): void {
-  sessions.set(accountId, { sessionId, accountId, startedAt: new Date() });
+export function setSession(
+  accountId: string,
+  sessionId: string,
+  meta?: LoginSessionMeta
+): void {
+  sessions.set(accountId, {
+    sessionId,
+    accountId,
+    startedAt: new Date(),
+    meta
+  });
 }
 
 export function getSessionId(accountId: string): string | null {
@@ -51,13 +67,15 @@ export async function waitForPendingToClear(
  * A session created moments ago for this account, if any.
  * Used to coalesce duplicate starts (React StrictMode double-mount,
  * double-clicks) into the same browser session instead of erroring 409.
+ * Carries the original start meta (headed/qrImage) so coalesced callers
+ * see the same runtime shape as the first caller.
  */
 export function getFreshSession(
   accountId: string,
   maxAgeMs: number
-): { sessionId: string } | null {
+): { sessionId: string; headed?: boolean; qrImage?: string } | null {
   const session = sessions.get(accountId);
   if (!session) return null;
   if (Date.now() - session.startedAt.getTime() > maxAgeMs) return null;
-  return { sessionId: session.sessionId };
+  return { sessionId: session.sessionId, ...session.meta };
 }

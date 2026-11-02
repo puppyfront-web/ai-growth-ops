@@ -60,6 +60,8 @@ describe('BrowserLoginDialog（第 1 代：弹出浏览器窗口扫码）', () =
     expect(
       screen.queryByText(/浏览器助手/)
     ).not.toBeInTheDocument();
+    // 扫码发生在弹出的真实浏览器窗口中，弹窗自身不渲染二维码截图
+    expect(document.querySelector('img')).toBeNull();
   });
 
   it('无显示服务的部署（无 DISPLAY 容器）：降级为弹窗内展示二维码', async () => {

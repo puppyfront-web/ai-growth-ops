@@ -201,3 +201,41 @@ describe('session-manager（第 1 代扫码登录：有显示弹窗口，无显�
     await sessionManager.cancelSession(sessionId);
   });
 });
+
+describe('xiaohongshu 与抖音共用同一登录会话链路', () => {
+  beforeEach(() => {
+    vi.mocked(chromium.launch).mockReset();
+  });
+
+  afterEach(async () => {
+    if (typeof ORIGINAL_PLATFORM === 'string') {
+      Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM });
+    }
+    await sessionManager.cleanupStaleSessions();
+  });
+
+  it('有显示服务时同样弹出真实浏览器窗口，不做任何额外页面操作', async () => {
+    setPlatform('darwin');
+    clearDisplayEnv();
+    const world = makeFakeWorld();
+    vi.mocked(chromium.launch).mockResolvedValue(
+      world.browser as unknown as Browser
+    );
+
+    const { sessionId, headed } = await sessionManager.createSession(
+      'xiaohongshu'
+    );
+
+    expect(chromium.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ headless: false })
+    );
+    expect(headed).toBe(true);
+    // 只打开登录页，不点击、不输入——登录动作由操作员在真实窗口中完成
+    expect(world.page.goto).toHaveBeenCalledWith(
+      'https://creator.xiaohongshu.com/login',
+      expect.anything()
+    );
+
+    await sessionManager.cancelSession(sessionId);
+  });
+});

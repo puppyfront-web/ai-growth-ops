@@ -275,7 +275,9 @@ describe('Browser Login — concurrent start coalescing', () => {
         res.end(
           JSON.stringify({
             sessionId: 'slow-mock-session',
-            status: 'waiting_scan'
+            status: 'waiting_scan',
+            headed: true,
+            qrImage: 'data:image/png;base64,slow-qr'
           })
         );
       } else {
@@ -301,12 +303,19 @@ describe('Browser Login — concurrent start coalescing', () => {
     expect(res1.body.sessionId).toBe('slow-mock-session');
     expect(res2.body.sessionId).toBe('slow-mock-session');
 
+    // 合并/复用响应必须保留首次响应的 headed 与 qrImage：
+    // 丢失 headed 会让前端弹窗退回「网页内展示二维码」分支（spec/29）
+    expect(res1.body.headed).toBe(true);
+    expect(res2.body.headed).toBe(true);
+
     // A repeat start within the reuse window also returns the same session
     const res3 = await api.post(
       `/api/accounts/${dy.id}/qr-login/start`
     );
     expect(res3.status).toBe(200);
     expect(res3.body.sessionId).toBe('slow-mock-session');
+    expect(res3.body.headed).toBe(true);
+    expect(res3.body.qrImage).toBe('data:image/png;base64,slow-qr');
 
     // Cleanup
     process.env.BROWSER_RUNNER_URL = mockRunnerUrl;

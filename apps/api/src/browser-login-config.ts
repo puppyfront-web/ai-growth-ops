@@ -1,18 +1,12 @@
-import { getBrowserRunnerConfig, getBrowserRunnerHeaders } from '@ai-growth-ops/shared';
+import {
+  getBrowserRunnerConfig,
+  getBrowserRunnerHeaders,
+  getPlatformLoginAdapter
+} from '@ai-growth-ops/shared';
 
-const loginUrls: Record<string, string> = {
-  douyin: 'https://creator.douyin.com/',
-  xiaohongshu: 'https://creator.xiaohongshu.com/login',
-  wechat_official: 'https://mp.weixin.qq.com/',
-  wechat_channels: 'https://channels.weixin.qq.com/',
-  baijiahao: 'https://baijiahao.baidu.com/',
-  zhihu: 'https://www.zhihu.com/signin'
-};
-
+/** 登录页 URL 的单一事实源在 packages/shared/src/platform-login.ts。 */
 export function getLoginUrl(platform: string): string {
-  const url = loginUrls[platform];
-  if (!url) throw new Error(`No login URL for platform: ${platform}`);
-  return url;
+  return getPlatformLoginAdapter(platform).loginUrl;
 }
 
 export function getBrowserRunnerUrl(): string {

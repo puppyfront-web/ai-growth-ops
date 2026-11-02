@@ -24,6 +24,7 @@ export * from './experiment';
 export * from './lifecycle';
 export * from './outreach';
 export * from './platform-capabilities';
+export * from './platform-login';
 export * from './browser-runner';
 export * from './platform-cookie';
 export * from './platform-auth';
