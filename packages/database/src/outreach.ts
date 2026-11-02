@@ -175,6 +175,30 @@ function templateVars(customer: {
   };
 }
 
+/** 组织级免打扰时段覆盖（outreach_channel_config 内）；start==end 表示关闭。 */
+async function quietHoursOverride(
+  db: DatabaseClient,
+  organizationId: string
+): Promise<{ quietHoursStart?: string; quietHoursEnd?: string }> {
+  const config = await db.appConfig.findFirst({
+    where: { organizationId, key: 'outreach_channel_config' }
+  });
+  const value =
+    config?.value && typeof config.value === 'object' && !Array.isArray(config.value)
+      ? (config.value as Record<string, unknown>)
+      : {};
+  const read = (key: string): string | undefined => {
+    const raw = value[key];
+    return typeof raw === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw)
+      ? raw
+      : undefined;
+  };
+  const quietHoursStart = read('quietHoursStart');
+  const quietHoursEnd = read('quietHoursEnd');
+  if (!quietHoursStart || !quietHoursEnd) return {};
+  return { quietHoursStart, quietHoursEnd };
+}
+
 async function channelStatuses(
   db: DatabaseClient,
   organizationId: string
@@ -530,7 +554,8 @@ export async function completeOutreachTouch(
       suppressed,
       dailySent,
       weeklySent,
-      now
+      now,
+      ...(await quietHoursOverride(db, organizationId))
     });
     if (!guard.allowed) {
       throw new Error(guard.reason || '触达被风控拦截');

@@ -12,6 +12,13 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Server } from 'node:http';
+
+// 无真实 LLM 外呼：占位 Key 会让 OpenAI SDK 真连 api.openai.com（网络不通时
+// 挂起+重试，曾致 Phase 3 超时 30s）。置空后走 not_configured → 规则分类兜底，
+// 与本文件"规则分类"的断言意图一致。
+vi.stubEnv('OPENAI_API_KEY', '');
+vi.stubEnv('ANTHROPIC_API_KEY', '');
+vi.stubEnv('OPENAI_BASE_URL', '');
 import {
   createDatabaseClient,
   resetDatabase,

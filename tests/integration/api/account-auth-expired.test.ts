@@ -90,16 +90,19 @@ describe('平台登录失效 → 本地浏览器重新授权', () => {
     const start = await api.post(
       `/api/accounts/${accountId}/browser-login/start`
     );
+    // 桥接令牌只经 launchUrl 下发（与 browser-login 契约一致：响应体不重复暴露）
+    const bridgeToken = new URL(start.body.launchUrl).searchParams.get('token');
+    expect(bridgeToken).toBeTruthy();
     await fetch(
       `${baseUrl}/api/browser-bridge/sessions/${start.body.sessionId}`,
-      { headers: { authorization: `Bearer ${start.body.bridgeToken}` } }
+      { headers: { authorization: `Bearer ${bridgeToken}` } }
     );
     const response = await fetch(
       `${baseUrl}/api/browser-bridge/sessions/${start.body.sessionId}/complete`,
       {
         method: 'POST',
         headers: {
-          authorization: `Bearer ${start.body.bridgeToken}`,
+          authorization: `Bearer ${bridgeToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({

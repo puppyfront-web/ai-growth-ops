@@ -127,5 +127,5 @@ export function createAuthFetch(baseUrl: string, auth: TestAuthContext) {
     });
     return { status: res.status, body: await res.json().catch(() => null) };
   }
-  return { get, post, put, patch, del };
+  return { get, post, put, patch, del, delete: del };
 }

@@ -65,6 +65,9 @@ async function createSequence(f: Fixture, delays = [0, 24]) {
   });
 }
 
+// 触达发送统一用今天正午：避开 22:00–08:00 免打扰守卫，测试随时段运行都确定
+const NOON = (() => { const d = new Date(); d.setHours(12, 0, 0, 0); return d; })();
+
 describe('outreach sequences and touches', () => {
   let f: Fixture;
 
@@ -127,7 +130,7 @@ describe('outreach sequences and touches', () => {
       f.db,
       enrolled.touch!.id,
       f.organizationId,
-      { status: 'sent' }
+      { status: 'sent', now: NOON }
     );
 
     expect(sent.touch.status).toBe('sent');
@@ -140,7 +143,7 @@ describe('outreach sequences and touches', () => {
       f.organizationId,
       {
         status: 'sent',
-        now: new Date(Date.now() + 25 * 60 * 60 * 1000)
+        now: new Date(NOON.getTime() + 25 * 60 * 60 * 1000)
       }
     );
 
@@ -191,7 +194,8 @@ describe('outreach sequences and touches', () => {
 
     await expect(
       completeOutreachTouch(f.db, enrolled.touch!.id, f.organizationId, {
-        status: 'sent'
+        status: 'sent',
+        now: NOON
       })
     ).rejects.toThrow(/退订|黑名单/);
 
@@ -216,12 +220,13 @@ describe('outreach sequences and touches', () => {
       f.db,
       enrolled.touch!.id,
       f.organizationId,
-      { status: 'sent' }
+      { status: 'sent', now: NOON }
     );
 
     await expect(
       completeOutreachTouch(f.db, first.nextTouch!.id, f.organizationId, {
-        status: 'sent'
+        status: 'sent',
+        now: NOON
       })
     ).rejects.toThrow(/上限/);
   });
@@ -293,7 +298,7 @@ describe('outreach sequences and touches', () => {
         f.db,
         enrolled.touch!.id,
         otherOrg.id,
-        { status: 'sent' }
+        { status: 'sent', now: NOON }
       )
     ).rejects.toThrow(/不存在/);
   });

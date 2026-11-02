@@ -232,7 +232,8 @@ describe('experiment wiring', () => {
       db,
       enrolled.touch!.id,
       organizationId,
-      { status: 'sent' }
+      // 固定正午时间：避开 22:00–08:00 免打扰守卫，测试随时段运行都确定
+      { status: 'sent', now: new Date('2026-01-01T12:00:00') }
     );
     expect(sent.touch.status).toBe('sent');
 

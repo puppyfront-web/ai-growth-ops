@@ -65,5 +65,14 @@ export const outreachChannelConfigSchema = z.object({
   wecom: capabilityStatusSchema.optional(),
   email: capabilityStatusSchema.optional(),
   phone_task: capabilityStatusSchema.optional(),
-  manual: capabilityStatusSchema.optional()
+  manual: capabilityStatusSchema.optional(),
+  // 免打扰时段（HH:MM，本地时区）；start==end 表示关闭。缺省 22:00–08:00
+  quietHoursStart: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
+  quietHoursEnd: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional()
 });

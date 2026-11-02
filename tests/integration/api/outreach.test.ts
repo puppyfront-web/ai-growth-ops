@@ -66,6 +66,21 @@ beforeEach(async () => {
   await db.outreachSuppression.deleteMany();
   await db.customer.deleteMany({ where: { organizationId } });
   await db.notification.deleteMany({ where: { organizationId } });
+  // 免打扰时段全开（start==end 关闭守卫）：测试随时段运行都确定
+  await db.appConfig.upsert({
+    where: {
+      userId_key: { userId, key: 'outreach_channel_config' }
+    },
+    create: {
+      organizationId,
+      userId,
+      key: 'outreach_channel_config',
+      value: { manual: 'verified', quietHoursStart: '00:00', quietHoursEnd: '00:00' }
+    },
+    update: {
+      value: { manual: 'verified', quietHoursStart: '00:00', quietHoursEnd: '00:00' }
+    }
+  });
 });
 
 afterAll(async () => {
