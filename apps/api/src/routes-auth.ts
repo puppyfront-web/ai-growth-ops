@@ -27,21 +27,10 @@ import {
   welcomeEmail,
   resetPasswordEmail
 } from '@ai-growth-ops/email';
+import { sendJson, type RouteContext } from './route-kit.js';
 
-interface AuthRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type AuthRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
 function sendValidationErrors(
   res: ServerResponse,

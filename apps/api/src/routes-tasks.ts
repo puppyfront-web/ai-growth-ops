@@ -1,21 +1,10 @@
 import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import { getOrganizationContext } from './auth.js';
+import { sendJson, type RouteContext } from './route-kit.js';
 
-interface TaskRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type TaskRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
 export const taskRoutes: Array<{
   method: string;

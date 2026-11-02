@@ -11,38 +11,17 @@ import {
   stopExperiment
 } from '@ai-growth-ops/database';
 import { getOrganizationContext } from './auth.js';
-import { hasPermission } from './middleware/rbac.js';
 import { validateBody } from './middleware/validate.js';
 import {
   assignExperimentSchema,
   createExperimentSchema,
   experimentEventSchema
 } from './schemas/experiments.js';
+import { canAccess, sendJson, type RouteContext } from './route-kit.js';
 
-interface ExperimentRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type ExperimentRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
-function canAccess(
-  res: ServerResponse,
-  role: string,
-  permission: 'analytics:view' | 'settings:manage'
-): boolean {
-  if (hasPermission(role, permission)) return true;
-  sendJson(res, 403, { error: '权限不足' });
-  return false;
-}
 
 function handleError(res: ServerResponse, error: unknown) {
   sendJson(res, 400, {

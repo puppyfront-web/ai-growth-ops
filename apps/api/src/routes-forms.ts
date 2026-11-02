@@ -16,7 +16,6 @@ import {
 } from '@ai-growth-ops/database';
 import { getOrganizationContext } from './auth.js';
 import { validateBody } from './middleware/validate.js';
-import { hasPermission } from './middleware/rbac.js';
 import { isRateLimited, clientIp } from './server.js';
 import {
   createAssignmentRuleSchema,
@@ -25,31 +24,11 @@ import {
   updateAssignmentRuleSchema,
   updateLeadCaptureFormSchema
 } from './schemas/forms.js';
+import { canAccess, sendJson, type RouteContext } from './route-kit.js';
 
-interface FormRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type FormRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
-function canAccess(
-  res: ServerResponse,
-  role: string,
-  permission: 'lead:view' | 'lead:edit' | 'settings:manage'
-): boolean {
-  if (hasPermission(role, permission)) return true;
-  sendJson(res, 403, { error: '权限不足' });
-  return false;
-}
 
 function handleError(res: ServerResponse, error: unknown) {
   sendJson(res, 400, {

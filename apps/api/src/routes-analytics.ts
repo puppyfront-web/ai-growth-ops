@@ -6,21 +6,10 @@ import { getOrganizationContext } from './auth.js';
 import { hasPermission } from './middleware/rbac.js';
 import { getAcquisitionAnalytics } from './services/acquisition-analytics.js';
 import { getUnifiedFunnel } from './services/funnel-analytics.js';
+import { sendJson, type RouteContext } from './route-kit.js';
 
-interface AnalyticsRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type AnalyticsRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
 export const analyticsRoutes: Array<{
   method: string;

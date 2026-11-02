@@ -13,7 +13,6 @@ import {
   type ForecastStage
 } from '@ai-growth-ops/shared';
 import { getOrganizationContext } from './auth.js';
-import { hasPermission } from './middleware/rbac.js';
 import { validateBody } from './middleware/validate.js';
 import {
   createMarketingCostSchema,
@@ -23,31 +22,11 @@ import {
   getAttributionAnalytics,
   getEfficiencyAnalytics
 } from './services/efficiency-analytics.js';
+import { canAccess, sendJson, type RouteContext } from './route-kit.js';
 
-interface CostRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type CostRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
-function canAccess(
-  res: ServerResponse,
-  role: string,
-  permission: 'analytics:view' | 'settings:manage'
-): boolean {
-  if (hasPermission(role, permission)) return true;
-  sendJson(res, 403, { error: '权限不足' });
-  return false;
-}
 
 function daysFrom(url: URL): number {
   const days = Number(url.searchParams.get('days') || 30);

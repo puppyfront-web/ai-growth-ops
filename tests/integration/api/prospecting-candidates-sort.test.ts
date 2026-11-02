@@ -156,6 +156,13 @@ describe('GET /api/prospecting/tasks/:id/candidates 排序', () => {
 describe('GET /api/prospecting/tasks/:id/candidates 日期分段筛选', () => {
   let rangeTaskId: string;
   const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000);
+  /** "今天"样本必须落在今天内：取 1 分钟前，但不早于今日 0 点（跨午夜跑测试的稳健性） */
+  const earlierToday = () => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const candidate = new Date(Date.now() - 60_000);
+    return candidate < start ? new Date(start.getTime() + 60_000) : candidate;
+  };
 
   beforeAll(async () => {
     const task = await db.prospectingTask.create({
@@ -169,7 +176,7 @@ describe('GET /api/prospecting/tasks/:id/candidates 日期分段筛选', () => {
     });
     rangeTaskId = task.id;
     const dated = [
-      { nickname: '一小时前', at: hoursAgo(1) },
+      { nickname: '一小时前', at: earlierToday() },
       { nickname: '八天前', at: hoursAgo(8 * 24) },
       { nickname: '三十一天前', at: hoursAgo(31 * 24) }
     ];

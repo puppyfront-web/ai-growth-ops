@@ -2,21 +2,10 @@ import type { ServerResponse, IncomingMessage } from 'http';
 import type { DatabaseClient } from '@ai-growth-ops/database';
 import type { AuditAction } from '@prisma/client';
 import { getOrganizationContext } from './auth.js';
+import { sendJson, type RouteContext } from './route-kit.js';
 
-interface AuditRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type AuditRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
 export const auditRoutes: Array<{
   method: string;

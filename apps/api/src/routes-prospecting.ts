@@ -52,21 +52,9 @@ import {
 } from './services/prospecting.js';
 import { enqueueCustomerProfileRefresh } from './services/customer-profile.js';
 import { trySyncCustomerToFeishu } from '@ai-growth-ops/database';
+import { sendJson, type RouteContext } from './route-kit.js';
 
-interface RouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
 async function buildGuardPayload(
   db: DatabaseClient,

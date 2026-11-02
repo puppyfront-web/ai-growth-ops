@@ -18,7 +18,6 @@ import {
 import { getOrganizationContext } from './auth.js';
 import { parsePagination, paginate } from './middleware/pagination.js';
 import { validateBody } from './middleware/validate.js';
-import { hasPermission, type Permission } from './middleware/rbac.js';
 import { fireWebhook } from './services/webhook-service.js';
 import {
   addCustomerActivitySchema,
@@ -50,31 +49,11 @@ import {
   updateCustomerPlaybook
 } from './services/customer-playbook.js';
 import { clientIp, isRateLimited } from './server.js';
+import { canAccess, sendJson, type RouteContext } from './route-kit.js';
 
-interface CustomerRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type CustomerRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
-function canAccess(
-  res: ServerResponse,
-  role: string,
-  permission: Permission
-): boolean {
-  if (hasPermission(role, permission)) return true;
-  sendJson(res, 403, { error: '权限不足' });
-  return false;
-}
 
 async function findDuplicates(
   db: DatabaseClient,

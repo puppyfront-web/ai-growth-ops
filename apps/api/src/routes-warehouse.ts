@@ -3,21 +3,10 @@ import type { DatabaseClient } from '@ai-growth-ops/database';
 import { resolveAcquisitionRange } from '@ai-growth-ops/shared';
 import { getOrganizationContext } from './auth.js';
 import { hasPermission } from './middleware/rbac.js';
+import { sendJson, type RouteContext } from './route-kit.js';
 
-interface WarehouseRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type WarehouseRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
 export const warehouseRoutes: Array<{
   method: string;

@@ -15,38 +15,17 @@ import {
 import { getOrganizationContext } from './auth.js';
 import { parsePagination } from './middleware/pagination.js';
 import { validateBody } from './middleware/validate.js';
-import { hasPermission } from './middleware/rbac.js';
 import { fireWebhook } from './services/webhook-service.js';
 import {
   addDealActivitySchema,
   createDealSchema,
   updateDealSchema
 } from './schemas/deals.js';
+import { canAccess, sendJson, type RouteContext } from './route-kit.js';
 
-interface DealRouteContext {
-  db: DatabaseClient;
-  url: URL;
-  params: Record<string, string>;
-  body: unknown;
-}
+type DealRouteContext = RouteContext;
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
-  res.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  res.end(JSON.stringify(payload));
-}
 
-function canAccess(
-  res: ServerResponse,
-  role: string,
-  permission: 'lead:view' | 'lead:edit'
-): boolean {
-  if (hasPermission(role, permission)) return true;
-  sendJson(res, 403, { error: '权限不足' });
-  return false;
-}
 
 function toDate(
   value: string | null | undefined
