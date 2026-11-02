@@ -40,7 +40,7 @@
     "local:backup": "node --env-file-if-exists=.env scripts/backup-local-data.mjs",
     "local:restore": "node --env-file-if-exists=.env scripts/restore-local-data.mjs",
     "lint": "eslint .",
-    "test": "node --test scripts/test-database-url.test.mjs && vitest run && pnpm test:web",
+    "test": "node --test scripts/*.test.mjs && vitest run && pnpm test:web",
     "test:architecture": "tsx scripts/check-architecture-drift.ts && vitest run tests/unit/harness/architecture-drift.test.ts tests/unit/deployment/local-only-runtime.test.ts",
     "test:unit": "vitest run tests/unit",
     "test:integration": "node scripts/with-e2e-database.mjs pnpm db:push && vitest run tests/integration",

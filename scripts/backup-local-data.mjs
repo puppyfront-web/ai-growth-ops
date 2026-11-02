@@ -8,7 +8,11 @@ import { resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { createGzip } from 'node:zlib';
-import { resolveLocalDataRoot, sha256File } from './local-data-utils.mjs';
+import {
+  resolvePostgresAccess,
+  resolveLocalDataRoot,
+  sha256File
+} from './local-data-utils.mjs';
 
 const root = resolveLocalDataRoot(process.env.LOCAL_DATA_DIR);
 const stamp = new Date()
@@ -16,13 +20,17 @@ const stamp = new Date()
   .replaceAll(':', '-')
   .replaceAll('.', '-');
 const destination = resolve(root, 'backups', stamp);
-const composeArgs = ['compose', '-f', 'docker-compose.prod.yml'];
 
-if (!existsSync(root)) {
-  throw new Error(`Local data directory does not exist: ${root}`);
-}
+// 备份输出需要一个家：数据目录不存在时自动创建（空目录仅意味着没有文件类数据可打包）
+mkdirSync(root, { recursive: true, mode: 0o700 });
 
 mkdirSync(destination, { recursive: true, mode: 0o700 });
+
+const access = resolvePostgresAccess({ env: process.env });
+const composeArgs =
+  access.mode === 'compose'
+    ? ['compose', '-f', access.composeFile]
+    : null;
 
 function compose(args, options = {}) {
   const result = spawnSync('docker', [...composeArgs, ...args], {
@@ -35,21 +43,11 @@ function compose(args, options = {}) {
     throw new Error(`docker compose ${args.join(' ')} failed`);
 }
 
-function runningServices() {
-  const result = spawnSync(
-    'docker',
-    [...composeArgs, 'ps', '--services', '--status', 'running'],
-    { cwd: process.cwd(), env: process.env, encoding: 'utf8' }
-  );
-  if (result.status !== 0)
-    throw new Error('Unable to inspect running services');
-  return new Set(result.stdout.split('\n').filter(Boolean));
-}
-
-async function dumpDatabase() {
-  const child = spawn(
-    'docker',
-    [
+// pg_dump 本身具备事务一致性；container 模式（开发/自托管布局）下
+// 应用进程无需停机。compose（生产）模式保持原有的停写服务语义。
+function dumpCommandArgs() {
+  if (access.mode === 'compose') {
+    return [
       ...composeArgs,
       'exec',
       '-T',
@@ -57,13 +55,17 @@ async function dumpDatabase() {
       'sh',
       '-c',
       'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"'
-    ],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'inherit']
-    }
-  );
+    ];
+  }
+  return ['exec', access.container, 'pg_dump', '-U', access.user, access.db];
+}
+
+async function dumpDatabase() {
+  const child = spawn('docker', dumpCommandArgs(), {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'inherit']
+  });
   const closed = new Promise((done) => child.once('close', done));
   await pipeline(
     child.stdout,
@@ -74,7 +76,20 @@ async function dumpDatabase() {
   if (code !== 0) throw new Error('PostgreSQL backup failed');
 }
 
-const running = runningServices();
+const running =
+  access.mode === 'compose'
+    ? new Set(
+        (
+          spawnSync(
+            'docker',
+            [...composeArgs, 'ps', '--services', '--status', 'running'],
+            { cwd: process.cwd(), env: process.env, encoding: 'utf8' }
+          ).stdout ?? ''
+        )
+          .split('\n')
+          .filter(Boolean)
+      )
+    : new Set();
 const writeServices = ['api', 'worker', 'web', 'browser-runner'].filter(
   (name) => running.has(name)
 );

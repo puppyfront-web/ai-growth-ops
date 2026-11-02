@@ -13,6 +13,7 @@ import { createGunzip } from 'node:zlib';
 import {
   assertSafeArchiveEntries,
   assertSafeArchiveEntryTypes,
+  resolvePostgresAccess,
   resolveLocalDataRoot,
   sha256File
 } from './local-data-utils.mjs';
@@ -70,7 +71,9 @@ if (existsSync(filesBackup)) {
 mkdirSync(root, { recursive: true, mode: 0o700 });
 chmodSync(root, 0o700);
 
-const composeArgs = ['compose', '-f', 'docker-compose.prod.yml'];
+const access = resolvePostgresAccess({ env: process.env });
+const composeArgs =
+  access.mode === 'compose' ? ['compose', '-f', access.composeFile] : null;
 function compose(args) {
   const result = spawnSync('docker', [...composeArgs, ...args], {
     cwd: process.cwd(),
@@ -81,31 +84,49 @@ function compose(args) {
     throw new Error(`docker compose ${args.join(' ')} failed`);
 }
 
+function psqlCommandArgs(sql = null) {
+  const base =
+    access.mode === 'compose'
+      ? [
+          ...composeArgs,
+          'exec',
+          '-T',
+          'postgres',
+          'sh',
+          '-c',
+          `psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"${
+            sql ? ` -c ${JSON.stringify(sql).replaceAll('"', '\\"')}` : ''
+          }`
+        ]
+      : [
+          'exec',
+          '-i',
+          access.container,
+          'psql',
+          '-v',
+          'ON_ERROR_STOP=1',
+          '-U',
+          access.user,
+          '-d',
+          access.db,
+          ...(sql ? ['-c', sql] : [])
+        ];
+  return base;
+}
+
 async function restoreDatabase() {
-  const child = spawn(
-    'docker',
-    [
-      ...composeArgs,
-      'exec',
-      '-T',
-      'postgres',
-      'sh',
-      '-c',
-      'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"'
-    ],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: ['pipe', 'inherit', 'inherit']
-    }
-  );
+  const child = spawn('docker', psqlCommandArgs(), {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: ['pipe', 'inherit', 'inherit']
+  });
   const closed = new Promise((done) => child.once('close', done));
   await pipeline(createReadStream(databaseBackup), createGunzip(), child.stdin);
   const code = await closed;
   if (code !== 0) throw new Error('PostgreSQL restore failed');
 }
 
-compose(['down']);
+if (access.mode === 'compose') compose(['down']);
 if (existsSync(filesBackup)) {
   for (const directory of ['objects', 'secrets', 'uploads']) {
     rmSync(resolve(root, directory), { recursive: true, force: true });
@@ -116,15 +137,25 @@ if (existsSync(filesBackup)) {
   if (archive.status !== 0) throw new Error('Local file restore failed');
 }
 
-compose(['up', '-d', '--wait', 'postgres']);
-compose([
-  'exec',
-  '-T',
-  'postgres',
-  'sh',
-  '-c',
-  'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
-]);
+if (access.mode === 'compose') {
+  compose(['up', '-d', '--wait', 'postgres']);
+  compose([
+    'exec',
+    '-T',
+    'postgres',
+    'sh',
+    '-c',
+    'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
+  ]);
+} else {
+  // container 模式：直接重置目标库 schema（DATABASE_URL 指向的库，--confirm 已确认）
+  const reset = spawnSync(
+    'docker',
+    psqlCommandArgs('DROP SCHEMA public CASCADE; CREATE SCHEMA public;'),
+    { stdio: 'inherit' }
+  );
+  if (reset.status !== 0) throw new Error('PostgreSQL schema reset failed');
+}
 await restoreDatabase();
-compose(['up', '-d']);
+if (access.mode === 'compose') compose(['up', '-d']);
 console.log(`Backup restored from: ${source}`);
