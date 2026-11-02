@@ -26,6 +26,9 @@ export type ProspectScoreResult = {
 
 export type ProspectScoreSource = 'rules' | 'skill';
 
+/** 评分逻辑版本：任何影响打分结果的变更必须递增（1=规则+语义合并；2=画像两步判定）。落库快照引用此值。 */
+export const SCORING_VERSION = 2;
+
 /** 语义评估第一步输出的评论者画像。 */
 export const PROSPECT_PERSONA_TAGS = [
   'demand_seeker',

@@ -26,6 +26,7 @@ import {
   passesProspectThreshold,
   PROSPECT_GUARD,
   remainingMs,
+  SCORING_VERSION,
   scoreProspectUser,
   secUidFromHomepage,
   mergeProspectAttributions,
@@ -670,6 +671,7 @@ export async function executeProspectingTask(
       {
         prospect: AggregatedProspect;
         score: ProspectUserScoreResult;
+        scoring: ProspectScoringTelemetry;
         attributions: ProspectAttribution[];
       }
     >();
@@ -828,16 +830,45 @@ export async function executeProspectingTask(
           videoTitle: prospect.sourceVideoTitle ?? undefined,
           profileText: prospect.userNickname ?? undefined
         });
-        const score = mergeSemanticScore(
-          ruleScore,
-          semanticScores.get(prospect.userKey)
-        );
+        const semanticResult = semanticScores.get(prospect.userKey);
+        const score = mergeSemanticScore(ruleScore, semanticResult);
         // 诚实降级：语义评分没跑成（余额不足/超时/未配置）时，规则分不配
         // 产出 A/B 级——历史上一次 402 就把整批从业者打成了 A 级潜客。
+        const degraded =
+          !semanticScores.has(prospect.userKey) && Boolean(semanticUnavailableReason);
         const scoreFinal =
-          !semanticScores.has(prospect.userKey) && semanticUnavailableReason
+          degraded && semanticUnavailableReason
             ? downgradeWithoutSemanticScore(score, semanticUnavailableReason)
             : score;
+
+        // 评分快照埋点（41 号 spec）：把被合并丢弃的分量持久化，
+        // 供"评分→赢单"回流分析；不改变任何评分行为。
+        const scoringTelemetry: ProspectScoringTelemetry = {
+          version: SCORING_VERSION,
+          ruleScore: ruleScore.relevanceScore,
+          semanticScore:
+            typeof semanticResult?.relevanceScore === 'number'
+              ? semanticResult.relevanceScore
+              : null,
+          personaTag: scoreFinal.personaTag ?? null,
+          degraded,
+          ...(degraded && semanticUnavailableReason
+            ? { reason: semanticUnavailableReason }
+            : {}),
+          ...(scoreFinal.audienceFit !== undefined ||
+          scoreFinal.needStrength !== undefined ||
+          scoreFinal.buyingIntent !== undefined ||
+          scoreFinal.evidenceQuality !== undefined
+            ? {
+                dimensions: {
+                  audienceFit: scoreFinal.audienceFit,
+                  needStrength: scoreFinal.needStrength,
+                  buyingIntent: scoreFinal.buyingIntent,
+                  evidenceQuality: scoreFinal.evidenceQuality
+                }
+              }
+            : {})
+        };
 
         if (!passesProspectThreshold(scoreFinal, task.minRelevanceScore)) continue;
 
@@ -856,12 +887,14 @@ export async function executeProspectingTask(
           existing.attributions.push(attribution);
           if (existing.score.relevanceScore < scoreFinal.relevanceScore) {
             existing.score = scoreFinal;
+            existing.scoring = scoringTelemetry;
           }
           continue;
         }
         prospectsByUser.set(prospect.userKey, {
           prospect,
           score: scoreFinal,
+          scoring: scoringTelemetry,
           attributions: [attribution]
         });
       }
@@ -880,7 +913,7 @@ export async function executeProspectingTask(
       { totalVideos, totalComments, totalCandidates }
     );
 
-    for (const { prospect, score, attributions } of prospectsByUser.values()) {
+    for (const { prospect, score, scoring, attributions } of prospectsByUser.values()) {
       const existing = findExistingCandidate(prospect);
       const saved = await upsertProspectCandidate(db, {
         taskId: task.id,
@@ -889,7 +922,8 @@ export async function executeProspectingTask(
         prospect,
         score,
         attributions,
-        existing
+        existing,
+        scoring
       });
       // 刷新快照：同账号可能在同一批次以不同 key 再次命中该行。
       if (saved) {
@@ -1030,7 +1064,26 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-async function upsertProspectCandidate(
+/**
+ * 评分快照（41 号 spec）：被合并丢弃的评分分量。写入候选 metadata.scoring，
+ * 供"评分 → 赢单"回流分析；纯遥测，不参与任何评分决策。
+ */
+export type ProspectScoringTelemetry = {
+  version: number;
+  ruleScore: number;
+  semanticScore: number | null;
+  personaTag: string | null;
+  degraded: boolean;
+  reason?: string;
+  dimensions?: {
+    audienceFit?: number;
+    needStrength?: number;
+    buyingIntent?: number;
+    evidenceQuality?: number;
+  };
+};
+
+export async function upsertProspectCandidate(
   db: DatabaseClient,
   input: {
     taskId: string;
@@ -1039,6 +1092,7 @@ async function upsertProspectCandidate(
     prospect: AggregatedProspect;
     score: ProspectUserScoreResult;
     attributions: ProspectAttribution[];
+    scoring?: ProspectScoringTelemetry;
     existing?: {
       id: string;
       customerId: string | null;
@@ -1051,13 +1105,14 @@ async function upsertProspectCandidate(
       avatarUrl: string | null;
       metadata: unknown;
       attributions: unknown;
+      personaTag: string | null;
     };
   }
 ) {
   // 返回落库后的最新行：调用方用它刷新快照索引，避免同批次内
   // 两个不同 key 的潜客命中同一行时，第二次 upsert 基于陈旧快照
   // 覆盖第一次合并的 evidence。
-  const { prospect, score, existing, attributions } = input;
+  const { prospect, score, existing, attributions, scoring } = input;
   if (!existing) {
     return db.prospectCandidate.create({
       data: {
@@ -1087,7 +1142,8 @@ async function upsertProspectCandidate(
         attributions: attributions as never,
         buyingStage: score.buyingStage,
         confidence: score.confidence,
-        riskFlags: score.riskFlags as never
+        riskFlags: score.riskFlags as never,
+        ...(scoring ? { metadata: { scoring } as never } : {})
       }
     });
   }
@@ -1129,7 +1185,19 @@ async function upsertProspectCandidate(
       riskFlags: keepExistingScore ? undefined : (score.riskFlags as never),
       personaTag: keepExistingScore
         ? (existing.personaTag ?? score.personaTag ?? undefined)
-        : (score.personaTag ?? existing.personaTag ?? undefined)
+        : (score.personaTag ?? existing.personaTag ?? undefined),
+      // 快照与分数同进退：保留旧分则保留旧快照（无旧快照时用新值补种），换新分则换新快照
+      ...(scoring
+        ? {
+            metadata: {
+              ...asRecord(existing.metadata),
+              scoring: keepExistingScore
+                ? ((existing.metadata as Record<string, unknown> | null)
+                    ?.scoring ?? scoring)
+                : scoring
+            } as never
+          }
+        : {})
     }
   });
   return db.prospectCandidate.findUnique({ where: { id: existing.id } });
@@ -1163,6 +1231,7 @@ type ProspectCandidateRow = {
   relevanceScore: number;
   leadLevel: string;
   scoreSource: string;
+  personaTag: string | null;
   intent: string | null;
   summary: string | null;
   matchedKeywords: unknown;
@@ -1253,6 +1322,7 @@ export async function mergeDuplicateProspectCandidates(
           relevanceScore: best.relevanceScore,
           leadLevel: best.leadLevel,
           scoreSource: best.scoreSource,
+          personaTag: best.personaTag,
           intent: best.intent,
           summary: best.summary,
           matchedKeywords: best.matchedKeywords as never,
@@ -1736,12 +1806,33 @@ export async function convertProspectToCustomer(
       throw new Error('该潜客已被其他请求转入客户库');
     }
 
+    // 冻结首次转化时刻的评分现场（41 号 spec）：之后行数据继续合并演化，
+    // 快照保持转化当时的值——"哪类评分真的走向成交"的回流分析锚点。
+    const convertMeta = asRecord(candidate.metadata);
+    const convertedAt = new Date().toISOString();
     await tx.prospectCandidate.update({
       where: { id: candidate.id },
       data: {
         metadata: {
-          ...asRecord(candidate.metadata),
-          convertedAt: new Date().toISOString()
+          ...convertMeta,
+          convertedAt,
+          conversionSnapshot: (convertMeta.conversionSnapshot ?? {
+            at: convertedAt,
+            relevanceScore: candidate.relevanceScore,
+            leadLevel: candidate.leadLevel,
+            personaTag: candidate.personaTag ?? null,
+            summary: candidate.summary ?? null,
+            matchedKeywords: Array.isArray(candidate.matchedKeywords)
+              ? candidate.matchedKeywords
+              : [],
+            evidenceCount: Array.isArray(candidate.evidence)
+              ? candidate.evidence.length
+              : 0,
+            scoringVersion:
+              typeof asRecord(convertMeta.scoring)?.version === 'number'
+                ? asRecord(convertMeta.scoring).version
+                : null
+          }) as never
         } as never
       }
     });
