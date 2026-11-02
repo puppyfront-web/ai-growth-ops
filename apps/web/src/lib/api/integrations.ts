@@ -51,6 +51,11 @@ export function validatePlatformAccount(
   return apiPost<Record<string, unknown>>(`/api/accounts/${id}/validate`, {});
 }
 
+/** 恢复软删除账号：恢复后状态为 expired 且凭据清空，需重新扫码登录。 */
+export function restorePlatformAccount(id: string): Promise<PlatformAccount> {
+  return apiPost<PlatformAccount>(`/api/accounts/${id}/restore`, {});
+}
+
 export function deletePlatformAccount(id: string): Promise<void> {
   return apiDelete<void>(`/api/accounts/${id}`);
 }

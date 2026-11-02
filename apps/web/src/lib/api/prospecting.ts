@@ -124,6 +124,7 @@ export type ProspectingTask = {
   userId: string;
   platform: ProspectingPlatform;
   platformAccountId: string | null;
+  platformAccountName?: string | null;
   keywords: string[];
   requirement: string | null;
   intent: ProspectingIntent | null;
@@ -153,6 +154,8 @@ export type ProspectCandidateFilters = {
   minScore: number;
   leadLevel: '' | 'A' | 'B' | 'C' | 'D';
   converted: '' | 'yes' | 'no';
+  /** 日期分段：'' 为全部 */
+  dateRange: '' | 'today' | '7d' | '30d';
 };
 
 /** 潜客列表排序：相关度优先（默认）或最新采集优先。 */
@@ -263,6 +266,8 @@ export type CreateProspectingTaskInput = {
   planId: string;
   enabledStrategyIds: string[];
   minRelevanceScore?: number;
+  /** 指定后每个账号各创建一个任务；不指定则沿用计划草稿绑定的账号 */
+  platformAccountIds?: string[];
 };
 
 export type ProspectingPlanAnalysis = {
@@ -382,7 +387,7 @@ export function listProspectCandidates(
   page: number,
   pageSize: number,
   focusId?: string,
-  sort: ProspectSort = 'relevance'
+  sort: ProspectSort = 'latest'
 ) {
   const params = new URLSearchParams({
     page: String(page),
@@ -393,6 +398,7 @@ export function listProspectCandidates(
   if (filters.q) params.set('q', filters.q);
   if (filters.leadLevel) params.set('leadLevel', filters.leadLevel);
   if (filters.converted) params.set('converted', filters.converted);
+  if (filters.dateRange) params.set('dateRange', filters.dateRange);
   if (focusId) params.set('focusId', focusId);
   return apiGet<ProspectCandidatePage>(
     `/api/prospecting/tasks/${taskId}/candidates?${params.toString()}`
@@ -400,6 +406,7 @@ export function listProspectCandidates(
 }
 
 export function createProspectingTask(data: CreateProspectingTaskInput) {
+  // 多账号提交时服务端返回 { tasks }；该能力后端已就绪，前端接线随多账号功能恢复时启用
   return apiPost<ProspectingTask>('/api/prospecting/tasks', data);
 }
 

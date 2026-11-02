@@ -12,7 +12,8 @@ export const emptyProspectFilters: ProspectCandidateFilters = {
   q: '',
   minScore: 0,
   leadLevel: '',
-  converted: ''
+  converted: '',
+  dateRange: ''
 };
 
 export function hasActiveProspectFilters(
@@ -22,9 +23,20 @@ export function hasActiveProspectFilters(
     filters.q !== '' ||
     filters.minScore > 0 ||
     filters.leadLevel !== '' ||
-    filters.converted !== ''
+    filters.converted !== '' ||
+    filters.dateRange !== ''
   );
 }
+
+const dateRangeOptions: Array<{
+  value: ProspectCandidateFilters['dateRange'];
+  label: string;
+}> = [
+  { value: '', label: '全部' },
+  { value: 'today', label: '今天' },
+  { value: '7d', label: '近7天' },
+  { value: '30d', label: '近30天' }
+];
 
 type ProspectFilterBarProps = {
   filters: ProspectCandidateFilters;
@@ -36,7 +48,7 @@ type ProspectFilterBarProps = {
 export function ProspectFilterBar({
   filters,
   onChange,
-  sort = 'relevance',
+  sort = 'latest',
   onSortChange
 }: ProspectFilterBarProps) {
   const update = (patch: Partial<ProspectCandidateFilters>) =>
@@ -121,6 +133,29 @@ export function ProspectFilterBar({
           <option value="yes">已转客户</option>
         </NativeSelect>
       </div>
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">采集时间</span>
+        <div
+          role="group"
+          aria-label="采集时间"
+          className="flex overflow-hidden rounded-md border"
+        >
+          {dateRangeOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => update({ dateRange: option.value })}
+              className={`px-2.5 py-1 text-xs transition-colors ${
+                filters.dateRange === option.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted/50'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {onSortChange && (
         <div className="flex items-center gap-2">
           <label
@@ -137,8 +172,8 @@ export function ProspectFilterBar({
             }
             className="h-8 w-28 text-xs"
           >
-            <option value="relevance">相关度优先</option>
             <option value="latest">最新优先</option>
+            <option value="relevance">相关度优先</option>
           </NativeSelect>
         </div>
       )}

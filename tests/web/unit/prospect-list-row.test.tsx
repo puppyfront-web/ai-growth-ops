@@ -36,6 +36,13 @@ describe('ProspectListRow', () => {
     expect(screen.getByText('想采购一套私域工具')).toBeTruthy();
   });
 
+  it('摘要行展示采集时间（YYYY-MM-DD HH:mm）', () => {
+    setup({ createdAt: '2026-11-02T02:30:00.000Z' });
+    expect(
+      screen.getByText(/想采购一套私域工具 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
+    ).toBeTruthy();
+  });
+
   it('点击行回调完整 candidate', async () => {
     const { onSelect, c } = setup();
     await userEvent.click(screen.getByRole('button', { name: /张老板/ }));

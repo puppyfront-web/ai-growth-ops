@@ -52,6 +52,10 @@ import { ErrorState } from '@/components/shared/ErrorState';
 import { NativeSelect } from '@/components/ui/native-select';
 import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/components/ui/toast';
+import { platformLabels } from '@/lib/constants';
+import { restorePlatformAccount } from '@/lib/api/integrations';
+import { BrowserLoginDialog } from '@/components/integrations/BrowserLoginDialog';
+import { BoundAccountLoginNotice } from '@/components/prospecting/BoundAccountLoginNotice';
 
 const statusLabels: Record<string, string> = {
   draft: '草稿',
@@ -401,6 +405,7 @@ export default function ProspectingDetailPage() {
   const [filters, setFilters] = useState<ProspectCandidateFilters>(() => {
     const level = searchParams.get('leadLevel') ?? '';
     const converted = searchParams.get('converted') ?? '';
+    const dateRange = searchParams.get('dateRange') ?? '';
     return {
       q: searchParams.get('q') ?? '',
       minScore: Number(searchParams.get('minScore')) || 0,
@@ -409,6 +414,9 @@ export default function ProspectingDetailPage() {
         : '',
       converted: ['yes', 'no'].includes(converted)
         ? (converted as ProspectCandidateFilters['converted'])
+        : '',
+      dateRange: ['today', '7d', '30d'].includes(dateRange)
+        ? (dateRange as ProspectCandidateFilters['dateRange'])
         : ''
     };
   });
@@ -416,7 +424,7 @@ export default function ProspectingDetailPage() {
     Math.max(1, Number(searchParams.get('page')) || 1)
   );
   const [sort, setSort] = useState<ProspectSort>(() =>
-    searchParams.get('sort') === 'latest' ? 'latest' : 'relevance'
+    searchParams.get('sort') === 'relevance' ? 'relevance' : 'latest'
   );
   const [pageSize, setPageSize] = useState(() =>
     Math.min(100, Math.max(10, Number(searchParams.get('pageSize')) || 20))
@@ -428,6 +436,8 @@ export default function ProspectingDetailPage() {
   const [enrichError, setEnrichError] = useState('');
   const [forceRecrawl, setForceRecrawl] = useState(false);
   const [captchaOpen, setCaptchaOpen] = useState(false);
+  const [boundLoginOpen, setBoundLoginOpen] = useState(false);
+  const [boundLoginRestoring, setBoundLoginRestoring] = useState(false);
   const [scheduleInterval, setScheduleInterval] = useState('24');
   const [convertNotice, setConvertNotice] = useState<{
     reused: boolean;
@@ -522,9 +532,10 @@ export default function ProspectingDetailPage() {
       if (filters.minScore > 0) params.set('minScore', String(filters.minScore));
       if (filters.leadLevel) params.set('leadLevel', filters.leadLevel);
       if (filters.converted) params.set('converted', filters.converted);
+      if (filters.dateRange) params.set('dateRange', filters.dateRange);
       if (page > 1) params.set('page', String(page));
       if (pageSize !== 20) params.set('pageSize', String(pageSize));
-      if (sort !== 'relevance') params.set('sort', sort);
+      if (sort !== 'latest') params.set('sort', sort);
       const qs = params.toString();
       const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       const target = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
@@ -584,6 +595,27 @@ export default function ProspectingDetailPage() {
       }
     }
   });
+
+  // 任务绑定账号失效/被移除时的直达恢复：先恢复软删行再弹扫码登录；
+  // 账号未删除（仅凭据过期）时 restore 返回 400，忽略后同样进入扫码流程
+  const handleBoundAccountRelogin = async () => {
+    if (!task?.platformAccountId) return;
+    setBoundLoginRestoring(true);
+    try {
+      await restorePlatformAccount(task.platformAccountId).catch((err) => {
+        if (!(err instanceof ApiError) || err.status !== 400) throw err;
+      });
+      setBoundLoginOpen(true);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `${err.message}，也可到「集成 → 平台账号」处理`
+          : '恢复账号失败，请到「集成 → 平台账号」处理'
+      );
+    } finally {
+      setBoundLoginRestoring(false);
+    }
+  };
 
   const scheduleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
@@ -715,7 +747,11 @@ export default function ProspectingDetailPage() {
               <Button
                 onClick={() => {
                   if (guard?.needsLogin) {
-                    router.push('/integrations/platforms');
+                    if (task.platformAccountId) {
+                      void handleBoundAccountRelogin();
+                    } else {
+                      router.push('/integrations/platforms');
+                    }
                     return;
                   }
                   runMutation.mutate();
@@ -883,6 +919,14 @@ export default function ProspectingDetailPage() {
               : ''}
             {guard.needsLogin ? ' 请先在「集成配置」完成抖音扫码登录。' : ''}
           </p>
+          {guard.needsLogin && task.platformAccountName && (
+            <BoundAccountLoginNotice
+              platformLabel={platformLabels[task.platform] ?? task.platform}
+              accountName={task.platformAccountName}
+              onLogin={() => void handleBoundAccountRelogin()}
+              pending={boundLoginRestoring}
+            />
+          )}
           {task.status !== 'running' && (
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1032,6 +1076,17 @@ export default function ProspectingDetailPage() {
           onClose={() => setCaptchaOpen(false)}
           onSolved={() => {
             setCaptchaOpen(false);
+            qc.invalidateQueries({ queryKey: ['prospecting'] });
+          }}
+        />
+      )}
+      {boundLoginOpen && task.platformAccountId && (
+        <BrowserLoginDialog
+          accountId={task.platformAccountId}
+          platform={task.platform}
+          open={boundLoginOpen}
+          onClose={() => {
+            setBoundLoginOpen(false);
             qc.invalidateQueries({ queryKey: ['prospecting'] });
           }}
         />

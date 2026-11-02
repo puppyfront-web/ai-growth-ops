@@ -69,9 +69,19 @@ afterAll(async () => {
 });
 
 describe('GET /api/prospecting/tasks/:id/candidates 排序', () => {
-  it('默认按相关度降序（现状不回退）', async () => {
+  it('默认按采集时间倒序', async () => {
     const res = await api.get(
       `/api/prospecting/tasks/${taskId}/candidates?pageSize=10`
+    );
+    expect(res.status).toBe(200);
+    expect(
+      res.body.items.map((i: { userNickname: string }) => i.userNickname)
+    ).toEqual(['新低分', '中中分', '旧高分']);
+  });
+
+  it('sort=relevance 仍可显式按相关度降序', async () => {
+    const res = await api.get(
+      `/api/prospecting/tasks/${taskId}/candidates?sort=relevance&pageSize=10`
     );
     expect(res.status).toBe(200);
     expect(
@@ -140,5 +150,99 @@ describe('GET /api/prospecting/tasks/:id/candidates 排序', () => {
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(1);
     expect(res.body.items[0].userNickname).toBe('Tom Smith');
+  });
+});
+
+describe('GET /api/prospecting/tasks/:id/candidates 日期分段筛选', () => {
+  let rangeTaskId: string;
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000);
+
+  beforeAll(async () => {
+    const task = await db.prospectingTask.create({
+      data: {
+        organizationId: auth.orgId,
+        userId: auth.userId,
+        platform: 'douyin',
+        keywords: [],
+        status: 'completed'
+      }
+    });
+    rangeTaskId = task.id;
+    const dated = [
+      { nickname: '一小时前', at: hoursAgo(1) },
+      { nickname: '八天前', at: hoursAgo(8 * 24) },
+      { nickname: '三十一天前', at: hoursAgo(31 * 24) }
+    ];
+    for (const seed of dated) {
+      await db.prospectCandidate.create({
+        data: {
+          prospectingTaskId: rangeTaskId,
+          organizationId: auth.orgId,
+          platform: 'douyin',
+          keyword: '',
+          userKey: `${rangeTaskId}-${seed.nickname}`,
+          externalUserId: `ext-${seed.nickname}`,
+          userNickname: seed.nickname,
+          content: `${seed.nickname}的评论`,
+          commentCount: 1,
+          relevanceScore: 60,
+          leadLevel: 'B',
+          createdAt: seed.at
+        }
+      });
+    }
+  });
+
+  it('today 只含今天采集的潜客', async () => {
+    const res = await api.get(
+      `/api/prospecting/tasks/${rangeTaskId}/candidates?dateRange=today`
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.items[0].userNickname).toBe('一小时前');
+  });
+
+  it('7d 只含近 7 天，30d 只含近 30 天，缺省为全部', async () => {
+    const week = await api.get(
+      `/api/prospecting/tasks/${rangeTaskId}/candidates?dateRange=7d`
+    );
+    expect(week.status).toBe(200);
+    expect(week.body.total).toBe(1);
+
+    const month = await api.get(
+      `/api/prospecting/tasks/${rangeTaskId}/candidates?dateRange=30d`
+    );
+    expect(month.status).toBe(200);
+    expect(
+      (month.body.items as Array<{ userNickname: string }>).map(
+        (i) => i.userNickname
+      )
+    ).toEqual(['一小时前', '八天前']);
+
+    const all = await api.get(
+      `/api/prospecting/tasks/${rangeTaskId}/candidates`
+    );
+    expect(all.body.total).toBe(3);
+  });
+
+  it('dateRange 与关键词组合取交集', async () => {
+    const hit = await api.get(
+      `/api/prospecting/tasks/${rangeTaskId}/candidates?dateRange=30d&q=八天前`
+    );
+    expect(hit.status).toBe(200);
+    expect(hit.body.total).toBe(1);
+
+    const miss = await api.get(
+      `/api/prospecting/tasks/${rangeTaskId}/candidates?dateRange=7d&q=八天前`
+    );
+    expect(miss.status).toBe(200);
+    expect(miss.body.total).toBe(0);
+  });
+
+  it('非法 dateRange 返回 400', async () => {
+    const res = await api.get(
+      `/api/prospecting/tasks/${rangeTaskId}/candidates?dateRange=xxx`
+    );
+    expect(res.status).toBe(400);
   });
 });

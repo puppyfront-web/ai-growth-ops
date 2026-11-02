@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client';
+
 export const packageMetadata = {
   name: '@ai-growth-ops/database',
   scope: 'data'
@@ -43,3 +45,7 @@ export type {
   SkillRun,
   User
 } from '@prisma/client';
+
+// Prisma 生成的 WhereInput 类型挂在 `Prisma` 命名空间下，这里拍平再导出。
+export type ProspectCandidateWhereInput =
+  Prisma.ProspectCandidateWhereInput;

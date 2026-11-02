@@ -10,7 +10,8 @@ import {
   loadProspectGuard,
   resolveLlmClientFromDb,
   scheduleProspectingTask,
-  type DatabaseClient
+  type DatabaseClient,
+  type ProspectCandidateWhereInput
 } from '@ai-growth-ops/database';
 import {
   emptyProspectGuardState,
@@ -468,15 +469,20 @@ export const prospectingRoutes: Array<{
 
       const { page, pageSize } = parsePagination(ctx.url);
       const where = { organizationId: orgCtx.organization.id };
-      const [items, total] = await Promise.all([
+      const [rows, total] = await Promise.all([
         ctx.db.prospectingTask.findMany({
           where,
           orderBy: { createdAt: 'desc' },
           skip: (page - 1) * pageSize,
-          take: pageSize
+          take: pageSize,
+          include: { platformAccount: { select: { name: true } } }
         }),
         ctx.db.prospectingTask.count({ where })
       ]);
+      const items = rows.map(({ platformAccount, ...task }) => ({
+        ...task,
+        platformAccountName: platformAccount?.name ?? null
+      }));
 
       sendJson(res, 200, {
         items,
@@ -541,6 +547,70 @@ export const prospectingRoutes: Array<{
         }))
       });
 
+      const buildTaskData = (platformAccountId: string | null) => ({
+        organizationId: orgCtx.organization.id,
+        userId: orgCtx.user.id,
+        platform: draft.platform,
+        platformAccountId,
+        keywords: [],
+        requirement: plan.requirement,
+        intent: plan.intent as never,
+        strategyPlan: plan as never,
+        planVersion: plan.version,
+        topNVideos: 1,
+        maxCommentsPerVideo: plan.limits.maxCommentsPerVideo,
+        commentScrollRounds: 8,
+        minRelevanceScore: bodyResult.data.minRelevanceScore,
+        status: 'draft' as const
+      });
+
+      if (bodyResult.data.platformAccountIds) {
+        const accountIds = [...new Set(bodyResult.data.platformAccountIds)];
+        const accounts: NonNullable<
+          Awaited<ReturnType<typeof findProspectingAccount>>
+        >[] = [];
+        for (const accountId of accountIds) {
+          const ref = await findProspectingAccount(
+            ctx.db,
+            orgCtx.organization.id,
+            draft.platform,
+            accountId
+          );
+          if (!ref) {
+            const row = await ctx.db.platformAccount.findFirst({
+              where: {
+                id: accountId,
+                organizationId: orgCtx.organization.id
+              },
+              select: { name: true }
+            });
+            return sendJson(res, 400, {
+              error: `执行账号不可用：${row?.name ?? accountId}（需为当前平台已登录且启用的账号）`
+            });
+          }
+          accounts.push(ref);
+        }
+        const tasks = await ctx.db.$transaction(async (tx) => {
+          const consumed = await tx.prospectingPlanDraft.updateMany({
+            where: { id: draft.id, consumedAt: null },
+            data: { consumedAt: new Date() }
+          });
+          if (consumed.count !== 1) throw new Error('需求分析已被使用');
+          const created: Awaited<
+            ReturnType<typeof tx.prospectingTask.create>
+          >[] = [];
+          for (const account of accounts) {
+            created.push(
+              await tx.prospectingTask.create({
+                data: buildTaskData(account.id)
+              })
+            );
+          }
+          return created;
+        });
+        return sendJson(res, 201, { tasks });
+      }
+
       const task = await ctx.db.$transaction(async (tx) => {
         const consumed = await tx.prospectingPlanDraft.updateMany({
           where: { id: draft.id, consumedAt: null },
@@ -548,22 +618,7 @@ export const prospectingRoutes: Array<{
         });
         if (consumed.count !== 1) throw new Error('需求分析已被使用');
         return tx.prospectingTask.create({
-          data: {
-            organizationId: orgCtx.organization.id,
-            userId: orgCtx.user.id,
-            platform: draft.platform,
-            platformAccountId: draft.platformAccountId,
-            keywords: [],
-            requirement: plan.requirement,
-            intent: plan.intent as never,
-            strategyPlan: plan as never,
-            planVersion: plan.version,
-            topNVideos: 1,
-            maxCommentsPerVideo: plan.limits.maxCommentsPerVideo,
-            commentScrollRounds: 8,
-            minRelevanceScore: bodyResult.data.minRelevanceScore,
-            status: 'draft'
-          }
+          data: buildTaskData(draft.platformAccountId)
         });
       });
 
@@ -585,11 +640,16 @@ export const prospectingRoutes: Array<{
         where: {
           id: ctx.params.id,
           organizationId: orgCtx.organization.id
-        }
+        },
+        include: { platformAccount: { select: { name: true } } }
       });
 
       if (!task) return sendJson(res, 404, { error: '任务不存在' });
-      sendJson(res, 200, task);
+      const { platformAccount, ...row } = task;
+      sendJson(res, 200, {
+        ...row,
+        platformAccountName: platformAccount?.name ?? null
+      });
     }
   },
   {
@@ -609,14 +669,37 @@ export const prospectingRoutes: Array<{
           errors: queryResult.errors
         });
       }
-      const { minScore = 0, leadLevel, converted, q, focusId, sort = 'relevance' } =
-        queryResult.data;
+      const {
+        minScore = 0,
+        leadLevel,
+        converted,
+        q,
+        focusId,
+        sort = 'latest',
+        dateRange = 'all'
+      } = queryResult.data;
       const { page: requestedPage, pageSize } = parsePagination(ctx.url);
       // 排序规则单一来源：列表 orderBy 与深链排名计算共用。
       const candidateOrderBy =
         sort === 'latest'
           ? [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
           : [{ relevanceScore: 'desc' as const }, { id: 'asc' as const }];
+
+      const dateBoundary = (() => {
+        const now = new Date();
+        if (dateRange === 'today') {
+          const start = new Date(now);
+          start.setHours(0, 0, 0, 0);
+          return start;
+        }
+        if (dateRange === '7d') {
+          return new Date(now.getTime() - 7 * 86_400_000);
+        }
+        if (dateRange === '30d') {
+          return new Date(now.getTime() - 30 * 86_400_000);
+        }
+        return null;
+      })();
 
       const task = await ctx.db.prospectingTask.findFirst({
         where: {
@@ -627,8 +710,9 @@ export const prospectingRoutes: Array<{
       });
       if (!task) return sendJson(res, 404, { error: '任务不存在' });
 
-      const filters = {
+      const filters: ProspectCandidateWhereInput = {
         prospectingTaskId: task.id,
+        ...(dateBoundary ? { createdAt: { gte: dateBoundary } } : {}),
         ...(minScore > 0 ? { relevanceScore: { gte: minScore } } : {}),
         ...(leadLevel ? { leadLevel } : {}),
         ...(converted === 'yes'

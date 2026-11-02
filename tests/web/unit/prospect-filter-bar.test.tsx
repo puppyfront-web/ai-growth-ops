@@ -11,7 +11,8 @@ const emptyFilters: ProspectFilters = {
   q: '',
   minScore: 0,
   leadLevel: '',
-  converted: ''
+  converted: '',
+  dateRange: ''
 };
 
 function setup(filters: ProspectFilters = emptyFilters) {
@@ -71,16 +72,44 @@ describe('ProspectFilterBar', () => {
       q: '私域',
       minScore: 60,
       leadLevel: 'A',
-      converted: 'no'
+      converted: 'no',
+      dateRange: ''
     });
     const reset = screen.getByRole('button', { name: '重置筛选' });
     await userEvent.click(reset);
     expect(onChange).toHaveBeenCalledWith(emptyFilters);
   });
 
+  it('渲染日期分段并切换触发 onChange', async () => {
+    const { onChange } = setup();
+    expect(screen.getByRole('button', { name: '全部' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '今天' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '近7天' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '近30天' })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: '近7天' }));
+    expect(onChange).toHaveBeenCalledWith({ ...emptyFilters, dateRange: '7d' });
+  });
+
+  it('仅日期分段激活时也显示重置按钮', () => {
+    setup({ ...emptyFilters, dateRange: 'today' });
+    expect(
+      screen.getByRole('button', { name: '重置筛选' })
+    ).toBeTruthy();
+  });
+
   it('未传 onSortChange 时不渲染排序下拉（兼容旧调用方）', () => {
     setup();
     expect(screen.queryByLabelText('排序')).toBeNull();
+  });
+
+  it('排序默认值为最新优先', () => {
+    render(
+      <ProspectFilterBar filters={emptyFilters} onChange={vi.fn()} onSortChange={vi.fn()} />
+    );
+    expect((screen.getByLabelText('排序') as HTMLSelectElement).value).toBe(
+      'latest'
+    );
   });
 
   it('切换排序回调 onSortChange', async () => {

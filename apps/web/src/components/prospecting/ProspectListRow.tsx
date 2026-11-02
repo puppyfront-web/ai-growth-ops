@@ -1,6 +1,7 @@
 'use client';
 
 import type { ProspectCandidate } from '@/lib/api/prospecting';
+import { formatDateTime } from '@/lib/utils';
 import { candidateComments, prospectLevelLabels } from './prospect-shared';
 
 type ProspectListRowProps = {
@@ -68,6 +69,7 @@ export function ProspectListRow({
         </span>
         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
           {excerpt}
+          {c.createdAt ? ` · ${formatDateTime(c.createdAt)}` : ''}
         </span>
       </span>
       <span className="flex-shrink-0 text-sm font-medium text-muted-foreground tabular-nums">

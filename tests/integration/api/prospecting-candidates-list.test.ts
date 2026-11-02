@@ -89,7 +89,7 @@ async function createTaskWithCandidates(organizationId: string, userId: string) 
       totalCandidates: seedCandidates.length
     }
   });
-  for (const seed of seedCandidates) {
+  for (const [index, seed] of seedCandidates.entries()) {
     let customerId: string | null = null;
     if (seed.converted) {
       const customer = await db.customer.create({
@@ -131,7 +131,9 @@ async function createTaskWithCandidates(organizationId: string, userId: string) 
         sourceVideoUrl: 'https://example.com/video/1',
         relevanceScore: seed.score,
         leadLevel: seed.level,
-        customerId
+        customerId,
+        // 显式递增时间：默认时间倒序的断言依赖确定顺序，避免同毫秒平局靠 uuid 定序
+        createdAt: new Date(Date.now() - (seedCandidates.length - index) * 60_000)
       }
     });
     ids[seed.key] = candidate.id;
@@ -184,13 +186,13 @@ function scoresOf(body: unknown): number[] {
 }
 
 describe('GET /api/prospecting/tasks/:id/candidates', () => {
-  it('分页返回按相关度降序的潜客', async () => {
+  it('分页默认按采集时间倒序', async () => {
     const response = await api.get(
       `/api/prospecting/tasks/${taskId}/candidates?page=1&pageSize=2`
     );
     expect(response.status).toBe(200);
     expect(response.body.items).toHaveLength(2);
-    expect(scoresOf(response.body)).toEqual([90, 80]);
+    expect(scoresOf(response.body)).toEqual([40, 50]);
     expect(response.body.total).toBe(6);
     expect(response.body.totalPages).toBe(3);
     expect(response.body.page).toBe(1);
@@ -201,17 +203,17 @@ describe('GET /api/prospecting/tasks/:id/candidates', () => {
       `/api/prospecting/tasks/${taskId}/candidates?page=3&pageSize=2`
     );
     expect(page3.status).toBe(200);
-    expect(scoresOf(page3.body)).toEqual([50, 40]);
+    expect(scoresOf(page3.body)).toEqual([80, 90]);
   });
 
-  it('默认每页 20 条，含全量排序', async () => {
+  it('默认每页 20 条，含全量时间倒序', async () => {
     const response = await api.get(
       `/api/prospecting/tasks/${taskId}/candidates`
     );
     expect(response.status).toBe(200);
     expect(response.body.pageSize).toBe(20);
     expect(response.body.items).toHaveLength(6);
-    expect(scoresOf(response.body)).toEqual([90, 80, 70, 60, 50, 40]);
+    expect(scoresOf(response.body)).toEqual([40, 50, 60, 70, 80, 90]);
   });
 
   it('minScore 过滤', async () => {
@@ -219,7 +221,7 @@ describe('GET /api/prospecting/tasks/:id/candidates', () => {
       `/api/prospecting/tasks/${taskId}/candidates?minScore=70`
     );
     expect(response.status).toBe(200);
-    expect(scoresOf(response.body)).toEqual([90, 80, 70]);
+    expect(scoresOf(response.body)).toEqual([70, 80, 90]);
     expect(response.body.total).toBe(3);
   });
 
@@ -228,7 +230,7 @@ describe('GET /api/prospecting/tasks/:id/candidates', () => {
       `/api/prospecting/tasks/${taskId}/candidates?leadLevel=A`
     );
     expect(response.status).toBe(200);
-    expect(scoresOf(response.body)).toEqual([90, 70]);
+    expect(scoresOf(response.body)).toEqual([70, 90]);
     expect(response.body.total).toBe(2);
   });
 
@@ -237,14 +239,14 @@ describe('GET /api/prospecting/tasks/:id/candidates', () => {
       `/api/prospecting/tasks/${taskId}/candidates?converted=yes`
     );
     expect(yes.status).toBe(200);
-    expect(scoresOf(yes.body)).toEqual([90, 40]);
+    expect(scoresOf(yes.body)).toEqual([40, 90]);
     expect(yes.body.convertedCount).toBe(2);
 
     const no = await api.get(
       `/api/prospecting/tasks/${taskId}/candidates?converted=no`
     );
     expect(no.status).toBe(200);
-    expect(scoresOf(no.body)).toEqual([80, 70, 60, 50]);
+    expect(scoresOf(no.body)).toEqual([50, 60, 70, 80]);
     expect(no.body.convertedCount).toBe(2);
   });
 
@@ -274,17 +276,18 @@ describe('GET /api/prospecting/tasks/:id/candidates', () => {
       `/api/prospecting/tasks/${taskId}/candidates?minScore=35&leadLevel=B`
     );
     expect(response.status).toBe(200);
-    expect(scoresOf(response.body)).toEqual([80, 40]);
+    expect(scoresOf(response.body)).toEqual([40, 80]);
   });
 
   it('focusId 定位到潜客所在页', async () => {
+    // 时间倒序下最旧的高分潜客排在末尾：rank 5 → 第 3 页
     const response = await api.get(
-      `/api/prospecting/tasks/${taskId}/candidates?page=1&pageSize=2&focusId=${candidateIds.c6}`
+      `/api/prospecting/tasks/${taskId}/candidates?page=1&pageSize=2&focusId=${candidateIds.c1}`
     );
     expect(response.status).toBe(200);
     expect(response.body.page).toBe(3);
-    expect(response.body.focusResolved).toBe(candidateIds.c6);
-    expect(scoresOf(response.body)).toEqual([50, 40]);
+    expect(response.body.focusResolved).toBe(candidateIds.c1);
+    expect(scoresOf(response.body)).toEqual([80, 90]);
   });
 
   it('focusId 不存在时忽略并按请求页返回', async () => {
@@ -294,7 +297,7 @@ describe('GET /api/prospecting/tasks/:id/candidates', () => {
     expect(response.status).toBe(200);
     expect(response.body.page).toBe(1);
     expect(response.body.focusResolved).toBeUndefined();
-    expect(scoresOf(response.body)).toEqual([90, 80]);
+    expect(scoresOf(response.body)).toEqual([40, 50]);
   });
 
   it('focusId 被当前筛选排除时忽略', async () => {

@@ -4306,6 +4306,47 @@ const routes: Route[] = [
   // 用户在窗口里扫码并完成验证方式选择/短信验证码。
   {
     method: 'POST',
+    pattern: '/api/accounts/:id/restore',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'integration:manage')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const account = await ctx.db.platformAccount.findFirst({
+        where: {
+          id: ctx.params.id,
+          organizationId: orgCtx.organization.id,
+          deletedAt: { not: null }
+        }
+      });
+      if (!account) {
+        // 区分"不存在/他组织"与"未删除"：先确认组织内是否有这行
+        const active = await ctx.db.platformAccount.findFirst({
+          where: {
+            id: ctx.params.id,
+            organizationId: orgCtx.organization.id,
+            deletedAt: null
+          },
+          select: { id: true }
+        });
+        if (active) {
+          return sendJson(res, 400, { error: '账号未处于删除状态，无需恢复' });
+        }
+        return sendJson(res, 404, { error: '账号不存在' });
+      }
+      // 恢复后必须重新扫码：旧凭据视为失效，避免 guard 误判可用。
+      // 同名冲突无需检查：唯一约束 [org, platform, name] 连软删除行一起生效，
+      // 软删期间不可能再创建同名新行（创建时会复用软删行，见 account-duplicate-name 修复）。
+      const restored = await ctx.db.platformAccount.update({
+        where: { id: account.id },
+        data: { deletedAt: null, status: 'expired', cookieRef: null }
+      });
+      sendJson(res, 200, toPlatformAccountDto(restored));
+    }
+  },
+  {
+    method: 'POST',
     pattern: '/api/accounts/:id/qr-login/start',
     handler: async (req, res, ctx) => {
       const orgCtx = await getOrganizationContext(req, ctx.db);
@@ -4330,7 +4371,9 @@ const routes: Route[] = [
       if (fresh) {
         return sendJson(res, 200, {
           sessionId: fresh.sessionId,
-          status: 'waiting_scan'
+          status: 'waiting_scan',
+          headed: fresh.headed === true,
+          qrImage: fresh.qrImage
         });
       }
       if (!markPending(account.id)) {
@@ -4346,7 +4389,9 @@ const routes: Route[] = [
         if (afterWait) {
           return sendJson(res, 200, {
             sessionId: afterWait.sessionId,
-            status: 'waiting_scan'
+            status: 'waiting_scan',
+            headed: afterWait.headed === true,
+            qrImage: afterWait.qrImage
           });
         }
         if (!markPending(account.id)) {
@@ -4397,7 +4442,10 @@ const routes: Route[] = [
           qrImage?: string;
           headed?: boolean;
         };
-        setSession(account.id, data.sessionId);
+        setSession(account.id, data.sessionId, {
+          headed: data.headed === true,
+          qrImage: data.qrImage
+        });
         sendJson(res, 200, {
           sessionId: data.sessionId,
           status: 'waiting_scan',
