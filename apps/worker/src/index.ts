@@ -47,6 +47,7 @@ import { handleCustomerPlaybookGenerate } from './job-handlers/customer.playbook
 import { handleProspectingRun } from './job-handlers/prospecting.run.js';
 import { handleOutreachCheck } from './job-handlers/outreach.check.js';
 import { handleProspectingSchedule } from './job-handlers/prospecting.schedule.js';
+import { handleLlmHealthCheck } from './job-handlers/llm-health-check.js';
 import {
   startScheduler,
   SCHEDULED_QUEUE,
@@ -78,6 +79,7 @@ const realHandlers: Record<
   [QUEUE_NAMES.PROSPECTING_RUN]: handleProspectingRun,
   [QUEUE_NAMES.OUTREACH_CHECK]: handleOutreachCheck,
   [QUEUE_NAMES.PROSPECTING_SCHEDULE]: handleProspectingSchedule,
+  [QUEUE_NAMES.LLM_HEALTH_CHECK]: handleLlmHealthCheck,
   [SCHEDULED_QUEUE]: handleScheduledChecker,
   [CAMPAIGN_CHECK_QUEUE]: handleCampaignCheckSchedule
 };

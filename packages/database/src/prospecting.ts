@@ -24,6 +24,7 @@ import {
   defaultNextActionAt,
   normalizePhone,
   passesProspectThreshold,
+  classifyLlmError,
   PROSPECT_GUARD,
   remainingMs,
   SCORING_VERSION,
@@ -35,7 +36,11 @@ import {
   type ProspectingIntent
 } from '@ai-growth-ops/shared';
 import { loadIcpConfig } from './customer-profile.js';
-import { resolveLlmClientFromDb } from './llm-config.js';
+import {
+  resolveLlmClientFromDb,
+  resolveLlmConfigFromDb
+} from './llm-config.js';
+import { notifyLlmHealthIssue, recordLlmRun } from './llm-telemetry.js';
 import { findCustomerByAcquisitionIdentity } from './customer-crm.js';
 import { applyAssignmentRules } from './assignment.js';
 import {
@@ -398,7 +403,17 @@ async function scoreProspectsSemantically(
       skillName: string;
       input: I;
       llmClient?: unknown;
-    }) => Promise<{ status: string; output?: O; error?: string }>;
+    }) => Promise<{
+      status: string;
+      output?: O;
+      error?: string;
+      tokenUsage?: {
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+      };
+      latencyMs?: number;
+    }>;
   };
   try {
     const { getSharedSkillRunner } = await import('@ai-growth-ops/skills');
@@ -412,6 +427,12 @@ async function scoreProspectsSemantically(
   const orgLlm = await resolveLlmClientFromDb(db, organizationId).catch(
     () => undefined
   );
+  // 遥测元数据（43 号 spec）：provider/model 供 ProviderRunLog 落库
+  const orgLlmMeta = await resolveLlmConfigFromDb(db, organizationId).catch(
+    () => undefined
+  );
+  const telemetryProvider = orgLlmMeta?.provider ?? (orgLlm ? 'env' : 'unknown');
+  const telemetryModel = orgLlmMeta?.model ?? null;
   let llmUnavailable = false;
   // 首个失败原因（402 余额不足、超时、输出解析失败等）——落进任务元数据，
   // 供诚实降级标记与 UI 告警使用；此前只 warn 到终端，失败对用户不可见。
@@ -455,8 +476,37 @@ async function scoreProspectsSemantically(
         if (result.error?.includes(LLM_NOT_CONFIGURED_MESSAGE)) {
           llmUnavailable = true;
         }
+        // 遥测：失败落库 + 余额/鉴权类失败即时告警（402 挂 10 天无人发现的教训）
+        const errorCode = classifyLlmError(result.error);
+        await recordLlmRun(db, {
+          organizationId,
+          provider: telemetryProvider,
+          model: telemetryModel ?? undefined,
+          operation: 'prospect_scoring',
+          status: 'failed',
+          durationMs: result.latencyMs,
+          errorCode,
+          errorMessage: result.error
+        });
+        await notifyLlmHealthIssue(db, {
+          organizationId,
+          errorCode,
+          message: result.error
+        });
         continue;
       }
+      // 遥测：成功批次落库（token 用量此前只在内存 tracker，重启即丢）
+      await recordLlmRun(db, {
+        organizationId,
+        provider: telemetryProvider,
+        model: telemetryModel ?? undefined,
+        operation: 'prospect_scoring',
+        status: 'success',
+        promptTokens: result.tokenUsage?.inputTokens,
+        completionTokens: result.tokenUsage?.outputTokens,
+        totalTokens: result.tokenUsage?.totalTokens,
+        durationMs: result.latencyMs
+      });
       for (const score of result.output?.results ?? []) {
         if (typeof score.userKey === 'string') {
           byUserKey.set(score.userKey, score);
@@ -475,6 +525,23 @@ async function scoreProspectsSemantically(
       ) {
         llmUnavailable = true;
       }
+      // 遥测：超时/网络异常等抛出路径同样落库并告警
+      const message = err instanceof Error ? err.message : String(err);
+      const errorCode = classifyLlmError(message);
+      await recordLlmRun(db, {
+        organizationId,
+        provider: telemetryProvider,
+        model: telemetryModel ?? undefined,
+        operation: 'prospect_scoring',
+        status: 'failed',
+        errorCode,
+        errorMessage: message
+      });
+      await notifyLlmHealthIssue(db, {
+        organizationId,
+        errorCode,
+        message
+      });
     }
   }
 

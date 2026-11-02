@@ -80,6 +80,33 @@ export function getForecastAnalytics(months = 6): Promise<ForecastAnalytics> {
   return apiGet(`/api/analytics/forecast?months=${months}`);
 }
 
+export type LlmUsageByModel = {
+  provider: string;
+  model: string;
+  calls: number;
+  failures: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  avgLatencyMs: number | null;
+  lastError: { code: string; message: string | null; at: string } | null;
+};
+
+export type LlmUsageAnalytics = {
+  range: { days: number };
+  byModel: LlmUsageByModel[];
+  lastError: {
+    code: string;
+    message: string | null;
+    at: string;
+    operation: string;
+  } | null;
+};
+
+export function getLlmUsageAnalytics(days = 30): Promise<LlmUsageAnalytics> {
+  return apiGet(`/api/analytics/llm-usage?days=${days}`);
+}
+
 export function getEfficiencyAnalytics(
   days = 30
 ): Promise<EfficiencyAnalytics> {

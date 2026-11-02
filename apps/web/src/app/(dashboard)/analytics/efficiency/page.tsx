@@ -8,6 +8,7 @@ import {
   getAttributionAnalytics,
   getEfficiencyAnalytics,
   getForecastAnalytics,
+  getLlmUsageAnalytics,
   listMarketingCosts,
   type CostCategory
 } from '@/lib/api/efficiency';
@@ -78,6 +79,10 @@ export default function EfficiencyPage() {
   const forecast = useQuery({
     queryKey: ['forecast', 6],
     queryFn: () => getForecastAnalytics(6)
+  });
+  const llmUsage = useQuery({
+    queryKey: ['llm-usage', days],
+    queryFn: () => getLlmUsageAnalytics(days)
   });
 
   const invalidate = () => {
@@ -436,6 +441,72 @@ export default function EfficiencyPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="mt-4 rounded-xl border bg-card p-5">
+        <h3 className="font-semibold">AI 算力用量</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          近 {days} 天 LLM 调用与 token 消耗（随获客语义评分自动记录）。
+        </p>
+        {llmUsage.data?.lastError ? (
+          <div className="mt-3 rounded border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            最近失败（{formatDateTime(llmUsage.data.lastError.at)}）：
+            {llmUsage.data.lastError.message ?? llmUsage.data.lastError.code}
+            。余额/鉴权问题请到「集成 → LLM」处理。
+          </div>
+        ) : null}
+        {(llmUsage.data?.byModel ?? []).length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            暂无 LLM 调用记录；执行获客任务后这里会显示用量。
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-4 font-medium">模型</th>
+                  <th className="py-2 pr-4 text-right font-medium">调用</th>
+                  <th className="py-2 pr-4 text-right font-medium">失败</th>
+                  <th className="py-2 pr-4 text-right font-medium">
+                    输入 tokens
+                  </th>
+                  <th className="py-2 pr-4 text-right font-medium">
+                    输出 tokens
+                  </th>
+                  <th className="py-2 pr-4 text-right font-medium">
+                    平均耗时
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(llmUsage.data?.byModel ?? []).map((row) => (
+                  <tr key={`${row.provider}:${row.model}`} className="border-b last:border-0">
+                    <td className="py-2 pr-4">
+                      {row.provider} / {row.model}
+                    </td>
+                    <td className="py-2 pr-4 text-right tabular-nums">
+                      {row.calls}
+                    </td>
+                    <td className="py-2 pr-4 text-right tabular-nums">
+                      {row.failures}
+                    </td>
+                    <td className="py-2 pr-4 text-right tabular-nums">
+                      {row.promptTokens.toLocaleString('zh-CN')}
+                    </td>
+                    <td className="py-2 pr-4 text-right tabular-nums">
+                      {row.completionTokens.toLocaleString('zh-CN')}
+                    </td>
+                    <td className="py-2 pr-4 text-right tabular-nums">
+                      {row.avgLatencyMs === null
+                        ? '-'
+                        : `${(row.avgLatencyMs / 1000).toFixed(1)}s`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="mt-4 rounded-xl border bg-card p-5">
         <h3 className="font-semibold">成本明细</h3>

@@ -90,4 +90,16 @@ export async function startScheduler(): Promise<void> {
     }
   );
   logger.info('Prospecting scheduler started — claim runs every 15min');
+
+  // 每日 LLM 健康兜底（43 号 spec）：quota/auth 失败补发告警（自带当日去重）
+  const llmHealthQueue = getQueue(QUEUE_NAMES.LLM_HEALTH_CHECK);
+  await llmHealthQueue.add(
+    QUEUE_NAMES.LLM_HEALTH_CHECK,
+    { task: 'llm-health-scan', triggeredAt: new Date().toISOString() },
+    {
+      repeat: { every: 86_400_000 },
+      jobId: 'llm-health-check-repeat'
+    }
+  );
+  logger.info('LLM health scheduler started — daily scan');
 }

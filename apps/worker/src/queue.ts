@@ -37,7 +37,8 @@ export const QUEUE_NAMES = {
   CUSTOMER_PLAYBOOK_GENERATE: 'customer.playbook.generate',
   PROSPECTING_RUN: 'prospecting.run',
   PROSPECTING_SCHEDULE: 'prospecting.schedule',
-  OUTREACH_CHECK: 'outreach.check'
+  OUTREACH_CHECK: 'outreach.check',
+  LLM_HEALTH_CHECK: 'llm.health-check'
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

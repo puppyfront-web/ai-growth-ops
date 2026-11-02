@@ -3,6 +3,7 @@ import type { DatabaseClient } from '@ai-growth-ops/database';
 import {
   createMarketingCost,
   deleteMarketingCost,
+  getLlmUsageSummary,
   listMarketingCosts,
   updateMarketingCost
 } from '@ai-growth-ops/database';
@@ -68,6 +69,21 @@ export const costRoutes: Array<{
     ctx: CostRouteContext
   ) => Promise<void>;
 }> = [
+  {
+    method: 'GET',
+    pattern: '/api/analytics/llm-usage',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!canAccess(res, orgCtx.memberRole, 'analytics:view')) return;
+      const payload = await getLlmUsageSummary(
+        ctx.db,
+        orgCtx.organization.id,
+        daysFrom(ctx.url)
+      );
+      sendJson(res, 200, payload);
+    }
+  },
   {
     method: 'GET',
     pattern: '/api/analytics/efficiency',

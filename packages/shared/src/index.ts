@@ -22,6 +22,7 @@ export * from './attribution';
 export * from './forecast';
 export * from './experiment';
 export * from './lifecycle';
+export * from './llm-telemetry';
 export * from './outreach';
 export * from './platform-capabilities';
 export * from './platform-login';

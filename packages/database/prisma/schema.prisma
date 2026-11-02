@@ -1749,8 +1749,10 @@ model AgentRun {
 
 model ProviderRunLog {
   id                String            @id @default(uuid())
+  organizationId    String?
   providerName      String
   providerVersion   String?
+  model             String?
   operation         String
   inputSummary      String?
   outputSummary     String?
@@ -1759,12 +1761,16 @@ model ProviderRunLog {
   errorMessage      String?
   screenshotAssetId String?
   durationMs        Int?
+  promptTokens      Int?
+  completionTokens  Int?
+  totalTokens       Int?
   startedAt         DateTime?
   finishedAt        DateTime?
   traceId           String?
   createdAt         DateTime          @default(now())
   metadata          Json?
 
+  @@index([organizationId, createdAt])
   @@map("provider_run_logs")
 }
 

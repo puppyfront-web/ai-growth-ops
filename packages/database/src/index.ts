@@ -12,6 +12,7 @@ export * from './seed';
 export * from './customer-profile';
 export * from './customer-playbook';
 export * from './llm-config';
+export * from './llm-telemetry';
 export * from './prospecting';
 export * from './prospecting-plan';
 export * from './prospecting-schedule';
