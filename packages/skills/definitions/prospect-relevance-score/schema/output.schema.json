@@ -7,6 +7,10 @@
         "type": "object",
         "properties": {
           "userKey": { "type": "string" },
+          "personaTag": {
+            "type": "string",
+            "enum": ["demand_seeker", "peer_vendor", "already_adopted", "practitioner", "job_seeker", "irrelevant"]
+          },
           "relevanceScore": { "type": "number" },
           "leadLevel": { "type": "string", "enum": ["A", "B", "C", "D"] },
           "intent": { "type": "string" },
@@ -20,7 +24,7 @@
           "confidence": { "type": "number", "minimum": 0, "maximum": 100 },
           "riskFlags": { "type": "array", "items": { "type": "string" } }
         },
-        "required": ["userKey", "relevanceScore", "leadLevel"]
+        "required": ["userKey", "personaTag", "relevanceScore", "leadLevel"]
       }
     }
   },

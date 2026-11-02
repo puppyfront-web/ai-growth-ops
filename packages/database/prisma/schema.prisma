@@ -1493,6 +1493,7 @@ model ProspectCandidate {
   relevanceScore     Int       @default(0)
   leadLevel          String
   scoreSource        String    @default("rules")
+  personaTag         String?
   intent             String?
   summary            String?
   matchedKeywords    Json?

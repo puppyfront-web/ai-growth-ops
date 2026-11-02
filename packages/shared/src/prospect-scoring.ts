@@ -26,8 +26,40 @@ export type ProspectScoreResult = {
 
 export type ProspectScoreSource = 'rules' | 'skill';
 
+/** 语义评估第一步输出的评论者画像。 */
+export const PROSPECT_PERSONA_TAGS = [
+  'demand_seeker',
+  'peer_vendor',
+  'already_adopted',
+  'practitioner',
+  'job_seeker',
+  'irrelevant'
+] as const;
+
+export type ProspectPersonaTag = (typeof PROSPECT_PERSONA_TAGS)[number];
+
+/** 非需求方画像的中文说明，追加进 riskFlags 供人工复核。 */
+export const PROSPECT_PERSONA_RISK_LABELS: Record<ProspectPersonaTag, string> = {
+  demand_seeker: '需求方',
+  peer_vendor: '疑似同行/服务商',
+  already_adopted: '已落地无采购需求',
+  practitioner: '从业者/技术爱好者',
+  job_seeker: '疑似求职者',
+  irrelevant: '无关人群'
+};
+
+export function isProspectPersonaTag(
+  value: unknown
+): value is ProspectPersonaTag {
+  return (
+    typeof value === 'string' &&
+    (PROSPECT_PERSONA_TAGS as readonly string[]).includes(value)
+  );
+}
+
 export type ProspectUserScoreResult = ProspectScoreResult & {
   scoreSource: ProspectScoreSource;
+  personaTag?: ProspectPersonaTag;
   audienceFit?: number;
   needStrength?: number;
   buyingIntent?: number;
@@ -54,6 +86,7 @@ export type SemanticProspectScore = {
   intent?: unknown;
   summary?: unknown;
   matchedKeywords?: unknown;
+  personaTag?: unknown;
   audienceFit?: unknown;
   needStrength?: unknown;
   buyingIntent?: unknown;
@@ -384,6 +417,39 @@ export function mergeSemanticScore(
     return ruleScore;
   }
 
+  const personaTag = isProspectPersonaTag(semantic.personaTag)
+    ? semantic.personaTag
+    : undefined;
+
+  // Persona is decided before scoring: only demand seekers may hold A/B/C.
+  // A peer / already-adopted / practitioner / job seeker stays D no matter
+  // how relevant the LLM judged their comments.
+  if (personaTag && personaTag !== 'demand_seeker') {
+    const label = PROSPECT_PERSONA_RISK_LABELS[personaTag];
+    return {
+      relevanceScore: Math.min(25, Math.round(relevanceScore)),
+      leadLevel: 'D',
+      intent: `persona:${personaTag}`,
+      summary:
+        typeof semantic.summary === 'string' && semantic.summary.trim()
+          ? semantic.summary.trim()
+          : ruleScore.summary,
+      matchedKeywords: ruleScore.matchedKeywords,
+      personaTag,
+      riskFlags: [
+        ...new Set([
+          ...(Array.isArray(semantic.riskFlags)
+            ? semantic.riskFlags.filter(
+                (flag): flag is string => typeof flag === 'string'
+              )
+            : []),
+          label
+        ])
+      ],
+      scoreSource: 'skill'
+    };
+  }
+
   const semanticKeywords = Array.isArray(semantic.matchedKeywords)
     ? semantic.matchedKeywords.filter(
         (keyword): keyword is string => typeof keyword === 'string'
@@ -393,6 +459,7 @@ export function mergeSemanticScore(
   return {
     relevanceScore: Math.round(relevanceScore),
     leadLevel,
+    personaTag,
     intent:
       typeof semantic.intent === 'string' && semantic.intent.trim()
         ? semantic.intent.trim()
@@ -434,6 +501,25 @@ export function passesProspectThreshold(
 ) {
   if (score.leadLevel === 'D') return false;
   return score.relevanceScore >= minRelevanceScore;
+}
+
+/**
+ * 语义打分失败/未配置时的诚实降级：规则分只配产出 C 级及以下的候选，
+ * 永远不能替代语义画像产出「A 级同行」（设计文档 §10：模型失败时结果
+ * 必须标记未完成语义评估，不能把召回结果直接当作合格潜客）。
+ */
+export function downgradeWithoutSemanticScore(
+  score: ProspectUserScoreResult,
+  reason: string
+): ProspectUserScoreResult {
+  const flag = `语义评估未完成：${reason}`;
+  const leadLevel =
+    score.leadLevel === 'A' || score.leadLevel === 'B' ? 'C' : score.leadLevel;
+  return {
+    ...score,
+    leadLevel,
+    riskFlags: [...new Set([...(score.riskFlags ?? []), flag])]
+  };
 }
 
 export const DEFAULT_ICP_FOR_PROSPECTING: Pick<

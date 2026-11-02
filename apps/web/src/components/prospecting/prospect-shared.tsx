@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type {
   ProspectCandidate,
   ProspectEvidence,
+  ProspectPersonaTag,
   ProspectUserProfile
 } from '@/lib/api/prospecting';
 
@@ -13,6 +14,38 @@ export const prospectLevelLabels: Record<string, string> = {
   C: '低意向',
   D: '无效'
 };
+
+export const prospectPersonaLabels: Record<ProspectPersonaTag, string> = {
+  demand_seeker: '需求方',
+  peer_vendor: '同行/服务商',
+  already_adopted: '已落地',
+  practitioner: '从业者',
+  job_seeker: '求职者',
+  irrelevant: '无关'
+};
+
+/** 画像徽标：只有语义判定过的候选才有；同行/已落地用警示色一眼可辨。 */
+export function ProspectPersonaBadge({
+  personaTag
+}: {
+  personaTag: ProspectPersonaTag | null | undefined;
+}) {
+  if (!personaTag) return null;
+  const label = prospectPersonaLabels[personaTag] ?? personaTag;
+  const tone =
+    personaTag === 'demand_seeker'
+      ? 'bg-success/10 text-success'
+      : personaTag === 'peer_vendor'
+        ? 'bg-destructive/10 text-destructive'
+        : 'bg-muted text-muted-foreground';
+  return (
+    <span
+      className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium ${tone}`}
+    >
+      {label}
+    </span>
+  );
+}
 
 export function candidateComments(
   candidate: ProspectCandidate

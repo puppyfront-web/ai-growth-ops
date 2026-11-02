@@ -36,6 +36,22 @@ describe('ProspectListRow', () => {
     expect(screen.getByText('想采购一套私域工具')).toBeTruthy();
   });
 
+  it('画像为同行/服务商时渲染警示徽标', () => {
+    setup({ personaTag: 'peer_vendor', leadLevel: 'D' });
+    expect(screen.getByText('同行/服务商')).toBeTruthy();
+  });
+
+  it('画像为需求方时渲染绿色徽标', () => {
+    setup({ personaTag: 'demand_seeker' });
+    expect(screen.getByText('需求方')).toBeTruthy();
+  });
+
+  it('未做画像判定（历史数据）不渲染画像徽标', () => {
+    setup({ personaTag: null });
+    expect(screen.queryByText('需求方')).toBeNull();
+    expect(screen.queryByText('同行/服务商')).toBeNull();
+  });
+
   it('摘要行展示采集时间（YYYY-MM-DD HH:mm）', () => {
     setup({ createdAt: '2026-11-02T02:30:00.000Z' });
     expect(

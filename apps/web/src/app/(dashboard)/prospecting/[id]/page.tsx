@@ -404,6 +404,7 @@ export default function ProspectingDetailPage() {
   // 筛选与分页从 URL 恢复（interaction-spec §6：列表状态可分享、刷新不丢）。
   const [filters, setFilters] = useState<ProspectCandidateFilters>(() => {
     const level = searchParams.get('leadLevel') ?? '';
+    const persona = searchParams.get('personaTag') ?? '';
     const converted = searchParams.get('converted') ?? '';
     const dateRange = searchParams.get('dateRange') ?? '';
     return {
@@ -411,6 +412,16 @@ export default function ProspectingDetailPage() {
       minScore: Number(searchParams.get('minScore')) || 0,
       leadLevel: ['A', 'B', 'C', 'D'].includes(level)
         ? (level as ProspectCandidateFilters['leadLevel'])
+        : '',
+      personaTag: [
+        'demand_seeker',
+        'peer_vendor',
+        'already_adopted',
+        'practitioner',
+        'job_seeker',
+        'irrelevant'
+      ].includes(persona)
+        ? (persona as ProspectCandidateFilters['personaTag'])
         : '',
       converted: ['yes', 'no'].includes(converted)
         ? (converted as ProspectCandidateFilters['converted'])
@@ -531,6 +542,7 @@ export default function ProspectingDetailPage() {
       if (filters.q) params.set('q', filters.q);
       if (filters.minScore > 0) params.set('minScore', String(filters.minScore));
       if (filters.leadLevel) params.set('leadLevel', filters.leadLevel);
+      if (filters.personaTag) params.set('personaTag', filters.personaTag);
       if (filters.converted) params.set('converted', filters.converted);
       if (filters.dateRange) params.set('dateRange', filters.dateRange);
       if (page > 1) params.set('page', String(page));

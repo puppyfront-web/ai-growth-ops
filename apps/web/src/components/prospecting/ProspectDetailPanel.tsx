@@ -6,7 +6,8 @@ import {
   candidateComments,
   ConvertedBadge,
   ProfileSummary,
-  prospectLevelLabels
+  prospectLevelLabels,
+  ProspectPersonaBadge
 } from './prospect-shared';
 
 type ProspectDetailPanelProps = {
@@ -87,6 +88,7 @@ export function ProspectDetailPanel({
             >
               {prospectLevelLabels[c.leadLevel] ?? c.leadLevel}
             </span>
+            <ProspectPersonaBadge personaTag={c.personaTag} />
             <span className="text-xs text-muted-foreground tabular-nums">
               相关度 {c.relevanceScore}
             </span>
@@ -107,6 +109,11 @@ export function ProspectDetailPanel({
           {(c.matchedKeywords?.length ?? 0) > 0 && (
             <p className="text-xs text-muted-foreground mt-1">
               匹配：{c.matchedKeywords?.join('、')}
+            </p>
+          )}
+          {(c.riskFlags?.length ?? 0) > 0 && (
+            <p className="text-xs text-warning mt-1">
+              风险提示：{c.riskFlags?.join('；')}
             </p>
           )}
           {c.metadata?.profile && <ProfileSummary profile={c.metadata.profile} />}

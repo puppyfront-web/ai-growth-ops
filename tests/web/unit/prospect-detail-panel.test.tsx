@@ -91,4 +91,16 @@ describe('ProspectDetailPanel', () => {
     });
     expect(screen.getByText('主页采集失败：登录已失效')).toBeTruthy();
   });
+
+  it('展示画像徽标与风险提示（39 号 spec）', () => {
+    setup({
+      personaTag: 'peer_vendor',
+      leadLevel: 'D',
+      riskFlags: ['疑似同行/服务商', '语义评估未完成：402 Insufficient Balance']
+    });
+    expect(screen.getByText('同行/服务商')).toBeTruthy();
+    expect(
+      screen.getByText(/风险提示：疑似同行\/服务商；语义评估未完成/)
+    ).toBeTruthy();
+  });
 });

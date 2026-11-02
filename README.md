@@ -10,6 +10,22 @@ AI Native 的多平台获客运营系统：内容生产与发布、评论私信�
 
 <img src="docs/images/community-group-qr.png" alt="社区交流群二维码" width="260" />
 
+## 快速开始
+
+要求：Node.js ≥ 22.12、Docker、[pnpm](https://pnpm.io/)（仓库已带 `packageManager` 声明，用 `corepack pnpm` 即可）。
+
+```bash
+git clone https://github.com/puppyfront-web/ai-growth-ops.git
+cd ai-growth-ops
+corepack pnpm local:bootstrap   # 环境检查 → 基础设施容器 → 迁移 → 初始管理员（幂等，可重复执行）
+corepack pnpm dev               # API :3100
+corepack pnpm --filter @ai-growth-ops/worker dev   # Worker（队列与定时任务）
+corepack pnpm dev:browser-runner # 浏览器自动化 :3200（采集/发布/扫码登录需要）
+corepack pnpm dev:web           # Web http://localhost:3001
+```
+
+初始管理员 `admin@ai-growth-ops.local` / `changeme123`（开发默认，登录后立即修改；生产用 `ADMIN_PASSWORD` 显式设置）。语义打分与需求分析需要先在「集成 → LLM」配置模型服务。对外暴露前务必替换 `.env` 中所有 `CHANGE_ME` 密钥，并建立备份习惯（`corepack pnpm local:backup`，Runbook 见 [演练记录](docs/delivery/2026-11-02-backup-restore-drill.md)）。生产/办公室单机部署见 [docs/deployment.md](docs/deployment.md)。
+
 ## 功能模块使用介绍
 
 左侧导航按「获客 → 运营 → 配置」组织。各模块的能力状态如实标注：✅ 已验证 / 🧪 Beta（部分验证）/ ⏳ 未验收，与 [能力矩阵](docs/delivery/crm-release-status.md) 保持一致。
@@ -198,4 +214,4 @@ Operations guide: [`docs/superpowers/runbooks/agent-runtime-runbook.md`](docs/su
 
 - 贡献指南（SDD + TDD 工作流）：[CONTRIBUTING.md](./CONTRIBUTING.md)
 - 安全披露：[SECURITY.md](./SECURITY.md)
-- 许可证：[Apache-2.0](./LICENSE) — 允许商业使用、修改与再分发（需保留版权与许可证声明，修改需注明）
+- 许可证：[AGPL-3.0-or-later](./LICENSE) — 允许自由使用、修改与再分发；基于本项目提供网络服务时必须开源你的修改（这正是"本地优先、数据不出户"定位的法律护城河）

@@ -672,6 +672,7 @@ export const prospectingRoutes: Array<{
       const {
         minScore = 0,
         leadLevel,
+        personaTag,
         converted,
         q,
         focusId,
@@ -715,6 +716,7 @@ export const prospectingRoutes: Array<{
         ...(dateBoundary ? { createdAt: { gte: dateBoundary } } : {}),
         ...(minScore > 0 ? { relevanceScore: { gte: minScore } } : {}),
         ...(leadLevel ? { leadLevel } : {}),
+        ...(personaTag ? { personaTag } : {}),
         ...(converted === 'yes'
           ? { customerId: { not: null } }
           : converted === 'no'

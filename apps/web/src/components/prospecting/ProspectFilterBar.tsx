@@ -12,6 +12,7 @@ export const emptyProspectFilters: ProspectCandidateFilters = {
   q: '',
   minScore: 0,
   leadLevel: '',
+  personaTag: '',
   converted: '',
   dateRange: ''
 };
@@ -23,10 +24,24 @@ export function hasActiveProspectFilters(
     filters.q !== '' ||
     filters.minScore > 0 ||
     filters.leadLevel !== '' ||
+    filters.personaTag !== '' ||
     filters.converted !== '' ||
     filters.dateRange !== ''
   );
 }
+
+const personaOptions: Array<{
+  value: ProspectCandidateFilters['personaTag'];
+  label: string;
+}> = [
+  { value: '', label: '全部' },
+  { value: 'demand_seeker', label: '需求方' },
+  { value: 'peer_vendor', label: '同行/服务商' },
+  { value: 'already_adopted', label: '已落地' },
+  { value: 'practitioner', label: '从业者' },
+  { value: 'job_seeker', label: '求职者' },
+  { value: 'irrelevant', label: '无关' }
+];
 
 const dateRangeOptions: Array<{
   value: ProspectCandidateFilters['dateRange'];
@@ -108,6 +123,31 @@ export function ProspectFilterBar({
           <option value="B">中意向 B</option>
           <option value="C">低意向 C</option>
           <option value="D">无效 D</option>
+        </NativeSelect>
+      </div>
+      <div className="flex items-center gap-2">
+        <label
+          htmlFor="persona-filter"
+          className="text-muted-foreground text-xs"
+        >
+          画像
+        </label>
+        <NativeSelect
+          id="persona-filter"
+          value={filters.personaTag}
+          onChange={(e) =>
+            update({
+              personaTag: e.target
+                .value as ProspectCandidateFilters['personaTag']
+            })
+          }
+          className="h-8 w-28 text-xs"
+        >
+          {personaOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </NativeSelect>
       </div>
       <div className="flex items-center gap-2">

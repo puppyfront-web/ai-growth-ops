@@ -2,7 +2,7 @@
   "name": "ai-growth-ops",
   "version": "0.1.0",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/puppyfront-web/ai-growth-ops.git"
@@ -39,6 +39,7 @@
     "local:prepare": "node --env-file-if-exists=.env scripts/prepare-local-data.mjs",
     "local:backup": "node --env-file-if-exists=.env scripts/backup-local-data.mjs",
     "local:restore": "node --env-file-if-exists=.env scripts/restore-local-data.mjs",
+    "local:bootstrap": "node scripts/bootstrap-local.mjs",
     "lint": "eslint .",
     "test": "node --test scripts/*.test.mjs && vitest run && pnpm test:web",
     "test:architecture": "tsx scripts/check-architecture-drift.ts && vitest run tests/unit/harness/architecture-drift.test.ts tests/unit/deployment/local-only-runtime.test.ts",

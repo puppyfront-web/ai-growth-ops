@@ -4,12 +4,13 @@ import type { RouteHandler, Route } from './routes.js';
 import { reportPublishProgress } from './report-publish-progress.js';
 import { createHeadlessSession } from './browser-session.js';
 import { publishDouyin } from './douyin-publish.js';
+import { publishXiaohongshu } from './xhs-publish.js';
 
 // ── Platform publish page URLs ──────────────────────────────────
 
+// 有专属发布流的平台（douyin/xiaohongshu）不在此表中——见 handlePublishContent 的专属分支。
 const PUBLISH_PAGE_URLS: Record<string, () => string> = {
   douyin: () => 'https://creator.douyin.com/creator-micro/content/upload',
-  xiaohongshu: () => 'https://creator.xiaohongshu.com/publish/publish',
   wechat_official: () =>
     'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&isNew=1&type=10&action=edit',
   wechat_channels: () => 'https://channels.weixin.qq.com/platform/post/create',
@@ -36,17 +37,6 @@ const PUBLISH_SELECTORS: Record<string, PublishSelectors> = {
     uploadButton: 'input[type="file"], [class*="upload"], [class*="add-image"]',
     submitButton:
       'button:has-text("发布"), button:has-text("发表"), [class*="publish-btn"]'
-  },
-  xiaohongshu: {
-    titleInput:
-      'input[placeholder*="标题"], input[placeholder*="title"], [class*="title-input"]',
-    contentInput:
-      'textarea, [contenteditable="true"], [class*="editor"], .ql-editor, .c-input_inner',
-    uploadButton: 'input[type="file"], [class*="upload"], [class*="add-image"]',
-    submitButton:
-      'button:has-text("发布"), button:has-text("发表"), [class*="publish-btn"]',
-    tagInput:
-      'input[placeholder*="标签"], input[placeholder*="tag"], [class*="tag-input"]'
   },
   wechat_official: {
     titleInput:
@@ -210,15 +200,7 @@ const handlePublishContent: RouteHandler = async (_req, res, ctx) => {
     return;
   }
 
-  const urlFn = PUBLISH_PAGE_URLS[body.platform];
-  const selectors = PUBLISH_SELECTORS[body.platform];
-  if (!urlFn || !selectors) {
-    sendJson(res, 400, {
-      error: `Unsupported platform for publishing: ${body.platform}`
-    });
-    return;
-  }
-
+  // 专属发布流：抖音/小红书有独立实现，不经过下方通用选择器表。
   if (body.platform === 'douyin') {
     const result = await publishDouyin({
       publishJobId: body.publishJobId,
@@ -230,6 +212,29 @@ const handlePublishContent: RouteHandler = async (_req, res, ctx) => {
       mediaFilePaths: body.mediaFilePaths ?? body.mediaUrls
     });
     sendJson(res, 200, result);
+    return;
+  }
+
+  if (body.platform === 'xiaohongshu') {
+    const result = await publishXiaohongshu({
+      publishJobId: body.publishJobId,
+      cookie: body.cookie,
+      contentType: body.contentType,
+      title: body.title || '',
+      content: body.content,
+      tags: body.tags,
+      mediaFilePaths: body.mediaFilePaths ?? body.mediaUrls
+    });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  const urlFn = PUBLISH_PAGE_URLS[body.platform];
+  const selectors = PUBLISH_SELECTORS[body.platform];
+  if (!urlFn || !selectors) {
+    sendJson(res, 400, {
+      error: `Unsupported platform for publishing: ${body.platform}`
+    });
     return;
   }
 
@@ -253,15 +258,33 @@ const handlePublishContent: RouteHandler = async (_req, res, ctx) => {
     });
     await page.waitForTimeout(2000);
 
-    // ── Platform-specific ordering ──────────────────────────────────
-    // Xiaohongshu requires images to be uploaded BEFORE filling text.
-    // All other platforms: fill text first, then upload media.
-
     const hasMedia =
       body.mediaFilePaths?.length && body.mediaFilePaths.length > 0;
 
-    if (body.platform === 'xiaohongshu' && hasMedia) {
-      // XHS: Upload media FIRST, then fill text
+    // Fill text first, then upload media
+    await reportPublishProgress(
+      body.publishJobId,
+      'browser_fill',
+      '正在填写标题与正文…'
+    );
+    // Fill title if provided and selector exists
+    if (body.title) {
+      const titleInput = page.locator(selectors.titleInput).first();
+      try {
+        await titleInput.click({ timeout: 5000 });
+        await titleInput.fill(body.title);
+      } catch {
+        // Title input may not be available for all content types
+      }
+    }
+
+    // Fill content
+    const contentInput = page.locator(selectors.contentInput).first();
+    await contentInput.click({ timeout: 5000 });
+    await contentInput.fill(body.content);
+
+    // Upload media files if provided (non-Douyin platforms)
+    if (hasMedia) {
       await uploadMediaFiles(
         page,
         selectors,
@@ -269,60 +292,6 @@ const handlePublishContent: RouteHandler = async (_req, res, ctx) => {
         body.publishJobId,
         body.platform
       );
-
-      await reportPublishProgress(
-        body.publishJobId,
-        'browser_fill',
-        '正在填写标题与正文…'
-      );
-      // Fill title
-      if (body.title) {
-        const titleInput = page.locator(selectors.titleInput).first();
-        try {
-          await titleInput.click({ timeout: 5000 });
-          await titleInput.fill(body.title);
-        } catch {
-          // Title input may not be available for all content types
-        }
-      }
-
-      // Fill content
-      const contentInput = page.locator(selectors.contentInput).first();
-      await contentInput.click({ timeout: 5000 });
-      await contentInput.fill(body.content);
-    } else {
-      // All other platforms: Fill text first, then upload media
-      await reportPublishProgress(
-        body.publishJobId,
-        'browser_fill',
-        '正在填写标题与正文…'
-      );
-      // Fill title if provided and selector exists
-      if (body.title) {
-        const titleInput = page.locator(selectors.titleInput).first();
-        try {
-          await titleInput.click({ timeout: 5000 });
-          await titleInput.fill(body.title);
-        } catch {
-          // Title input may not be available for all content types
-        }
-      }
-
-      // Fill content
-      const contentInput = page.locator(selectors.contentInput).first();
-      await contentInput.click({ timeout: 5000 });
-      await contentInput.fill(body.content);
-
-      // Upload media files if provided (non-Douyin platforms)
-      if (hasMedia) {
-        await uploadMediaFiles(
-          page,
-          selectors,
-          body.mediaFilePaths!,
-          body.publishJobId,
-          body.platform
-        );
-      }
     }
 
     // Add tags if supported

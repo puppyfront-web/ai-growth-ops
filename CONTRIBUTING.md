@@ -73,4 +73,4 @@ docs(readme): 对齐本地部署定位
 
 ## 许可证
 
-提交即表示你同意贡献内容按 [Apache-2.0](./LICENSE) 授权。
+提交即表示你同意贡献内容按 [AGPL-3.0-or-later](./LICENSE) 授权。

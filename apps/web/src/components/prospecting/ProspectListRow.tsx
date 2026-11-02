@@ -2,7 +2,11 @@
 
 import type { ProspectCandidate } from '@/lib/api/prospecting';
 import { formatDateTime } from '@/lib/utils';
-import { candidateComments, prospectLevelLabels } from './prospect-shared';
+import {
+  ProspectPersonaBadge,
+  candidateComments,
+  prospectLevelLabels
+} from './prospect-shared';
 
 type ProspectListRowProps = {
   candidate: ProspectCandidate;
@@ -61,6 +65,7 @@ export function ProspectListRow({
           >
             {prospectLevelLabels[c.leadLevel] ?? c.leadLevel}
           </span>
+          <ProspectPersonaBadge personaTag={c.personaTag} />
           {c.customerId && (
             <span className="flex-shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
               已转客户

@@ -4,7 +4,8 @@ import {
   passesProspectThreshold,
   isProspectingTaskRunnable,
   scoreProspectUser,
-  mergeSemanticScore
+  mergeSemanticScore,
+  downgradeWithoutSemanticScore
 } from '../../../packages/shared/src/prospect-scoring';
 
 describe('scoreProspectCandidate', () => {
@@ -132,6 +133,114 @@ describe('mergeSemanticScore', () => {
         leadLevel: 'Z' as never
       }).scoreSource
     ).toBe('rules');
+  });
+});
+
+describe('persona 画像硬规则（mergeSemanticScore）', () => {
+  const ruleHigh = scoreProspectUser({
+    contents: ['什么价格？我们厂想上一套'],
+    keywords: ['价格'],
+    icpHighIntentKeywords: ['价格']
+  });
+
+  it.each(['peer_vendor', 'already_adopted', 'practitioner', 'job_seeker'] as const)(
+    '画像 %s 即使语义判 A 也强制 D 且分数封顶 25',
+    (personaTag) => {
+      const merged = mergeSemanticScore(ruleHigh, {
+        relevanceScore: 95,
+        leadLevel: 'A',
+        intent: '采购意向',
+        summary: '高度相关',
+        personaTag,
+        riskFlags: []
+      });
+      expect(merged.leadLevel).toBe('D');
+      expect(merged.relevanceScore).toBeLessThanOrEqual(25);
+      expect(merged.personaTag).toBe(personaTag);
+      expect(passesProspectThreshold(merged, 40)).toBe(false);
+    }
+  );
+
+  it('demand_seeker 透传画像且不降级', () => {
+    const merged = mergeSemanticScore(ruleHigh, {
+      relevanceScore: 82,
+      leadLevel: 'A',
+      intent: '采购意向',
+      summary: '工厂问价',
+      personaTag: 'demand_seeker'
+    });
+    expect(merged.leadLevel).toBe('A');
+    expect(merged.relevanceScore).toBe(82);
+    expect(merged.personaTag).toBe('demand_seeker');
+  });
+
+  it('非法 personaTag 视为未判定，按原语义结果合并且不带画像', () => {
+    const merged = mergeSemanticScore(ruleHigh, {
+      relevanceScore: 70,
+      leadLevel: 'B',
+      summary: '还行',
+      personaTag: 'super_buyer'
+    });
+    expect(merged.leadLevel).toBe('B');
+    expect(merged.personaTag).toBeUndefined();
+  });
+
+  it('规则 sellerSignal 命中时保持规则结果，画像不复活同行', () => {
+    const rule = scoreProspectUser({
+      contents: ['厂家直销一手货源，长期供货'],
+      keywords: ['供应链'],
+      icpHighIntentKeywords: ['合作']
+    });
+    const merged = mergeSemanticScore(rule, {
+      relevanceScore: 95,
+      leadLevel: 'A',
+      summary: '高度相关',
+      personaTag: 'demand_seeker'
+    });
+    expect(merged.leadLevel).toBe('D');
+    expect(merged.relevanceScore).toBeLessThanOrEqual(25);
+  });
+});
+
+describe('downgradeWithoutSemanticScore（诚实降级）', () => {
+  it('语义不可用时规则 A/B 级降为 C 并追加风险标记', () => {
+    const ruleA = scoreProspectUser({
+      contents: ['什么价格？想采购'],
+      keywords: ['价格'],
+      icpHighIntentKeywords: ['价格']
+    });
+    const downgraded = downgradeWithoutSemanticScore(
+      ruleA,
+      '402 Insufficient Balance'
+    );
+    expect(downgraded.leadLevel).toBe('C');
+    expect(downgraded.riskFlags).toContain(
+      '语义评估未完成：402 Insufficient Balance'
+    );
+    expect(downgraded.scoreSource).toBe('rules');
+  });
+
+  it('C/D 级保持不变，风险标记仍追加', () => {
+    const ruleC = scoreProspectUser({
+      contents: ['看着还行'],
+      keywords: ['价格']
+    });
+    const downgraded = downgradeWithoutSemanticScore(ruleC, 'LLM 未配置');
+    expect(downgraded.leadLevel).toBe(ruleC.leadLevel);
+    expect(downgraded.riskFlags).toContain('语义评估未完成：LLM 未配置');
+  });
+
+  it('多次降级不重复追加风险标记', () => {
+    const ruleA = scoreProspectUser({
+      contents: ['什么价格？想采购'],
+      keywords: ['价格'],
+      icpHighIntentKeywords: ['价格']
+    });
+    const once = downgradeWithoutSemanticScore(ruleA, '超时');
+    const twice = downgradeWithoutSemanticScore(once, '超时');
+    expect(
+      twice.riskFlags?.filter((flag) => flag.includes('语义评估未完成')).length
+    ).toBe(1);
   });
 });
 

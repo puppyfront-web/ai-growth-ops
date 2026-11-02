@@ -11,6 +11,7 @@ const emptyFilters: ProspectFilters = {
   q: '',
   minScore: 0,
   leadLevel: '',
+  personaTag: '',
   converted: '',
   dateRange: ''
 };
@@ -67,11 +68,24 @@ describe('ProspectFilterBar', () => {
     });
   });
 
+  it('选择画像触发 onChange（39 号 spec：隔离同行/已落地）', async () => {
+    const { onChange } = setup();
+    await userEvent.selectOptions(
+      screen.getByLabelText('画像'),
+      'peer_vendor'
+    );
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...emptyFilters,
+      personaTag: 'peer_vendor'
+    });
+  });
+
   it('有激活筛选时点击重置回调空筛选', async () => {
     const { onChange } = setup({
       q: '私域',
       minScore: 60,
       leadLevel: 'A',
+      personaTag: 'demand_seeker',
       converted: 'no',
       dateRange: ''
     });

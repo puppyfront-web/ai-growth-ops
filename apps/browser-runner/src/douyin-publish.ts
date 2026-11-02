@@ -3,6 +3,7 @@ import type { Page } from 'playwright';
 import { createHeadlessSession } from './browser-session.js';
 import { reportPublishProgress } from './report-publish-progress.js';
 import { clickWithVisionFallback } from './vision-assist.js';
+import { pickImageFiles, pickVideoFile } from './media-files.js';
 
 const UPLOAD_URL = 'https://creator.douyin.com/creator-micro/content/upload';
 const MANAGE_PATTERN =
@@ -509,19 +510,6 @@ async function publishDouyinImages(
     '提交发布…'
   );
   return clickPublish(page);
-}
-
-function pickVideoFile(paths: string[]): string | null {
-  const video = paths.find(
-    (p) => /\.(mp4|mov|webm|avi)$/i.test(p) && existsSync(p)
-  );
-  return video ?? null;
-}
-
-function pickImageFiles(paths: string[]): string[] {
-  return paths.filter(
-    (p) => /\.(png|jpe?g|webp|gif)$/i.test(p) && existsSync(p)
-  );
 }
 
 export async function publishDouyin(

@@ -18,6 +18,7 @@ import {
   jitterDelayMs,
   mergeProspectEvidence,
   mergeSemanticScore,
+  downgradeWithoutSemanticScore,
   getBrowserRunnerConfig,
   getBrowserRunnerHeaders,
   defaultNextActionAt,
@@ -342,6 +343,7 @@ type SemanticScore = {
   intent?: unknown;
   summary?: unknown;
   matchedKeywords?: unknown;
+  personaTag?: unknown;
   audienceFit?: unknown;
   needStrength?: unknown;
   buyingIntent?: unknown;
@@ -384,6 +386,7 @@ async function scoreProspectsSemantically(
 ): Promise<{
   scores: Map<string, SemanticScore>;
   llmUnavailable: boolean;
+  unavailableReason?: string;
 }> {
   const byUserKey = new Map<string, SemanticScore>();
   if (prospects.length === 0)
@@ -409,6 +412,9 @@ async function scoreProspectsSemantically(
     () => undefined
   );
   let llmUnavailable = false;
+  // 首个失败原因（402 余额不足、超时、输出解析失败等）——落进任务元数据，
+  // 供诚实降级标记与 UI 告警使用；此前只 warn 到终端，失败对用户不可见。
+  let unavailableReason: string | undefined;
 
   const batchTotal = Math.ceil(prospects.length / SEMANTIC_BATCH_SIZE);
 
@@ -444,6 +450,7 @@ async function scoreProspectsSemantically(
         console.warn(
           `[prospecting] 语义打分不可用，本批次沿用规则评分: ${result.error ?? result.status}`
         );
+        unavailableReason ??= result.error ?? `status=${result.status}`;
         if (result.error?.includes(LLM_NOT_CONFIGURED_MESSAGE)) {
           llmUnavailable = true;
         }
@@ -459,6 +466,8 @@ async function scoreProspectsSemantically(
         '[prospecting] 语义打分调用失败，本批次沿用规则评分:',
         err instanceof Error ? err.message : String(err)
       );
+      unavailableReason ??=
+        err instanceof Error ? err.message : String(err);
       if (
         err instanceof Error &&
         err.message.includes(LLM_NOT_CONFIGURED_MESSAGE)
@@ -468,7 +477,7 @@ async function scoreProspectsSemantically(
     }
   }
 
-  return { scores: byUserKey, llmUnavailable };
+  return { scores: byUserKey, llmUnavailable, unavailableReason };
 }
 
 export async function executeProspectingTask(
@@ -666,6 +675,7 @@ export async function executeProspectingTask(
     >();
 
     let semanticLlmUnavailable = false;
+    let semanticUnavailableReason: string | undefined;
     const searchEmptyReasons = new Set<string>();
 
     for (const unit of executionUnits) {
@@ -801,6 +811,7 @@ export async function executeProspectingTask(
       );
       const semanticScores = semantic.scores;
       if (semantic.llmUnavailable) semanticLlmUnavailable = true;
+      semanticUnavailableReason ??= semantic.unavailableReason;
 
       for (const prospect of prospects) {
         const ruleScore = scoreProspectUser({
@@ -821,8 +832,14 @@ export async function executeProspectingTask(
           ruleScore,
           semanticScores.get(prospect.userKey)
         );
+        // 诚实降级：语义评分没跑成（余额不足/超时/未配置）时，规则分不配
+        // 产出 A/B 级——历史上一次 402 就把整批从业者打成了 A 级潜客。
+        const scoreFinal =
+          !semanticScores.has(prospect.userKey) && semanticUnavailableReason
+            ? downgradeWithoutSemanticScore(score, semanticUnavailableReason)
+            : score;
 
-        if (!passesProspectThreshold(score, task.minRelevanceScore)) continue;
+        if (!passesProspectThreshold(scoreFinal, task.minRelevanceScore)) continue;
 
         const attribution: ProspectAttribution = {
           strategyId: unit.strategy.id,
@@ -837,14 +854,14 @@ export async function executeProspectingTask(
             prospect.evidence
           );
           existing.attributions.push(attribution);
-          if (existing.score.relevanceScore < score.relevanceScore) {
-            existing.score = score;
+          if (existing.score.relevanceScore < scoreFinal.relevanceScore) {
+            existing.score = scoreFinal;
           }
           continue;
         }
         prospectsByUser.set(prospect.userKey, {
           prospect,
-          score,
+          score: scoreFinal,
           attributions: [attribution]
         });
       }
@@ -894,13 +911,15 @@ export async function executeProspectingTask(
       where: { prospectingTaskId: task.id }
     });
 
+    const semanticDegraded =
+      semanticLlmUnavailable || Boolean(semanticUnavailableReason);
     const warnings: string[] = [];
     if (quotaExhausted) {
       warnings.push('今日额度已用完，已保存当前结果，明天可增量执行');
     }
-    if (semanticLlmUnavailable) {
+    if (semanticDegraded) {
       warnings.push(
-        '语义评估未完成，本轮结果仅供复核。请检查 LLM 配置后重新执行'
+        `语义评估未完成（${semanticUnavailableReason ?? 'LLM 未配置'}），本轮结果已按规则评分并封顶 C 级，仅供复核。请检查 LLM 配置/余额后重新执行`
       );
     }
     if (skippedDuplicateUserKeys.size > 0) {
@@ -933,7 +952,15 @@ export async function executeProspectingTask(
           ...(warning ? { warning } : {}),
           ...(searchEmptyReasons.size > 0
             ? { searchEmptyReasons: [...searchEmptyReasons] }
-            : {})
+            : {}),
+          ...(semanticDegraded
+            ? {
+                semanticScoring: {
+                  ok: false,
+                  error: semanticUnavailableReason ?? 'LLM 未配置'
+                }
+              }
+            : { semanticScoring: { ok: true } })
         } as never
       }
     });
@@ -1053,6 +1080,7 @@ async function upsertProspectCandidate(
         relevanceScore: score.relevanceScore,
         leadLevel: score.leadLevel,
         scoreSource: score.scoreSource,
+        personaTag: score.personaTag,
         intent: score.intent,
         summary: score.summary,
         matchedKeywords: score.matchedKeywords as never,
@@ -1098,7 +1126,10 @@ async function upsertProspectCandidate(
       attributions: mergedAttributions as never,
       buyingStage: keepExistingScore ? undefined : score.buyingStage,
       confidence: keepExistingScore ? undefined : score.confidence,
-      riskFlags: keepExistingScore ? undefined : (score.riskFlags as never)
+      riskFlags: keepExistingScore ? undefined : (score.riskFlags as never),
+      personaTag: keepExistingScore
+        ? (existing.personaTag ?? score.personaTag ?? undefined)
+        : (score.personaTag ?? existing.personaTag ?? undefined)
     }
   });
   return db.prospectCandidate.findUnique({ where: { id: existing.id } });

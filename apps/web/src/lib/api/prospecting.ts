@@ -70,6 +70,7 @@ export type ProspectCandidate = {
   relevanceScore: number;
   leadLevel: string;
   scoreSource: 'rules' | 'skill';
+  personaTag: ProspectPersonaTag | null;
   intent: string | null;
   summary: string | null;
   matchedKeywords: string[] | null;
@@ -116,6 +117,8 @@ export type ProspectingTaskProgress = {
   updatedAt?: string;
   warning?: string;
   captchaRequired?: boolean;
+  /** 语义评分是否完整跑完（39 号 spec）：false 时本轮候选按规则分封顶 C 级 */
+  semanticScoring?: { ok: boolean; error?: string };
 };
 
 export type ProspectingTask = {
@@ -149,10 +152,19 @@ export type ProspectingTask = {
   updatedAt: string;
 };
 
+export type ProspectPersonaTag =
+  | 'demand_seeker'
+  | 'peer_vendor'
+  | 'already_adopted'
+  | 'practitioner'
+  | 'job_seeker'
+  | 'irrelevant';
+
 export type ProspectCandidateFilters = {
   q: string;
   minScore: number;
   leadLevel: '' | 'A' | 'B' | 'C' | 'D';
+  personaTag: '' | ProspectPersonaTag;
   converted: '' | 'yes' | 'no';
   /** 日期分段：'' 为全部 */
   dateRange: '' | 'today' | '7d' | '30d';
@@ -397,6 +409,7 @@ export function listProspectCandidates(
   });
   if (filters.q) params.set('q', filters.q);
   if (filters.leadLevel) params.set('leadLevel', filters.leadLevel);
+  if (filters.personaTag) params.set('personaTag', filters.personaTag);
   if (filters.converted) params.set('converted', filters.converted);
   if (filters.dateRange) params.set('dateRange', filters.dateRange);
   if (focusId) params.set('focusId', focusId);
