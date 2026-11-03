@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "needsHuman": { "type": "boolean" },
+    "draftText": { "type": "string" },
+    "replyType": {
+      "type": "string",
+      "enum": [
+        "faq_answer",
+        "guide_to_private",
+        "guide_to_wecom",
+        "ask_more_info",
+        "thanks",
+        "complaint_response",
+        "manual_only"
+      ]
+    },
+    "riskLevel": { "type": "string", "enum": ["low", "medium", "high"] },
+    "reason": { "type": "string" }
+  },
+  "required": ["needsHuman", "riskLevel"]
+}

@@ -64,7 +64,7 @@ personaTag String?   // demand_seeker | peer_vendor | already_adopted | practiti
 
 `SemanticScore` 增加可选 `personaTag`；`mergeSemanticScore` 透传，并新增硬规则（先于现有 sellerSignal 规则）：
 
-- 语义 `personaTag ∈ {peer_vendor, already_adopted, job_seeker}` → `leadLevel='D'`、score ≤ 25、intent `persona:{tag}`、riskFlags 含中文画像原因；规则侧 sellerSignal 仍保留最终否决权。
+- 语义 `personaTag ∈ {peer_vendor, already_adopted, practitioner, job_seeker, irrelevant}`（即一切非 `demand_seeker` 画像）→ `leadLevel='D'`、score ≤ 25、riskFlags 含中文画像原因；规则侧 sellerSignal 仍保留最终否决权。
 
 ## 6. 诚实降级（packages/database + Web）
 

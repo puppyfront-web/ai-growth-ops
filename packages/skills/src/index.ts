@@ -16,6 +16,12 @@ export {
   allSkillsToToolSpecs,
   createSkillToolCallHandler
 } from './skill-to-tool.js';
+export {
+  REPLY_DRAFT_SKILL_NAME,
+  draftReply,
+  isReplyDraftNeedsHuman
+} from './reply-draft.js';
+export type { ReplyDraftOutput } from './reply-draft.js';
 export type {
   SkillRunner,
   SkillDefinition,

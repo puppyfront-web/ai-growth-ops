@@ -30,6 +30,7 @@ export * from './backfill-deals';
 export * from './customer-feishu-sync';
 export * from './prospect-guard';
 export * from './schema-guard';
+export * from './interaction-blocklist';
 
 export type {
   ContentItem,

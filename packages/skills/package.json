@@ -10,6 +10,7 @@
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ai-growth-ops/ai": "workspace:*"
+    "@ai-growth-ops/ai": "workspace:*",
+    "@ai-growth-ops/shared": "workspace:*"
   }
 }

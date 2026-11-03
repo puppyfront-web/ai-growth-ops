@@ -1,0 +1,46 @@
+{
+  "type": "object",
+  "properties": {
+    "interaction": {
+      "type": "object",
+      "properties": {
+        "platform": { "type": "string" },
+        "type": { "type": "string" },
+        "content": { "type": "string" },
+        "truncated": { "type": "boolean" },
+        "sourceContentTitle": { "type": "string" }
+      },
+      "required": ["platform", "type", "content"]
+    },
+    "customerProfile": {
+      "type": ["object", "null"],
+      "properties": {
+        "summary": { "type": "string" },
+        "leadLevel": { "type": "string" },
+        "intent": { "type": "string" }
+      }
+    },
+    "recentInteractions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "direction": { "type": "string" },
+          "content": { "type": "string" },
+          "occurredAt": { "type": "string" }
+        },
+        "required": ["content"]
+      }
+    },
+    "brandStyle": {
+      "type": ["object", "null"],
+      "properties": {
+        "tone": { "type": "string" },
+        "bannedWords": { "type": "array", "items": { "type": "string" } },
+        "signature": { "type": "string" },
+        "allowPriceMention": { "type": "boolean" }
+      }
+    }
+  },
+  "required": ["interaction"]
+}
