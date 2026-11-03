@@ -39,3 +39,35 @@ export function getAcquisitionAnalytics(
 ): Promise<AcquisitionAnalytics> {
   return apiGet<AcquisitionAnalytics>(`/api/analytics/acquisition?days=${days}`);
 }
+
+export type ProspectOutcomeRow = {
+  leadLevel?: string;
+  personaTag?: string;
+  candidates: number;
+  converted: number;
+  won: number;
+  wonRate: number | null;
+};
+
+export type ProspectOutcomeAnalytics = {
+  range: { days: number };
+  byLevel: ProspectOutcomeRow[];
+  byPersona: ProspectOutcomeRow[];
+  byScoringVersion: Array<{ version: string; candidates: number }>;
+  summary: {
+    candidates: number;
+    converted: number;
+    won: number;
+    wonRate: number | null;
+    scoringSnapshotCoverage: number | null;
+    conversionSnapshotCoverage: number | null;
+  };
+};
+
+export function getProspectOutcomeAnalytics(
+  days = 30
+): Promise<ProspectOutcomeAnalytics> {
+  return apiGet<ProspectOutcomeAnalytics>(
+    `/api/analytics/prospect-outcomes?days=${days}`
+  );
+}

@@ -37,6 +37,8 @@ import { getOrganizationContext } from './auth.js';
 import { parsePagination } from './middleware/pagination.js';
 import { validateBody, validateQuery } from './middleware/validate.js';
 import { hasPermission } from './middleware/rbac.js';
+import { defineRoute } from './route-kit.js';
+import { getProspectOutcomeAnalytics } from './services/prospect-outcomes.js';
 import {
   runProspectingTaskSchema,
   analyzeProspectingPlanSchema,
@@ -112,6 +114,23 @@ export const prospectingRoutes: Array<{
     ctx: RouteContext
   ) => Promise<void>;
 }> = [
+  defineRoute({
+    method: 'GET',
+    pattern: '/api/analytics/prospect-outcomes',
+    permission: 'analytics:view',
+    handler: async (_req, res, ctx) => {
+      const days = Math.min(
+        365,
+        Math.max(1, Number(ctx.url.searchParams.get('days') || 30) || 30)
+      );
+      const payload = await getProspectOutcomeAnalytics(
+        ctx.db,
+        ctx.org.organization.id,
+        days
+      );
+      sendJson(res, 200, payload);
+    }
+  }),
   {
     method: 'POST',
     pattern: '/api/prospecting/plan',

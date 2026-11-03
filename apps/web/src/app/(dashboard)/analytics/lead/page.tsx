@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { getAcquisitionAnalytics } from '@/lib/api/analytics';
+import { getAcquisitionAnalytics, getProspectOutcomeAnalytics } from '@/lib/api/analytics';
 import { queryKeys } from '@/lib/query-keys';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
@@ -54,6 +54,10 @@ export default function LeadAnalyticsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.analytics.acquisition(days),
     queryFn: () => getAcquisitionAnalytics(days)
+  });
+  const outcomes = useQuery({
+    queryKey: ['analytics', 'prospect-outcomes', days],
+    queryFn: () => getProspectOutcomeAnalytics(days)
   });
 
   if (isLoading) return <LoadingState />;
@@ -387,6 +391,99 @@ export default function LeadAnalyticsPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </section>
+
+          <section className="rounded-xl border bg-card p-5">
+            <h3 className="font-semibold mb-1">评分 → 赢单回流</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              按转化时刻快照归因：哪类等级/画像的潜客真正走向赢单。已转化潜客用转化时刻评分（行值后续演化不影响归因）。
+              {outcomes.data?.summary.conversionSnapshotCoverage !== null &&
+              outcomes.data?.summary.conversionSnapshotCoverage !== undefined
+                ? ` 快照覆盖率 ${Math.round(
+                    outcomes.data.summary.conversionSnapshotCoverage * 100
+                  )}%。`
+                : ''}
+            </p>
+            {(outcomes.data?.byLevel ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                暂无潜客数据；执行获客任务并转化潜客后，这里会给出等级与画像的赢单对照。
+              </p>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    按意向等级
+                  </p>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="py-2 font-medium">等级</th>
+                        <th className="py-2 px-2 text-right font-medium">潜客</th>
+                        <th className="py-2 px-2 text-right font-medium">转入</th>
+                        <th className="py-2 text-right font-medium">赢单率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(outcomes.data?.byLevel ?? []).map((row) => (
+                        <tr
+                          key={row.leadLevel}
+                          className="border-b last:border-0"
+                        >
+                          <td className="py-2">{row.leadLevel}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">
+                            {row.candidates}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums">
+                            {row.converted}
+                          </td>
+                          <td className="py-2 text-right tabular-nums">
+                            {row.wonRate === null
+                              ? '-'
+                              : `${Math.round(row.wonRate * 100)}%`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    按画像
+                  </p>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="py-2 font-medium">画像</th>
+                        <th className="py-2 px-2 text-right font-medium">潜客</th>
+                        <th className="py-2 px-2 text-right font-medium">转入</th>
+                        <th className="py-2 text-right font-medium">赢单率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(outcomes.data?.byPersona ?? []).map((row) => (
+                        <tr
+                          key={row.personaTag}
+                          className="border-b last:border-0"
+                        >
+                          <td className="py-2">{row.personaTag}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">
+                            {row.candidates}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums">
+                            {row.converted}
+                          </td>
+                          <td className="py-2 text-right tabular-nums">
+                            {row.wonRate === null
+                              ? '-'
+                              : `${Math.round(row.wonRate * 100)}%`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </section>
         </>

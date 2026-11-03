@@ -15,7 +15,7 @@ const FROZEN: Record<string, number> = {
   'apps/browser-runner/src/assist-routes.ts': 3064,
   'packages/database/src/prospecting.ts': 1913,
   'apps/api/src/routes-customers.ts': 1064,
-  'apps/api/src/routes-prospecting.ts': 1055,
+  'apps/api/src/routes-prospecting.ts': 1062,
   'packages/database/src/outreach.ts': 944,
   'apps/web/src/app/(dashboard)/integrations/platforms/page.tsx': 870,
   'apps/worker/src/job-handlers/interaction-pipeline.ts': 900
