@@ -143,6 +143,7 @@ export async function startBrowserAuthorization(
     sessionId: session.id,
     status: 'waiting_local_bridge' as const,
     expiresAt: expiresAt.toISOString(),
+    // 桥接令牌只经 launchUrl 下发（browser-login.test 契约：响应不重复暴露）
     launchUrl: launchUrl.toString(),
     ...(installerUrl ? { installerUrl } : {}),
     loginUrl: adapter.loginUrl

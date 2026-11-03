@@ -1,9 +1,12 @@
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, apiDelete } from './client';
 import type {
   Interaction,
   Conversation,
-  ReplySuggestion
+  ReplySuggestion,
+  LeadSummary
 } from '@/types/interaction';
+
+export type { LeadSummary };
 
 export async function listInteractions(filters?: {
   status?: string;
@@ -110,4 +113,49 @@ export function convertToLead(id: string): Promise<ConvertInteractionToCustomerR
 
 export function ignoreInteraction(id: string): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(`/api/interactions/${id}/ignore`, {});
+}
+
+/* ── 评论/私信用户级黑名单（spec/47 G1）────────────────────────── */
+
+export interface InteractionBlocklistEntry {
+  id: string;
+  organizationId: string;
+  platform: string;
+  platformUserId: string;
+  reason: string | null;
+  note: string | null;
+  blockedById: string | null;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export function blockTarget(params: {
+  platform: string;
+  platformUserId: string;
+  reason?: 'manual' | 'unsubscribe' | 'complaint';
+  note?: string;
+}): Promise<InteractionBlocklistEntry> {
+  return apiPost<InteractionBlocklistEntry>(
+    '/api/interactions/blocklist',
+    params
+  );
+}
+
+export function unblockTarget(id: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(`/api/interactions/blocklist/${id}`);
+}
+
+export async function checkTargetBlocked(
+  platform: string,
+  platformUserId: string
+): Promise<InteractionBlocklistEntry | null> {
+  const res = await apiGet<{
+    items: InteractionBlocklistEntry[];
+    total: number;
+  }>(
+    `/api/interactions/blocklist?platform=${encodeURIComponent(
+      platform
+    )}&platformUserId=${encodeURIComponent(platformUserId)}`
+  );
+  return res.items?.[0] ?? null;
 }

@@ -18,6 +18,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import {
+  BlocklistBadge,
+  BlockTargetButton,
+  useTargetBlocked
+} from '@/components/conversations/BlocklistControls';
+import { LeadSummaryCard } from '@/components/conversations/LeadSummaryCard';
 import { toast } from '@/components/ui/toast';
 import { interactionStatusLabels, platformLabels } from '@/lib/constants';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -60,6 +66,13 @@ function ReviewCard({
     [suggestions]
   );
 
+  // 黑名单状态：命中则禁用发送并展示标签（同用户缓存去重）
+  const { data: blocklistEntry } = useTargetBlocked(
+    item.platform,
+    item.externalUserId
+  );
+  const isBlocked = Boolean(blocklistEntry);
+
   return (
     <div
       ref={(el) => registeringRef(item.id, el)}
@@ -86,6 +99,7 @@ function ReviewCard({
             status={item.status}
             label={interactionStatusLabels[item.status] ?? item.status}
           />
+          {isBlocked && <BlocklistBadge reason={blocklistEntry?.reason} />}
           <span className="text-xs tabular-nums text-muted-foreground">
             {formatRelativeTime(item.receivedAt)}
           </span>
@@ -93,6 +107,10 @@ function ReviewCard({
       </div>
 
       <p className="mt-3 text-sm leading-relaxed">{item.content}</p>
+
+      <div className="mt-2">
+        <LeadSummaryCard leadSummary={item.leadSummary} compact />
+      </div>
 
       {suggestion && (
         <div className="mt-3 rounded-md bg-muted/50 p-3">
@@ -149,11 +167,17 @@ function ReviewCard({
 
       {!editing && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          {isBlocked && (
+            <span className="text-xs text-destructive">
+              该用户已在黑名单中，禁止发送回复
+            </span>
+          )}
           <Button
             size="sm"
             variant="outline"
             className="border-success/40 text-success hover:bg-success/10 hover:text-success"
-            disabled={item.status !== REVIEW_STATUS}
+            disabled={item.status !== REVIEW_STATUS || isBlocked}
+            title={isBlocked ? '该用户已在黑名单中，禁止发送回复' : undefined}
             onClick={() => onAction(item.id, 'approve')}
           >
             <Check className="h-3.5 w-3.5" />
@@ -163,7 +187,7 @@ function ReviewCard({
             size="sm"
             variant="outline"
             data-edit
-            disabled={item.status !== REVIEW_STATUS}
+            disabled={item.status !== REVIEW_STATUS || isBlocked}
             onClick={() => {
               setDraft(suggestion?.suggestedReply ?? '');
               setEditing(true);
@@ -181,6 +205,11 @@ function ReviewCard({
             <X className="h-3.5 w-3.5" />
             拒绝
           </Button>
+          <BlockTargetButton
+            platform={item.platform}
+            externalUserId={item.externalUserId}
+            displayName={item.externalUserName}
+          />
         </div>
       )}
     </div>

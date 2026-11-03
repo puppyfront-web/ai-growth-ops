@@ -222,6 +222,75 @@ export async function syncLeadOutcome(
   );
 }
 
+const LEAD_LEVEL_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+
+/**
+ * 潜客转化（prospect → customer）时 Lead 级别的"只升不降"合并：
+ * 取更高意向等级，取不到时保留现值。
+ */
+export function mergeLeadLevelForConversion(
+  current: string | null | undefined,
+  incoming: string | null | undefined
+): string {
+  const a = LEAD_LEVEL_RANK[current ?? ''] ?? 99;
+  const b = LEAD_LEVEL_RANK[incoming ?? ''] ?? 99;
+  if (b >= a && a !== 99) return current as string;
+  return b !== 99 ? (incoming as string) : (current ?? 'C');
+}
+
+/**
+ * 潜客转化成功的状态机推进：只有 NEW 升到 QUALIFIED（已建立客户档案），
+ * 其余状态（CONTACTED/ASSIGNED/WON/LOST/…）保持不变，不降级。
+ */
+export function leadStatusAfterProspectConversion(
+  current: string | null | undefined
+): string {
+  return current === 'NEW' || current == null ? 'QUALIFIED' : current;
+}
+
+/**
+ * spec/53 G3：潜客转化事件驱动的 Lead 同步（事务内调用）。
+ * 关联 customerId（仅当为空）、按只升不降合并等级、推进状态、写 LeadActivity。
+ */
+export async function syncLeadConvertedTx(
+  tx: Tx,
+  params: {
+    leadId: string;
+    organizationId: string;
+    customerId: string;
+    incomingLevel?: string | null;
+    note?: string;
+  }
+) {
+  const lead = await tx.lead.findFirst({
+    where: { id: params.leadId, organizationId: params.organizationId, deletedAt: null }
+  });
+  if (!lead) throw new Error('线索不存在');
+
+  const nextStatus = leadStatusAfterProspectConversion(lead.status);
+  const nextLevel = mergeLeadLevelForConversion(lead.level, params.incomingLevel);
+
+  await tx.lead.update({
+    where: { id: lead.id },
+    data: {
+      ...(lead.customerId == null ? { customerId: params.customerId } : {}),
+      ...(nextStatus !== lead.status
+        ? { status: nextStatus as never }
+        : {}),
+      ...(nextLevel !== lead.level ? { level: nextLevel as never } : {})
+    }
+  });
+  await tx.leadActivity.create({
+    data: {
+      leadId: lead.id,
+      action: 'converted_from_prospect',
+      note: params.note ?? '潜客转化，已建立客户档案',
+      operator: 'system'
+    }
+  });
+  return { leadId: lead.id, status: nextStatus };
+}
+
 export async function syncCustomerOutcomeTx(
   tx: Tx,
   customerId: string,

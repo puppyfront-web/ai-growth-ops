@@ -14,7 +14,11 @@ import {
   applyAssignmentRules,
   assignRunningExperiments,
   verifyDatabaseSchema,
-  syncLeadOutcomeTx
+  syncLeadOutcomeTx,
+  blockInteractionTarget,
+  unblockInteractionTarget,
+  listInteractionBlocklist,
+  isInteractionTargetBlocked
 } from '@ai-growth-ops/database';
 import { createLogger } from '@ai-growth-ops/observability';
 import {
@@ -170,6 +174,62 @@ interface Route {
 }
 
 const routeLogger = createLogger('api');
+
+/* ── 会话/互动关联线索摘要（spec/53 T4）────────────────────────── */
+
+interface LeadSummaryPayload {
+  id: string;
+  status: string;
+  level: string;
+  name: string | null;
+  source: string;
+  /** Lead 无独立评分字段，仅在 metadata.score 为数值时返回 */
+  score?: number;
+}
+
+function buildLeadSummary(
+  lead:
+    | {
+        id: string;
+        status: string;
+        level: string;
+        externalUserName: string | null;
+        sourcePlatform: string;
+        metadata: unknown;
+      }
+    | null
+    | undefined
+): LeadSummaryPayload | undefined {
+  if (!lead) return undefined;
+  const metadata = (lead.metadata ?? {}) as Record<string, unknown>;
+  const score = typeof metadata.score === 'number' ? metadata.score : undefined;
+  return {
+    id: lead.id,
+    status: lead.status,
+    level: lead.level,
+    name: lead.externalUserName,
+    source: lead.sourcePlatform,
+    ...(score !== undefined ? { score } : {})
+  };
+}
+
+/** 按 Interaction 反查关联 Lead（organizationId 过滤），返回线索摘要 */
+async function findLeadSummary(
+  db: DatabaseClient,
+  organizationId: string,
+  interactionIds: string[]
+): Promise<LeadSummaryPayload | undefined> {
+  if (interactionIds.length === 0) return undefined;
+  const lead = await db.lead.findFirst({
+    where: {
+      organizationId,
+      deletedAt: null,
+      sourceInteractionId: { in: interactionIds }
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+  return buildLeadSummary(lead);
+}
 
 const routes: Route[] = [
   // ── Health ──────────────────────────────────────────────────────
@@ -2389,9 +2449,132 @@ const routes: Route[] = [
         },
         { page, pageSize },
         { receivedAt: 'desc' },
-        { conversation: true }
+        { conversation: true, leads: { where: { deletedAt: null } } }
+      );
+      sendJson(res, 200, {
+        ...result,
+        items: result.items.map((raw) => {
+          const item = raw as {
+            leads: NonNullable<Parameters<typeof buildLeadSummary>[0]>[];
+          };
+          const leadSummary = buildLeadSummary(item.leads[0]);
+          return leadSummary ? { ...item, leadSummary } : raw;
+        })
+      });
+    }
+  },
+  // ── Interaction Blocklist（评论/私信用户级黑名单，spec/47 G1）────
+  {
+    method: 'POST',
+    pattern: '/api/interactions/blocklist',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'lead:edit')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const body = (ctx.body ?? {}) as Record<string, unknown>;
+      const platform = String(body.platform ?? '').trim();
+      const platformUserId = String(body.platformUserId ?? '').trim();
+      if (!platform || !platformUserId) {
+        return sendJson(res, 400, {
+          error: 'platform 和 platformUserId 不能为空'
+        });
+      }
+      const reason = ['manual', 'unsubscribe', 'complaint'].includes(
+        String(body.reason)
+      )
+        ? String(body.reason)
+        : 'manual';
+      const result = await blockInteractionTarget(ctx.db, {
+        organizationId: orgCtx.organization.id,
+        platform,
+        platformUserId,
+        reason,
+        note: body.note ? String(body.note).slice(0, 500) : null,
+        blockedById: orgCtx.user.id
+      });
+      if (!result.created) {
+        return sendJson(res, 409, {
+          error: '该用户已在黑名单中',
+          errorCode: 'BLOCKLISTED_TARGET',
+          id: result.record.id
+        });
+      }
+      // 关键写操作记录审计日志
+      await ctx.db.auditLog
+        .create({
+          data: {
+            organizationId: orgCtx.organization.id,
+            userId: orgCtx.user.id,
+            action: 'create',
+            entity: 'interaction_blocklist',
+            entityId: result.record.id,
+            changes: {
+              after: { platform, platformUserId, reason }
+            } as never
+          }
+        })
+        .catch(() => {
+          /* auditLog 写入失败不阻断 */
+        });
+      sendJson(res, 201, result.record);
+    }
+  },
+  {
+    method: 'GET',
+    pattern: '/api/interactions/blocklist',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'lead:edit')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const { page, pageSize } = parsePagination(ctx.url);
+      const result = await listInteractionBlocklist(
+        ctx.db,
+        orgCtx.organization.id,
+        {
+          page,
+          pageSize,
+          platform: ctx.url.searchParams.get('platform') ?? undefined,
+          platformUserId:
+            ctx.url.searchParams.get('platformUserId') ?? undefined
+        }
       );
       sendJson(res, 200, result);
+    }
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/interactions/blocklist/:id',
+    handler: async (req, res, ctx) => {
+      const orgCtx = await getOrganizationContext(req, ctx.db);
+      if (!orgCtx) return sendJson(res, 401, { error: '未登录' });
+      if (!hasPermission(orgCtx.memberRole, 'lead:edit')) {
+        return sendJson(res, 403, { error: '权限不足' });
+      }
+      const ok = await unblockInteractionTarget(
+        ctx.db,
+        orgCtx.organization.id,
+        ctx.params.id
+      );
+      if (!ok) return sendJson(res, 404, { error: '黑名单条目不存在' });
+      await ctx.db.auditLog
+        .create({
+          data: {
+            organizationId: orgCtx.organization.id,
+            userId: orgCtx.user.id,
+            action: 'delete',
+            entity: 'interaction_blocklist',
+            entityId: ctx.params.id,
+            changes: { after: { unblocked: true } } as never
+          }
+        })
+        .catch(() => {
+          /* auditLog 写入失败不阻断 */
+        });
+      sendJson(res, 200, { ok: true });
     }
   },
   {
@@ -2430,6 +2613,21 @@ const routes: Route[] = [
         }
       });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
+
+      // 黑名单拦截：命中后拒绝人工发送（worker 发送前还会再查一次）
+      if (
+        await isInteractionTargetBlocked(
+          ctx.db,
+          orgCtx.organization.id,
+          interaction.platform,
+          interaction.externalUserId
+        )
+      ) {
+        return sendJson(res, 409, {
+          error: '该用户已被加入黑名单，禁止发送回复',
+          errorCode: 'BLOCKLISTED_TARGET'
+        });
+      }
 
       // Reply Policy Engine: check risk level and review requirements
       const metadata = interaction.metadata as Record<string, unknown> | null;
@@ -3111,7 +3309,12 @@ const routes: Route[] = [
         }
       });
       if (item) {
-        sendJson(res, 200, item);
+        const leadSummary = await findLeadSummary(
+          ctx.db,
+          orgCtx.organization.id,
+          item.interactions.map((i) => i.id)
+        );
+        sendJson(res, 200, { ...item, ...(leadSummary ? { leadSummary } : {}) });
         return;
       }
 
@@ -3134,9 +3337,20 @@ const routes: Route[] = [
       });
       if (!interaction) return sendJson(res, 404, { error: 'Not found' });
       if (interaction.conversation) {
-        sendJson(res, 200, interaction.conversation);
+        const leadSummary = await findLeadSummary(
+          ctx.db,
+          orgCtx.organization.id,
+          interaction.conversation.interactions.map((i) => i.id)
+        );
+        sendJson(res, 200, {
+          ...interaction.conversation,
+          ...(leadSummary ? { leadSummary } : {})
+        });
         return;
       }
+      const leadSummary = await findLeadSummary(ctx.db, orgCtx.organization.id, [
+        interaction.id
+      ]);
       sendJson(res, 200, {
         id: interaction.id,
         userId: interaction.userId,
@@ -3150,7 +3364,8 @@ const routes: Route[] = [
         updatedAt: interaction.updatedAt,
         deletedAt: null,
         metadata: { synthetic: true, interactionId: interaction.id },
-        interactions: [interaction]
+        interactions: [interaction],
+        ...(leadSummary ? { leadSummary } : {})
       });
     }
   },

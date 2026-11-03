@@ -42,6 +42,7 @@ import {
 } from './llm-config.js';
 import { notifyLlmHealthIssue, recordLlmRun } from './llm-telemetry.js';
 import { findCustomerByAcquisitionIdentity } from './customer-crm.js';
+import { syncLeadConvertedTx } from './lifecycle.js';
 import { applyAssignmentRules } from './assignment.js';
 import {
   claimProfileFetch,
@@ -1861,13 +1862,60 @@ export async function convertProspectToCustomer(
       });
     }
 
+    // spec/53 T1 漏斗汇合：转化时在 Lead 层与互动漏斗汇合。
+    // 去重口径与互动侧一致：同组织 + 同平台 + 同外部用户 ID（任意来源账号）
+    // 只复用既有 Lead，不重复创建；等级按"只升不降"由 lifecycle 合并。
+    const leadExternalUserId =
+      candidate.externalUserId?.trim() || candidate.userKey;
+    const existingLead = await tx.lead.findFirst({
+      where: {
+        organizationId,
+        sourcePlatform: candidate.platform,
+        externalUserId: leadExternalUserId,
+        deletedAt: null
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+    const lead =
+      existingLead ??
+      (await tx.lead.create({
+        data: {
+          organizationId,
+          userId,
+          sourcePlatform: candidate.platform,
+          sourceAccountId: 'prospect-keyword',
+          externalUserId: leadExternalUserId,
+          externalUserName: candidate.userNickname,
+          level: (['A', 'B', 'C', 'D'].includes(candidate.leadLevel)
+            ? candidate.leadLevel
+            : 'C') as 'A' | 'B' | 'C' | 'D',
+          status: 'NEW',
+          intent: candidate.intent ?? null,
+          confidence:
+            typeof candidate.confidence === 'number'
+              ? candidate.confidence
+              : null,
+          summary: candidate.summary ?? candidate.content.slice(0, 200),
+          tags: ['关键词获客'] as never
+        }
+      }));
+
+    // spec/53 T3 事件驱动状态机：转化事务内同步 Lead（关联客户、状态推进、活动记录）
+    await syncLeadConvertedTx(tx, {
+      leadId: lead.id,
+      organizationId,
+      customerId: customer.id,
+      incomingLevel: candidate.leadLevel,
+      note: `关键词获客转化（${candidate.keyword}）`
+    });
+
     const claimed = await tx.prospectCandidate.updateMany({
       where: {
         organizationId,
         userKey: candidate.userKey,
         customerId: null
       },
-      data: { customerId: customer.id }
+      data: { customerId: customer.id, leadId: lead.id }
     });
     if (claimed.count < 1) {
       throw new Error('该潜客已被其他请求转入客户库');
@@ -1906,7 +1954,8 @@ export async function convertProspectToCustomer(
 
     return {
       customer,
-      candidate: { ...candidate, customerId: customer.id },
+      leadId: lead.id,
+      candidate: { ...candidate, customerId: customer.id, leadId: lead.id },
       reused
     };
   });

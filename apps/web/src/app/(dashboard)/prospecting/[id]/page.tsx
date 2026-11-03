@@ -129,6 +129,7 @@ export default function ProspectingDetailPage() {
   const [convertNotice, setConvertNotice] = useState<{
     reused: boolean;
     customerId: string;
+    leadId?: string;
   } | null>(null);
 
   const {
@@ -526,6 +527,9 @@ export default function ProspectingDetailPage() {
           >
             查看客户
           </Link>
+          {convertNotice.leadId && (
+            <Link href={`/leads/${convertNotice.leadId}`} className="underline ml-2">查看线索</Link>
+          )}
         </div>
       )}
 

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { compileProspectingPlan } from '../../../packages/database/src/prospecting-plan';
+import {
+  leadStatusAfterProspectConversion,
+  mergeLeadLevelForConversion
+} from '../../../packages/database/src/lifecycle';
 
 const requirement =
   '寻找正在考虑采购私域运营工具的中小企业负责人，优先零售行业，排除同行服务商';
@@ -179,5 +183,68 @@ describe('compileProspectingPlan', () => {
     expect(plan.strategies.length).toBeGreaterThanOrEqual(2);
     const retryPrompt = chat.mock.calls[1][0].map((m: { content: string }) => m.content).join('\n');
     expect(retryPrompt).toContain('未通过结构校验');
+  });
+});
+
+describe('compileProspectingPlan 服务类排除词兜底（39 号 spec）', () => {
+  const serviceOutput = JSON.parse(JSON.stringify(modelOutput));
+  serviceOutput.intent.offering = 'AI 落地服务';
+  serviceOutput.intent.exclusions = [];
+  const serviceRequirement =
+    '寻找正在找 AI 落地服务的企业或工厂，排除同行和已经做完的企业';
+
+  it('服务类 offering 且 exclusions 为空时，矫正层注入同行/服务商类排除词', async () => {
+    const plan = await compileProspectingPlan({
+      requirement: serviceRequirement,
+      availableVideos: 20,
+      llmClient: mockClient(serviceOutput)
+    });
+    expect(plan.intent.exclusions).toEqual(
+      expect.arrayContaining(['同行', '服务商', '代理商', '培训机构', '求职者'])
+    );
+  });
+
+  it('模型已给出 exclusions 时保留原词、不注入兜底', async () => {
+    const output = JSON.parse(JSON.stringify(serviceOutput));
+    output.intent.exclusions = ['已做完AI落地的企业'];
+    const plan = await compileProspectingPlan({
+      requirement: serviceRequirement,
+      availableVideos: 20,
+      llmClient: mockClient(output)
+    });
+    expect(plan.intent.exclusions).toEqual(['已做完AI落地的企业']);
+  });
+
+  it('实物商品类 offering 不注入兜底排除词', async () => {
+    const output = JSON.parse(JSON.stringify(modelOutput));
+    output.intent.offering = '静音家用风扇';
+    output.intent.exclusions = [];
+    const plan = await compileProspectingPlan({
+      requirement: '寻找正在考虑购买静音家用风扇的家长，宿舍和卧室场景均可',
+      availableVideos: 20,
+      llmClient: mockClient(output)
+    });
+    expect(plan.intent.exclusions).toEqual([]);
+  });
+});
+
+describe('潜客转化 lifecycle 纯函数', () => {
+  it('mergeLeadLevelForConversion 取更高意向等级（A 最优），不降级', () => {
+    expect(mergeLeadLevelForConversion('C', 'A')).toBe('A');
+    expect(mergeLeadLevelForConversion('A', 'C')).toBe('A');
+    expect(mergeLeadLevelForConversion('B', 'B')).toBe('B');
+    // 非法输入回退：现值合法则保留
+    expect(mergeLeadLevelForConversion('B', null)).toBe('B');
+    expect(mergeLeadLevelForConversion('B', 'X')).toBe('B');
+  });
+
+  it('leadStatusAfterProspectConversion 仅 NEW/空 推进到 QUALIFIED，其余保持', () => {
+    expect(leadStatusAfterProspectConversion('NEW')).toBe('QUALIFIED');
+    expect(leadStatusAfterProspectConversion(null)).toBe('QUALIFIED');
+    expect(leadStatusAfterProspectConversion(undefined)).toBe('QUALIFIED');
+    expect(leadStatusAfterProspectConversion('CONTACTED')).toBe('CONTACTED');
+    expect(leadStatusAfterProspectConversion('WON')).toBe('WON');
+    expect(leadStatusAfterProspectConversion('LOST')).toBe('LOST');
+    expect(leadStatusAfterProspectConversion('QUALIFIED')).toBe('QUALIFIED');
   });
 });

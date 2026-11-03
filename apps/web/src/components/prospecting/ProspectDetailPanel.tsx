@@ -131,7 +131,7 @@ export function ProspectDetailPanel({
         </div>
         <div className="flex-shrink-0">
           {c.customerId ? (
-            <ConvertedBadge customerId={c.customerId} />
+            <ConvertedBadge customerId={c.customerId} leadId={c.leadId} />
           ) : (
             <Button variant="outline" size="xs" onClick={() => onConvert(c)}>
               转客户

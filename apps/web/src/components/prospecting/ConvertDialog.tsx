@@ -20,7 +20,11 @@ export function ConvertDialog({
 }: {
   candidate: ProspectCandidate;
   onClose: () => void;
-  onDone: (result: { reused: boolean; customerId: string }) => void;
+  onDone: (result: {
+    reused: boolean;
+    customerId: string;
+    leadId?: string;
+  }) => void;
 }) {
   const comments = candidateComments(candidate);
   const [phone, setPhone] = useState('');
@@ -53,7 +57,11 @@ export function ConvertDialog({
         confirmDuplicate
       }),
     onSuccess: (result) =>
-      onDone({ reused: result.reused, customerId: result.customer.id }),
+      onDone({
+        reused: result.reused,
+        customerId: result.customer.id,
+        leadId: result.leadId
+      }),
     onError: (err: Error) => {
       if (err instanceof ApiError && err.status === 409) {
         const items = Array.isArray(err.payload.duplicates)

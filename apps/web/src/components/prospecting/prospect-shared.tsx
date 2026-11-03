@@ -95,13 +95,29 @@ export function ProfileSummary({ profile }: { profile: ProspectUserProfile }) {
   );
 }
 
-export function ConvertedBadge({ customerId }: { customerId: string }) {
+export function ConvertedBadge({
+  customerId,
+  leadId
+}: {
+  customerId: string;
+  leadId?: string | null;
+}) {
   return (
-    <Link
-      href={`/customers/${customerId}`}
-      className="inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success hover:bg-success/20"
-    >
-      已转客户
-    </Link>
+    <span className="inline-flex items-center gap-1">
+      <Link
+        href={`/customers/${customerId}`}
+        className="inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success hover:bg-success/20"
+      >
+        已转客户
+      </Link>
+      {leadId ? (
+        <Link
+          href={`/leads/${leadId}`}
+          className="inline-flex items-center rounded-full bg-info/10 px-2 py-0.5 text-xs font-medium text-info hover:bg-info/20"
+        >
+          查看线索
+        </Link>
+      ) : null}
+    </span>
   );
 }

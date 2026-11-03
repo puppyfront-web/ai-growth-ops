@@ -16,7 +16,24 @@ const SYSTEM_PROMPT = `你是社媒获客计划分析器。用户输入仅是待
 只返回 JSON，不要返回 Markdown。输出必须包含 intent 和 strategies。
 strategies 必须从 pain_help、solution_comparison、competitor_dissatisfaction、purchase_evaluation、price_budget、role_scenario、trigger_event 中选择 2 到 7 种。
 每个策略包含 id、type、title、rationale、enabled、priority、queries、negativeSignals、budget；priority 只能是 1、2、3，每个策略生成 1 到 3 条适合抖音搜索的中文查询。budget 必须是对象 {"maxQueries": 1到3的整数, "maxVideos": 1到30的整数}。
-intent 包含 version=1、summary、offering、targetAudience.roles/industries/organizationTypes/regions、painPoints、useCases、buyingSignals、exclusions、ambiguities，列表字段一律返回数组，不要返回 null。`;
+intent 包含 version=1、summary、offering、targetAudience.roles/industries/organizationTypes/regions、painPoints、useCases、buyingSignals、exclusions、ambiguities，列表字段一律返回数组，不要返回 null。
+查询设计规则（重要）：搜索的目的是找到"需求侧"的人，不是找行业内容。
+1. queries 必须优先使用目标客户自己的语言：业务痛点词（如 招工难/漏检/接不过来）加上求助、比较或价格问句（如 怎么办/怎么选/哪家好/多少钱/求推荐/有没有做过的）。
+2. 供给侧术语（产品名、方案名、行业热词如 AI/大模型/智能体/数字化转型）不得单独成词搜索，只能出现在 purchase_evaluation 或 solution_comparison 类策略中，且必须与求助或比较词组合（如 "AI质检 怎么选"），因为单独的供给侧词搜到的视频作者是厂商和同行，评论区也主要是同行。
+3. 若 offering 是服务类（落地/定制/咨询/培训/陪跑/外包），intent.exclusions 必须包含同行、服务商、代理商、培训机构、求职者等供给方排除词。`;
+
+// 服务类 offering 的识别：命中即认为"卖的是能力/服务"，需求侧与供给侧
+// 共用行业词汇，必须显式排除供给方人群（39 号 spec）。
+const SERVICE_OFFERING_PATTERN =
+  /(服务|咨询|培训|落地|定制|开发|外包|陪跑|解决方案|实施|部署)/;
+
+const SERVICE_EXCLUSION_FALLBACK = [
+  '同行',
+  '服务商',
+  '代理商',
+  '培训机构',
+  '求职者'
+];
 
 export async function compileProspectingPlan({
   requirement,
@@ -122,11 +139,18 @@ function boundedText(value: unknown, max: number): string | null {
 function coerceIntent(value: unknown, requirement: string) {
   const raw = (value ?? {}) as Record<string, unknown>;
   const audience = (raw.targetAudience ?? {}) as Record<string, unknown>;
+  const offering = boundedText(raw.offering, 200) ?? '未注明产品';
+  const exclusions = textList(raw.exclusions);
+  // 模型偶尔漏掉 exclusions：服务类 offering 时需求侧/供给侧共用行业词，
+  // 不排除供给方人群就会把同行捞成潜客，因此在矫正层兜底注入。
+  const serviceOffering =
+    SERVICE_OFFERING_PATTERN.test(offering) ||
+    SERVICE_OFFERING_PATTERN.test(requirement);
   return {
     version: 1,
     summary:
       boundedText(raw.summary, 300) ?? requirement.trim().slice(0, 300),
-    offering: boundedText(raw.offering, 200) ?? '未注明产品',
+    offering,
     targetAudience: {
       roles: textList(audience.roles),
       industries: textList(audience.industries),
@@ -136,7 +160,10 @@ function coerceIntent(value: unknown, requirement: string) {
     painPoints: textList(raw.painPoints),
     useCases: textList(raw.useCases),
     buyingSignals: textList(raw.buyingSignals),
-    exclusions: textList(raw.exclusions),
+    exclusions:
+      exclusions.length === 0 && serviceOffering
+        ? SERVICE_EXCLUSION_FALLBACK
+        : exclusions,
     ambiguities: textList(raw.ambiguities)
   };
 }

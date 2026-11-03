@@ -84,6 +84,7 @@ export type ProspectCandidate = {
   confidence: number | null;
   riskFlags: string[] | null;
   customerId: string | null;
+  leadId: string | null;
   metadata?: {
     profile?: ProspectUserProfile;
     convertedAt?: string;
@@ -451,6 +452,7 @@ export function convertProspectToCustomer(
 ) {
   return apiPost<{
     customer: { id: string };
+    leadId: string;
     candidate: ProspectCandidate;
     reused: boolean;
   }>(`/api/prospecting/candidates/${candidateId}/convert`, data);

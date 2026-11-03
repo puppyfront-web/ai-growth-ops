@@ -99,6 +99,15 @@ const columns: ColumnDef<Lead>[] = [
         >
           查看
         </Link>
+        {row.original.sourceInteractionId && (
+          <Link
+            href={`/conversations/${row.original.sourceInteractionId}`}
+            className="text-sm text-muted-foreground hover:text-foreground"
+            title="查看该线索来源的互动会话"
+          >
+            查看会话
+          </Link>
+        )}
         <Link
           href={`/leads/${row.original.id}?sync=feishu`}
           className="text-sm text-muted-foreground hover:text-foreground"

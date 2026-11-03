@@ -6,10 +6,11 @@
  */
 
 import { Job } from 'bullmq';
-import { createDatabaseClient } from '@ai-growth-ops/database';
+import { createDatabaseClient, isInteractionTargetBlocked } from '@ai-growth-ops/database';
 import { decryptToken } from '@ai-growth-ops/providers';
 import { createLogger } from '@ai-growth-ops/observability';
-import { getBrowserRunnerConfig, getBrowserRunnerHeaders, isPlatformAuthExpiredError } from '@ai-growth-ops/shared';
+import { getBrowserRunnerConfig, getBrowserRunnerHeaders, isPlatformAuthExpiredError, BLOCKLISTED_TARGET_ERROR_CODE } from '@ai-growth-ops/shared';
+import { writeBackReplyToLead } from './reply-lead-writeback.js';
 
 const logger = createLogger('auto-reply');
 
@@ -66,6 +67,33 @@ export async function handleInteractionAutoReply(
     return;
   }
 
+  // 黑名单强制检查（spec/47）：命中则不发送、不消耗配额，job 以
+  // BLOCKLISTED_TARGET 错误码失败。
+  if (interaction.organizationId) {
+    const blocked = await isInteractionTargetBlocked(
+      db,
+      interaction.organizationId,
+      interaction.platform,
+      interaction.externalUserId
+    );
+    if (blocked) {
+      await db.replySuggestion.update({
+        where: { id: suggestion.id },
+        data: {
+          status: 'rejected',
+          decision: 'rejected',
+          decisionReason: 'blocklisted'
+        }
+      });
+      const err = Object.assign(
+        new Error('目标用户已在黑名单，禁止自动回复'),
+        { code: BLOCKLISTED_TARGET_ERROR_CODE }
+      );
+      logger.warn('Auto-reply blocked by blocklist', { interactionId });
+      throw err;
+    }
+  }
+
   // Decrypt cookie
   const cookie = decryptToken(account.cookieRef);
 
@@ -118,6 +146,15 @@ export async function handleInteractionAutoReply(
     await db.interaction.update({
       where: { id: interactionId },
       data: { status: 'REPLIED' }
+    });
+
+    // 回复发送成功后回写线索（lastContactedAt/活动/状态推进，spec/53 T2）
+    await writeBackReplyToLead(db, {
+      interactionId,
+      organizationId: interaction.organizationId,
+      suggestionLeadId: suggestion.leadId,
+      replySuggestionId: suggestion.id,
+      source: 'auto_reply'
     });
 
     logger.info('Auto-reply sent', {

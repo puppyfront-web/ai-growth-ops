@@ -21,6 +21,12 @@ import { useState } from 'react';
 import { toast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import type { ReplySuggestion } from '@/types/interaction';
+import {
+  BlocklistBadge,
+  BlockTargetButton,
+  useTargetBlocked
+} from '@/components/conversations/BlocklistControls';
+import { LeadSummaryCard } from '@/components/conversations/LeadSummaryCard';
 
 export default function ConversationDetailPage() {
   const params = useParams();
@@ -35,6 +41,11 @@ export default function ConversationDetailPage() {
   });
   const latestInteraction =
     conversation?.interactions[conversation.interactions.length - 1];
+  const { data: blocklistEntry } = useTargetBlocked(
+    latestInteraction?.platform,
+    latestInteraction?.externalUserId
+  );
+  const isBlocked = Boolean(blocklistEntry);
   const { data: suggestions } = useQuery({
     queryKey: ['reply-suggestions', latestInteraction?.id],
     queryFn: () => getReplySuggestions(latestInteraction!.id),
@@ -146,23 +157,37 @@ export default function ConversationDetailPage() {
           </div>
 
           <div className="rounded-xl border bg-card p-5">
-            <h3 className="font-semibold mb-3">回复</h3>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">回复</h3>
+              {isBlocked && <BlocklistBadge reason={blocklistEntry?.reason} />}
+            </div>
+            {isBlocked && (
+              <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                该用户已在黑名单中，发送已被禁止。可在黑名单列表中解除后恢复发送。
+              </p>
+            )}
             <textarea
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               rows={4}
+              disabled={isBlocked}
               className="w-full rounded-md border p-3 text-sm"
               placeholder="输入回复内容..."
             />
             <p className="mb-2 text-xs text-muted-foreground">
               已配置官方 token 时走官方回复；扫码账号是尽力而为，发送后请到平台确认。
             </p>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 onClick={() =>
                   replyText.trim() && replyMutation.mutate(replyText)
                 }
-                disabled={!replyText.trim()}
+                disabled={!replyText.trim() || isBlocked}
+                title={
+                  isBlocked
+                    ? '该用户已在黑名单中，禁止发送回复'
+                    : undefined
+                }
                 loading={replyMutation.isPending}
               >
                 {replyMutation.isPending ? '发送中...' : '发送回复'}
@@ -183,11 +208,21 @@ export default function ConversationDetailPage() {
                   ? '处理中...'
                   : '转入客户库'}
               </Button>
+              {latestInteraction?.platform &&
+                latestInteraction?.externalUserId && (
+                  <BlockTargetButton
+                    platform={latestInteraction.platform}
+                    externalUserId={latestInteraction.externalUserId}
+                    displayName={conversation.externalUserName}
+                  />
+                )}
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
+          <LeadSummaryCard leadSummary={conversation.leadSummary} />
+
           <div className="rounded-xl border bg-card p-5">
             <h3 className="font-semibold mb-3">AI 评估</h3>
             {suggestion ? (

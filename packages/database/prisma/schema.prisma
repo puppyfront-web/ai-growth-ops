@@ -843,6 +843,8 @@ model Lead {
   externalMappings LeadExternalMapping[]
   syncLogs         LeadSinkSyncLog[]
   deals            Deal[]
+  replySuggestions ReplySuggestion[]
+  prospectCandidates ProspectCandidate[]
 
   @@index([organizationId])
   @@index([organizationId, nextActionAt])
@@ -1502,17 +1504,20 @@ model ProspectCandidate {
   confidence         Int?
   riskFlags          Json?
   customerId         String?
+  leadId             String?
   createdAt          DateTime  @default(now())
   metadata           Json?
 
   prospectingTask ProspectingTask @relation(fields: [prospectingTaskId], references: [id], onDelete: Cascade)
   organization    Organization    @relation(fields: [organizationId], references: [id])
   customer        Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead            Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@unique([prospectingTaskId, userKey])
   @@index([prospectingTaskId, relevanceScore])
   @@index([organizationId, createdAt])
   @@index([customerId])
+  @@index([leadId])
   @@map("prospect_candidates")
 }
 
@@ -1920,10 +1925,13 @@ model ReplySuggestion {
   sentAt         DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  leadId         String?
   interaction    Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  lead           Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
   replyAttempts  ReplyAttempt[]
 
   @@index([interactionId, status])
+  @@index([leadId])
   @@map("reply_suggestions")
 }
 
@@ -1942,6 +1950,24 @@ model ReplyAttempt {
 
   @@index([platform, status])
   @@map("reply_attempts")
+}
+
+model InteractionBlocklist {
+  id             String    @id @default(uuid())
+  organizationId String
+  platform       String
+  platformUserId String
+  reason         String? // manual / unsubscribe / complaint
+  note           String?
+  blockedById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  metadata       Json?
+
+  @@index([organizationId])
+  @@unique([organizationId, platform, platformUserId])
+  @@map("interaction_blocklists")
 }
 
 model InteractionSyncJob {

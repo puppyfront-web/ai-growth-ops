@@ -9,13 +9,21 @@
 
 import {
   applyAssignmentRules,
+  blockInteractionTarget,
   ensureCustomerFromInteraction,
+  isInteractionTargetBlocked,
   recordLeadConversionForPublishJob,
   trySyncCustomerToFeishu,
   type DatabaseClient
 } from '@ai-growth-ops/database';
-import { getSharedSkillRunner } from '@ai-growth-ops/skills';
-import { defaultNextActionAt } from '@ai-growth-ops/shared';
+import { draftReply, getSharedSkillRunner } from '@ai-growth-ops/skills';
+import {
+  buildReplyDraftContext,
+  defaultNextActionAt,
+  detectUnsubscribeIntent,
+  REPLY_DRAFT_MAX_HISTORY_ITEMS,
+  type ReplyDraftContext
+} from '@ai-growth-ops/shared';
 import { getQueue, QUEUE_NAMES } from '../queue.js';
 import type {
   ClassificationResult,
@@ -48,6 +56,216 @@ const VALID_REPLY_TYPES = [
 ] as const;
 
 /**
+ * 黑名单/退订守卫（spec/47 G1）：
+ * 1. 私信文本命中退订意图 → 自动加入黑名单（reason=unsubscribe）并写 AuditLog；
+ * 2. 命中黑名单 → Interaction metadata.blocklisted=true，跳过分类/建议，
+ *    已存在的 waiting_review 建议置为 rejected(reason=blocklisted)。
+ * 返回 true 表示目标被拉黑，调用方应跳过后续分类/建议。
+ */
+export async function applyInteractionBlocklistGuard(
+  db: DatabaseClient,
+  input: {
+    interactionId: string;
+    content: string;
+    platform: string;
+    interactionType: string;
+  }
+): Promise<boolean> {
+  const interaction = await db.interaction.findUnique({
+    where: { id: input.interactionId },
+    select: {
+      organizationId: true,
+      userId: true,
+      platform: true,
+      externalUserId: true,
+      type: true
+    }
+  });
+  if (!interaction?.organizationId || !interaction.externalUserId) return false;
+
+  // 私信中表达明确退订意图 → 自动拉黑（幂等，已拉黑不重复建）
+  if (
+    (interaction.type === 'message' || interaction.type === 'official_message') &&
+    input.interactionType !== 'comment' &&
+    detectUnsubscribeIntent(input.content)
+  ) {
+    const result = await blockInteractionTarget(db, {
+      organizationId: interaction.organizationId,
+      platform: interaction.platform,
+      platformUserId: interaction.externalUserId,
+      reason: 'unsubscribe',
+      metadata: { interactionId: input.interactionId }
+    });
+    if (result.created) {
+      await db.auditLog
+        .create({
+          data: {
+            organizationId: interaction.organizationId,
+            userId: interaction.userId,
+            action: 'create',
+            entity: 'interaction_blocklist',
+            entityId: result.record.id,
+            changes: {
+              after: {
+                reason: 'unsubscribe',
+                platform: interaction.platform,
+                platformUserId: interaction.externalUserId,
+                triggerInteractionId: input.interactionId
+              }
+            } as never
+          }
+        })
+        .catch(() => {
+          /* auditLog 写入失败不阻断 */
+        });
+    }
+  }
+
+  const blocked = await isInteractionTargetBlocked(
+    db,
+    interaction.organizationId,
+    interaction.platform,
+    interaction.externalUserId
+  );
+  if (!blocked) return false;
+
+  // 标记并跳过：合并 metadata，避免覆盖已有键
+  const existing = await db.interaction.findUnique({
+    where: { id: input.interactionId },
+    select: { metadata: true }
+  });
+  const mergedMetadata = {
+    ...((existing?.metadata as Record<string, unknown> | null) ?? {}),
+    blocklisted: true
+  };
+  await db.interaction.update({
+    where: { id: input.interactionId },
+    data: {
+      status: 'IGNORED',
+      metadata: mergedMetadata as never
+    }
+  });
+
+  // 已有待审建议 → 置为 rejected
+  await db.replySuggestion.updateMany({
+    where: { interactionId: input.interactionId, status: 'waiting_review' },
+    data: {
+      status: 'rejected',
+      decision: 'rejected',
+      decisionReason: 'blocklisted'
+    }
+  });
+
+  console.log(
+    `[pipeline] Interaction ${input.interactionId} blocklisted, skip classify/suggest`
+  );
+  return true;
+}
+
+/**
+ * 组装 reply-draft skill 的完整上下文（spec/47 G2）：
+ * 画像来自同平台同外部用户的最新的 Lead，历史取最近
+ * REPLY_DRAFT_MAX_HISTORY_ITEMS 条互动，话术来自 AppConfig `reply_style_config`。
+ * 任何数据缺失都归一化为 null，组装失败返回 null（调用方走回退链路）。
+ */
+export async function buildReplyDraftPipelineContext(
+  db: DatabaseClient,
+  input: {
+    interactionId: string;
+    content: string;
+    platform: string;
+    interactionType: string;
+  }
+): Promise<ReplyDraftContext | null> {
+  try {
+    const interaction = await db.interaction.findUnique({
+      where: { id: input.interactionId },
+      select: {
+        platform: true,
+        externalUserId: true,
+        type: true,
+        content: true,
+        organizationId: true,
+        userId: true
+      }
+    });
+    if (!interaction) return null;
+
+    const [lead, historyRows, styleRecord] = await Promise.all([
+      interaction.externalUserId
+        ? db.lead.findFirst({
+            where: {
+              sourcePlatform: interaction.platform,
+              externalUserId: interaction.externalUserId
+            },
+            orderBy: { updatedAt: 'desc' },
+            select: { level: true, intent: true, summary: true }
+          })
+        : null,
+      interaction.externalUserId
+        ? db.interaction.findMany({
+            where: {
+              platform: interaction.platform,
+              externalUserId: interaction.externalUserId,
+              id: { not: input.interactionId }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: REPLY_DRAFT_MAX_HISTORY_ITEMS,
+            select: { content: true, createdAt: true }
+          })
+        : [],
+      db.appConfig.findFirst({
+        where: {
+          organizationId: interaction.organizationId,
+          key: 'reply_style_config'
+        },
+        select: { value: true }
+      })
+    ]);
+
+    const styleValue = (styleRecord?.value ?? null) as Record<
+      string,
+      unknown
+    > | null;
+
+    return buildReplyDraftContext(
+      {
+        platform: interaction.platform,
+        interactionType: input.interactionType,
+        content: input.content || interaction.content || ''
+      },
+      lead
+        ? {
+            summary: lead.summary,
+            leadLevel: lead.level,
+            intent: lead.intent
+          }
+        : null,
+      // shared 契约：历史升序（旧→新）传入，由纯函数保留最近 N 条
+      historyRows.length > 0
+        ? historyRows
+            .map((row) => ({
+              content: row.content,
+              occurredAt: row.createdAt?.toISOString() ?? null
+            }))
+            .reverse()
+        : null,
+      styleValue
+        ? {
+            tone: (styleValue.tone as string) ?? null,
+            bannedWords: (styleValue.bannedWords as string[]) ?? null,
+            signature: (styleValue.signature as string) ?? null,
+            allowPriceMention: (styleValue.allowPriceMention as boolean) ?? null
+          }
+        : null
+    );
+  } catch (error) {
+    console.error('[pipeline] Build reply-draft context failed:', error);
+    return null;
+  }
+}
+
+/**
  * Classify an interaction and optionally generate a reply suggestion.
  * Writes results to DB. Never throws — errors are logged and the
  * interaction status is still updated.
@@ -59,6 +277,19 @@ export async function classifyAndSuggestReply(
   platform: string,
   interactionType: string
 ): Promise<void> {
+  // ── Step 0: Blocklist / unsubscribe guard ─────────────────────────
+  try {
+    const blocked = await applyInteractionBlocklistGuard(db, {
+      interactionId,
+      content,
+      platform,
+      interactionType
+    });
+    if (blocked) return;
+  } catch (error) {
+    console.error('[pipeline] Blocklist guard failed:', error);
+  }
+
   // ── Step 1: Classify ──────────────────────────────────────────────
   let classification: ClassificationResult | null = null;
 
@@ -139,44 +370,87 @@ export async function classifyAndSuggestReply(
   try {
     let reply: ReplySuggestionResult | null = null;
 
+    // ── Step 2a: reply-draft skill（注入画像/历史/话术，spec/47 G2）────────
+    // AI 失败返回 null / needsHuman 时都不得假装 AI 成功：
+    // 前者直接走下方回退链路；后者保留规则草稿但强制人工审核。
+    let draftNeedsHuman = false;
+    let draftNeedsHumanReason: string | undefined;
     try {
-      const runner = getSharedSkillRunner();
-      const result = await runner.run<
-        Record<string, unknown>,
-        Record<string, unknown>
-      >({
-        skillName: 'reply-suggestion',
-        input: {
-          interaction: { content, platform, type: interactionType },
-          classification,
-          platform,
-          brandTone: '专业、克制、不过度承诺'
-        }
+      const draftContext = await buildReplyDraftPipelineContext(db, {
+        interactionId,
+        content,
+        platform,
+        interactionType
       });
-
-      if (result.status === 'success' && result.output) {
-        const output = result.output;
-        reply = {
-          suggestedText: String(output.suggestedText || ''),
-          replyType: String(output.replyType || 'faq_answer'),
-          riskLevel: (['low', 'medium', 'high'].includes(
-            String(output.riskLevel)
-          )
-            ? output.riskLevel
-            : 'low') as ReplySuggestionResult['riskLevel'],
-          needReview: Boolean(output.needReview),
-          reason: output.reason ? String(output.reason) : undefined
-        };
+      if (draftContext) {
+        const draft = await draftReply(
+          getSharedSkillRunner(),
+          draftContext
+        );
+        if (draft?.needsHuman) {
+          draftNeedsHuman = true;
+          draftNeedsHumanReason = draft.reason || 'AI 判定需人工处理';
+        } else if (draft?.draftText?.trim()) {
+          reply = {
+            suggestedText: draft.draftText,
+            replyType: draft.replyType || 'faq_answer',
+            riskLevel: draft.riskLevel || 'low',
+            needReview: false,
+            reason: draft.reason ? `reply-draft: ${draft.reason}` : undefined
+          };
+        }
       }
     } catch (error) {
-      console.error(
-        '[pipeline] AI reply suggestion failed, using rules:',
-        error
-      );
+      console.error('[pipeline] reply-draft skill failed, fallback:', error);
+    }
+
+    // ── Step 2b: 回退链路 reply-suggestion skill ──────────────────────
+    if (!reply) {
+      try {
+        const runner = getSharedSkillRunner();
+        const result = await runner.run<
+          Record<string, unknown>,
+          Record<string, unknown>
+        >({
+          skillName: 'reply-suggestion',
+          input: {
+            interaction: { content, platform, type: interactionType },
+            classification,
+            platform,
+            brandTone: '专业、克制、不过度承诺'
+          }
+        });
+
+        if (result.status === 'success' && result.output) {
+          const output = result.output;
+          reply = {
+            suggestedText: String(output.suggestedText || ''),
+            replyType: String(output.replyType || 'faq_answer'),
+            riskLevel: (['low', 'medium', 'high'].includes(
+              String(output.riskLevel)
+            )
+              ? output.riskLevel
+              : 'low') as ReplySuggestionResult['riskLevel'],
+            needReview: Boolean(output.needReview),
+            reason: output.reason ? String(output.reason) : undefined
+          };
+        }
+      } catch (error) {
+        console.error(
+          '[pipeline] AI reply suggestion failed, using rules:',
+          error
+        );
+      }
     }
 
     if (!reply) {
       reply = generateRuleBasedReply(content, classification, platform);
+    }
+
+    // reply-draft 判定需人工处理时，保留回退草稿供审核参考，但强制人工审核
+    if (draftNeedsHuman) {
+      reply.needReview = true;
+      reply.reason = draftNeedsHumanReason;
     }
 
     // Apply sensitive content policy. Regex catches literal contact patterns
@@ -205,9 +479,30 @@ export async function classifyAndSuggestReply(
     )
       ? reply.replyType
       : 'faq_answer';
+    // 生成建议时记录关联线索（spec/53 T2）：Step 1 转化产生的 Lead 以
+    // 本互动为来源互动；查不到（D 级/历史/无组织）保持 NULL，发送侧回退反查。
+    const interactionForLead = await db.interaction
+      .findUnique({
+        where: { id: interactionId },
+        select: { organizationId: true }
+      })
+      .catch(() => null);
+    const suggestionLead = await db.lead
+      .findFirst({
+        where: {
+          sourceInteractionId: interactionId,
+          deletedAt: null,
+          ...(interactionForLead?.organizationId
+            ? { organizationId: interactionForLead.organizationId }
+            : {})
+        },
+        select: { id: true }
+      })
+      .catch(() => null);
     await db.replySuggestion.create({
       data: {
         interactionId,
+        leadId: suggestionLead?.id ?? null,
         suggestedText: reply.suggestedText,
         replyType: replyType as
           | 'faq_answer'

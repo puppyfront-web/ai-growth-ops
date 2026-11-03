@@ -20,6 +20,10 @@
 > 2026-10-23 询盘多渠道接入（已验收，内部数据链路）：`AcquisitionChannel` 新增 WhatsApp/Telegram/微信（个人）/邮件/Messenger/Instagram/Line 7 个**数据来源渠道**；`Customer` 新增 `email`/`imAccount` 联系方式与三级去重（手机号→邮箱→IM 账号）；新增 `POST /api/inquiries/webhook`（token 鉴权、渠道路由分配、通知、幂等）与客户 CSV 导入邮箱/IM 列。证据：单测 602 项、Web 151 项、集成新增 7 项全部通过，空库迁移重放与 schema diff 无漂移，见 `docs/delivery/2026-10-23-inquiry-channels.md`。边界：IM 渠道仅为询盘数据录入标识，**不构成任何 IM 平台的自动化能力**（无收发消息）；集成套件存在 2 个文件的既有失败（`platform-account-security` 测试调用了不存在的 `api.delete`、`account-auth-expired` 浏览器 Bridge 401），与本次改动无关，待修。
 >
 > 2026-10-23 小红书登录适配 + 统一平台登录适配器（真实账号验收未完成，保持 `未验收`；10-24 修订为与抖音完全同一交互方案）：修复小红书 qr-login 误判——旧检测规则把匿名 cookie `xsecappid` 当登录信号，会话创建即假报 `logged_in` 并把账号置 `error`；现检测与 finalize 双侧强校验 `web_session`。登录交互与抖音零差异：有显示环境弹真实浏览器窗口、操作员在窗口内自行完成登录（扫码或短信均可），runner 不做任何自动页面操作；无显示容器沿用全平台共用的截图 + 远程交互降级。登录配置收敛为 `packages/shared/src/platform-login.ts` 单一事实源（loginUrl / 检测规则 / 基线与必备 cookie），browser-runner、API、cookie 校验与 Bridge 授权全部派生，新平台登录接入收敛为 3 处。证据：单测全量通过（先红后绿，含匿名 cookie 不判登录）、`qr-login` 集成 37 项、typecheck/lint/架构守卫通过；本机真实登录页冒烟会话正常建立且轮询为 `waiting_scan` 不误判。真实小红书账号登录与 Cookie 健康检查仍待操作员执行，见 `docs/delivery/2026-10-23-xhs-login-adapter.md`。同轮修复主分支既有 typecheck 失败（`routes-prospecting` 的 `filters` 缺 `ProspectCandidateWhereInput` 类型标注）；另观察到 `outreach`/`experiment-wiring`/`douyin-e2e-workflow` 集成在干净主分支同样失败，待修。10-24 追加修复：qr-login start 的会话合并/复用响应丢失 `headed` 字段导致弹窗退回网页内二维码分支（React StrictMode 双次触发必现），现 `browser-login-session` 保存并原样回传首次响应元数据，集成测试已覆盖。
+>
+> 2026-11-03 文档增补：真实平台验收 Runbook 新增两个低量真实验收模板——抖音评论回复（`docs/delivery/real-platform-acceptance-runbook.md` §3.4，manual-reply 人工确认发送）与抖音私信回复（同文件 §3.5），均含批准签字栏、前置条件、执行步骤、证据要求与失败回滚。用户级黑名单/退订机制（`InteractionBlocklist`、退订关键词自动拉黑、发送前强制拦截）与 AI 回复草稿升级（建议生成 AI 化、失败回退规则模板）均为**开发中，见 `spec/47_评论私信回复AI化_SPEC.md`**，代码未落地前相关能力不得标为"支持"；真实评论/私信回复保持 `未验收`，按上述模板验收通过并留存外部证据后方可升级。
+>
+> 2026-11-03 获客到转化全链路贯通（spec/53，内部数据链路，非真实平台验收）：T1 漏斗汇合——`convertProspectToCustomer` 转化事务内按「组织 + 平台 + 外部用户 ID」去重 upsert Lead（与互动漏斗在 Lead 层汇合、等级只升不降），回填 `ProspectCandidate.leadId`，转化响应回传 `leadId`，/prospecting/[id] 转化提示与详情面板接入「查看线索」真实链接；T3 事件驱动状态机——lifecycle 新增 `syncLeadConvertedTx`（转化事务内关联 customerId、NEW→QUALIFIED 推进、写 `converted_from_prospect` LeadActivity，其余状态不降级）。证据：新增集成测试 `tests/integration/db/prospect-convert-creates-lead.test.ts` 6 用例先红后绿（含去重幂等、跨组织拒绝、不降级），integration 55 files/391 tests、unit 741 tests、web 176 tests、typecheck、lint 全通过；文件尺寸守卫冻结基线因本系列交付更新（见 `tests/unit/harness/file-size-guard.test.ts` 注释）。边界：本条仅为系统内部数据链路打通，不代表真实平台获客/回复能力变化；真实评论/私信回复仍属未验收边界（见上一条）。
 
 ## 已完成的整理
 
@@ -46,7 +50,8 @@
 | 生产构建       | PASS                 | 全工作区构建通过，Web 生成 68 个路由                                                       |
 | 浏览器闭环     | PASS（本地）         | 智能获客 3 个场景通过；覆盖需求分析、策略确认、任务创建及无账号引导                        |
 | 容器           | 通过                 | API、Worker 本地优先镜像构建通过，且已验证两个容器可通过共享挂载目录读写同一份本地加密凭据 |
-| 真实平台       | 部分验收（抖音）     | 已验证：账号 Cookie 校验、多策略关键词采集（13 视频/363 评论）、语义打分（A/B/C 潜客 23 名）、画像增强（真实主页）、一条真实图文发布（PUBLISHED）、互动同步管道。未验收：真实回复、飞书/企微写入 |
+| 真实平台       | 部分验收（抖音）     | 已验证：账号 Cookie 校验、多策略关键词采集（13 视频/363 评论）、语义打分（A/B/C 潜客 23 名）、画像增强（真实主页）、一条真实图文发布（PUBLISHED）、互动同步管道。未验收：真实评论/私信回复（验收模板见 [Runbook §3.4/§3.5](./real-platform-acceptance-runbook.md)）、飞书/企微写入；黑名单/退订与 AI 回复草稿升级开发中（见 `spec/47`） |
+| 潜客画像评估   | 已修复，待真实回放（2026-11-02） | 语义打分升级为「画像判定 + 需求侧意图识别」两步（同行/已落地/从业者强制 D，候选带画像标签可筛选）；LLM 失败（如 402 余额不足）改为诚实降级（封顶 C + 任务告警），不再静默误判 A 级。组织 DeepSeek 余额不足导致 10-23/11-02 两批误判，充值后需按[交付记录](./2026-11-02-prospect-persona-scoring.md)跑回放验收 |
 | 运维恢复       | 已验证（dev 布局，2026-11-02） | 备份/恢复脚本已支持开发式布局与生产 compose 双模式；完成真实备份 → 校验和复核 → 隔离库恢复演练（77 表、关键表行数、文件哈希全部一致），详见[演练记录](./2026-11-02-backup-restore-drill.md)。生产 compose 布局的全量恢复与重启演练待真实部署环境执行 |
 
 测试日志中的“无 AI Key 使用规则分类”和“无平台账号引导登录”是预期降级路径，不是生产外部服务验收。自动化没有向真实平台发帖、回复或写入真实飞书表格。
