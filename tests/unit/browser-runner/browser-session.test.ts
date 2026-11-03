@@ -186,7 +186,8 @@ describe('createCrawlSession routing', () => {
       addCookies: vi.fn().mockResolvedValue(undefined),
       pages: vi.fn().mockReturnValue([]),
       newPage: vi.fn().mockResolvedValue({ close: vi.fn().mockResolvedValue(undefined) }),
-      close: vi.fn().mockResolvedValue(undefined)
+      close: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn()
     };
     vi.mocked(chromium.launchPersistentContext).mockResolvedValue(
       fakeContext as unknown as Awaited<
@@ -207,6 +208,97 @@ describe('createCrawlSession routing', () => {
     await session.close();
     // close 只关 page，持久 context 保持存活供下次复用
     expect(fakeContext.close).not.toHaveBeenCalled();
+  });
+
+  it('持久 context 被外部关闭后，下一次采集应重新启动而不是复用僵尸 context', async () => {
+    setPlatform('linux');
+    clearDisplayEnv();
+    process.env.BROWSER_RUNNER_PROFILE_DIR = '/data/profiles';
+    const closeListeners: Array<() => void> = [];
+    const makeFakePersistentContext = () => ({
+      addInitScript: vi.fn().mockResolvedValue(undefined),
+      addCookies: vi.fn().mockResolvedValue(undefined),
+      pages: vi.fn().mockReturnValue([]),
+      newPage: vi.fn().mockResolvedValue({ close: vi.fn().mockResolvedValue(undefined) }),
+      close: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn((event: string, listener: () => void) => {
+        if (event === 'close') closeListeners.push(listener);
+      })
+    });
+    const firstContext = makeFakePersistentContext();
+    const secondContext = makeFakePersistentContext();
+    vi.mocked(chromium.launchPersistentContext)
+      .mockResolvedValueOnce(firstContext as never)
+      .mockResolvedValueOnce(secondContext as never);
+
+    const first = await createCrawlSession(
+      'sessionid=abc',
+      'douyin.com',
+      false,
+      'douyin-zombie'
+    );
+    await first.close();
+
+    // 模拟持久浏览器进程崩溃/被手动关闭：close 事件触发
+    closeListeners.splice(0).forEach((listener) => listener());
+
+    const second = await createCrawlSession(
+      'sessionid=abc',
+      'douyin.com',
+      false,
+      'douyin-zombie'
+    );
+    expect(chromium.launchPersistentContext).toHaveBeenCalledTimes(2);
+    expect(secondContext.addInitScript).toHaveBeenCalled();
+    expect(firstContext.addInitScript).toHaveBeenCalledTimes(1);
+    await second.close();
+  });
+
+  it('空闲 TTL 关闭持久 context 后，下一次采集应重新启动而不是复用旧 launch 缓存', async () => {
+    setPlatform('linux');
+    clearDisplayEnv();
+    process.env.BROWSER_RUNNER_PROFILE_DIR = '/data/profiles';
+    const makeFakePersistentContext = () => ({
+      addInitScript: vi.fn().mockResolvedValue(undefined),
+      addCookies: vi.fn().mockResolvedValue(undefined),
+      pages: vi.fn().mockReturnValue([]),
+      newPage: vi.fn().mockResolvedValue({ close: vi.fn().mockResolvedValue(undefined) }),
+      close: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn()
+    });
+    const firstContext = makeFakePersistentContext();
+    const secondContext = makeFakePersistentContext();
+    vi.mocked(chromium.launchPersistentContext)
+      .mockResolvedValueOnce(firstContext as never)
+      .mockResolvedValueOnce(secondContext as never);
+
+    // 用假定时器贯穿创建与释放，空闲 TTL 的 setTimeout 才能被推进
+    vi.useFakeTimers();
+    try {
+      const first = await createCrawlSession(
+        'sessionid=abc',
+        'douyin.com',
+        false,
+        'douyin-idle'
+      );
+      await first.close();
+
+      // 推进空闲定时器：持久 context 被整体关闭
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 1000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(firstContext.close).toHaveBeenCalled();
+
+    const second = await createCrawlSession(
+      'sessionid=abc',
+      'douyin.com',
+      false,
+      'douyin-idle'
+    );
+    expect(chromium.launchPersistentContext).toHaveBeenCalledTimes(2);
+    expect(secondContext.addInitScript).toHaveBeenCalled();
+    await second.close();
   });
 
   it('不传 profileKey 时回退共享浏览器一次性 context', async () => {

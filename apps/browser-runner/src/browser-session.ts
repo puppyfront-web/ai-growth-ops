@@ -327,6 +327,8 @@ interface PersistentProfileEntry {
   activeSessions: number;
   stealthApplied: boolean;
   idleTimer?: ReturnType<typeof setTimeout>;
+  /** 浏览器进程崩溃/被手动关闭后置位，条目随即失效，必须重新 launch。 */
+  closed: boolean;
 }
 
 const persistentProfiles = new Map<string, PersistentProfileEntry>();
@@ -338,13 +340,19 @@ async function acquirePersistentContext(
   headedOverride?: boolean
 ): Promise<PersistentProfileEntry> {
   const existing = persistentProfiles.get(profileKey);
-  if (existing) {
+  if (existing && !existing.closed) {
     if (existing.idleTimer) {
       clearTimeout(existing.idleTimer);
       existing.idleTimer = undefined;
     }
     existing.activeSessions += 1;
     return existing;
+  }
+  if (existing) {
+    // 持久浏览器已死（崩溃/手动关闭）：清掉僵尸条目和缓存的 launch promise，走重新启动
+    if (existing.idleTimer) clearTimeout(existing.idleTimer);
+    persistentProfiles.delete(profileKey);
+    persistentLaunches.delete(profileKey);
   }
 
   let launch = persistentLaunches.get(profileKey);
@@ -370,8 +378,18 @@ async function acquirePersistentContext(
   const context = await launch;
   let entry = persistentProfiles.get(profileKey);
   if (!entry) {
-    entry = { context, activeSessions: 0, stealthApplied: false };
+    entry = { context, activeSessions: 0, stealthApplied: false, closed: false };
     persistentProfiles.set(profileKey, entry);
+    const created = entry;
+    // 崩溃/手动关闭时立即摘除缓存，避免后续请求复用已关闭的 context 抛
+    // "Target page, context or browser has been closed"
+    context.on('close', () => {
+      if (persistentProfiles.get(profileKey) !== created) return;
+      created.closed = true;
+      if (created.idleTimer) clearTimeout(created.idleTimer);
+      persistentProfiles.delete(profileKey);
+      persistentLaunches.delete(profileKey);
+    });
   }
   entry.activeSessions += 1;
   return entry;
@@ -385,7 +403,9 @@ function releasePersistentSession(profileKey: string): void {
   entry.idleTimer = setTimeout(() => {
     const current = persistentProfiles.get(profileKey);
     if (!current || current.activeSessions > 0) return;
+    // 先摘 Map 会让 close 处理器因身份不匹配提前返回，必须在这里同步清掉 launch 缓存
     persistentProfiles.delete(profileKey);
+    persistentLaunches.delete(profileKey);
     void current.context.close().catch(() => undefined);
   }, PERSISTENT_IDLE_TTL_MS);
   entry.idleTimer.unref?.();
