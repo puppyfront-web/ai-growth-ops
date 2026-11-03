@@ -1,5 +1,4 @@
 import type { ServerResponse, IncomingMessage } from 'http';
-import type { DatabaseClient } from '@ai-growth-ops/database';
 import { getOrganizationContext } from './auth.js';
 import { sendJson, type RouteContext } from './route-kit.js';
 

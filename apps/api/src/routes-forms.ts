@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { DatabaseClient } from '@ai-growth-ops/database';
 import {
   createAssignmentRule,
   createLeadCaptureForm,

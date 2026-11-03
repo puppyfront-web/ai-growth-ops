@@ -1,6 +1,5 @@
 import type { ServerResponse, IncomingMessage } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import type { DatabaseClient } from '@ai-growth-ops/database';
 import { getAuthenticatedUser, getOrganizationContext } from './auth.js';
 import { getEmailProvider, inviteMemberEmail } from '@ai-growth-ops/email';
 import { hasPermission } from './middleware/rbac.js';
