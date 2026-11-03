@@ -1004,7 +1004,7 @@ async function dismissDouyinPopups(
   await page.waitForTimeout(500);
 }
 
-async function extractSearchResultsFromDOM(
+export async function extractSearchResultsFromDOM(
   page: import('playwright').Page,
   platform: string
 ): Promise<SearchResultItem[]> {
@@ -1088,7 +1088,7 @@ function _isUINoise(text: string): boolean {
 }
 
 /** Extract comments from the video page DOM. */
-async function extractCommentsFromDOM(
+export async function extractCommentsFromDOM(
   page: import('playwright').Page,
   platform: string,
   sourceContentId: string
