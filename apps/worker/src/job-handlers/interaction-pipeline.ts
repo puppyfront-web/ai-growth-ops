@@ -195,6 +195,7 @@ export async function buildReplyDraftPipelineContext(
       interaction.externalUserId
         ? db.lead.findFirst({
             where: {
+              organizationId: interaction.organizationId,
               sourcePlatform: interaction.platform,
               externalUserId: interaction.externalUserId
             },
@@ -205,6 +206,7 @@ export async function buildReplyDraftPipelineContext(
       interaction.externalUserId
         ? db.interaction.findMany({
             where: {
+              organizationId: interaction.organizationId,
               platform: interaction.platform,
               externalUserId: interaction.externalUserId,
               id: { not: input.interactionId }

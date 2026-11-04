@@ -103,6 +103,23 @@ describe('buildReplyDraftPipelineContext', () => {
     expect(ctx).toBeNull();
   });
 
+  it('画像与历史查询必须带 organizationId 过滤（跨组织数据不得进入草稿上下文）', async () => {
+    const db = createFakeDb();
+    await buildReplyDraftPipelineContext(db, {
+      interactionId: 'it-1',
+      content: '这个多少钱',
+      platform: 'douyin',
+      interactionType: 'comment'
+    });
+
+    const leadWhere = (db.lead.findFirst as ReturnType<typeof vi.fn>).mock
+      .calls[0][0].where;
+    expect(leadWhere.organizationId).toBe('org-1');
+    const historyWhere = (db.interaction.findMany as ReturnType<typeof vi.fn>)
+      .mock.calls[0][0].where;
+    expect(historyWhere.organizationId).toBe('org-1');
+  });
+
   it('纯函数构建遵循 shared 契约（升序传入、保留最近 N 条）', () => {
     const ctx = buildReplyDraftContext(
       { platform: 'douyin', interactionType: 'comment', content: 'c' },
